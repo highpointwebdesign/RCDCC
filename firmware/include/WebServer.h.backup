@@ -1,0 +1,2430 @@
+#ifndef WEBSERVER_H
+#define WEBSERVER_H
+
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <WiFi.h>
+#include <ArduinoJson.h>
+#include <functional>
+#include "StorageManager.h"
+
+class WebServerManager {
+private:
+  AsyncWebServer server{80};
+  AsyncWebSocket ws{"/ws"};
+  StorageManager* storageManager = nullptr;
+  std::function<void()> calibrationCallback = nullptr;
+  std::function<bool()> mpuStatusCallback = nullptr;
+  std::function<void(uint8_t)> orientationCallback = nullptr;
+  
+  // Latest sensor data for HTTP polling
+  float latestRoll = 0.0f;
+  float latestPitch = 0.0f;
+  float latestYaw = 0.0f;
+  float latestVerticalAccel = 0.0f;
+  float latestBattery1 = 0.0f;
+  float latestBattery2 = 0.0f;
+  float latestBattery3 = 0.0f;
+  
+public:
+  void init(StorageManager& storage) {
+    storageManager = &storage;
+    
+    // Start WiFi in AP mode
+    startWiFiAP();
+    
+    // Setup WebSocket
+    ws.onEvent([](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+      if (type == WS_EVT_CONNECT) {
+        Serial.printf("WebSocket client #%u connected\n", client->id());
+      } else if (type == WS_EVT_DISCONNECT) {
+        Serial.printf("WebSocket client #%u disconnected\n", client->id());
+      }
+    });
+    server.addHandler(&ws);
+    
+    // Setup web server routes
+    setupRoutes();
+    
+    // Start server
+    server.begin();
+    Serial.println("Web server started on http://192.168.4.1");
+  }
+  
+  // Public method to send status messages to all connected clients
+  void sendStatus(const String& message) {
+    ws.textAll(message);
+  }
+  
+  // Store latest sensor/battery data
+  struct {
+    float roll = NAN, pitch = NAN, yaw = NAN, verticalAccel = NAN;
+    float battery1 = 0, battery2 = 0, battery3 = 0;
+  } latestData;
+  
+  // Send combined sensor and battery data to all connected clients
+  void sendTelemetry() {
+    String json = "{\"type\":\"telemetry\",\"roll\":" + String(latestData.roll, 1) + 
+                  ",\"pitch\":" + String(latestData.pitch, 1) + 
+                  ",\"yaw\":" + String(latestData.yaw, 1) + 
+                  ",\"verticalAccel\":" + String(latestData.verticalAccel, 2) + 
+                  ",\"voltages\":[" + 
+                  String(latestData.battery1, 2) + "," + 
+                  String(latestData.battery2, 2) + "," + 
+                  String(latestData.battery3, 2) + "]}";
+    ws.textAll(json);
+  }
+  
+  // Send sensor data to all connected clients
+  void sendSensorData(float roll, float pitch, float yaw, float verticalAccel) {
+    latestData.roll = roll;
+    latestData.pitch = pitch;
+    latestData.yaw = yaw;
+    latestData.verticalAccel = verticalAccel;
+    sendTelemetry();
+  }
+  
+  // Send battery voltage data to all connected clients
+  void sendBatteryData(float battery1, float battery2, float battery3) {
+    latestData.battery1 = battery1;
+    latestData.battery2 = battery2;
+    latestData.battery3 = battery3;
+    sendTelemetry();
+  }
+  
+  // Set calibration callback for MPU6050 recalibration
+  void setCalibrationCallback(std::function<void()> callback) {
+    calibrationCallback = callback;
+  }
+  
+  void setMPUStatusCallback(std::function<bool()> callback) {
+    mpuStatusCallback = callback;
+  }
+  
+  void setOrientationCallback(std::function<void(uint8_t)> callback) {
+    orientationCallback = callback;
+  }
+  
+  // Store latest sensor data for HTTP polling
+  void setSensorData(float roll, float pitch, float yaw, float verticalAccel) {
+    latestRoll = roll;
+    latestPitch = pitch;
+    latestYaw = yaw;
+    latestVerticalAccel = verticalAccel;
+  }
+  
+  // Store latest battery data for HTTP polling
+  void setBatteryData(float battery1, float battery2, float battery3) {
+    latestBattery1 = battery1;
+    latestBattery2 = battery2;
+    latestBattery3 = battery3;
+  }
+  
+private:
+  void startWiFiAP() {
+    // First, try to connect to home WiFi
+    Serial.println("Attempting to connect to home WiFi...");
+    Serial.print("SSID: ");
+    Serial.println(HOME_WIFI_SSID);
+    
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(HOME_WIFI_SSID, HOME_WIFI_PASSWORD);
+    
+    unsigned long startAttemptTime = millis();
+    
+    // Wait for connection with timeout
+    while (WiFi.status() != WL_CONNECTED && 
+           millis() - startAttemptTime < WIFI_CONNECT_TIMEOUT) {
+      delay(500);
+      Serial.print(".");
+    }
+    Serial.println();
+    
+    // Check if connected to home WiFi
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("Connected to home WiFi");
+      Serial.print("IP address: ");
+      Serial.println(WiFi.localIP());
+      Serial.print("Access web interface at: http://");
+      Serial.println(WiFi.localIP());
+    } else {
+      // Connection failed, fall back to AP mode
+      Serial.println("✗ Failed to connect to home WiFi");
+      Serial.println("Starting Access Point mode...");
+      
+      WiFi.mode(WIFI_AP);
+      WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD);
+      
+      IPAddress ip(WIFI_AP_IP);
+      IPAddress gateway(WIFI_AP_GATEWAY);
+      IPAddress subnet(WIFI_AP_SUBNET);
+      
+      WiFi.softAPConfig(ip, gateway, subnet);
+      
+      Serial.print("WiFi AP started: ");
+      Serial.println(WIFI_AP_SSID);
+      Serial.print("IP address: ");
+      Serial.println(WiFi.softAPIP());
+      Serial.println("Access web interface at: http://192.168.4.1");
+    }
+  }
+  
+  void setupRoutes() {
+    // Enable CORS for all routes
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
+    
+    // Handle OPTIONS preflight requests
+    server.on("/*", HTTP_OPTIONS, [](AsyncWebServerRequest *request) {
+      request->send(200);
+    });
+    
+    // API endpoint for sensor data (HTTP polling)
+    server.on("/api/sensors", HTTP_GET, [this](AsyncWebServerRequest *request) {
+      String json = "{\"roll\":" + String(latestRoll, 1) + 
+                    ",\"pitch\":" + String(latestPitch, 1) + 
+                    ",\"yaw\":" + String(latestYaw, 1) + 
+                    ",\"verticalAccel\":" + String(latestVerticalAccel, 2) + 
+                    ",\"batteries\":[" + String(latestBattery1, 2) + "," + 
+                    String(latestBattery2, 2) + "," + String(latestBattery3, 2) + "]}";
+      request->send(200, "application/json", json);
+    });
+    
+    // API endpoint to get current config
+    server.on("/api/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
+      // Combine system config, servo config, and battery config into one response
+      String configJson = storageManager->getConfigJSON();
+      String servoConfigJson = storageManager->getServoConfigJSON();
+      String batteryConfigJson = storageManager->getBatteryConfigJSON();
+      
+      // Parse all JSON strings and combine them
+      DynamicJsonDocument doc(4096);
+      DeserializationError error1 = deserializeJson(doc, configJson);
+      
+      if (!error1) {
+        // Add servo config under "servos" key
+        DynamicJsonDocument servoDoc(2048);
+        DeserializationError error2 = deserializeJson(servoDoc, servoConfigJson);
+        if (!error2) {
+          doc["servos"] = servoDoc;
+        }
+        
+        // Add battery config under "batteries" key
+        DynamicJsonDocument batteryDoc(1024);
+        DeserializationError error3 = deserializeJson(batteryDoc, batteryConfigJson);
+        if (!error3) {
+          doc["batteries"] = batteryDoc["batteries"];
+        }
+      }
+      
+      String combinedJson;
+      serializeJson(doc, combinedJson);
+      request->send(200, "application/json", combinedJson);
+    });
+    
+    // API endpoint to update config
+    server.on("/api/config", HTTP_POST, [this](AsyncWebServerRequest *request) {}, nullptr, 
+      [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        DynamicJsonDocument doc(1024);
+        DeserializationError error = deserializeJson(doc, data);
+        
+        if (!error) {
+          Serial.print("Config update received: ");
+          serializeJson(doc, Serial);
+          Serial.println();
+          
+                    if (doc.containsKey("reactionSpeed")) {
+                        float val = doc["reactionSpeed"];
+                        Serial.printf("Updating reactionSpeed to: %.2f\n", val);
+                        storageManager->updateParameter("reactionSpeed", val);
+                    }
+                    if (doc.containsKey("rideHeightOffset")) {
+                        float val = doc["rideHeightOffset"];
+                        Serial.printf("Updating rideHeightOffset to: %.0f\n", val);
+                        storageManager->updateParameter("rideHeightOffset", val);
+                    }
+                    if (doc.containsKey("rangeLimit")) {
+                        float val = doc["rangeLimit"];
+                        Serial.printf("Updating rangeLimit to: %.0f\n", val);
+                        storageManager->updateParameter("rangeLimit", val);
+                    }
+                    if (doc.containsKey("damping")) {
+                        float val = doc["damping"];
+                        Serial.printf("Updating damping to: %.2f\n", val);
+                        storageManager->updateParameter("damping", val);
+                    }
+                    if (doc.containsKey("frontRearBalance")) {
+                        float val = doc["frontRearBalance"];
+                        Serial.printf("Updating frontRearBalance to: %.2f\n", val);
+                        storageManager->updateParameter("frontRearBalance", val);
+                    }
+                    if (doc.containsKey("stiffness")) {
+                        float val = doc["stiffness"];
+                        Serial.printf("Updating stiffness to: %.2f\n", val);
+                        storageManager->updateParameter("stiffness", val);
+                    }
+                    if (doc.containsKey("mpuOrientation")) {
+                        uint8_t orientation = doc["mpuOrientation"];
+                        Serial.printf("Updating mpuOrientation to: %d\n", orientation);
+                        storageManager->updateParameter("mpuOrientation", orientation);
+                        // Notify sensor fusion of orientation change
+                        if (orientationCallback) {
+                            orientationCallback(orientation);
+                        }
+                    }
+                    if (doc.containsKey("fpvAutoMode")) {
+                        bool autoMode = doc["fpvAutoMode"];
+                        Serial.printf("Updating fpvAutoMode to: %s\n", autoMode ? "true" : "false");
+                        storageManager->updateParameter("fpvAutoMode", autoMode ? 1.0f : 0.0f);
+                    }
+          
+          request->send(200, "application/json", "{\"status\":\"success\"}");
+        } else {
+          Serial.println("Config update JSON parse error");
+          request->send(400, "application/json", "{\"status\":\"error\"}");
+        }
+      });
+    
+    // API endpoint to reset config to defaults
+    server.on("/api/reset", HTTP_POST, [this](AsyncWebServerRequest *request) {
+      storageManager->resetToDefaults();
+      sendStatus("Settings reset to factory defaults");
+      request->send(200, "application/json", "{\"status\":\"success\"}");
+    });
+    
+    // API endpoint to recalibrate MPU6050
+    server.on("/api/calibrate", HTTP_POST, [this](AsyncWebServerRequest *request) {
+      if (calibrationCallback) {
+        sendStatus("Starting recalibration...");
+        calibrationCallback();
+        request->send(200, "application/json", "{\"status\":\"success\"}");
+      } else {
+        request->send(500, "application/json", "{\"status\":\"error\",\"message\":\"Calibration not available\"}");
+      }
+    });
+    
+    // API endpoint to update servo configuration
+    server.on("/api/servo-config", HTTP_POST, [this](AsyncWebServerRequest *request) {}, nullptr, 
+      [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        DynamicJsonDocument doc(1024);
+        DeserializationError error = deserializeJson(doc, data);
+        
+        if (!error) {
+          // Check which servo and parameter to update
+          if (doc.containsKey("servo") && doc.containsKey("param") && doc.containsKey("value")) {
+            String servo = doc["servo"].as<String>();
+            String param = doc["param"].as<String>();
+            int value = doc["value"].as<int>();
+            
+            storageManager->updateServoParameter(servo, param, value);
+            request->send(200, "application/json", "{\"status\":\"success\"}");
+          } else {
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing parameters\"}");
+          }
+        } else {
+          request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        }
+      });
+    
+  }
+};
+
+#endif
+            justify-content: space-around;
+            padding: 8px 0;
+            z-index: 1000;
+        }
+        
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: #757575;
+            padding: 4px;
+            transition: color 0.3s;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .nav-item.active {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .nav-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+        
+        /* Global Save Indicator */
+        .save-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 2000;
+            pointer-events: none;
+        }
+        
+        .save-indicator.show {
+            opacity: 1;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 15px;
+            }
+            
+            h1 {
+                font-size: 20px;
+            }
+            
+            .nav-item {
+                font-size: 10px;
+            }
+            
+            .nav-icon {
+                font-size: 20px;
+            }
+        }
+    )===";
+  }
+  
+  // Common bottom navigation HTML
+  String getBottomNavigation(const String& activePage) {
+    String nav = R"===(
+    <div class="bottom-nav">
+        <a href="/" class="nav-item )===" + String(activePage == "dashboard" ? "active" : "") + R"===(">
+            <div class="nav-icon">📊</div>
+            <div>Dashboard</div>
+        </a>
+        <a href="/suspension.html" class="nav-item )===" + String(activePage == "suspension" ? "active" : "") + R"===(">
+            <div class="nav-icon">🔧</div>
+            <div>Tuning</div>
+        </a>
+        <a href="/lights.html" class="nav-item )===" + String(activePage == "lights" ? "active" : "") + R"===(">
+            <div class="nav-icon">💡</div>
+            <div>Lights</div>
+        </a>
+        <a href="/configuration.html" class="nav-item )===" + String(activePage == "configuration" ? "active" : "") + R"===(">
+            <div class="nav-icon">⚙️</div>
+            <div>Configuration</div>
+        </a>
+    </div>
+    )===";
+    return nav;
+  }
+  
+  // Common JavaScript for health check and WebSocket (reusable)
+  String getCommonScript() {
+    return R"===(
+        // WebSocket connection for real-time messages
+        let ws;
+        let reconnectInterval;
+        
+        function connectWebSocket() {
+            ws = new WebSocket('ws://' + window.location.hostname + '/ws');
+            
+            ws.onopen = function() {
+                console.log('WebSocket connected');
+                clearInterval(reconnectInterval);
+            };
+            
+            ws.onmessage = function(event) {
+                console.log('Status update:', event.data);
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'sensor') {
+                        // Update sensor gauges if they exist (Dashboard only)
+                        const rollGauge = document.getElementById('rollGauge');
+                        const pitchGauge = document.getElementById('pitchGauge');
+                        
+                        if (rollGauge) rollGauge.textContent = isNaN(data.roll) ? '--' : data.roll.toFixed(1) + '°';
+                        if (pitchGauge) pitchGauge.textContent = isNaN(data.pitch) ? '--' : data.pitch.toFixed(1) + '°';
+                    } else if (data.type === 'battery') {
+                        // Update battery voltage gauges if they exist (Dashboard only)
+                        if (data.voltages && Array.isArray(data.voltages)) {
+                            data.voltages.forEach((voltage, index) => {
+                                const gauge = document.getElementById('battery' + index);
+                                const icon = document.getElementById('battery' + index + '-icon');
+                                const fill = document.getElementById('battery' + index + '-fill');
+                                
+                                if (gauge && voltage > 0) {
+                                    // Get cell count for this battery
+                                    const cellCount = batteryConfigs[index]?.cellCount || 3;
+                                    const voltagePerCell = voltage / cellCount;
+                                    
+                                    // Determine color based on voltage per cell (LiPo assumption)
+                                    let color, fillPercent;
+                                    
+                                    if (voltagePerCell > 3.8) {
+                                        // GREEN - Good to go (>3.8V per cell)
+                                        color = '#28a745';
+                                        fillPercent = Math.min(100, ((voltagePerCell - 3.0) / 1.2) * 100);
+                                    } else if (voltagePerCell >= 3.4) {
+                                        // YELLOW/ORANGE - Caution (3.4V - 3.8V per cell)
+                                        color = '#ffc107';
+                                        fillPercent = ((voltagePerCell - 3.0) / 1.2) * 100;
+                                    } else {
+                                        // RED - Critical (<3.4V per cell)
+                                        color = '#dc3545';
+                                        fillPercent = ((voltagePerCell - 3.0) / 1.2) * 100;
+                                    }
+                                    
+                                    // Update voltage display
+                                    gauge.textContent = voltage.toFixed(2) + 'V';
+                                    gauge.style.color = color;
+                                    
+                                    // Update battery icon
+                                    if (fill) {
+                                        fill.style.width = Math.max(0, Math.min(100, fillPercent)) + '%';
+                                        fill.style.backgroundColor = color;
+                                    }
+                                    
+                                    // Blink red if critical (<3.2V per cell)
+                                    if (icon) {
+                                        if (voltagePerCell < 3.2) {
+                                            icon.classList.add('battery-critical');
+                                            icon.style.borderColor = color;
+                                        } else {
+                                            icon.classList.remove('battery-critical');
+                                            icon.style.borderColor = '#333';
+                                        }
+                                    }
+                                } else if (gauge) {
+                                    gauge.textContent = '--';
+                                    gauge.style.color = '#667eea';
+                                    if (fill) fill.style.width = '0%';
+                                    if (icon) {
+                                        icon.classList.remove('battery-critical');
+                                        icon.style.borderColor = '#333';
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    // Don't display JSON in status text - it causes toggling with health check
+                } catch (e) {
+                    // Not JSON, treat as status message (from calibration, save operations, etc.)
+                    const statusTextEl = document.getElementById('statusText');
+                    if (statusTextEl) {
+                        statusTextEl.innerHTML = event.data;
+                    }
+                }
+            };
+            
+            ws.onclose = function() {
+                console.log('WebSocket disconnected');
+                reconnectInterval = setInterval(connectWebSocket, 3000);
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                ws.close();
+            };
+        }
+        
+        // Connect WebSocket on page load
+        connectWebSocket();
+        
+        // Clean up WebSocket on page unload/hide
+        window.addEventListener('beforeunload', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+            clearInterval(reconnectInterval);
+            clearInterval(healthCheckInterval);
+        });
+        
+        // Handle visibility change (tab switching)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.close();
+                }
+                clearInterval(reconnectInterval);
+            } else {
+                connectWebSocket();
+            }
+        });
+        
+        // Global save indicator function
+        function showSaveIndicator(message = 'Saved') {
+            let indicator = document.getElementById('globalSaveIndicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.id = 'globalSaveIndicator';
+                indicator.className = 'save-indicator';
+                document.body.appendChild(indicator);
+            }
+            indicator.textContent = message;
+            indicator.classList.add('show');
+            setTimeout(() => {
+                indicator.classList.remove('show');
+            }, 1500);
+        }
+        
+        // API Health Check - runs every 1 second
+        let healthCheckInterval;
+        
+        async function checkAPIHealth() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                
+                const response = await fetch('/api/health', {
+                    method: 'GET',
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const mpuStatus = data.mpu6050 ? true : false;
+                    const mpuColor = data.mpu6050 ? '#155724' : '#dc3545';
+                    
+                    const statusEl = document.getElementById('systemStatus');
+                    const statusTextEl = document.getElementById('statusText');
+                    
+                    if (statusEl && statusTextEl) {
+                        statusEl.style.background = '#d4edda';
+                        statusEl.style.borderLeftColor = '#28a745';
+                        statusEl.style.color = '#155724';
+                        statusTextEl.innerHTML = 'ESP32 Connected<br><span style="color:' + mpuColor + '">' + mpuStatus + ' Gyro ' + (data.mpu6050 ? 'Online' : 'Offline') + '</span>';
+                    }
+                } else {
+                    updateSystemStatus('✗ Connection Lost', 'error');
+                }
+            } catch (error) {
+                console.error('Health check failed:', error);
+                updateSystemStatus('✗ Connection Lost', 'error');
+            }
+        }
+        
+        function updateSystemStatus(message, status) {
+            const statusEl = document.getElementById('systemStatus');
+            const statusTextEl = document.getElementById('statusText');
+            
+            if (!statusEl || !statusTextEl) return;
+            
+            if (status === 'success') {
+                statusEl.style.background = '#d4edda';
+                statusEl.style.borderLeftColor = '#28a745';
+                statusEl.style.color = '#155724';
+            } else if (status === 'error') {
+                statusEl.style.background = '#f8d7da';
+                statusEl.style.borderLeftColor = '#dc3545';
+                statusEl.style.color = '#721c24';
+            }
+            
+            statusTextEl.innerHTML = message;
+        }
+        
+        // Start health check on page load
+        window.addEventListener('load', () => {
+            checkAPIHealth();
+            healthCheckInterval = setInterval(checkAPIHealth, 1500);
+        });
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            clearInterval(healthCheckInterval);
+        });
+        
+        async function recalibrateGyro() {
+            try {
+                const response = await fetch('/api/calibrate', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    showSaveIndicator('Level has been set');
+                } else {
+                    showSaveIndicator('Failed to set level');
+                }
+            } catch (error) {
+                console.error('Failed to calibrate:', error);
+                showSaveIndicator('Failed to set level');
+            }
+        }
+    )===";
+  }
+  
+  // Dashboard Page (new home page)
+  String getDashboardPage() {
+    return R"===(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - ESP32 Active Suspension</title>
+    <style>
+        )===" + getCommonStyles() + R"===(
+        
+        .gauge-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .gauge {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }
+        
+        .gauge-title {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .gauge-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        /* Battery Icon Styles */
+        .battery-icon {
+            width: 40px;
+            height: 20px;
+            border: 2px solid #333;
+            border-radius: 3px;
+            position: relative;
+            margin: 10px auto 0;
+            display: inline-block;
+        }
+        
+        .battery-icon::after {
+            content: '';
+            position: absolute;
+            right: -4px;
+            top: 6px;
+            width: 3px;
+            height: 8px;
+            background: #333;
+            border-radius: 0 2px 2px 0;
+        }
+        
+        .battery-fill {
+            height: 100%;
+            background: #28a745;
+            border-radius: 1px;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+        
+        .battery-critical {
+            animation: blink-red 1s infinite;
+        }
+        
+        @keyframes blink-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .status-indicator {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .status-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .status-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .quick-action {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            margin-bottom: 15px;
+        }
+        
+        .quick-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(240, 147, 251, 0.4);
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #0c5aa0;
+            margin-top: 15px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Active Suspension</h1>
+        <p class="subtitle">ESP32 Dashboard</p>
+        
+        <div class="gauge-container">
+            <div class="gauge">
+                <div class="gauge-title">ROLL</div>
+                <div class="gauge-value" id="rollGauge">--°</div>
+            </div>
+            <div class="gauge">
+                <div class="gauge-title">PITCH</div>
+                <div class="gauge-value" id="pitchGauge">--°</div>
+            </div>
+        </div>
+        
+        <!-- Battery Status (Dynamic) -->
+        <div class="gauge-container" id="batteryGauges">
+            <!-- Batteries will be populated by JavaScript based on configuration -->
+        </div>
+        
+        <div class="status-indicator">
+            <div class="status-label">Transfer Case</div>
+            <div class="status-value" id="transferCase">4H</div>
+        </div>
+        
+        <button class="quick-action" onclick="recalibrateGyro()">Set as Level</button>
+        
+        <div class="info-box" style="background: #e7f3ff; border-left-color: #2196F3;">
+            <strong>Orientation Guide:</strong><br>
+            &bull; <strong>PITCH</strong>: Uphill = positive (+), Downhill = negative (-)<br>
+            &bull; <strong>ROLL</strong>: Right side down = positive (+), Left side down = negative (-)
+        </div>
+        
+        <div class="info-box" id="systemStatus" style="background: #fff3cd; border-left-color: #ffc107; color: #856404;">
+            <strong>System Status:</strong><br>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </div>
+    
+    )===" + getBottomNavigation("dashboard") + R"===(
+    
+    <script>
+        )===" + getCommonScript() + R"===(
+        
+        // Battery gauge colors
+        const batteryColors = ['#28a745', '#ffc107', '#dc3545'];
+        
+        // Store battery configurations globally
+        let batteryConfigs = [];
+        
+        // Load battery configuration and create gauges
+        async function loadBatteryConfig() {
+            try {
+                const response = await fetch('/api/battery-config');
+                if (response.ok) {
+                    const config = await response.json();
+                    batteryConfigs = config.batteries; // Store for later use
+                    const container = document.getElementById('batteryGauges');
+                    container.innerHTML = ''; // Clear existing
+                    
+                    // Create gauges for batteries with showOnDashboard enabled
+                    config.batteries.forEach((battery, index) => {
+                        if (battery.showOnDashboard && battery.name && battery.name.trim() !== '') {
+                            const color = batteryColors[index % batteryColors.length];
+                            const gauge = document.createElement('div');
+                            gauge.className = 'gauge';
+                            gauge.style.borderLeftColor = color;
+                            gauge.innerHTML = `
+                                <div class="gauge-title">${battery.name.toUpperCase()}</div>
+                                <div class="gauge-value" id="battery${index}">--</div>
+                                <div class="battery-icon" id="battery${index}-icon">
+                                    <div class="battery-fill" id="battery${index}-fill" style="width: 0%;"></div>
+                                </div>
+                            `;
+                            container.appendChild(gauge);
+                        }
+                    });
+                    
+                    // If no batteries configured, hide the container
+                    if (container.children.length === 0) {
+                        container.style.display = 'none';
+                    } else {
+                        container.style.display = 'grid';
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load battery config:', error);
+            }
+        }
+        
+        // Load battery config on page load
+        window.addEventListener('load', loadBatteryConfig);
+    </script>
+</body>
+</html>
+    )===";
+  }
+  
+  // Suspension Page (renamed from getHTMLPage)
+  String getSuspensionPage() {
+    return R"===(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suspension - ESP32 Active Suspension</title>
+    <style>
+        )===" + getCommonStyles() + R"===(
+        
+        .control-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(102, 126, 234, 0.4);
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 5px rgba(102, 126, 234, 0.4);
+        }
+        
+        .value-display {
+            min-width: 60px;
+            text-align: right;
+            font-weight: 600;
+            color: #667eea;
+            font-size: 14px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-save {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-save:active {
+            transform: translateY(0);
+        }
+        
+        .btn-reset {
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        
+        .btn-reset:hover {
+            background: #e0e0e0;
+        }
+        
+        .orientation-select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            font-size: 14px;
+            color: #333;
+            cursor: pointer;
+        }
+        
+        .orientation-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #0c5aa0;
+            margin-top: 20px;
+            line-height: 1.5;
+        }
+        
+        .help-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            line-height: 16px;
+            text-align: center;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-left: 5px;
+            user-select: none;
+        }
+        
+        .help-icon:hover {
+            background: #764ba2;
+        }
+        
+        .help-text {
+            display: none;
+            margin-top: 8px;
+            padding: 8px;
+            background: #e8eaf6;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #555;
+            line-height: 1.4;
+        }
+        
+        .help-text.show {
+            display: block;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 15px;
+            }
+            
+            h1 {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Suspension Control</h1>
+        <p class="subtitle">ESP32 Active Suspension Manager</p>
+        
+        <div class="control-group">
+            <label for="reactionSpeed">Reaction Speed <span class="help-icon" onclick="toggleHelp('reactionSpeed')">?</span></label>
+            <div class="slider-container">
+                <input type="range" id="reactionSpeed" min="0.1" max="5" step="0.1" value="1.0">
+                <span class="value-display" id="reactionSpeedValue">1.0</span>
+            </div>
+            <div class="help-text" id="reactionSpeedHelp">Controls how quickly the suspension responds to changes. Higher = faster response, but may cause oscillations.</div>
+        </div>
+        
+        <div class="control-group">
+            <label for="rideHeightOffset">Ride Height <span class="help-icon" onclick="toggleHelp('rideHeightOffset')">?</span></label>
+            <div class="slider-container">
+                <input type="range" id="rideHeightOffset" min="30" max="150" step="1" value="90">
+                <span class="value-display" id="rideHeightOffsetValue">90</span>
+            </div>
+            <div class="help-text" id="rideHeightOffsetHelp">Sets the neutral servo position (90° = center). Adjust to change overall vehicle height.</div>
+        </div>
+        
+        <div class="control-group">
+            <label for="rangeLimit">Travel Range <span class="help-icon" onclick="toggleHelp('rangeLimit')">?</span></label>
+            <div class="slider-container">
+                <input type="range" id="rangeLimit" min="10" max="90" step="1" value="60">
+                <span class="value-display" id="rangeLimitValue">60</span>
+            </div>
+            <div class="help-text" id="rangeLimitHelp">Maximum suspension travel in degrees (±). Limits how far servos can move from center position.</div>
+        </div>
+        
+        <div class="control-group">
+            <label for="damping">Damping <span class="help-icon" onclick="toggleHelp('damping')">?</span></label>
+            <div class="slider-container">
+                <input type="range" id="damping" min="0.1" max="2" step="0.1" value="0.8">
+                <span class="value-display" id="dampingValue">0.8</span>
+            </div>
+            <div class="help-text" id="dampingHelp">Reduces oscillations and smooths suspension motion. Higher = more damping, softer response.</div>
+        </div>
+        
+        <div class="control-group">
+            <label for="frontRearBalance">Front/Rear Balance <span class="help-icon" onclick="toggleHelp('frontRearBalance')">?</span></label>
+            <div class="slider-container">
+                <input type="range" id="frontRearBalance" min="0" max="1" step="0.05" value="0.5">
+                <span class="value-display" id="frontRearBalanceValue">0.5</span>
+            </div>
+            <div class="help-text" id="frontRearBalanceHelp">Distributes correction force between front and rear. 0=rear-biased, 1=front-biased, 0.5=balanced.</div>
+        </div>
+        
+        <div class="control-group">
+            <label for="stiffness">Stiffness <span class="help-icon" onclick="toggleHelp('stiffness')">?</span></label>
+            <div class="slider-container">
+                <input type="range" id="stiffness" min="0.5" max="3" step="0.1" value="1.0">
+                <span class="value-display" id="stiffnessValue">1.0</span>
+            </div>
+            <div class="help-text" id="stiffnessHelp">Overall suspension firmness. Higher = stiffer, more responsive. Lower = softer, more forgiving.</div>
+        </div>
+        
+        <div class="button-group">
+            <button class="btn-reset" onclick="resetConfig()">Reset to Defaults</button>
+        </div>
+        
+        <div class="info-box">
+            <strong>Info:</strong><br>
+            &bull; Adjustments save automatically when slider is released<br>
+            &bull; Changes apply in real-time to suspension<br>
+            &bull; Click ? icons for parameter help
+        </div>
+        
+        <div class="info-box" id="systemStatus" style="background: #fff3cd; border-left-color: #ffc107; color: #856404;">
+            <strong>System Status:</strong><br>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </div>
+    
+    )===" + getBottomNavigation("suspension") + R"===(
+    
+    <script>
+        )===" + getCommonScript() + R"===(
+        
+        const controls = {
+            reactionSpeed: document.getElementById('reactionSpeed'),
+            rideHeightOffset: document.getElementById('rideHeightOffset'),
+            rangeLimit: document.getElementById('rangeLimit'),
+            damping: document.getElementById('damping'),
+            frontRearBalance: document.getElementById('frontRearBalance'),
+            stiffness: document.getElementById('stiffness')
+        };
+        
+        const valueDisplays = {
+            reactionSpeed: document.getElementById('reactionSpeedValue'),
+            rideHeightOffset: document.getElementById('rideHeightOffsetValue'),
+            rangeLimit: document.getElementById('rangeLimitValue'),
+            damping: document.getElementById('dampingValue'),
+            frontRearBalance: document.getElementById('frontRearBalanceValue'),
+            stiffness: document.getElementById('stiffnessValue')
+        };
+        
+        // Load config on page load
+        window.addEventListener('load', loadConfig);
+        
+        // Track if we're currently saving to prevent reload conflicts
+        let isSaving = false;
+        
+        // Update value displays and save on change
+        Object.keys(controls).forEach(key => {
+            controls[key].addEventListener('input', (e) => {
+                valueDisplays[key].textContent = parseFloat(e.target.value).toFixed(
+                    key === 'reactionSpeed' || key === 'damping' || key === 'frontRearBalance' || key === 'stiffness' ? 2 : 0
+                );
+            });
+            
+            controls[key].addEventListener('change', async (e) => {
+                if (isSaving) return; // Prevent duplicate saves
+                isSaving = true;
+                
+                const newValue = parseFloat(e.target.value);
+                const config = {};
+                config[key] = newValue;
+                
+                try {
+                    const response = await fetch('/api/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(config)
+                    });
+                    
+                    if (response.ok) {
+                        showSaveIndicator();
+                        // Don't reload - keep the value the user just set
+                        console.log('Saved ' + key + ' = ' + newValue);
+                    } else {
+                        console.error('Save failed for ' + key);
+                        // On failure, reload to restore correct value
+                        await loadConfig();
+                    }
+                } catch (error) {
+                    console.error('Failed to save ' + key + ':', error);
+                    // On error, reload to restore correct value
+                    await loadConfig();
+                } finally {
+                    isSaving = false;
+                }
+            });
+        });
+        
+        function toggleHelp(paramName) {
+            const helpEl = document.getElementById(paramName + 'Help');
+            helpEl.classList.toggle('show');
+        }
+        
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+                
+                Object.keys(controls).forEach(key => {
+                    if (config.hasOwnProperty(key)) {
+                        controls[key].value = config[key];
+                        valueDisplays[key].textContent = parseFloat(config[key]).toFixed(
+                            key === 'reactionSpeed' || key === 'damping' || key === 'frontRearBalance' || key === 'stiffness' ? 2 : 0
+                        );
+                    }
+                });
+                
+                // Load MPU orientation
+                if (config.hasOwnProperty('mpuOrientation')) {
+                    document.getElementById('mpuOrientation').value = config.mpuOrientation;
+                }
+            } catch (error) {
+                console.error('Failed to load config:', error);
+                showStatus('Failed to load configuration', 'error');
+            }
+        }
+        
+        async function updateOrientation(value) {
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mpuOrientation: parseInt(value) })
+                });
+                
+                if (response.ok) {
+                    showSaveIndicator();
+                }
+            } catch (error) {
+                console.error('Failed to save orientation:', error);
+            }
+        }
+        
+        async function saveConfig() {
+            const config = {};
+            Object.keys(controls).forEach(key => {
+                config[key] = parseFloat(controls[key].value);
+            });
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+                
+                if (response.ok) {
+                    showSaveIndicator('Configuration saved');
+                }
+            } catch (error) {
+                console.error('Failed to save config:', error);
+            }
+        }
+        
+        async function resetConfig() {
+            if (confirm('Reset all settings to factory defaults?')) {
+                try {
+                    const response = await fetch('/api/reset', {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        await loadConfig();
+                        showSaveIndicator('Settings reset');
+                    }
+                } catch (error) {
+                    console.error('Failed to reset config:', error);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+    )===";
+  }
+  
+  // Lights Page (placeholder)
+  String getLightsPage() {
+    return R"===(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lights - ESP32 Active Suspension</title>
+    <style>
+        )===" + getCommonStyles() + R"===(
+        
+        .placeholder {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        
+        .placeholder-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #0c5aa0;
+            margin-top: 20px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Light Control</h1>
+        <p class="subtitle">Coming Soon</p>
+        
+        <div class="placeholder">
+            <div class="placeholder-icon">💡</div>
+            <p>Light configuration page will be implemented here.</p>
+        </div>
+        
+        <div class="info-box" id="systemStatus" style="background: #fff3cd; border-left-color: #ffc107; color: #856404;">
+            <strong>System Status:</strong><br>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </div>
+    
+    )===" + getBottomNavigation("lights") + R"===(
+    
+    <script>
+        )===" + getCommonScript() + R"===(
+    </script>
+</body>
+</html>
+    )===";
+  }
+  
+  // Configuration Page - Servo Settings
+  String getConfigurationPage() {
+    return R"===(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration - ESP32 Active Suspension</title>
+    <style>
+        )===" + getCommonStyles() + R"===("
+        
+        /* Collapsible Servo Sections */
+        .servo-section {
+            background: #f8f9fa;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            overflow: hidden;
+        }
+        
+        .servo-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            cursor: pointer;
+            user-select: none;
+            background: #f8f9fa;
+            transition: background 0.2s;
+        }
+        
+        .servo-header:hover {
+            background: #e9ecef;
+        }
+        
+        .servo-title {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .chevron {
+            transition: transform 0.3s;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .servo-section.expanded .chevron {
+            transform: rotate(180deg);
+        }
+        
+        .servo-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        
+        .servo-section.expanded .servo-content {
+            max-height: 500px;
+            transition: max-height 0.5s ease-in;
+        }
+        
+        .servo-body {
+            padding: 15px;
+            background: white;
+        }
+        
+        .param-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .param-label {
+            font-size: 12px;
+            color: #666;
+            flex: 1;
+        }
+        
+        .param-controls {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .param-value {
+            min-width: 50px;
+            text-align: center;
+            font-weight: 600;
+            color: #667eea;
+            font-size: 14px;
+        }
+        
+        .btn-adjust {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #333;
+        }
+        
+        .btn-adjust:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .btn-adjust:active {
+            transform: scale(0.95);
+        }
+        
+        .btn-reset-servo {
+            width: 100%;
+            padding: 8px;
+            margin-top: 10px;
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-reset-servo:hover {
+            background: #e0e0e0;
+        }
+        
+        .btn-reset-all {
+            width: 100%;
+            padding: 12px;
+            margin: 20px 0;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-reset-all:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #667eea;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        /* Vertical Slider Styles */
+        .servo-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .servo-column {
+            background: white;
+            border-radius: 8px;
+            padding: 15px 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .servo-column h3 {
+            margin: 0 0 15px 0;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .sliders-container {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            margin-bottom: 15px;
+            gap: 8px;
+        }
+        
+        .slider-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+        }
+        
+        .slider-label {
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #666;
+        }
+        
+        /* Range container holds min and max side-by-side */
+        .range-container {
+            display: flex;
+            gap: 15px;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .range-sliders {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        
+        .range-slider-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .range-slider-label {
+            font-size: 9px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #888;
+        }
+        
+        .vertical-slider {
+            -webkit-appearance: slider-vertical;
+            writing-mode: bt-lr;
+            width: 8px;
+            height: 180px;
+            padding: 0;
+            margin: 10px 0;
+        }
+        
+        input[type=range].vertical-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        input[type=range].vertical-slider::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        /* Different colors for min/max handles */
+        input[type=range].range-max::-webkit-slider-thumb {
+            background: #764ba2;
+        }
+        
+        input[type=range].range-max::-moz-range-thumb {
+            background: #764ba2;
+        }
+        
+        input[type=range].range-min::-webkit-slider-thumb {
+            background: #4a90e2;
+        }
+        
+        input[type=range].range-min::-moz-range-thumb {
+            background: #4a90e2;
+        }
+        
+        .slider-value {
+            font-size: 12px;
+            font-weight: 600;
+            color: #667eea;
+            margin-top: 8px;
+        }
+        
+        .range-slider-value {
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+        
+        .range-slider-wrapper .range-slider-value {
+            color: #764ba2;
+        }
+        
+        .range-slider-wrapper:first-child .range-slider-value {
+            color: #4a90e2;
+        }
+        
+        .reverse-toggle {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        
+        @media (max-width: 768px) {
+            .servo-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .servo-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #0c5aa0;
+            margin-top: 20px;
+            line-height: 1.5;
+        }
+        
+        /* Collapsible Section Styles */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            margin-bottom: 15px;
+        }
+        
+        .section-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: #667eea;
+        }
+        
+        .section-chevron {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+            transition: color 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .section-content {
+            max-height: 5000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        
+        .section-content.collapsed {
+            max-height: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Configuration</h1>
+        <p class="subtitle">System and Servo Settings</p>
+        
+        <!-- Battery Configuration -->
+        <div class="control-group" style="margin-bottom: 25px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div class="section-header" onclick="toggleSection('batterySection')">
+                <h2>🔋 Battery Configuration</h2>
+                <span class="section-chevron collapsed" id="batterySection-chevron">+</span>
+            </div>
+            <div class="section-content collapsed" id="batterySection-content">
+            
+            <!-- Battery 1 -->
+            <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px;">
+                <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #333;">Battery 1</h3>
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Name</label>
+                    <input type="text" id="battery1Name" placeholder="e.g., Main Drive" 
+                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"
+                           onchange="saveBatteryConfig(1, 'name', this.value)">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Cell Count</label>
+                        <select id="battery1Cells" class="orientation-select" onchange="saveBatteryConfig(1, 'cellCount', this.value)">
+                            <option value="2">2S (7.4V)</option>
+                            <option value="3">3S (11.1V)</option>
+                            <option value="4">4S (14.8V)</option>
+                            <option value="5">5S (18.5V)</option>
+                            <option value="6">6S (22.2V)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Plug Assignment</label>
+                        <select id="battery1Plug" class="orientation-select" onchange="saveBatteryConfig(1, 'plugAssignment', this.value)">
+                            <option value="0">None</option>
+                            <option value="1">Plug A (GPIO 34)</option>
+                            <option value="2">Plug B (GPIO 35)</option>
+                            <option value="3">Plug C (GPIO 32)</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="battery1Show" onchange="saveBatteryConfig(1, 'showOnDashboard', this.checked ? 1 : 0)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size: 14px; color: #333;">Show on Dashboard</span>
+                </div>
+            </div>
+            
+            <!-- Battery 2 -->
+            <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px;">
+                <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #333;">Battery 2</h3>
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Name</label>
+                    <input type="text" id="battery2Name" placeholder="e.g., FPV System" 
+                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"
+                           onchange="saveBatteryConfig(2, 'name', this.value)">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Cell Count</label>
+                        <select id="battery2Cells" class="orientation-select" onchange="saveBatteryConfig(2, 'cellCount', this.value)">
+                            <option value="2">2S (7.4V)</option>
+                            <option value="3">3S (11.1V)</option>
+                            <option value="4">4S (14.8V)</option>
+                            <option value="5">5S (18.5V)</option>
+                            <option value="6">6S (22.2V)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Plug Assignment</label>
+                        <select id="battery2Plug" class="orientation-select" onchange="saveBatteryConfig(2, 'plugAssignment', this.value)">
+                            <option value="0">None</option>
+                            <option value="1">Plug A (GPIO 34)</option>
+                            <option value="2">Plug B (GPIO 35)</option>
+                            <option value="3">Plug C (GPIO 32)</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="battery2Show" onchange="saveBatteryConfig(2, 'showOnDashboard', this.checked ? 1 : 0)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size: 14px; color: #333;">Show on Dashboard</span>
+                </div>
+            </div>
+            
+            <!-- Battery 3 -->
+            <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px;">
+                <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #333;">Battery 3</h3>
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Name</label>
+                    <input type="text" id="battery3Name" placeholder="e.g., Lights & Accessories" 
+                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"
+                           onchange="saveBatteryConfig(3, 'name', this.value)">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Cell Count</label>
+                        <select id="battery3Cells" class="orientation-select" onchange="saveBatteryConfig(3, 'cellCount', this.value)">
+                            <option value="2">2S (7.4V)</option>
+                            <option value="3">3S (11.1V)</option>
+                            <option value="4">4S (14.8V)</option>
+                            <option value="5">5S (18.5V)</option>
+                            <option value="6">6S (22.2V)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Plug Assignment</label>
+                        <select id="battery3Plug" class="orientation-select" onchange="saveBatteryConfig(3, 'plugAssignment', this.value)">
+                            <option value="0">None</option>
+                            <option value="1">Plug A (GPIO 34)</option>
+                            <option value="2">Plug B (GPIO 35)</option>
+                            <option value="3">Plug C (GPIO 32)</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="battery3Show" onchange="saveBatteryConfig(3, 'showOnDashboard', this.checked ? 1 : 0)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size: 14px; color: #333;">Show on Dashboard</span>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <strong>Important:</strong><br>
+                &bull; Requires voltage divider circuits on GPIO pins (8:1 ratio recommended)<br>
+                &bull; Each plug can only be assigned to one battery<br>
+                &bull; Dashboard will only show batteries with "Show on Dashboard" enabled<br>
+                &bull; Plug A = GPIO 34, Plug B = GPIO 35, Plug C = GPIO 32 (ADC pins)
+            </div>
+            </div>
+        </div>
+        
+        <!-- MPU6050 Orientation -->
+        <div class="control-group" style="margin-bottom: 25px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div class="section-header" onclick="toggleSection('mpuSection')">
+                <h2>🧭 MPU6050 Sensor Orientation</h2>
+                <span class="section-chevron collapsed" id="mpuSection-chevron">+</span>
+            </div>
+            <div class="section-content collapsed" id="mpuSection-content">
+            <div class="control-row">
+                <div class="control-label">
+                    <span>Physical Mounting</span>
+                    <span class="help-icon" onclick="toggleHelp('mpuOrientationHelp')">?</span>
+                </div>
+                <select id="mpuOrientation" class="orientation-select" onchange="updateOrientation(this.value)">
+                    <option value="0">Arrow Forward, Chip Up (Default)</option>
+                    <option value="1">Arrow Up, Chip Forward</option>
+                    <option value="2">Arrow Backward, Chip Up</option>
+                    <option value="3">Arrow Down, Chip Forward</option>
+                    <option value="4">Arrow Right, Chip Up</option>
+                    <option value="5">Arrow Left, Chip Up</option>
+                </select>
+                <div class="help-text" id="mpuOrientationHelp">Select how your MPU6050 sensor is physically mounted. The arrow is printed on the chip. Correct orientation is critical for accurate roll/pitch readings. This is a one-time setup based on your installation.</div>
+            </div>
+            </div>
+        </div>
+        
+        <!-- Servo Calibration Section -->
+        <div class="control-group" style="margin-bottom: 25px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div class="section-header" onclick="toggleSection('servoSection')">
+                <h2>🎯 Servo Calibration</h2>
+                <span class="section-chevron collapsed" id="servoSection-chevron">+</span>
+            </div>
+            <div class="section-content collapsed" id="servoSection-content">
+            <div class="servo-grid">
+            <!-- Front Left -->
+            <div class="servo-column">
+                <h3>🔵 Front Left</h3>
+                <div class="sliders-container">
+                    <div class="slider-wrapper">
+                        <div class="slider-label">RANGE</div>
+                        <div class="range-container">
+                            <div class="range-sliders">
+                                <div class="range-slider-wrapper">
+                                    <div class="range-slider-label">MIN</div>
+                                    <input type="range" class="vertical-slider range-min" id="fl-min" 
+                                           min="0" max="180" value="30" orient="vertical"
+                                           oninput="updateDisplay('frontLeft', 'min', this.value)"
+                                           onchange="saveSlider('frontLeft', 'min', this.value)">
+                                    <div class="range-slider-value" id="fl-min-val">30°</div>
+                                </div>
+                                <div class="range-slider-wrapper">
+                                    <div class="range-slider-label">MAX</div>
+                                    <input type="range" class="vertical-slider range-max" id="fl-max" 
+                                           min="0" max="180" value="150" orient="vertical"
+                                           oninput="updateDisplay('frontLeft', 'max', this.value)"
+                                           onchange="saveSlider('frontLeft', 'max', this.value)">
+                                    <div class="range-slider-value" id="fl-max-val">150°</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-label">TRIM</div>
+                        <input type="range" class="vertical-slider" id="fl-trim" 
+                               min="-45" max="45" value="0" orient="vertical"
+                               oninput="updateDisplay('frontLeft', 'trim', this.value)"
+                               onchange="saveSlider('frontLeft', 'trim', this.value)">
+                        <div class="slider-value" id="fl-trim-val">0°</div>
+                    </div>
+                </div>
+                <div class="reverse-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="fl-reversed" onchange="toggleReverse('frontLeft')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Reverse</span>
+                </div>
+                <button class="btn-reset-servo" onclick="resetServo('frontLeft')">Reset</button>
+            </div>
+            
+            <!-- Front Right -->
+            <div class="servo-column">
+                <h3>🟢 Front Right</h3>
+                <div class="sliders-container">
+                    <div class="slider-wrapper">
+                        <div class="slider-label">RANGE</div>
+                        <div class="range-container">
+                            <div class="range-sliders">
+                                <div class="range-slider-wrapper">
+                                    <div class="range-slider-label">MIN</div>
+                                    <input type="range" class="vertical-slider range-min" id="fr-min" 
+                                           min="0" max="180" value="30" orient="vertical"
+                                           oninput="updateDisplay('frontRight', 'min', this.value)"
+                                           onchange="saveSlider('frontRight', 'min', this.value)">
+                                    <div class="range-slider-value" id="fr-min-val">30°</div>
+                                </div>
+                                <div class="range-slider-wrapper">
+                                    <div class="range-slider-label">MAX</div>
+                                    <input type="range" class="vertical-slider range-max" id="fr-max" 
+                                           min="0" max="180" value="150" orient="vertical"
+                                           oninput="updateDisplay('frontRight', 'max', this.value)"
+                                           onchange="saveSlider('frontRight', 'max', this.value)">
+                                    <div class="range-slider-value" id="fr-max-val">150°</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-label">TRIM</div>
+                        <input type="range" class="vertical-slider" id="fr-trim" 
+                               min="-45" max="45" value="0" orient="vertical"
+                               oninput="updateDisplay('frontRight', 'trim', this.value)"
+                               onchange="saveSlider('frontRight', 'trim', this.value)">
+                        <div class="slider-value" id="fr-trim-val">0°</div>
+                    </div>
+                </div>
+                <div class="reverse-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="fr-reversed" onchange="toggleReverse('frontRight')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Reverse</span>
+                </div>
+                <button class="btn-reset-servo" onclick="resetServo('frontRight')">Reset</button>
+            </div>
+            
+            <!-- Rear Left -->
+            <div class="servo-column">
+                <h3>🟠 Rear Left</h3>
+                <div class="sliders-container">
+                    <div class="slider-wrapper">
+                        <div class="slider-label">RANGE</div>
+                        <div class="range-container">
+                            <div class="range-sliders">
+                                <div class="range-slider-wrapper">
+                                    <div class="range-slider-label">MIN</div>
+                                    <input type="range" class="vertical-slider range-min" id="rl-min" 
+                                           min="0" max="180" value="30" orient="vertical"
+                                           oninput="updateDisplay('rearLeft', 'min', this.value)"
+                                           onchange="saveSlider('rearLeft', 'min', this.value)">
+                                    <div class="range-slider-value" id="rl-min-val">30°</div>
+                                </div>
+                                <div class="range-slider-wrapper">
+                                    <div class="range-slider-label">MAX</div>
+                                    <input type="range" class="vertical-slider range-max" id="rl-max" 
+                                           min="0" max="180" value="150" orient="vertical"
+                                           oninput="updateDisplay('rearLeft', 'max', this.value)"
+                                           onchange="saveSlider('rearLeft', 'max', this.value)">
+                                    <div class="range-slider-value" id="rl-max-val">150°</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-label">TRIM</div>
+                        <input type="range" class="vertical-slider" id="rl-trim" 
+                               min="-45" max="45" value="0" orient="vertical"
+                               oninput="updateDisplay('rearLeft', 'trim', this.value)"
+                               onchange="saveSlider('rearLeft', 'trim', this.value)">
+                        <div class="slider-value" id="rl-trim-val">0°</div>
+                    </div>
+                </div>
+                <div class="reverse-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="rl-reversed" onchange="toggleReverse('rearLeft')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Reverse</span>
+                </div>
+                <button class="btn-reset-servo" onclick="resetServo('rearLeft')">Reset</button>
+            </div>
+            
+            <!-- Rear Right -->
+            <div class="servo-column">
+                <h3>🔴 Rear Right</h3>
+                <div class="sliders-container">
+                    <div class="slider-wrapper">
+                        <div class="slider-label">RANGE</div>
+                        <div class="range-container">
+                            <div class="range-sliders">
+                                <div class="range-slider-wrapper">
+                                    <div class="range-slider-label">MIN</div>
+                                    <input type="range" class="vertical-slider range-min" id="rr-min" 
+                                           min="0" max="180" value="30" orient="vertical"
+                                           oninput="updateDisplay('rearRight', 'min', this.value)"
+                                           onchange="saveSlider('rearRight', 'min', this.value)">
+                                    <div class="range-slider-value" id="rr-min-val">30°</div>
+                                </div>
+                                <div class="range-slider-wrapper">
+                                    <div class="range-slider-label">MAX</div>
+                                    <input type="range" class="vertical-slider range-max" id="rr-max" 
+                                           min="0" max="180" value="150" orient="vertical"
+                                           oninput="updateDisplay('rearRight', 'max', this.value)"
+                                           onchange="saveSlider('rearRight', 'max', this.value)">
+                                    <div class="range-slider-value" id="rr-max-val">150°</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-label">TRIM</div>
+                        <input type="range" class="vertical-slider" id="rr-trim" 
+                               min="-45" max="45" value="0" orient="vertical"
+                               oninput="updateDisplay('rearRight', 'trim', this.value)"
+                               onchange="saveSlider('rearRight', 'trim', this.value)">
+                        <div class="slider-value" id="rr-trim-val">0°</div>
+                    </div>
+                </div>
+                <div class="reverse-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="rr-reversed" onchange="toggleReverse('rearRight')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Reverse</span>
+                </div>
+                <button class="btn-reset-servo" onclick="resetServo('rearRight')">Reset</button>
+            </div>
+        </div>
+        
+        <button class="btn-reset-all" onclick="resetAllServos()">Reset All Servos to Defaults</button>
+        
+        <div class="info-box">
+            <strong>Info:</strong><br>
+            &bull; Trim adjusts servo center position<br>
+            &bull; Min/Max limits prevent mechanical damage<br>
+            &bull; Reverse changes the servo rotation<br>
+            &bull; Changes save automatically
+        </div>
+        </div>
+        </div>
+        
+        <div class="info-box" id="systemStatus" style="background: #fff3cd; border-left-color: #ffc107; color: #856404;">
+            <strong>System Status:</strong><br>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </div>
+    
+    )===" + getBottomNavigation("configuration") + R"===(
+    
+    <script>
+        )===" + getCommonScript() + R"===(
+        
+        // Servo configuration state
+        let servoConfig = {};
+        
+        // Function to initialize page
+        async function initPage() {
+            // Show loading state
+            document.body.style.opacity = '0.6';
+            
+            try {
+                await loadAllConfig();
+                
+                // Success - show page
+                document.body.style.opacity = '1';
+            } catch (error) {
+                console.error('Failed to load configuration:', error);
+                alert('Failed to load configuration. Please check connection and try again.');
+                document.body.style.opacity = '1';
+            }
+        }
+        
+        // Always load config on page load/reload
+        document.addEventListener('DOMContentLoaded', initPage);
+        
+        async function loadAllConfig() {
+            console.log('Starting config load...');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                console.error('Config fetch timed out after 12 seconds');
+                controller.abort();
+            }, 12000); // 12 second timeout
+            
+            try {
+                console.log('Fetching /api/config...');
+                const response = await fetch('/api/config', { signal: controller.signal });
+                clearTimeout(timeoutId);
+                console.log('Fetch completed, status:', response.status);
+                
+                if (!response.ok) throw new Error('Config fetch failed with status: ' + response.status);
+                
+                console.log('Parsing JSON...');
+                const config = await response.json();
+                console.log('Config loaded successfully:', config);
+                
+                // Set MPU orientation from system config
+                if (config.mpuOrientation !== undefined) {
+                    document.getElementById('mpuOrientation').value = config.mpuOrientation;
+                }
+                
+                // Load servo config from nested servos object
+                if (config.servos) {
+                    servoConfig = config.servos;
+                    
+                    // Update UI with loaded values
+                    updateUI('frontLeft', 'fl');
+                    updateUI('frontRight', 'fr');
+                    updateUI('rearLeft', 'rl');
+                    updateUI('rearRight', 'rr');
+                }
+                
+                // Load battery config
+                if (config.batteries && Array.isArray(config.batteries)) {
+                    config.batteries.forEach((battery, index) => {
+                        const batteryNum = index + 1;
+                        document.getElementById('battery' + batteryNum + 'Name').value = battery.name || '';
+                        document.getElementById('battery' + batteryNum + 'Cells').value = battery.cellCount || 3;
+                        document.getElementById('battery' + batteryNum + 'Plug').value = battery.plugAssignment || 0;
+                        document.getElementById('battery' + batteryNum + 'Show').checked = battery.showOnDashboard || false;
+                    });
+                }
+            } catch (error) {
+                clearTimeout(timeoutId);
+                throw error;
+            }
+        }
+        
+        async function updateOrientation(value) {
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mpuOrientation: parseInt(value) })
+                });
+                
+                if (response.ok) {
+                    showSaveIndicator('Orientation saved');
+                }
+            } catch (error) {
+                console.error('Failed to save orientation:', error);
+            }
+        }
+        
+        function updateUI(servo, prefix) {
+            if (!servoConfig[servo]) return;
+            
+            const config = servoConfig[servo];
+            
+            // Update sliders
+            document.getElementById(prefix + '-trim').value = config.trim;
+            document.getElementById(prefix + '-min').value = config.min;
+            document.getElementById(prefix + '-max').value = config.max;
+            
+            // Update value displays
+            document.getElementById(prefix + '-trim-val').textContent = config.trim + '°';
+            document.getElementById(prefix + '-min-val').textContent = config.min + '°';
+            document.getElementById(prefix + '-max-val').textContent = config.max + '°';
+            
+            // Update reverse toggle
+            document.getElementById(prefix + '-reversed').checked = config.reversed;
+        }
+        
+        function updateDisplay(servo, param, value) {
+            value = parseInt(value);
+            
+            const prefix = servo === 'frontLeft' ? 'fl' : 
+                          servo === 'frontRight' ? 'fr' : 
+                          servo === 'rearLeft' ? 'rl' : 'rr';
+            
+            // Enforce min <= max constraint
+            if (param === 'min') {
+                const maxSlider = document.getElementById(prefix + '-max');
+                if (value > parseInt(maxSlider.value)) {
+                    value = parseInt(maxSlider.value);
+                    document.getElementById(prefix + '-min').value = value;
+                }
+            } else if (param === 'max') {
+                const minSlider = document.getElementById(prefix + '-min');
+                if (value < parseInt(minSlider.value)) {
+                    value = parseInt(minSlider.value);
+                    document.getElementById(prefix + '-max').value = value;
+                }
+            }
+            
+            // Update value display
+            document.getElementById(prefix + '-' + param + '-val').textContent = value + '°';
+        }
+        
+        async function saveSlider(servo, param, value) {
+            value = parseInt(value);
+            
+            try {
+                const response = await fetch('/api/servo-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        servo: servo,
+                        param: param,
+                        value: value
+                    })
+                });
+                
+                if (response.ok) {
+                    servoConfig[servo][param] = value;
+                    showSaveIndicator();
+                }
+            } catch (error) {
+                console.error('Failed to update servo:', error);
+            }
+        }
+        
+        async function toggleReverse(servo) {
+            const prefix = servo === 'frontLeft' ? 'fl' : 
+                          servo === 'frontRight' ? 'fr' : 
+                          servo === 'rearLeft' ? 'rl' : 'rr';
+            const isReversed = document.getElementById(prefix + '-reversed').checked;
+            
+            try {
+                const response = await fetch('/api/servo-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        servo: servo,
+                        param: 'reversed',
+                        value: isReversed ? 1 : 0
+                    })
+                });
+                
+                if (response.ok) {
+                    servoConfig[servo].reversed = isReversed;
+                    showSaveIndicator();
+                }
+            } catch (error) {
+                console.error('Failed to update servo reverse:', error);
+            }
+        }
+        
+        async function resetServo(servo) {
+            if (!confirm('Reset ' + servo + ' to default settings?')) return;
+            
+            try {
+                const response = await fetch('/api/servo-reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ servo: servo })
+                });
+                
+                if (response.ok) {
+                    await loadServoConfig();
+                    showSaveIndicator();
+                }
+            } catch (error) {
+                console.error('Failed to reset servo:', error);
+            }
+        }
+        
+        async function resetAllServos() {
+            if (!confirm('Reset ALL servos to default settings? This cannot be undone.')) return;
+            
+            try {
+                const response = await fetch('/api/servo-reset-all', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    await loadServoConfig();
+                    showSaveIndicator();
+                }
+            } catch (error) {
+                console.error('Failed to reset all servos:', error);
+            }
+        }
+        
+        // Toggle collapsible sections
+        function toggleSection(sectionId) {
+            const content = document.getElementById(sectionId + '-content');
+            const chevron = document.getElementById(sectionId + '-chevron');
+            
+            content.classList.toggle('collapsed');
+            chevron.classList.toggle('collapsed');
+            
+            // Change between + (collapsed) and - (expanded)
+            chevron.textContent = chevron.classList.contains('collapsed') ? '+' : '−';
+        }
+        
+        async function saveBatteryConfig(batteryNum, param, value) {
+            try {
+                const response = await fetch('/api/battery-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        battery: batteryNum,
+                        param: param,
+                        value: value
+                    })
+                });
+                
+                if (response.ok) {
+                    showSaveIndicator();
+                }
+            } catch (error) {
+                console.error('Failed to save battery config:', error);
+            }
+        }
+    </script>
+</body>
+</html>
+    )===";
+  }
+};
+
+#endif

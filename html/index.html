@@ -1,0 +1,3439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TRX-4 Telemetry Dashboard</title>
+    
+    <!-- Bootstrap 5.3.2 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome 6.4.0 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts - Space Grotesk -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Toasty CSS -->
+    <link rel="stylesheet" href="toasty/dist/toasty.min.css">
+    
+    <!-- noUiSlider CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css">
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #16a34a;
+            --warning: #f59e0b;
+            --danger: #dc2626;
+            --info: #0ea5e9;
+            --light-bg: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-primary: #111827;
+            --text-muted: #6b7280;
+            --border-color: #d1d5db;
+        }
+        
+        * {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 1.5rem;
+            padding-bottom: 5rem;
+        }
+        
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        /* Header */
+        .dashboard-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .brand-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 0.75rem;
+            background: linear-gradient(135deg, var(--primary) 0%, #1d4ed8 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.75rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            border: 2px solid #1e40af;
+        }
+        
+        .brand-title {
+            line-height: 1;
+        }
+        
+        .brand-title h1 {
+            font-size: 1.875rem;
+            font-weight: 900;
+            margin: 0;
+            letter-spacing: -0.025em;
+        }
+        
+        .brand-title p {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        
+        /* WiFi icon connecting state - opacity scan animation */
+        @keyframes wifiScan {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+        
+        #wifiIcon.connecting {
+            animation: wifiScan 1.5s ease-in-out infinite;
+            color: var(--text-muted);
+        }
+        
+        /* WiFi icon disconnected state with diagonal line */
+        #wifiIcon.disconnected {
+            position: relative;
+            animation: none;
+        }
+        
+        #wifiIcon.disconnected::after {
+            content: '';
+            position: absolute;
+            width: 130%;
+            height: 2px;
+            background-color: currentColor;
+            top: 50%;
+            left: -15%;
+            transform: translateY(-50%) rotate(-45deg);
+        }
+        
+        /* Settings page accordion styles */
+        .settings-accordion-header {
+            transition: background-color 0.2s ease;
+        }
+        
+        .settings-accordion-header:hover {
+            background-color: rgba(0, 0, 0, 0.03);
+        }
+        
+        .accordion-chevron {
+            transition: transform 0.3s ease;
+            font-size: 0.875rem;
+        }
+        
+        .settings-accordion-header[aria-expanded="true"] .accordion-chevron {
+            transform: rotate(180deg);
+        }
+        
+        /* noUiSlider custom styles for servo sliders */
+        .servo-slider {
+            width: 8px;
+            height: 300px;
+            margin: 1rem auto;
+        }
+        
+        .servo-slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            justify-content: center;
+        }
+        
+        .noUi-target {
+            background: #e5e7eb;
+            border: none;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+        }
+        
+        .noUi-connect {
+            background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+        }
+        
+        .noUi-handle {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            cursor: grab;
+            transition: all 0.2s ease;
+        }
+        
+        .noUi-handle:before,
+        .noUi-handle:after {
+            display: none;
+        }
+        
+        .noUi-handle:hover {
+            transform: scale(1.1);
+        }
+        
+        .noUi-handle:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+        
+        /* Different colors for min, trim, max handles */
+        .noUi-handle[data-handle="0"] {
+            background: #3b82f6;
+        }
+        
+        .noUi-handle[data-handle="1"] {
+            background: #10b981;
+        }
+        
+        .noUi-handle[data-handle="2"] {
+            background: #f59e0b;
+        }
+        
+        .servo-value-labels {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            font-size: 0.875rem;
+        }
+        
+        .servo-value-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 700;
+            font-size: 1rem;
+            border: 2px solid;
+            transition: all 150ms;
+        }
+        
+        .status-badge.connected {
+            border-color: #16a34a;
+            background-color: #dcfce7;
+            color: #15803d;
+        }
+        
+        .status-badge.activity {
+            border-color: var(--primary);
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status-badge svg {
+            width: 1rem;
+            height: 1rem;
+        }
+        
+        .btn-action {
+            height: 2rem;
+            border-radius: 0.375rem;
+            padding: 0 0.75rem;
+            font-weight: 700;
+            font-size: 1rem;
+            border: 2px solid;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: all 150ms;
+            background-color: #dc2626;
+            border-color: #991b1b;
+            color: white;
+        }
+        
+        .btn-action:hover {
+            background-color: #b91c1c;
+        }
+        
+        /* Cards */
+        .metric-card {
+            background: var(--card-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: all 150ms;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .metric-card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .metric-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+        
+        .metric-label {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .metric-icon {
+            width: 1.5rem;
+            height: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .metric-icon.blue {
+            color: var(--primary);
+        }
+        
+        .metric-icon.green {
+            color: var(--success);
+        }
+        
+        .metric-icon.orange {
+            color: #f97316;
+        }
+        
+        .metric-icon.purple {
+            color: #a855f7;
+        }
+        
+        .metric-value {
+            font-size: 2.25rem;
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            margin-bottom: 0.5rem;
+            line-height: 1;
+        }
+        
+        .metric-value.blue {
+            color: var(--primary);
+        }
+        
+        .metric-value.green {
+            color: var(--success);
+        }
+        
+        .metric-value.orange {
+            color: #f97316;
+        }
+        
+        .metric-value.purple {
+            color: #a855f7;
+        }
+        
+        .metric-unit {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+        
+        .metric-bar {
+            height: 0.75rem;
+            background-color: #e5e7eb;
+            border-radius: 9999px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            margin-top: 1rem;
+        }
+        
+        .metric-bar-fill {
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 300ms ease;
+        }
+        
+        .metric-bar-fill.blue {
+            background: linear-gradient(90deg, var(--primary) 0%, #1d4ed8 100%);
+        }
+        
+        .metric-bar-fill.green {
+            background: linear-gradient(90deg, var(--success) 0%, #15803d 100%);
+        }
+        
+        .metric-bar-fill.orange {
+            background: linear-gradient(90deg, #f97316 0%, #ea580c 100%);
+        }
+        
+        .metric-bar-fill.purple {
+            background: linear-gradient(90deg, #a855f7 0%, #7c3aed 100%);
+        }
+        
+        .metric-info {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+        
+        /* Steering Gauge */
+        .steering-gauge {
+            margin-top: 1rem;
+        }
+        
+        .steering-track {
+            height: 2rem;
+            background-color: #e5e7eb;
+            border-radius: 9999px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .steering-center-line {
+            position: absolute;
+            width: 2px;
+            height: 1rem;
+            background-color: #9ca3af;
+        }
+        
+        .steering-indicator {
+            position: absolute;
+            width: 1.25rem;
+            height: 1.25rem;
+            background-color: var(--primary);
+            border-radius: 9999px;
+            border: 2px solid white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: left 100ms ease;
+            top: 50%;
+            transform: translateY(-50%);
+            left: 50%;
+        }
+        
+        .steering-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        
+        .steering-value {
+            display: flex;
+            justify-content: center;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-top: 0.25rem;
+        }
+        
+        /* GPS Card */
+        .gps-data {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .gps-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .gps-label {
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+        
+        .gps-value {
+            color: var(--text-primary);
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+        }
+        
+        /* Statistics Cards */
+        .stat-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background-color: var(--light-bg);
+            border-radius: 0.5rem;
+            border: 2px solid var(--border-color);
+            margin-bottom: 0.75rem;
+        }
+        
+        .stat-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .stat-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .stat-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+        
+        .stat-icon.blue {
+            color: var(--primary);
+        }
+        
+        .stat-icon.purple {
+            color: #a855f7;
+        }
+        
+        .stat-icon.green {
+            color: var(--success);
+        }
+        
+        .stat-icon.sky {
+            color: #0ea5e9;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        
+        .stat-value {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            font-weight: 900;
+        }
+        
+        /* Section Title */
+        .section-title {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .section-title:first-child {
+            margin-top: 0;
+        }
+        
+        /* Footer */
+        .dashboard-footer {
+            margin-top: 2rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .dashboard-header {
+                margin-bottom: 1.5rem;
+            }
+            
+            .metric-value {
+                font-size: 1.875rem;
+            }
+            
+            .section-title {
+                margin-top: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 375px) {
+            .dashboard-header {
+                flex-wrap: wrap;
+            }
+            
+            .header-left {
+                flex-direction: column;
+                align-items: flex-start;
+                width: 100%;
+            }
+            
+            .brand-icon {
+                margin-bottom: 0.5rem;
+            }
+            
+            .brand-title h1 {
+                font-size: 1.5rem;
+            }
+            
+            .header-actions {
+                width: 100%;
+            }
+        }
+
+        /* Sticky Footer Navigation */
+        .footer-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #ffffff;
+            border-top: 2px solid var(--border-color);
+            box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            padding: 0.4rem 0.75rem 0.6rem;
+            z-index: 2000;
+        }
+
+        .footer-nav button {
+            border: none;
+            background: transparent;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.2rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            padding: 0.35rem;
+            cursor: pointer;
+            transition: all 150ms;
+        }
+
+        .footer-nav button:hover {
+            color: var(--primary);
+        }
+
+        .footer-nav button.active {
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .footer-nav button.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .footer-nav i {
+            font-size: 1.1rem;
+        }
+
+        /* Page Sections */
+        .page-section {
+            display: none;
+        }
+
+        .page-section.active {
+            display: block;
+        }
+
+        /* Data Display */
+        .data-display {
+            background: #1e293b;
+            color: #e2e8f0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header (visible on all pages) -->
+        <div class="dashboard-header">
+            <div class="header-left">
+                <div class="brand-icon">
+                    <i class="fas fa-gauge"></i>
+                </div>
+                <div class="brand-title">
+                    <h1>TRX-4 Telemetry</h1>
+                    <p>Real-time vehicle monitoring</p>
+                </div>
+            </div>
+            
+            <div class="header-actions">
+                <i class="fas fa-wifi" id="wifiIcon" style="font-size: 1.5rem; color: var(--text-muted);"></i>
+            </div>
+        </div>
+        
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="page-section active">
+        <!-- Main Metrics Grid -->
+        <div class="row g-3">
+            
+            <!-- Pitch Card -->
+            <div class="col-6 col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fa-solid fa-truck-front"></i>
+                        Pitch
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="display-4 text-primary mb-0" id="pitchValue">0.0</h2>
+                        <small class="text-muted">degrees</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Roll Card -->
+            <div class="col-6 col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fa-solid fa-truck-monster"></i>
+                        Roll
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="display-4 text-success mb-0" id="rollValue">0.0</h2>
+                        <small class="text-muted">degrees</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trip Statistics Card -->
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-compass"></i>
+                            Trip Statistics
+                        </div>
+                        <i class="fa-solid fa-clock-rotate-left" id="tripResetBtn" style="cursor: pointer;" title="Reset session time & distance"></i>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Distance</span>
+                                <strong id="distanceValue">0.00 mi</strong>
+                            </div>
+                            <div class="distance-bar mt-1">
+                                <div class="distance-fill" id="distanceBar" style="width: 0%; background: var(--color-danger);"></div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Total Distance</span>
+                                <strong id="totalDistanceValue">0.00 mi</strong>
+                            </div>
+                            <div class="distance-bar mt-1">
+                                <div class="distance-fill" id="totalDistanceBar" style="width: 0%; background: var(--color-danger);"></div>
+                            </div>
+                        </div>
+                        <div class="mb-0">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Session Time</span>
+                                <strong id="sessionDuration">00:00</strong>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Total Runtime</span>
+                                <strong id="totalDuration">00:00</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        
+            <!-- GPS Position Card -->
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-map-pin"></i>
+                            GPS
+                        </div>
+                        <i class="fa-solid fa-share-nodes" id="gpsShareBtn" style="cursor: pointer;" title="Share location"></i>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Latitude</span>
+                                <strong id="latitudeValue">--</strong>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Longitude</span>
+                                <strong id="longitudeValue">--</strong>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Elevation</span>
+                                <strong id="elevationValue">--</strong>
+                            </div>
+                        </div>
+                        <div class="mb-0">
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">Accuracy</small>
+                                <small class="text-muted" id="gpsAccuracy">--</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Battery Status Card -->
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-bolt"></i>
+                        Battery Status
+                    </div>
+                    <div class="card-body" id="batteryStatusContainer">
+                        <div id="batteryDisplay">
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <span>Loading batteries...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection Card -->
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-wifi"></i>
+                            Connection
+                        </div>
+                        <i class="fa-solid fa-gear" id="connectionSettingsGear" style="cursor: pointer;" title="Go to Settings"></i>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span>WebSocket</span>
+                            <span class="btn btn-danger" id="wsStatusBadge">Offline</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>ESP32 IP</span>
+                            <span id="deviceIpDisplay">--</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Updates</span>
+                            <span id="updatesStatus">0</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Last Update Received</span>
+                            <span id="lastUpdateDisplay">--</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Telemetry Stream</span>
+                            <span id="telemetryStatus">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tuning Settings -->
+             <!-- Connection Card -->
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-sliders"></i>
+                            Suspension Settings
+                        </div>
+                        <i class="fa-solid fa-gear" id="suspensionSettingsGear" style="cursor: pointer;" title="Go to Tuning"></i>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span>Reaction Speed</span>
+                            <span class="metric-pill" id="reactionSpeedBadge">--</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Ride Height</span>
+                            <span id="rideHeightDisplay">--</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Damping</span>
+                            <span id="dampingDisplay">--</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Stiffness</span>
+                            <span id="stiffnessDisplay">--</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Front/Rear Balance</span>
+                            <span id="frontRearBalanceDisplay">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section id="settings" class="page-section">
+            <div class="row g-3">
+                
+                <!-- Servo Configuration Card -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header settings-accordion-header" data-bs-toggle="collapse" data-bs-target="#collapseServo" aria-expanded="false" aria-controls="collapseServo" style="cursor: pointer;">
+                            <i class="fas fa-sliders"></i>
+                            Servo Configuration
+                            <i class="fas fa-chevron-down float-end accordion-chevron"></i>
+                        </div>
+                        <div id="collapseServo" class="collapse" data-accordion-id="servo">
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <!-- Front Left Servo Card -->
+                                <div class="col-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <i class="fas fa-arrow-up" style="transform: rotate(-45deg);"></i>
+                                            Front Left
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="servo-slider-container">
+                                                <div id="servoFLSlider" class="servo-slider"></div>
+                                            </div>
+                                            <div class="form-check form-switch mt-3 text-center">
+                                                <input class="form-check-input" type="checkbox" id="servoFLReversed">
+                                                <label class="form-check-label" for="servoFLReversed">Reverse Servo Rotation</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Front Right Servo Card -->
+                                <div class="col-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <i class="fas fa-arrow-up" style="transform: rotate(45deg);"></i>
+                                            Front Right
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="servo-slider-container">
+                                                <div id="servoFRSlider" class="servo-slider"></div>
+                                            </div>
+                                            <div class="form-check form-switch mt-3 text-center">
+                                                <input class="form-check-input" type="checkbox" id="servoFRReversed">
+                                                <label class="form-check-label" for="servoFRReversed">Reverse Servo Rotation</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Rear Left Servo Card -->
+                                <div class="col-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <i class="fas fa-arrow-down" style="transform: rotate(45deg);"></i>
+                                            Rear Left
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="servo-slider-container">
+                                                <div id="servoRLSlider" class="servo-slider"></div>
+                                            </div>
+                                            <div class="form-check form-switch mt-3 text-center">
+                                                <input class="form-check-input" type="checkbox" id="servoRLReversed">
+                                                <label class="form-check-label" for="servoRLReversed">Reverse Servo Rotation</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Rear Right Servo Card -->
+                                <div class="col-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <i class="fas fa-arrow-down" style="transform: rotate(-45deg);"></i>
+                                            Rear Right
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="servo-slider-container">
+                                                <div id="servoRRSlider" class="servo-slider"></div>
+                                            </div>
+                                            <div class="form-check form-switch mt-3 text-center">
+                                                <input class="form-check-input" type="checkbox" id="servoRRReversed">
+                                                <label class="form-check-label" for="servoRRReversed">Reverse Servo Rotation</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info mt-3" style="font-size: 0.875rem;">
+                                <strong>Servo Tips:</strong><br>
+                                • This page is for ONE-TIME setup and static leveling<br>
+                                • For dynamic ride height during driving, use Suspension Tuning page<br>
+                                • Changes are automatically saved
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gyro Configuration Card -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header settings-accordion-header" data-bs-toggle="collapse" data-bs-target="#collapseGyro" aria-expanded="false" aria-controls="collapseGyro" style="cursor: pointer;">
+                            <i class="fas fa-compass"></i>
+                            Gyro Configuration
+                            <i class="fas fa-chevron-down float-end accordion-chevron"></i>
+                        </div>
+                        <div id="collapseGyro" class="collapse" data-accordion-id="gyro">
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="mpuOrientation" class="form-label">Physical Mounting</label>
+                                <select class="form-select" id="mpuOrientation">
+                                    <option value="0">Arrow Forward, Chip Up (Default)</option>
+                                    <option value="1">Arrow Up, Chip Forward</option>
+                                    <option value="2">Arrow Backward, Chip Up</option>
+                                    <option value="3">Arrow Down, Chip Forward</option>
+                                    <option value="4">Arrow Right, Chip Up</option>
+                                    <option value="5">Arrow Left, Chip Up</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="sampleRateSlider" class="form-label d-flex align-items-center justify-content-between">
+                                    <span>Sensor Data Reading Frequency <span class="help-icon" onclick="toggleHelp('sampleRate')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">?</span> <span id="sampleRateLabel">Very Responsive</span></span>
+                                    
+                                </label>
+                                <div id="helpSampleRate" class="alert alert-info" style="display: none; font-size: 0.875rem; margin-top: 0.5rem;">
+                                    Controls how often the sensor is read and the suspension loop updates. Higher = more responsive, but more CPU/I2C load.
+                                </div>
+                                <input type="range" class="form-range" id="sampleRateSlider" min="5" max="25" step="1" value="25">
+                                <div class="d-flex justify-content-between" style="font-size: 0.75rem; color: #888;">
+                                    <span>Slower</span>
+                                    <span>Faster</span>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="telemetryRateSlider" class="form-label d-flex align-items-center justify-content-between">
+                                    <span>Dashboard Update Frequency <span class="help-icon" onclick="toggleHelp('telemetryRate')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">?</span> <span id="telemetryRateLabel">Normal</span></span>
+                                    
+                                </label>
+                                <div id="helpTelemetryRate" class="alert alert-info" style="display: none; font-size: 0.875rem; margin-top: 0.5rem;">
+                                    Controls how often the dashboard receives updates. Higher = smoother live data, but more network and CPU usage.
+                                </div>
+                                <input type="range" class="form-range" id="telemetryRateSlider" min="1" max="4" step="1" value="3" list="telemetryMarkers">
+                                <datalist id="telemetryMarkers">
+                                    <option value="1" label="Very Slow"></option>
+                                    <option value="2" label="Slow"></option>
+                                    <option value="3" label="Normal"></option>
+                                    <option value="4" label="Fast"></option>
+                                </datalist>
+                                <div class="d-flex justify-content-between" style="font-size: 0.75rem; color: #888;">
+                                    <span>Slower</span>
+                                    <span>Faster</span>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info" style="font-size: 0.875rem;">
+                                <strong>Calibration Tips:</strong><br>
+                                • Select how your MPU6050 sensor is physically mounted. The arrow is printed on the chip. Correct orientation is critical for accurate roll/pitch readings. This is a one-time setup based on your installation.<br>
+                                • Sample Rate controls sensor reading and suspension update frequency. Higher = faster response but more CPU/I2C load. 25 Hz is recommended.
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Battery Configuration Card -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header settings-accordion-header" data-bs-toggle="collapse" data-bs-target="#collapseBattery" aria-expanded="false" aria-controls="collapseBattery" style="cursor: pointer;">
+                            <i class="fas fa-battery-three-quarters"></i>
+                            Battery Configuration
+                            <i class="fas fa-chevron-down float-end accordion-chevron"></i>
+                        </div>
+                        <div id="collapseBattery" class="collapse" data-accordion-id="battery">
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <!-- Battery 1 Card -->
+                                <div class="col-12 col-md-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <i class="fas fa-battery-full"></i>
+                                            Battery 1
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Name</label>
+                                                <input type="text" class="form-control" id="battery1Name" placeholder="e.g., Main Drive">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Cell Count</label>
+                                                <select class="form-select" id="battery1CellCount">
+                                                    <option value="1">1S (3.7V)</option>
+                                                    <option value="2">2S (7.4V)</option>
+                                                    <option value="3" selected>3S (11.1V)</option>
+                                                    <option value="4">4S (14.8V)</option>
+                                                    <option value="5">5S (18.5V)</option>
+                                                    <option value="6">6S (22.2V)</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Cable</label>
+                                                <select class="form-select" id="battery1Plug">
+                                                    <option value="0">None</option>
+                                                    <option value="1" selected>Plug A</option>
+                                                    <option value="2">Plug B</option>
+                                                    <option value="3">Plug C</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="battery1Show" checked>
+                                                <label class="form-check-label" for="battery1Show">Show on Dashboard</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Battery 2 Card -->
+                                <div class="col-12 col-md-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <i class="fas fa-battery-full"></i>
+                                            Battery 2
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Name</label>
+                                                <input type="text" class="form-control" id="battery2Name" placeholder="e.g., FPV System">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Cell Count</label>
+                                                <select class="form-select" id="battery2CellCount">
+                                                    <option value="1">1S (3.7V)</option>
+                                                    <option value="2">2S (7.4V)</option>
+                                                    <option value="3" selected>3S (11.1V)</option>
+                                                    <option value="4">4S (14.8V)</option>
+                                                    <option value="5">5S (18.5V)</option>
+                                                    <option value="6">6S (22.2V)</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Cable</label>
+                                                <select class="form-select" id="battery2Plug">
+                                                    <option value="0" selected>None</option>
+                                                    <option value="1">Plug A</option>
+                                                    <option value="2">Plug B</option>
+                                                    <option value="3">Plug C</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="battery2Show">
+                                                <label class="form-check-label" for="battery2Show">Show on Dashboard</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Battery 3 Card -->
+                                <div class="col-12 col-md-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <i class="fas fa-battery-full"></i>
+                                            Battery 3
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Name</label>
+                                                <input type="text" class="form-control" id="battery3Name" placeholder="e.g., Lights & Accessories">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Cell Count</label>
+                                                <select class="form-select" id="battery3CellCount">
+                                                    <option value="1">1S (3.7V)</option>
+                                                    <option value="2">2S (7.4V)</option>
+                                                    <option value="3" selected>3S (11.1V)</option>
+                                                    <option value="4">4S (14.8V)</option>
+                                                    <option value="5">5S (18.5V)</option>
+                                                    <option value="6">6S (22.2V)</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Cable</label>
+                                                <select class="form-select" id="battery3Plug">
+                                                    <option value="0" selected>None</option>
+                                                    <option value="1">Plug A</option>
+                                                    <option value="2">Plug B</option>
+                                                    <option value="3">Plug C</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="battery3Show">
+                                                <label class="form-check-label" for="battery3Show">Show on Dashboard</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info mt-3" style="font-size: 0.875rem;">
+                                <strong>Battery Info:</strong><br>
+                                • Requires voltage divider circuits on GPIO pins (8:1 ratio recommended)<br>
+                                • Each plug can only be assigned to one battery<br>
+                                • Dashboard will only show batteries with "Show on Dashboard" enabled<br>
+                                • Plug A = GPIO 34, Plug B = GPIO 35, Plug C = GPIO 32 (ADC pins)
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Settings Card -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header settings-accordion-header" data-bs-toggle="collapse" data-bs-target="#collapseNetwork" aria-expanded="false" aria-controls="collapseNetwork" style="cursor: pointer;">
+                            <i class="fas fa-wifi"></i>
+                            Network Settings
+                            <i class="fas fa-chevron-down float-end accordion-chevron"></i>
+                        </div>
+                        <div id="collapseNetwork" class="collapse" data-accordion-id="network">
+                        <div class="card-body">
+                            <!-- Connection Mode Card -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <i class="fas fa-network-wired"></i>
+                                    Connection Mode
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked>
+                                            <label class="form-check-label" for="modeHomeWifi">
+                                                <i class="fas fa-wifi text-success"></i>
+                                                <strong>Home WiFi</strong>
+                                                <span class="badge bg-success ms-2">Recommended</span>
+                                            </label>
+                                            <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
+                                            <div id="helpHomeWifi" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
+                                                <strong>Home WiFi Mode:</strong><br>
+                                                • ESP32 connects to your home WiFi network<br>
+                                                • Check serial monitor for assigned IP address<br>
+                                                • IP address is saved automatically when changed<br>
+                                                • Test connection verifies WebSocket connectivity<br>
+                                                • IP may change if router reassigns it
+                                            </div>
+                                        </div>
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="radio" name="networkMode" id="modeStandalone" value="standalone">
+                                            <label class="form-check-label" for="modeStandalone">
+                                                <i class="fas fa-signal text-warning"></i>
+                                                <strong>Stand Alone Mode</strong>
+                                            </label>
+                                            <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
+                                            <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
+                                                <strong>Stand Alone Mode:</strong><br>
+                                                1. ESP32 creates its own WiFi network<br>
+                                                2. SSID: <strong>ESP32-Suspension</strong><br>
+                                                3. Password: <strong>12345678</strong><br>
+                                                4. IP is always: <strong>192.168.4.1</strong><br>
+                                                5. Connect your phone to ESP32-Suspension WiFi<br>
+                                                6. IP field will auto-fill when this mode is selected
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- IP Address Input -->
+                                    <div class="mb-3">
+                                        <label for="esp32IpAddress" class="form-label">ESP32 IP Address</label>
+                                        <input type="text" class="form-control" id="esp32IpAddress" placeholder="192.168.1.100">
+                                        <small class="form-text text-muted" id="ipHelpText">
+                                            Check network router for assigned IP
+                                        </small>
+                                    </div>
+
+                                    <!-- WebSocket Status -->
+                                    <div class="mb-3">
+                                        <label class="form-label">WebSocket Status</label>
+                                        <div id="wsStatusDisplay" class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #dee2e6;">
+                                            <i class="fas fa-circle" id="wsStatusIcon" style="color: #888;"></i>
+                                            <span id="wsStatusText">Disconnected</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Test Connection Button -->
+                                    <button type="button" class="btn btn-primary w-100 mb-3" id="testConnectionBtn">
+                                        <i class="fas fa-plug"></i>
+                                        Test Connection
+                                    </button>
+
+                                    <!-- Connection Test Result -->
+                                    <div id="connectionTestResult" style="display: none;" class="alert mb-0" role="alert"></div>
+                                </div>
+                            </div>
+
+                            <!-- Connection Setup Info -->
+                            <div class="alert alert-info mt-3" style="font-size: 0.875rem;">
+                                <i class="fas fa-info-circle"></i> <strong>Connection Setup</strong>
+                                
+                                <div class="mt-3">
+                                    <strong>Home WiFi Mode:</strong><br>
+                                    • ESP32 connects to your home WiFi network<br>
+                                    • Check serial monitor for assigned IP address<br>
+                                    • IP address is saved automatically when changed<br>
+                                    • Test connection verifies WebSocket connectivity<br>
+                                    • IP may change if router reassigns it
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <strong>Stand Alone Mode:</strong><br>
+                                    1. ESP32 creates its own WiFi network<br>
+                                    2. SSID: <strong>ESP32-Suspension</strong><br>
+                                    3. Password: <strong>12345678</strong><br>
+                                    4. IP is always: <strong>192.168.4.1</strong><br>
+                                    5. Connect your phone to ESP32-Suspension WiFi<br>
+                                    6. IP field will auto-fill when this mode is selected
+                                </div>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Data Feed Card -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header settings-accordion-header" data-bs-toggle="collapse" data-bs-target="#collapseLiveData" aria-expanded="false" aria-controls="collapseLiveData" style="cursor: pointer;">
+                            <i class="fas fa-broadcast-tower"></i>
+                            Live Data Feed
+                            <i class="fas fa-chevron-down float-end accordion-chevron"></i>
+                        </div>
+                        <div id="collapseLiveData" class="collapse" data-accordion-id="livedata">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <label class="form-label mb-0">Telemetry Stream</label>
+                                <i class="fa-solid fa-pause" id="dataFeedToggle" style="cursor: pointer; font-size: 1.25rem;" title="Pause/Resume"></i>
+                            </div>
+                            <div class="data-display" id="wsData">{
+  "type": "telemetry",
+  "roll": -10.4,
+  "pitch": -5.4,
+  "yaw": 776.9,
+  "verticalAccel": -0.64,
+  "voltages": [
+    0,
+    0,
+    0
+  ]
+}</div>
+                            <div class="alert alert-info mt-3" style="font-size: 0.875rem;">
+                                <i class="fas fa-info-circle"></i> <strong>Pause Behavior</strong><br>
+                                • Clicking pause affects ALL telemetry updates across the entire app<br>
+                                • Dashboard values (pitch, roll, battery) will freeze when paused<br>
+                                • WebSocket still receives data, but processing is blocked<br>
+                                • Pause state resets to "playing" when you refresh the page<br>
+                                • ESP32 reboot does NOT reset pause state (browser-side only)
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Config Data Card -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header settings-accordion-header" data-bs-toggle="collapse" data-bs-target="#collapseConfig" aria-expanded="false" aria-controls="collapseConfig" style="cursor: pointer;">
+                            <i class="fas fa-cog"></i>
+                            Configuration Data
+                            <i class="fas fa-chevron-down float-end accordion-chevron"></i>
+                        </div>
+                        <div id="collapseConfig" class="collapse" data-accordion-id="config">
+                        <div class="card-body">
+                            <div class="data-display" id="configData">{
+  "loading": "Fetching configuration..."
+}</div>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tuning Section -->
+        <section id="tuning" class="page-section">
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-sliders"></i>
+                            Suspension Tuning
+                        </div>
+                        <div class="card-body">
+                            <!-- Reaction Speed -->
+                            <div class="mb-4">
+                                <label class="form-label d-flex align-items-center justify-content-between">
+                                    <span>Reaction Speed</span>
+                                    <span class="help-icon" onclick="toggleHelp('reactionSpeed')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">?</span>
+                                </label>
+                                <div id="helpReactionSpeed" class="alert alert-info" style="display: none; font-size: 0.875rem; margin-top: 0.5rem;">
+                                    Controls how quickly the suspension responds to changes. Higher = faster response, but may cause oscillations.
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="range" class="form-range" id="sliderReactionSpeed" min="0.1" max="5" step="0.1" value="1.0" style="flex: 1;">
+                                    <span id="valueReactionSpeed" class="badge bg-primary" style="min-width: 50px; text-align: center;">1.0</span>
+                                </div>
+                            </div>
+
+                            <!-- Ride Height -->
+                            <div class="mb-4">
+                                <label class="form-label d-flex align-items-center justify-content-between">
+                                    <span>Ride Height</span>
+                                    <span class="help-icon" onclick="toggleHelp('rideHeight')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">?</span>
+                                </label>
+                                <div id="helpRideHeight" class="alert alert-info" style="display: none; font-size: 0.875rem; margin-top: 0.5rem;">
+                                    Sets baseline operating height as percentage of min/max range. 0% = lowest (stability), 100% = highest (clearance). Active suspension adjusts within this range.
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="range" class="form-range" id="sliderRideHeight" min="0" max="100" step="1" value="50" style="flex: 1;">
+                                    <span id="valueRideHeight" class="badge bg-primary" style="min-width: 50px; text-align: center;">50%</span>
+                                </div>
+                            </div>
+
+                            <!-- Damping -->
+                            <div class="mb-4">
+                                <label class="form-label d-flex align-items-center justify-content-between">
+                                    <span>Damping</span>
+                                    <span class="help-icon" onclick="toggleHelp('damping')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">?</span>
+                                </label>
+                                <div id="helpDamping" class="alert alert-info" style="display: none; font-size: 0.875rem; margin-top: 0.5rem;">
+                                    Reduces oscillations and smooths suspension motion. Higher = more damping, softer response.
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="range" class="form-range" id="sliderDamping" min="0.1" max="2" step="0.1" value="0.8" style="flex: 1;">
+                                    <span id="valueDamping" class="badge bg-primary" style="min-width: 50px; text-align: center;">0.8</span>
+                                </div>
+                            </div>
+
+                            <!-- Front/Rear Balance -->
+                            <div class="mb-4">
+                                <label class="form-label d-flex align-items-center justify-content-between">
+                                    <span>Front/Rear Balance</span>
+                                    <span class="help-icon" onclick="toggleHelp('frontRearBalance')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">?</span>
+                                </label>
+                                <div id="helpFrontRearBalance" class="alert alert-info" style="display: none; font-size: 0.875rem; margin-top: 0.5rem;">
+                                    Distributes correction force between front and rear. 0=rear-biased, 1=front-biased, 0.5=balanced.
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="range" class="form-range" id="sliderFrontRearBalance" min="0" max="1" step="0.05" value="0.5" style="flex: 1;">
+                                    <span id="valueFrontRearBalance" class="badge bg-primary" style="min-width: 50px; text-align: center;">0.50</span>
+                                </div>
+                            </div>
+
+                            <!-- Stiffness -->
+                            <div class="mb-4">
+                                <label class="form-label d-flex align-items-center justify-content-between">
+                                    <span>Stiffness</span>
+                                    <span class="help-icon" onclick="toggleHelp('stiffness')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">?</span>
+                                </label>
+                                <div id="helpStiffness" class="alert alert-info" style="display: none; font-size: 0.875rem; margin-top: 0.5rem;">
+                                    Overall suspension firmness. Higher = stiffer, more responsive. Lower = softer, more forgiving.
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="range" class="form-range" id="sliderStiffness" min="0.5" max="3" step="0.1" value="1.0" style="flex: 1;">
+                                    <span id="valueStiffness" class="badge bg-primary" style="min-width: 50px; text-align: center;">1.0</span>
+                                </div>
+                            </div>
+                            
+                            <hr class="my-4">
+                            
+                            <button class="btn btn-outline-secondary w-100" onclick="resetTuningToDefaults()">Reset to Defaults</button>
+
+                            <div class="alert alert-info mt-3" style="font-size: 0.875rem;">
+                                <strong>Info:</strong><br>
+                                • Adjustments save automatically when slider is released<br>
+                                • Changes apply in real-time to suspension<br>
+                                • Ride Height: 0% = min position, 100% = max position (use during driving)<br>
+                                • Click ? icons for parameter help
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Lights Section -->
+        <section id="lights" class="page-section">
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-lightbulb"></i>
+                            Light Control
+                        </div>
+                        <div class="card-body">
+                            <h5 class="mb-3">Headlights</h5>
+                            <div class="mb-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="headlightsOn">
+                                    <label class="form-check-label" for="headlightsOn">Headlights</label>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label for="headlightBrightness" class="form-label">Brightness</label>
+                                <input type="range" class="form-range" id="headlightBrightness" min="0" max="100" value="100">
+                            </div>
+                            
+                            <hr class="my-4">
+                            
+                            <h5 class="mb-3">Tail Lights</h5>
+                            <div class="mb-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="taillightsOn">
+                                    <label class="form-check-label" for="taillightsOn">Tail Lights</label>
+                                </div>
+                            </div>
+                            
+                            <hr class="my-4">
+                            
+                            <h5 class="mb-3">Underglow</h5>
+                            <div class="mb-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="underglowOn">
+                                    <label class="form-check-label" for="underglowOn">Underglow LEDs</label>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label for="underglowColor" class="form-label">Color</label>
+                                <input type="color" class="form-control form-control-color w-100" id="underglowColor" value="#2563eb">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FPV Section -->
+        <section id="fpv" class="page-section">
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-video"></i>
+                            FPV Camera
+                        </div>
+                        <div class="card-body">
+                            <div class="ratio ratio-16x9 bg-dark mb-3">
+                                <div class="d-flex align-items-center justify-content-center text-white">
+                                    <div class="text-center">
+                                        <i class="fas fa-video fa-3x mb-3"></i>
+                                        <p>Camera feed will appear here</p>
+                                        <small class="text-muted">Connect to ESP32-CAM module</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr class="my-4">
+                            
+                            <h5 class="mb-3">Camera Settings</h5>
+                            <div class="mb-3">
+                                <label for="cameraUrl" class="form-label">Camera Stream URL</label>
+                                <input type="text" class="form-control" id="cameraUrl" placeholder="http://192.168.87.33:81/stream">
+                            </div>
+                            <div class="mb-3">
+                                <label for="resolution" class="form-label">Resolution</label>
+                                <select class="form-select" id="resolution">
+                                    <option value="vga">VGA (640x480)</option>
+                                    <option value="svga" selected>SVGA (800x600)</option>
+                                    <option value="hd">HD (1280x720)</option>
+                                </select>
+                            </div>
+                            
+                            <button class="btn btn-primary w-100">Connect Camera</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <!-- Sticky Footer Navigation -->
+    <nav class="footer-nav">
+        <button class="active" id="nav-dashboard" data-target="dashboard">
+            <i class="fas fa-house"></i>
+            <span>Dashboard</span>
+        </button>
+        <button id="nav-tuning" data-target="tuning">
+            <i class="fas fa-sliders"></i>
+            <span>Tuning</span>
+        </button>
+        <button id="nav-lights" data-target="lights">
+            <i class="fas fa-lightbulb"></i>
+            <span>Lights</span>
+        </button>
+        <button id="nav-fpv" data-target="fpv">
+            <i class="fas fa-video"></i>
+            <span>FPV</span>
+        </button>
+        <button id="nav-settings" data-target="settings">
+            <i class="fas fa-gear"></i>
+            <span>Settings</span>
+        </button>
+    </nav>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Toasty JS -->
+    <script src="toasty/dist/toasty.min.js"></script>
+    
+    <!-- noUiSlider JS -->
+    <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+    
+    <script>
+        // ==================== Configuration ====================
+        const ESP32_IP = localStorage.getItem('esp32Ip') || '192.168.87.32';
+        const METERS_TO_FEET = 3.28084;
+        const GPS_UPDATE_INTERVAL = 2 * 60 * 1000; // 2 minutes
+        
+        let ws = null;
+        let telemetryCount = 0;
+        let isPaused = false;
+        let gpsTimer = null;
+        let sessionStartTime = null;
+        let totalRuntime = parseInt(localStorage.getItem('totalRuntime')) || 0;
+        let sessionTimer = null;
+        let totalSessionStart = null;
+        let totalTimer = null;
+        let currentGPS = { lat: null, lon: null, elevation: null };
+        let previousGPS = { lat: null, lon: null };
+        let tripDistance = 0;
+        let totalDistance = parseInt(localStorage.getItem('totalDistance')) || 0;
+        let batteryConfig = null;
+        let fullConfig = null;
+        let lastVoltages = [0, 0, 0];
+        
+        // Initialize Toasty for notifications
+        const toast = new Toasty({
+            duration: 3000,
+            enableSounds: false
+        });
+
+        // Helper function to get element by ID
+        function $(id) {
+            if (id.startsWith('#')) {
+                return document.getElementById(id.substring(1));
+            } else if (id.startsWith('.')) {
+                return document.querySelectorAll(id.substring(1));
+            }
+            return document.getElementById(id);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-connect WebSocket on load
+            connectWebSocket();
+            
+            // Display initial total runtime
+            updateDurationDisplays();
+            
+            // Initialize distance displays
+            const distVal = document.getElementById('distanceValue');
+            const totalDistVal = document.getElementById('totalDistanceValue');
+            if (distVal) distVal.textContent = `${tripDistance.toFixed(2)} mi`;
+            if (totalDistVal) totalDistVal.textContent = `${totalDistance.toFixed(2)} mi`;
+            
+            // Display ESP32 IP address on dashboard
+            const ipDisplay = document.getElementById('deviceIpDisplay');
+            if (ipDisplay) ipDisplay.textContent = ESP32_IP;
+            
+            // Fetch config from ESP32
+            fetchConfigFromESP32();
+            
+            // Initialize tuning sliders
+            initTuningSliders();
+            
+            // Initialize settings controls
+            initServoControls();
+            initGyroControls();
+            initBatteryControls();
+            initNetworkSettings();
+            initSettingsAccordions();
+
+            // Page navigation - footer nav buttons
+            document.querySelectorAll('.footer-nav button').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const target = this.dataset.target;
+                    if (target) {
+                        navigateToSection(target);
+                    }
+                });
+            });
+            
+            // Live Data Feed pause/play toggle
+            const dataFeedToggle = document.getElementById('dataFeedToggle');
+            if (dataFeedToggle) {
+                dataFeedToggle.addEventListener('click', function() {
+                    if (this.classList.contains('fa-pause')) {
+                        this.classList.remove('fa-pause');
+                        this.classList.add('fa-play');
+                        isPaused = true;
+                        console.log('Data feed paused');
+                    } else {
+                        this.classList.remove('fa-play');
+                        this.classList.add('fa-pause');
+                        isPaused = false;
+                        console.log('Data feed resumed');
+                    }
+                });
+            }
+            
+            // Reconnect button
+            const reconnectBtn = document.getElementById('reconnectBtn');
+            if (reconnectBtn) {
+                reconnectBtn.addEventListener('click', connectWebSocket);
+            }
+            
+            // GPS Share button
+            const gpsShareBtn = document.getElementById('gpsShareBtn');
+            if (gpsShareBtn) {
+                gpsShareBtn.addEventListener('click', shareGPSLocation);
+            }
+            
+            // Suspension Settings gear click - navigate to Tuning
+            const suspGear = document.getElementById('suspensionSettingsGear');
+            if (suspGear) {
+                suspGear.addEventListener('click', function() {
+                    navigateToSection('tuning');
+                });
+            }
+            
+            // Connection Settings gear click - navigate to Settings
+            const connGear = document.getElementById('connectionSettingsGear');
+            if (connGear) {
+                connGear.addEventListener('click', function() {
+                    navigateToSection('settings');
+                });
+            }
+            
+            // Trip Reset button
+            const tripResetBtn = document.getElementById('tripResetBtn');
+            if (tripResetBtn) {
+                tripResetBtn.addEventListener('click', function() {
+                    if (confirm('Reset trip statistics?\n\n✓ Session Time and Distance will reset\n✗ Total Runtime and Total Distance will NOT reset')) {
+                        tripDistance = 0;
+                        const distVal = document.getElementById('distanceValue');
+                        const distBar = document.getElementById('distanceBar');
+                        if (distVal) distVal.textContent = '0.00 mi';
+                        if (distBar) distBar.style.width = '0%';
+                        
+                        sessionStartTime = Date.now();
+                        updateDurationDisplays();
+                        
+                        toast.success('Trip statistics reset! (Session time & distance only)');
+                        console.log('Trip statistics reset');
+                    }
+                });
+            }
+            
+            // Restore page from localStorage
+            const lastPage = localStorage.getItem('currentPage') || 'dashboard';
+            navigateToSection(lastPage);
+        });
+
+        // Helper function to navigate to a section
+        function navigateToSection(sectionId) {
+            document.querySelectorAll('.footer-nav button').forEach(b => b.classList.remove('active'));
+            const navBtn = document.querySelector(`.footer-nav button[data-target="${sectionId}"]`);
+            if (navBtn) navBtn.classList.add('active');
+            
+            document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+            const section = document.getElementById(sectionId);
+            if (section) section.classList.add('active');
+            
+            // Save current page to localStorage
+            localStorage.setItem('currentPage', sectionId);
+            
+            window.scrollTo(0, 0);
+        }
+
+        // ==================== WebSocket Connection ====================
+        function connectWebSocket() {
+            if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+                console.log('WebSocket already connected or connecting');
+                return;
+            }
+
+            const wsUrl = `ws://${ESP32_IP}/ws`;
+            console.log(`Connecting to ${wsUrl}...`);
+            
+            // Show connecting state
+            const icon = document.getElementById('wifiIcon');
+            if (icon) {
+                icon.classList.remove('disconnected');
+                icon.classList.add('connecting');
+            }
+
+            try {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    console.log('WebSocket connected');
+                    updateConnectionStatus(true);
+                    const badge = document.getElementById('wsStatusBadge');
+                    if (badge) {
+                        badge.textContent = 'Online';
+                        badge.classList.remove('btn-danger');
+                        badge.classList.add('btn-success');
+                    }
+                    
+                    // Start session timer
+                    startSessionTimer();
+                    
+                    // Start total runtime timer (independent)
+                    startTotalTimer();
+                };
+
+                ws.onmessage = (event) => {
+                    if (isPaused) return;
+
+                    let payload = event.data;
+                    if (payload instanceof Blob) {
+                        payload.text().then(text => handleTelemetry(text));
+                    } else {
+                        handleTelemetry(payload);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                };
+
+                ws.onclose = () => {
+                    console.log('WebSocket disconnected');
+                    updateConnectionStatus(false);
+                    const badge = document.getElementById('wsStatusBadge');
+                    if (badge) {
+                        badge.textContent = 'Offline';
+                        badge.classList.remove('btn-success');
+                        badge.classList.add('btn-danger');
+                    }
+                    
+                    // Stop session timer
+                    stopSessionTimer();
+                    
+                    // Stop total timer and save to localStorage
+                    stopTotalTimer();
+                    
+                    // Auto-reconnect after 5 seconds
+                    setTimeout(() => {
+                        if (!ws || ws.readyState === WebSocket.CLOSED) {
+                            connectWebSocket();
+                        }
+                    }, 5000);
+                };
+            } catch (error) {
+                console.error('Failed to create WebSocket:', error);
+            }
+        }
+
+        // ==================== Telemetry Handling ====================
+        function handleTelemetry(payload) {
+            try {
+                const data = JSON.parse(payload);
+                if (data.type && data.type !== 'telemetry') return;
+
+                telemetryCount++;
+                updateDashboard(data);
+                
+                // Update live data feed
+                const wsData = document.getElementById('wsData');
+                if (wsData) wsData.textContent = JSON.stringify(data, null, 2);
+                
+                const updatesStatus = document.getElementById('updatesStatus');
+                if (updatesStatus) updatesStatus.textContent = telemetryCount;
+                
+                const lastUpdate = document.getElementById('lastUpdateDisplay');
+                if (lastUpdate) lastUpdate.textContent = new Date().toLocaleTimeString();
+            } catch (error) {
+                console.error('Telemetry parse error:', error);
+            }
+        }
+
+        // ==================== Dashboard Updates ====================
+        function updateDashboard(data) {
+            const roll = parseFloat(data.roll || 0);
+            const pitch = parseFloat(data.pitch || 0);
+            const yaw = parseFloat(data.yaw || 0);
+            const accel = parseFloat(data.verticalAccel || 0);
+            const batteries = data.voltages || [data.battery1, data.battery2, data.battery3];
+
+            // Update Pitch and Roll
+            const pitchVal = document.getElementById('pitchValue');
+            const rollVal = document.getElementById('rollValue');
+            if (pitchVal) pitchVal.textContent = pitch.toFixed(1);
+            if (rollVal) rollVal.textContent = roll.toFixed(1);
+
+            // Store latest voltages and update battery display
+            if (batteries && batteries.length >= 3) {
+                lastVoltages = batteries;
+                updateBatteryDisplay(batteries);
+            }
+        }
+        
+        function updateBatteryDisplay(voltages) {
+            // If no config yet, don't render
+            if (!batteryConfig || !Array.isArray(batteryConfig)) {
+                return;
+            }
+            
+            let html = '';
+            
+            batteryConfig.forEach((battery, index) => {
+                // Skip if showOnDashboard is false
+                if (!battery.showOnDashboard) {
+                    return;
+                }
+                
+                const voltage = voltages[index] || 0;
+                const cellCount = battery.cellCount || 3;
+                const minVoltage = 3.0 * cellCount;
+                const maxVoltage = 4.2 * cellCount;
+                
+                // Calculate percentage
+                const percent = Math.min(Math.max((voltage - minVoltage) / (maxVoltage - minVoltage) * 100, 0), 100);
+                
+                // Determine color
+                const warningThreshold = minVoltage + (maxVoltage - minVoltage) * 0.1;
+                const criticalThreshold = minVoltage + (maxVoltage - minVoltage) * 0.05;
+                let barColor = 'var(--success)';
+                if (voltage < criticalThreshold) {
+                    barColor = 'var(--danger)';
+                } else if (voltage < warningThreshold) {
+                    barColor = 'var(--warning)';
+                }
+                
+                const batteryName = battery.name || `Battery ${index + 1}`;
+                const voltageDisplay = `${minVoltage.toFixed(1)}V / ${voltage.toFixed(1)}V / ${maxVoltage.toFixed(1)}V (${cellCount}S)`;
+                
+                html += `
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span>${batteryName}</span>
+                            <strong>${voltageDisplay}</strong>
+                        </div>
+                        <div class="battery-bar mt-1">
+                            <div class="battery-fill" style="width: ${percent}%; background: ${barColor};"></div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // If no batteries shown, display message
+            if (html === '') {
+                html = '<div class="text-muted"><small>No batteries configured to display</small></div>';
+            }
+            
+            const batteryDisplay = document.getElementById('batteryDisplay');
+            if (batteryDisplay) batteryDisplay.innerHTML = html;
+        }
+
+        function updateConnectionStatus(connected) {
+            const icon = document.getElementById('wifiIcon');
+            if (connected) {
+                icon.classList.remove('connecting', 'disconnected');
+                icon.style.color = 'var(--success)';
+                const status = document.getElementById('telemetryStatus');
+                if (status) status.textContent = 'Live';
+            } else {
+                icon.classList.remove('connecting');
+                icon.classList.add('disconnected');
+                icon.style.color = 'var(--text-muted)';
+                const status = document.getElementById('telemetryStatus');
+                if (status) status.textContent = 'Inactive';
+            }
+        }
+
+        // ==================== GPS / Geolocation ====================
+        function startGPSUpdates() {
+            if (!("geolocation" in navigator)) {
+                console.warn("Geolocation not supported in this browser");
+                const elevation = document.getElementById('elevationValue');
+                const latitude = document.getElementById('latitudeValue');
+                const longitude = document.getElementById('longitudeValue');
+                if (elevation) elevation.textContent = 'Not supported';
+                if (latitude) latitude.textContent = 'Not supported';
+                if (longitude) longitude.textContent = 'Not supported';
+                return;
+            }
+
+            // Get first reading immediately
+            updateGPS();
+
+            // Then repeat every 2 minutes
+            gpsTimer = setInterval(updateGPS, GPS_UPDATE_INTERVAL);
+        }
+
+        function updateGPS() {
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const altMeters = position.coords.altitude;
+                    const accuracy = position.coords.accuracy;
+                    
+                    // Store current GPS data
+                    currentGPS.lat = lat;
+                    currentGPS.lon = lon;
+                    currentGPS.elevation = altMeters;
+
+                    // Calculate distance if we have a previous position
+                    if (previousGPS.lat !== null && previousGPS.lon !== null) {
+                        const distance = haversineDistance(previousGPS.lat, previousGPS.lon, lat, lon);
+                        
+                        // Filter out bad readings (GPS jumps over 1 mile indicate poor signal)
+                        if (distance < 1.0) {
+                            tripDistance += distance;
+                            totalDistance += distance;
+                            localStorage.setItem('totalDistance', totalDistance.toFixed(2));
+                            
+                            // Update distance displays
+                            const tripVal = document.getElementById('distanceValue');
+                            const totalVal = document.getElementById('totalDistanceValue');
+                            if (tripVal) tripVal.textContent = `${tripDistance.toFixed(2)} mi`;
+                            if (totalVal) totalVal.textContent = `${totalDistance.toFixed(2)} mi`;
+                            
+                            console.log(`Distance added: ${distance.toFixed(3)} mi | Trip: ${tripDistance.toFixed(2)} mi | Total: ${totalDistance.toFixed(2)} mi`);
+                        } else {
+                            console.warn(`GPS jump detected: ${distance.toFixed(2)} mi - ignoring bad reading`);
+                        }
+                    }
+                    
+                    // Store current position as previous for next calculation
+                    previousGPS.lat = lat;
+                    previousGPS.lon = lon;
+
+                    // Update latitude and longitude
+                    const latVal = document.getElementById('latitudeValue');
+                    const lonVal = document.getElementById('longitudeValue');
+                    if (latVal) latVal.textContent = `${lat.toFixed(6)}°`;
+                    if (lonVal) lonVal.textContent = `${lon.toFixed(6)}°`;
+
+                    // Update accuracy
+                    const accFeet = accuracy * METERS_TO_FEET;
+                    const accVal = document.getElementById('gpsAccuracy');
+                    if (accVal) accVal.textContent = `±${accFeet.toFixed(1)} ft`;
+
+                    // Update elevation if available
+                    const elevVal = document.getElementById('elevationValue');
+                    if (altMeters !== null && altMeters !== undefined) {
+                        const altFeet = altMeters * METERS_TO_FEET;
+                        if (elevVal) elevVal.textContent = `${altFeet.toFixed(1)} ft`;
+                    } else {
+                        if (elevVal) elevVal.textContent = 'Unavailable';
+                    }
+
+                    console.log(`GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)}, Elev: ${altMeters ? (altMeters * METERS_TO_FEET).toFixed(1) : 'N/A'} ft`);
+                },
+                error => {
+                    let msg = 'Error';
+
+                    if (error.code === error.PERMISSION_DENIED) {
+                        msg = 'Permission denied';
+                    } else if (error.code === error.POSITION_UNAVAILABLE) {
+                        msg = 'No GPS signal';
+                    } else if (error.code === error.TIMEOUT) {
+                        msg = 'Timeout';
+                    }
+
+                    const elevVal = document.getElementById('elevationValue');
+                    const latVal = document.getElementById('latitudeValue');
+                    const lonVal = document.getElementById('longitudeValue');
+                    const accVal = document.getElementById('gpsAccuracy');
+                    
+                    if (elevVal) elevVal.textContent = msg;
+                    if (latVal) latVal.textContent = msg;
+                    if (lonVal) lonVal.textContent = msg;
+                    if (accVal) accVal.textContent = '--';
+
+                    console.warn('Geolocation error:', msg, error);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 30000
+                }
+            );
+        }
+
+        // ==================== Distance Calculation ====================
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            // Convert degrees to radians
+            const toRad = Math.PI / 180;
+            const R = 3959; // Earth radius in miles
+            
+            const dLat = (lat2 - lat1) * toRad;
+            const dLon = (lon2 - lon1) * toRad;
+            
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        // ==================== Config Fetching ====================
+        function fetchConfigFromESP32() {
+            const configUrl = `http://${ESP32_IP}/api/config`;
+            
+            fetch(configUrl)
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    fullConfig = data;
+                    
+                    if (data.batteries && Array.isArray(data.batteries)) {
+                        batteryConfig = data.batteries;
+                        updateBatteryDisplay(lastVoltages);
+                    }
+                    
+                    // Update suspension settings display
+                    updateSuspensionSettings(data);
+                    
+                    // Load settings into Settings page
+                    loadSettingsFromConfig(data);
+                    
+                    // Display config data in the Config Data card
+                    const configData = document.getElementById('configData');
+                    if (configData) configData.textContent = JSON.stringify(data, null, 2);
+                    
+                    toast.success('Configuration loaded from ESP32');
+                })
+                .catch(error => {
+                    console.error('Failed to fetch config:', error);
+                    const configData = document.getElementById('configData');
+                    if (configData) configData.textContent = `Error: ${error.message}`;
+                    toast.warning('Could not load configuration from ESP32');
+                });
+        }
+
+        function updateSuspensionSettings(config) {
+            if (!config) return;
+            
+            // Update Reaction Speed
+            if (config.reactionSpeed !== undefined) {
+                const badge = document.getElementById('reactionSpeedBadge');
+                if (badge) badge.textContent = config.reactionSpeed.toFixed(1);
+            }
+            
+            // Update Ride Height
+            if (config.rideHeightOffset !== undefined) {
+                const display = document.getElementById('rideHeightDisplay');
+                if (display) display.textContent = `${config.rideHeightOffset.toFixed(0)}%`;
+            }
+            
+            // Update Damping
+            if (config.damping !== undefined) {
+                const display = document.getElementById('dampingDisplay');
+                if (display) display.textContent = config.damping.toFixed(1);
+            }
+            
+            // Update Stiffness
+            if (config.stiffness !== undefined) {
+                const display = document.getElementById('stiffnessDisplay');
+                if (display) display.textContent = config.stiffness.toFixed(1);
+            }
+            
+            // Update Front/Rear Balance
+            if (config.frontRearBalance !== undefined) {
+                const balancePercent = (config.frontRearBalance * 100).toFixed(0);
+                const display = document.getElementById('frontRearBalanceDisplay');
+                if (display) display.textContent = `${balancePercent}%`;
+            }
+            
+            // Update tuning sliders
+            updateTuningSliders(config);
+        }
+
+        // ==================== Tuning Functions ====================
+        function toggleHelp(param) {
+            const helpId = `help${param.charAt(0).toUpperCase() + param.slice(1)}`;
+            const element = document.getElementById(helpId);
+            if (element) {
+                const isHidden = element.style.display === 'none';
+                element.style.display = isHidden ? 'block' : 'none';
+            }
+        }
+
+        function updateTuningSliders(config) {
+            if (!config) return;
+            
+            // Update slider values from config
+            if (config.reactionSpeed !== undefined) {
+                const slider = document.getElementById('sliderReactionSpeed');
+                const value = document.getElementById('valueReactionSpeed');
+                if (slider) slider.value = config.reactionSpeed;
+                if (value) value.textContent = config.reactionSpeed.toFixed(2);
+            }
+            
+            if (config.rideHeightOffset !== undefined) {
+                const slider = document.getElementById('sliderRideHeight');
+                const value = document.getElementById('valueRideHeight');
+                if (slider) slider.value = config.rideHeightOffset;
+                if (value) value.textContent = `${config.rideHeightOffset.toFixed(0)}%`;
+            }
+            
+            if (config.damping !== undefined) {
+                const slider = document.getElementById('sliderDamping');
+                const value = document.getElementById('valueDamping');
+                if (slider) slider.value = config.damping;
+                if (value) value.textContent = config.damping.toFixed(2);
+            }
+            
+            if (config.frontRearBalance !== undefined) {
+                const slider = document.getElementById('sliderFrontRearBalance');
+                const value = document.getElementById('valueFrontRearBalance');
+                if (slider) slider.value = config.frontRearBalance;
+                if (value) value.textContent = config.frontRearBalance.toFixed(2);
+            }
+            
+            if (config.stiffness !== undefined) {
+                const slider = document.getElementById('sliderStiffness');
+                const value = document.getElementById('valueStiffness');
+                if (slider) slider.value = config.stiffness;
+                if (value) value.textContent = config.stiffness.toFixed(2);
+            }
+        }
+
+        function saveTuningSettings() {
+            const settings = {
+                reactionSpeed: parseFloat(document.getElementById('sliderReactionSpeed')?.value || 0),
+                rideHeightOffset: parseInt(document.getElementById('sliderRideHeight')?.value || 0),
+                damping: parseFloat(document.getElementById('sliderDamping')?.value || 0),
+                frontRearBalance: parseFloat(document.getElementById('sliderFrontRearBalance')?.value || 0),
+                stiffness: parseFloat(document.getElementById('sliderStiffness')?.value || 0)
+            };
+            
+            const saveUrl = `http://${ESP32_IP}/api/config`;
+            
+            fetch(saveUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(settings)
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                toast.success('Settings saved successfully!');
+                // Update dashboard displays
+                updateSuspensionSettings(settings);
+                // Re-fetch config to verify persistence
+                setTimeout(() => {
+                    fetchConfigFromESP32();
+                }, 500);
+            })
+            .catch(error => {
+                console.error('Failed to save settings:', error);
+                toast.error('Failed to save settings');
+            });
+        }
+
+        function resetTuningToDefaults() {
+            if (!confirm('Reset all tuning settings to factory defaults?')) return;
+            
+            const defaults = {
+                reactionSpeed: 1.0,
+                rideHeightOffset: 50,
+                damping: 0.8,
+                frontRearBalance: 0.5,
+                stiffness: 1.0
+            };
+            
+            // Update sliders
+            document.getElementById('sliderReactionSpeed').value = defaults.reactionSpeed;
+            document.getElementById('valueReactionSpeed').textContent = defaults.reactionSpeed.toFixed(2);
+            
+            document.getElementById('sliderRideHeight').value = defaults.rideHeightOffset;
+            document.getElementById('valueRideHeight').textContent = `${defaults.rideHeightOffset}%`;
+            
+            document.getElementById('sliderDamping').value = defaults.damping;
+            document.getElementById('valueDamping').textContent = defaults.damping.toFixed(2);
+            
+            document.getElementById('sliderFrontRearBalance').value = defaults.frontRearBalance;
+            document.getElementById('valueFrontRearBalance').textContent = defaults.frontRearBalance.toFixed(2);
+            
+            document.getElementById('sliderStiffness').value = defaults.stiffness;
+            document.getElementById('valueStiffness').textContent = defaults.stiffness.toFixed(2);
+            
+            // Save to ESP32
+            const saveUrl = `http://${ESP32_IP}/api/config`;
+            
+            fetch(saveUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(defaults)
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                toast.success('Settings reset to defaults!');
+                updateSuspensionSettings(defaults);
+                // Re-fetch config to verify persistence
+                setTimeout(() => {
+                    fetchConfigFromESP32();
+                }, 500);
+            })
+            .catch(error => {
+                console.error('Failed to reset settings:', error);
+                toast.error('Failed to reset settings');
+            });
+        }
+
+        function initTuningSliders() {
+            // Reaction Speed
+            const reactionSlider = document.getElementById('sliderReactionSpeed');
+            if (reactionSlider) {
+                reactionSlider.addEventListener('input', function() {
+                    const value = document.getElementById('valueReactionSpeed');
+                    if (value) value.textContent = parseFloat(this.value).toFixed(2);
+                });
+                reactionSlider.addEventListener('mouseup', saveTuningSettings);
+                reactionSlider.addEventListener('touchend', saveTuningSettings);
+            }
+            
+            // Ride Height
+            const heightSlider = document.getElementById('sliderRideHeight');
+            if (heightSlider) {
+                heightSlider.addEventListener('input', function() {
+                    const value = document.getElementById('valueRideHeight');
+                    if (value) value.textContent = `${this.value}%`;
+                });
+                heightSlider.addEventListener('mouseup', saveTuningSettings);
+                heightSlider.addEventListener('touchend', saveTuningSettings);
+            }
+            
+            // Damping
+            const dampingSlider = document.getElementById('sliderDamping');
+            if (dampingSlider) {
+                dampingSlider.addEventListener('input', function() {
+                    const value = document.getElementById('valueDamping');
+                    if (value) value.textContent = parseFloat(this.value).toFixed(2);
+                });
+                dampingSlider.addEventListener('mouseup', saveTuningSettings);
+                dampingSlider.addEventListener('touchend', saveTuningSettings);
+            }
+            
+            // Front/Rear Balance
+            const balanceSlider = document.getElementById('sliderFrontRearBalance');
+            if (balanceSlider) {
+                balanceSlider.addEventListener('input', function() {
+                    const value = document.getElementById('valueFrontRearBalance');
+                    if (value) value.textContent = parseFloat(this.value).toFixed(2);
+                });
+                balanceSlider.addEventListener('mouseup', saveTuningSettings);
+                balanceSlider.addEventListener('touchend', saveTuningSettings);
+            }
+            
+            // Stiffness
+            const stiffnessSlider = document.getElementById('sliderStiffness');
+            if (stiffnessSlider) {
+                stiffnessSlider.addEventListener('input', function() {
+                    const value = document.getElementById('valueStiffness');
+                    if (value) value.textContent = parseFloat(this.value).toFixed(2);
+                });
+                stiffnessSlider.addEventListener('mouseup', saveTuningSettings);
+                stiffnessSlider.addEventListener('touchend', saveTuningSettings);
+            }
+        }
+
+        // ==================== Settings Functions ====================
+        
+        // Load settings from config and populate UI
+        function loadSettingsFromConfig(config) {
+            if (!config) return;
+            
+            // Load servo settings into noUiSlider
+            const servoKeys = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'];
+            const servoAbbrev = ['FL', 'FR', 'RL', 'RR'];
+            
+            servoKeys.forEach((key, index) => {
+                const abbrev = servoAbbrev[index];
+                const servo = config.servos && config.servos[key];
+                const sliderElement = document.getElementById(`servo${abbrev}Slider`);
+                
+                if (servo && sliderElement && sliderElement.noUiSlider) {
+                    // Set slider values
+                    sliderElement.noUiSlider.set([
+                        servo.min || 30,
+                        servo.trim || 90,
+                        servo.max || 150
+                    ]);
+                    
+                    // Set reversed checkbox
+                    const checkbox = document.getElementById(`servo${abbrev}Reversed`);
+                    if (checkbox) checkbox.checked = servo.reversed || false;
+                }
+            });
+            
+            // Load gyro orientation
+            const gyroSelect = document.getElementById('mpuOrientation');
+            if (gyroSelect && config.mpuOrientation !== undefined) {
+                gyroSelect.value = config.mpuOrientation;
+            }
+            
+            // Load sample rate
+            const sampleRateSlider = document.getElementById('sampleRateSlider');
+            const sampleRateLabel = document.getElementById('sampleRateLabel');
+            if (sampleRateSlider && config.sampleRate !== undefined) {
+                sampleRateSlider.value = config.sampleRate;
+                if (sampleRateLabel) sampleRateLabel.textContent = getSampleRateLabel(config.sampleRate);
+            }
+            
+            // Load telemetry rate
+            const telemetryRateSlider = document.getElementById('telemetryRateSlider');
+            const telemetryRateLabel = document.getElementById('telemetryRateLabel');
+            if (telemetryRateSlider && config.telemetryRate !== undefined) {
+                const position = getSliderPositionFromHz(config.telemetryRate);
+                const rateInfo = getTelemetryRateFromSlider(position);
+                telemetryRateSlider.value = position;
+                if (telemetryRateLabel) telemetryRateLabel.textContent = rateInfo.label;
+            }
+            
+            // Load battery configuration
+            if (config.batteries && Array.isArray(config.batteries)) {
+                config.batteries.forEach((battery, index) => {
+                    const num = index + 1;
+                    if (num <= 3) {
+                        const nameInput = document.getElementById(`battery${num}Name`);
+                        const cellSelect = document.getElementById(`battery${num}CellCount`);
+                        const plugSelect = document.getElementById(`battery${num}Plug`);
+                        const showCheckbox = document.getElementById(`battery${num}Show`);
+                        
+                        if (nameInput) nameInput.value = battery.name || '';
+                        if (cellSelect) cellSelect.value = battery.cellCount || 3;
+                        if (plugSelect) plugSelect.value = battery.plugAssignment || 0;
+                        if (showCheckbox) showCheckbox.checked = battery.showOnDashboard || false;
+                    }
+                });
+            }
+        }
+
+        // Helper function to convert telemetry slider position to Hz and label
+        function getTelemetryRateFromSlider(position) {
+            const mapping = {
+                1: { hz: 1, label: 'Very Slow' },
+                2: { hz: 2, label: 'Slow' },
+                3: { hz: 5, label: 'Normal (Default)' },
+                4: { hz: 10, label: 'Fast' }
+            };
+            return mapping[position] || mapping[3];
+        }
+        
+        // Helper function to convert Hz to slider position
+        function getSliderPositionFromHz(hz) {
+            if (hz <= 1) return 1;
+            if (hz <= 2) return 2;
+            if (hz <= 5) return 3;
+            return 4;
+        }
+        
+        // Helper function to get sample rate label from Hz value
+        function getSampleRateLabel(hz) {
+            hz = parseInt(hz);
+            if (hz >= 20) return 'Very Responsive';
+            if (hz >= 16) return 'Responsive (Default)';
+            if (hz >= 12) return 'Balanced';
+            if (hz >= 8) return 'Stable';
+            return 'Conservative';
+        }
+
+        // Update servo parameter
+        function updateServoParam(servoKey, param, value) {
+            const servoMap = {
+                'frontLeft': 'FL',
+                'frontRight': 'FR',
+                'rearLeft': 'RL',
+                'rearRight': 'RR'
+            };
+            const abbrev = servoMap[servoKey];
+            
+            // Build update payload for /api/servo-config
+            const payload = {
+                servo: servoKey,
+                param: param,
+                value: value
+            };
+            
+            // Save to ESP32
+            fetch(`http://${ESP32_IP}/api/servo-config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                fullConfig.servos[servoKey][param] = value;
+                toast.success('Saved');
+                // Re-fetch config to verify persistence
+                setTimeout(() => {
+                    fetchConfigFromESP32();
+                }, 500);
+            })
+            .catch(error => {
+                toast.error('Failed to save settings');
+                // Revert UI
+                if (param === 'reversed') {
+                    const checkbox = document.getElementById(`servo${abbrev}Reversed`);
+                    if (checkbox) checkbox.checked = fullConfig.servos[servoKey].reversed;
+                }
+            });
+        }
+
+        // Update gyro orientation
+        function updateGyroOrientation(value) {
+            const payload = {
+                mpuOrientation: parseInt(value)
+            };
+            
+            fetch(`http://${ESP32_IP}/api/config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                fullConfig.mpuOrientation = parseInt(value);
+                toast.success('Saved');
+                // Re-fetch config to verify persistence
+                setTimeout(() => {
+                    fetchConfigFromESP32();
+                }, 500);
+            })
+            .catch(error => {
+                toast.error('Failed to save settings');
+                // Revert UI
+                const select = document.getElementById('mpuOrientation');
+                if (select) select.value = fullConfig.mpuOrientation;
+            });
+        }
+        
+        // Update sample rate
+        function updateSampleRate(value) {
+            const payload = {
+                sampleRate: parseInt(value)
+            };
+            
+            fetch(`http://${ESP32_IP}/api/config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                fullConfig.sampleRate = parseInt(value);
+                toast.success('Saved');
+                // Re-fetch config to verify persistence
+                setTimeout(() => {
+                    fetchConfigFromESP32();
+                }, 500);
+            })
+            .catch(error => {
+                toast.error('Failed to save settings');
+                // Revert UI
+                const slider = document.getElementById('sampleRateSlider');
+                const valueDisplay = document.getElementById('sampleRateValue');
+                if (slider && fullConfig.sampleRate !== undefined) {
+                    slider.value = fullConfig.sampleRate;
+                    if (valueDisplay) valueDisplay.textContent = fullConfig.sampleRate;
+                }
+            });
+        }
+        
+        // Update telemetry rate
+        function updateTelemetryRate(hz) {
+            const payload = {
+                telemetryRate: parseInt(hz)
+            };
+            
+            fetch(`http://${ESP32_IP}/api/config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                fullConfig.telemetryRate = parseInt(hz);
+                toast.success('Saved');
+                // Re-fetch config to verify persistence
+                setTimeout(() => {
+                    fetchConfigFromESP32();
+                }, 500);
+            })
+            .catch(error => {
+                toast.error('Failed to save settings');
+                // Revert UI
+                const slider = document.getElementById('telemetryRateSlider');
+                const labelDisplay = document.getElementById('telemetryRateLabel');
+                if (slider && fullConfig.telemetryRate !== undefined) {
+                    const position = getSliderPositionFromHz(fullConfig.telemetryRate);
+                    const rateInfo = getTelemetryRateFromSlider(position);
+                    slider.value = position;
+                    if (labelDisplay) labelDisplay.textContent = rateInfo.label;
+                }
+            });
+        }
+
+        // Update battery configuration
+        function updateBatteryConfig(batteryNum, param, value) {
+            const batteryIndex = batteryNum - 1;
+            
+            // Validate plug assignment uniqueness if changing plugAssignment
+            if (param === 'plugAssignment' && value > 0) {
+                for (let i = 0; i < batteryConfig.length; i++) {
+                    if (i !== batteryIndex && batteryConfig[i].plugAssignment === parseInt(value)) {
+                        toast.error('Each plug can only be assigned to one battery');
+                        // Revert UI
+                        const select = document.getElementById(`battery${batteryNum}Plug`);
+                        if (select) select.value = batteryConfig[batteryIndex].plugAssignment;
+                        return;
+                    }
+                }
+            }
+            
+            // Build updated batteries array
+            const updatedBatteries = [...batteryConfig];
+            updatedBatteries[batteryIndex] = {
+                ...updatedBatteries[batteryIndex],
+                [param]: param === 'showOnDashboard' ? value : (param === 'name' ? value : parseInt(value))
+            };
+            
+            const payload = {
+                batteries: updatedBatteries
+            };
+            
+            fetch(`http://${ESP32_IP}/api/batteries`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                batteryConfig = updatedBatteries;
+                fullConfig.batteries = updatedBatteries;
+                toast.success('Saved');
+                // Update dashboard battery display immediately
+                if (lastVoltages) {
+                    updateBatteryDisplay(lastVoltages);
+                }
+                // Re-fetch config from ESP32 to ensure UI reflects persisted state
+                setTimeout(() => {
+                    fetchConfigFromESP32();
+                }, 500);
+            })
+            .catch(error => {
+                toast.error('Failed to save settings');
+                // Revert UI
+                const battery = batteryConfig[batteryIndex];
+                if (param === 'name') {
+                    const input = document.getElementById(`battery${batteryNum}Name`);
+                    if (input) input.value = battery.name;
+                } else if (param === 'cellCount') {
+                    const select = document.getElementById(`battery${batteryNum}CellCount`);
+                    if (select) select.value = battery.cellCount;
+                } else if (param === 'plugAssignment') {
+                    const select = document.getElementById(`battery${batteryNum}Plug`);
+                    if (select) select.value = battery.plugAssignment;
+                } else if (param === 'showOnDashboard') {
+                    const checkbox = document.getElementById(`battery${batteryNum}Show`);
+                    if (checkbox) checkbox.checked = battery.showOnDashboard;
+                }
+            });
+        }
+
+        // Initialize servo controls with noUiSlider
+        function initServoControls() {
+            const servoKeys = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'];
+            const servoAbbrev = ['FL', 'FR', 'RL', 'RR'];
+            
+            servoKeys.forEach((key, index) => {
+                const abbrev = servoAbbrev[index];
+                const sliderId = `servo${abbrev}Slider`;
+                const sliderElement = document.getElementById(sliderId);
+                
+                if (!sliderElement) return;
+                
+                // Create vertical noUiSlider with 3 handles (min, trim, max)
+                noUiSlider.create(sliderElement, {
+                    start: [30, 90, 150],
+                    connect: true,
+                    orientation: 'vertical',
+                    direction: 'rtl',
+                    range: {
+                        'min': 0,
+                        'max': 180
+                    },
+                    step: 1,
+                    behaviour: 'tap-drag',
+                    animate: true,
+                    animationDuration: 300
+                });
+                
+                // Update value displays on slider change
+                sliderElement.noUiSlider.on('update', function(values) {
+                    const minVal = document.getElementById(`servo${abbrev}MinValue`);
+                    const trimVal = document.getElementById(`servo${abbrev}TrimValue`);
+                    const maxVal = document.getElementById(`servo${abbrev}MaxValue`);
+                    if (minVal) minVal.textContent = Math.round(values[0]);
+                    if (trimVal) trimVal.textContent = Math.round(values[1]);
+                    if (maxVal) maxVal.textContent = Math.round(values[2]);
+                });
+                
+                // Save to ESP32 when user finishes dragging
+                sliderElement.noUiSlider.on('end', function(values) {
+                    const min = Math.round(values[0]);
+                    const trim = Math.round(values[1]);
+                    const max = Math.round(values[2]);
+                    
+                    // Update all three values at once
+                    const payload = {
+                        servos: {
+                            [key]: {
+                                ...fullConfig.servos[key],
+                                min: min,
+                                trim: trim,
+                                max: max
+                            }
+                        }
+                    };
+                    
+                    fetch(`http://${ESP32_IP}/api/config`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(response => {
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        return response.json();
+                    })
+                    .then(data => {
+                        fullConfig.servos[key].min = min;
+                        fullConfig.servos[key].trim = trim;
+                        fullConfig.servos[key].max = max;
+                        toast.success('Saved');
+                    })
+                    .catch(error => {
+                        toast.error('Failed to save settings');
+                        // Revert slider to previous values
+                        sliderElement.noUiSlider.set([
+                            fullConfig.servos[key].min,
+                            fullConfig.servos[key].trim,
+                            fullConfig.servos[key].max
+                        ]);
+                    });
+                });
+                
+                // Reversed checkbox
+                const checkbox = document.getElementById(`servo${abbrev}Reversed`);
+                if (checkbox) {
+                    checkbox.addEventListener('change', function() {
+                        updateServoParam(key, 'reversed', this.checked);
+                    });
+                }
+            });
+        }
+
+        // Initialize gyro controls
+        function initGyroControls() {
+            const select = document.getElementById('mpuOrientation');
+            if (select) {
+                select.addEventListener('change', function() {
+                    updateGyroOrientation(this.value);
+                });
+            }
+            
+            // Sample rate slider
+            const sampleRateSlider = document.getElementById('sampleRateSlider');
+            if (sampleRateSlider) {
+                sampleRateSlider.addEventListener('input', function() {
+                    const labelDisplay = document.getElementById('sampleRateLabel');
+                    if (labelDisplay) labelDisplay.textContent = getSampleRateLabel(this.value);
+                });
+                sampleRateSlider.addEventListener('change', function() {
+                    updateSampleRate(this.value);
+                });
+            }
+            
+            // Telemetry rate slider
+            const telemetryRateSlider = document.getElementById('telemetryRateSlider');
+            if (telemetryRateSlider) {
+                telemetryRateSlider.addEventListener('input', function() {
+                    const rateInfo = getTelemetryRateFromSlider(parseInt(this.value));
+                    const labelDisplay = document.getElementById('telemetryRateLabel');
+                    if (labelDisplay) labelDisplay.textContent = rateInfo.label;
+                });
+                telemetryRateSlider.addEventListener('change', function() {
+                    const rateInfo = getTelemetryRateFromSlider(parseInt(this.value));
+                    updateTelemetryRate(rateInfo.hz);
+                });
+            }
+        }
+
+        // Initialize battery controls
+        function initBatteryControls() {
+            for (let i = 1; i <= 3; i++) {
+                // Name input
+                const nameInput = document.getElementById(`battery${i}Name`);
+                if (nameInput) {
+                    nameInput.addEventListener('change', function() {
+                        updateBatteryConfig(i, 'name', this.value);
+                    });
+                }
+                
+                // Cell count dropdown
+                const cellSelect = document.getElementById(`battery${i}CellCount`);
+                if (cellSelect) {
+                    cellSelect.addEventListener('change', function() {
+                        updateBatteryConfig(i, 'cellCount', this.value);
+                    });
+                }
+                
+                // Plug assignment dropdown
+                const plugSelect = document.getElementById(`battery${i}Plug`);
+                if (plugSelect) {
+                    plugSelect.addEventListener('change', function() {
+                        updateBatteryConfig(i, 'plugAssignment', this.value);
+                    });
+                }
+                
+                // Show on dashboard checkbox
+                const showCheckbox = document.getElementById(`battery${i}Show`);
+                if (showCheckbox) {
+                    showCheckbox.addEventListener('change', function() {
+                        updateBatteryConfig(i, 'showOnDashboard', this.checked);
+                    });
+                }
+            }
+        }
+
+        // ==================== Network Settings Functions ====================
+        
+        // Update WebSocket status display
+        function updateWebSocketStatus() {
+            const isConnected = ws && ws.readyState === WebSocket.OPEN;
+            const statusIcon = document.getElementById('wsStatusIcon');
+            const statusText = document.getElementById('wsStatusText');
+            
+            if (isConnected) {
+                if (statusIcon) statusIcon.style.color = '#16c79a';
+                if (statusText) {
+                    statusText.textContent = 'Connected';
+                    statusText.style.color = '#16c79a';
+                }
+            } else {
+                if (statusIcon) statusIcon.style.color = '#888';
+                if (statusText) {
+                    statusText.textContent = 'Disconnected';
+                    statusText.style.color = '#888';
+                }
+            }
+        }
+
+        // Update ESP32 IP address
+        function updateEsp32Ip(newIp) {
+            if (!newIp || newIp.trim() === '') {
+                toast.error('IP address cannot be empty');
+                return;
+            }
+            
+            // Validate IP format (basic validation)
+            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+            if (!ipPattern.test(newIp)) {
+                toast.error('Invalid IP address format');
+                return;
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('esp32Ip', newIp);
+            
+            toast.success('IP address saved. Reconnecting...');
+            
+            // Reconnect WebSocket with new IP
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        }
+
+        // Test ESP32 connection
+        function testEsp32Connection() {
+            const ipInput = document.getElementById('esp32IpAddress');
+            const resultDiv = document.getElementById('connectionTestResult');
+            const testBtn = document.getElementById('testConnectionBtn');
+            
+            if (!ipInput) return;
+            
+            const newIp = ipInput.value.trim();
+            
+            if (!newIp) {
+                if (resultDiv) {
+                    resultDiv.classList.remove('alert-success', 'alert-danger');
+                    resultDiv.classList.add('alert-danger');
+                    resultDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Please enter an IP address';
+                    resultDiv.style.display = 'block';
+                }
+                return;
+            }
+            
+            // Validate IP format
+            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+            if (!ipPattern.test(newIp)) {
+                if (resultDiv) {
+                    resultDiv.classList.remove('alert-success', 'alert-danger');
+                    resultDiv.classList.add('alert-danger');
+                    resultDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Invalid IP address format';
+                    resultDiv.style.display = 'block';
+                }
+                return;
+            }
+            
+            // Disable button and show testing state
+            if (testBtn) {
+                testBtn.disabled = true;
+                testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+            }
+            if (resultDiv) resultDiv.style.display = 'none';
+            
+            // Test HTTP connection to /api/config endpoint
+            const testUrl = `http://${newIp}/api/config`;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+            
+            fetch(testUrl, { 
+                method: 'GET',
+                signal: controller.signal
+            })
+            .then(response => {
+                clearTimeout(timeout);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                // Success - config endpoint responded
+                if (resultDiv) {
+                    resultDiv.classList.remove('alert-success', 'alert-danger');
+                    resultDiv.classList.add('alert-success');
+                    resultDiv.innerHTML = '<i class="fas fa-check-circle"></i> Connection successful! ESP32 is reachable.';
+                    resultDiv.style.display = 'block';
+                }
+                if (testBtn) {
+                    testBtn.disabled = false;
+                    testBtn.innerHTML = '<i class="fas fa-plug"></i> Test Connection';
+                }
+                
+                // Auto-save the IP if test is successful
+                if (newIp !== localStorage.getItem('esp32Ip')) {
+                    setTimeout(() => {
+                        updateEsp32Ip(newIp);
+                    }, 1500);
+                }
+            })
+            .catch(error => {
+                clearTimeout(timeout);
+                let errorMsg = 'Connection failed. ';
+                if (error.name === 'AbortError') {
+                    errorMsg += 'Request timed out.';
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMsg += 'Cannot reach ESP32. Check IP address and network.';
+                } else {
+                    errorMsg += error.message;
+                }
+                
+                if (resultDiv) {
+                    resultDiv.classList.remove('alert-success', 'alert-danger');
+                    resultDiv.classList.add('alert-danger');
+                    resultDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${errorMsg}`;
+                    resultDiv.style.display = 'block';
+                }
+                if (testBtn) {
+                    testBtn.disabled = false;
+                    testBtn.innerHTML = '<i class="fas fa-plug"></i> Test Connection';
+                }
+            });
+        }
+
+        // Initialize network settings controls
+        function initNetworkSettings() {
+            // Load current IP into input field
+            const currentIp = localStorage.getItem('esp32Ip') || '192.168.87.32';
+            const ipInput = document.getElementById('esp32IpAddress');
+            if (ipInput) ipInput.value = currentIp;
+            
+            // Detect initial mode based on IP
+            const isStandaloneMode = currentIp === '192.168.4.1';
+            const standalonRadio = document.getElementById('modeStandalone');
+            const homeRadio = document.getElementById('modeHomeWifi');
+            
+            if (isStandaloneMode) {
+                if (standalonRadio) standalonRadio.checked = true;
+                setStandaloneMode();
+            } else {
+                if (homeRadio) homeRadio.checked = true;
+                setHomeWifiMode();
+            }
+            
+            // Handle mode selection changes
+            document.querySelectorAll('input[name="networkMode"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.value === 'standalone') {
+                        setStandaloneMode();
+                    } else {
+                        setHomeWifiMode();
+                    }
+                });
+            });
+            
+            // Auto-save on IP change (with debounce)
+            let ipChangeTimeout;
+            if (ipInput) {
+                ipInput.addEventListener('input', function() {
+                    clearTimeout(ipChangeTimeout);
+                    const newIp = this.value.trim();
+                    
+                    // Hide test result when typing
+                    const resultDiv = document.getElementById('connectionTestResult');
+                    if (resultDiv) resultDiv.style.display = 'none';
+                    
+                    // Debounce save for 1.5 seconds
+                    ipChangeTimeout = setTimeout(() => {
+                        if (newIp && newIp !== localStorage.getItem('esp32Ip')) {
+                            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+                            if (ipPattern.test(newIp)) {
+                                localStorage.setItem('esp32Ip', newIp);
+                                toast.success('IP saved (reload page to reconnect)');
+                            }
+                        }
+                    }, 1500);
+                });
+            }
+            
+            // Test connection button
+            const testBtn = document.getElementById('testConnectionBtn');
+            if (testBtn) {
+                testBtn.addEventListener('click', testEsp32Connection);
+            }
+            
+            // Update WebSocket status every 500ms
+            setInterval(updateWebSocketStatus, 500);
+            updateWebSocketStatus();
+        }
+
+        function setStandaloneMode() {
+            const ipInput = document.getElementById('esp32IpAddress');
+            const helpText = document.getElementById('ipHelpText');
+            
+            // Set IP to Stand Alone Mode default
+            if (ipInput) {
+                ipInput.value = '192.168.4.1';
+                ipInput.readOnly = true;
+                ipInput.classList.add('bg-light');
+            }
+            
+            // Update help text
+            if (helpText) {
+                helpText.innerHTML = '<i class="fas fa-info-circle"></i> Stand Alone Mode always uses 192.168.4.1 (read-only)';
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('esp32Ip', '192.168.4.1');
+            
+            toast.info('Stand Alone Mode: IP set to 192.168.4.1');
+        }
+
+        function setHomeWifiMode() {
+            const ipInput = document.getElementById('esp32IpAddress');
+            const helpText = document.getElementById('ipHelpText');
+            
+            // Enable IP editing
+            if (ipInput) {
+                ipInput.readOnly = false;
+                ipInput.classList.remove('bg-light');
+            }
+            
+            // Update help text
+            if (helpText) {
+                helpText.textContent = 'Check network router for assigned IP';
+            }
+            
+            // If IP was on standalone, clear it so user enters their network IP
+            if (ipInput && ipInput.value === '192.168.4.1') {
+                ipInput.value = '';
+                ipInput.placeholder = 'e.g., 192.168.1.100';
+            }
+        }
+
+        // ==================== Settings Accordion State Management ====================
+        
+        // Initialize accordion state persistence
+        function initSettingsAccordions() {
+            const accordions = ['servo', 'gyro', 'battery', 'network', 'livedata', 'config'];
+            
+            // Restore accordion states from localStorage
+            accordions.forEach(accordionKey => {
+                const accordionId = `collapse${accordionKey.charAt(0).toUpperCase() + accordionKey.slice(1)}`;
+                const accordion = document.getElementById(accordionId);
+                if (!accordion) return;
+                
+                const savedState = localStorage.getItem(`accordion_${accordionKey}`);
+                
+                // Default to collapsed (closed) if no saved state
+                if (savedState === 'open') {
+                    // Use Bootstrap's class to show accordion
+                    accordion.classList.add('show');
+                }
+            });
+            
+            // Save state when accordion is shown or hidden using Bootstrap collapse events
+            accordions.forEach(accordionKey => {
+                const accordionId = `collapse${accordionKey.charAt(0).toUpperCase() + accordionKey.slice(1)}`;
+                const accordion = document.getElementById(accordionId);
+                if (!accordion) return;
+                
+                accordion.addEventListener('shown.bs.collapse', function() {
+                    localStorage.setItem(`accordion_${accordionKey}`, 'open');
+                    const header = this.previousElementSibling;
+                    if (header) header.setAttribute('aria-expanded', 'true');
+                });
+                
+                accordion.addEventListener('hidden.bs.collapse', function() {
+                    localStorage.setItem(`accordion_${accordionKey}`, 'closed');
+                    const header = this.previousElementSibling;
+                    if (header) header.setAttribute('aria-expanded', 'false');
+                });
+            });
+        }
+
+        // ==================== Time Tracking ====================
+        function startSessionTimer() {
+            if (sessionTimer) return; // Already running
+            
+            sessionStartTime = Date.now();
+            
+            // Update every second
+            sessionTimer = setInterval(() => {
+                updateDurationDisplays();
+            }, 1000);
+            
+            console.log('Session timer started');
+        }
+        
+        function stopSessionTimer() {
+            if (!sessionTimer) return;
+            
+            clearInterval(sessionTimer);
+            sessionTimer = null;
+            sessionStartTime = null;
+            
+            updateDurationDisplays();
+        }
+        
+        function updateDurationDisplays() {
+            // Update session duration (current trip only)
+            let sessionSeconds = 0;
+            if (sessionStartTime) {
+                sessionSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+            }
+            const sessionDuration = document.getElementById('sessionDuration');
+            if (sessionDuration) sessionDuration.textContent = formatDuration(sessionSeconds);
+            
+            // Update total duration (persisted + current session accumulation)
+            let totalSeconds = totalRuntime;
+            if (totalSessionStart) {
+                totalSeconds += Math.floor((Date.now() - totalSessionStart) / 1000);
+            }
+            const totalDuration = document.getElementById('totalDuration');
+            if (totalDuration) totalDuration.textContent = formatDuration(totalSeconds);
+        }
+        
+        function startTotalTimer() {
+            if (totalTimer) return; // Already running
+            
+            totalSessionStart = Date.now();
+            
+            // Update every second
+            totalTimer = setInterval(() => {
+                updateDurationDisplays();
+            }, 1000);
+            
+            console.log('Total runtime timer started');
+        }
+        
+        function stopTotalTimer() {
+            if (!totalTimer) return;
+            
+            // Add accumulated time to total runtime
+            if (totalSessionStart) {
+                const totalSessionSeconds = Math.floor((Date.now() - totalSessionStart) / 1000);
+                totalRuntime += totalSessionSeconds;
+                localStorage.setItem('totalRuntime', totalRuntime);
+                console.log(`Total session ended: ${totalSessionSeconds}s | Total accumulated: ${totalRuntime}s`);
+            }
+            
+            clearInterval(totalTimer);
+            totalTimer = null;
+            totalSessionStart = null;
+            
+            updateDurationDisplays();
+        }
+        
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}`;
+            } else {
+                return `${minutes}:${(seconds % 60).toString().padStart(2, '0')}`;
+            }
+        }
+
+        // ==================== GPS / Geolocation ====================
+        function startGPSUpdates() {
+            if (!("geolocation" in navigator)) {
+                console.warn("Geolocation not supported in this browser");
+                const elevation = document.getElementById('elevationValue');
+                const latitude = document.getElementById('latitudeValue');
+                const longitude = document.getElementById('longitudeValue');
+                if (elevation) elevation.textContent = 'Not supported';
+                if (latitude) latitude.textContent = 'Not supported';
+                if (longitude) longitude.textContent = 'Not supported';
+                return;
+            }
+
+            // Get first reading immediately
+            updateGPS();
+
+            // Then repeat every 2 minutes
+            gpsTimer = setInterval(updateGPS, GPS_UPDATE_INTERVAL);
+        }
+
+        function updateGPS() {
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const altMeters = position.coords.altitude;
+                    const accuracy = position.coords.accuracy;
+                    
+                    // Store current GPS data
+                    currentGPS.lat = lat;
+                    currentGPS.lon = lon;
+                    currentGPS.elevation = altMeters;
+
+                    // Calculate distance if we have a previous position
+                    if (previousGPS.lat !== null && previousGPS.lon !== null) {
+                        const distance = haversineDistance(previousGPS.lat, previousGPS.lon, lat, lon);
+                        
+                        // Filter out bad readings (GPS jumps over 1 mile indicate poor signal)
+                        if (distance < 1.0) {
+                            tripDistance += distance;
+                            totalDistance += distance;
+                            localStorage.setItem('totalDistance', totalDistance.toFixed(2));
+                            
+                            // Update distance displays
+                            const tripVal = document.getElementById('distanceValue');
+                            const totalVal = document.getElementById('totalDistanceValue');
+                            if (tripVal) tripVal.textContent = `${tripDistance.toFixed(2)} mi`;
+                            if (totalVal) totalVal.textContent = `${totalDistance.toFixed(2)} mi`;
+                            
+                            console.log(`Distance added: ${distance.toFixed(3)} mi | Trip: ${tripDistance.toFixed(2)} mi | Total: ${totalDistance.toFixed(2)} mi`);
+                        } else {
+                            console.warn(`GPS jump detected: ${distance.toFixed(2)} mi - ignoring bad reading`);
+                        }
+                    }
+                    
+                    // Store current position as previous for next calculation
+                    previousGPS.lat = lat;
+                    previousGPS.lon = lon;
+
+                    // Update latitude and longitude
+                    const latVal = document.getElementById('latitudeValue');
+                    const lonVal = document.getElementById('longitudeValue');
+                    if (latVal) latVal.textContent = `${lat.toFixed(6)}°`;
+                    if (lonVal) lonVal.textContent = `${lon.toFixed(6)}°`;
+
+                    // Update accuracy
+                    const accFeet = accuracy * METERS_TO_FEET;
+                    const accVal = document.getElementById('gpsAccuracy');
+                    if (accVal) accVal.textContent = `±${accFeet.toFixed(1)} ft`;
+
+                    // Update elevation if available
+                    const elevVal = document.getElementById('elevationValue');
+                    if (altMeters !== null && altMeters !== undefined) {
+                        const altFeet = altMeters * METERS_TO_FEET;
+                        if (elevVal) elevVal.textContent = `${altFeet.toFixed(1)} ft`;
+                    } else {
+                        if (elevVal) elevVal.textContent = 'Unavailable';
+                    }
+
+                    console.log(`GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)}, Elev: ${altMeters ? (altMeters * METERS_TO_FEET).toFixed(1) : 'N/A'} ft`);
+                },
+                error => {
+                    let msg = 'Error';
+
+                    if (error.code === error.PERMISSION_DENIED) {
+                        msg = 'Permission denied';
+                    } else if (error.code === error.POSITION_UNAVAILABLE) {
+                        msg = 'No GPS signal';
+                    } else if (error.code === error.TIMEOUT) {
+                        msg = 'Timeout';
+                    }
+
+                    const elevVal = document.getElementById('elevationValue');
+                    const latVal = document.getElementById('latitudeValue');
+                    const lonVal = document.getElementById('longitudeValue');
+                    const accVal = document.getElementById('gpsAccuracy');
+                    
+                    if (elevVal) elevVal.textContent = msg;
+                    if (latVal) latVal.textContent = msg;
+                    if (lonVal) lonVal.textContent = msg;
+                    if (accVal) accVal.textContent = '--';
+
+                    console.warn('Geolocation error:', msg, error);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 30000
+                }
+            );
+        }
+
+        // ==================== Distance Calculation ====================
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            // Convert degrees to radians
+            const toRad = Math.PI / 180;
+            const R = 3959; // Earth radius in miles
+            
+            const dLat = (lat2 - lat1) * toRad;
+            const dLon = (lon2 - lon1) * toRad;
+            
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+        function shareGPSLocation() {
+            if (currentGPS.lat === null || currentGPS.lon === null) {
+                toast.warning('GPS location not yet available. Please wait...');
+                return;
+            }
+
+            const lat = currentGPS.lat.toFixed(6);
+            const lon = currentGPS.lon.toFixed(6);
+            const elev = currentGPS.elevation ? `${(currentGPS.elevation * METERS_TO_FEET).toFixed(1)} ft` : 'N/A';
+            
+            const locationText = `TRX-4 Location:\nLat: ${lat}\nLon: ${lon}\nElevation: ${elev}`;
+            const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+            const shareText = `${locationText}\n\nView on map: ${googleMapsUrl}`;
+
+            // Try Web Share API first (native mobile sharing)
+            if (navigator.share) {
+                navigator.share({
+                    title: 'TRX-4 GPS Location',
+                    text: shareText
+                })
+                .then(() => {
+                    toast.success('Location shared successfully!');
+                })
+                .catch(error => {
+                    if (error.name !== 'AbortError') {
+                        console.error('Share failed:', error);
+                        fallbackShare(shareText);
+                    }
+                });
+            } else {
+                // Fallback: Copy to clipboard
+                fallbackShare(shareText);
+            }
+        }
+
+        function fallbackShare(text) {
+            // Try clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text)
+                    .then(() => {
+                        toast.info('Location copied to clipboard!');
+                    })
+                    .catch(() => {
+                        // Final fallback: Show alert with instructions
+                        toast.error('Share not supported. Location: ' + currentGPS.lat.toFixed(6) + ', ' + currentGPS.lon.toFixed(6));
+                    });
+            } else {
+                // Very old browser - just show the coordinates
+                toast.error('Share not supported. Location: ' + currentGPS.lat.toFixed(6) + ', ' + currentGPS.lon.toFixed(6));
+            }
+        }
+    </script>
+</body>
+</html>
