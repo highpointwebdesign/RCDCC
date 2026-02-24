@@ -32,6 +32,9 @@ unsigned long lastSimulationTime = 0;
 // Development mode flag
 bool mpuConnected = false;
 
+// Diagnostic flag to isolate WebSocket broadcast blocking
+const bool disableWebSocketTelemetry = true;
+
 // Battery monitoring variables
 float batteryVoltages[3] = {0.0f, 0.0f, 0.0f}; // Voltages for 3 batteries
 unsigned long lastBatteryReadTime = 0;
@@ -73,6 +76,9 @@ void setup() {
   delay(500);
   
   Serial.println("\n\nESP32 Active Suspension Simulator - Starting...");
+  if (disableWebSocketTelemetry) {
+    Serial.println("WebSocket telemetry broadcast DISABLED for diagnostics");
+  }
   
   // Initialize SPIFFS
   if (!SPIFFS.begin(true)) {
@@ -204,7 +210,32 @@ void setup() {
 
 // Main loop
 void loop() {
-  unsigned long currentTime = millis();
+  unsigned long loopStartTime = millis();
+  unsigned long currentTime = loopStartTime;
+  static unsigned long lastLoopTime = 0;
+  static bool firstLoop = true;
+  
+  // Log loop execution time every 5 seconds for diagnostics
+  if (!firstLoop && (currentTime - lastLoopTime) > 5000) {
+    unsigned long loopDuration = currentTime - lastLoopTime;
+    Serial.printf("[LOOP] Loop cycle time: %lums\n", loopDuration);
+    if (loopDuration > 2000) {
+      Serial.printf("⚠️  LONG LOOP DETECTED: %lums - possible blocking operation!\n", loopDuration);
+    }
+    lastLoopTime = currentTime;
+  }
+  if (firstLoop) {
+    lastLoopTime = currentTime;
+    firstLoop = false;
+  }
+  
+  // CHECKPOINT: WiFi status check
+  unsigned long beforeWiFiCheck = millis();
+  int wifiStatus = WiFi.status();
+  unsigned long wifiCheckTime = millis() - beforeWiFiCheck;
+  if (wifiCheckTime > 50) {
+    Serial.printf("⚠️  SLOW WIFI STATUS CHECK: %lums\n", wifiCheckTime);
+  }
   
   // Handle LED blink timeout
   if (ledBlinkEndTime > 0 && currentTime >= ledBlinkEndTime) {
@@ -214,15 +245,27 @@ void loop() {
   
   // Read MPU6050 sensor data at specified rate
   if (currentTime - lastMPUReadTime >= (1000 / SUSPENSION_SAMPLE_RATE_HZ)) {
+    unsigned long sensorBlockStart = millis();
     float accelX, accelY, accelZ, gyroX, gyroY, gyroZ;
     
     // Always try to read sensor data (to detect reconnection)
     int16_t ax, ay, az, gx, gy, gz;
     
+    // CHECKPOINT: I2C Read Start
+    unsigned long beforeI2C = millis();
+    
     // Suppress I2C error messages temporarily to avoid flooding serial
     esp_log_level_set("Wire", ESP_LOG_NONE);
     mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
     esp_log_level_set("Wire", ESP_LOG_WARN);
+    
+    unsigned long i2cTime = millis() - beforeI2C;
+    if (i2cTime > 100) {
+      Serial.printf("⚠️  SLOW I2C READ: %lums\n", i2cTime);
+    }
+    
+    // WATCHDOG FEED: Feed watchdog after I2C operation (can be slow)
+    yield();
     
     // Check if we got valid data (not all zeros which indicates error)
     if (ax != 0 || ay != 0 || az != 0 || gx != 0 || gy != 0 || gz != 0) {
@@ -259,18 +302,30 @@ void loop() {
     sensorFusion.update(accelX, accelY, accelZ, gyroX, gyroY, gyroZ);
     
     lastMPUReadTime = currentTime;
+    
+    unsigned long afterSensorTime = millis();
+    if (afterSensorTime - loopStartTime > 1000) {
+      Serial.printf("⚠️  LONG SENSOR READ: %lums\n", afterSensorTime - loopStartTime);
+    }
   }
   
   // Run suspension simulation
   if (currentTime - lastSimulationTime >= (1000 / SUSPENSION_SAMPLE_RATE_HZ)) {
+    unsigned long simulationBlockStart = millis();
+    
     // Get current orientation and acceleration from sensor fusion
     float roll = sensorFusion.getRoll();
     float pitch = sensorFusion.getPitch();
     float yaw = sensorFusion.getYaw();
     float verticalAccel = sensorFusion.getVerticalAcceleration();
     
-    // Update suspension state
+    // CHECKPOINT: Suspension update
+    unsigned long beforeSuspUpdate = millis();
     suspensionSimulator.update(roll, pitch, verticalAccel);
+    unsigned long suspUpdateTime = millis() - beforeSuspUpdate;
+    if (suspUpdateTime > 50) {
+      Serial.printf("⚠️  SLOW SUSPENSION UPDATE: %lums\n", suspUpdateTime);
+    }
     
     // Get suspension outputs (0-180 degrees for servos)
     float fl = suspensionSimulator.getFrontLeftOutput();
@@ -278,28 +333,90 @@ void loop() {
     float rl = suspensionSimulator.getRearLeftOutput();
     float rr = suspensionSimulator.getRearRightOutput();
     
-    // Get servo calibration settings
+    // CHECKPOINT: Servo config load (SPIFFS read - can be slow)
+    unsigned long beforeServoConfig = millis();
     ServoConfig servoConfig = storageManager.getServoConfig();
+    unsigned long servoConfigTime = millis() - beforeServoConfig;
+    if (servoConfigTime > 100) {
+      Serial.printf("⚠️  SLOW SERVO CONFIG LOAD: %lums (SPIFFS read)\n", servoConfigTime);
+    }
     
-    // Write PWM outputs with calibration applied
+    // CHECKPOINT: PWM writes
+    unsigned long beforePWM = millis();
     pwmOutputs.setChannel(0, fl, servoConfig.frontLeft);
     pwmOutputs.setChannel(1, fr, servoConfig.frontRight);
     pwmOutputs.setChannel(2, rl, servoConfig.rearLeft);
     pwmOutputs.setChannel(3, rr, servoConfig.rearRight);
+    unsigned long pwmTime = millis() - beforePWM;
+    if (pwmTime > 50) {
+      Serial.printf("⚠️  SLOW PWM WRITES: %lums\n", pwmTime);
+    }
     
     // Broadcast sensor data to web clients (interval based on telemetry rate config)
     static unsigned long lastBroadcast = 0;
+    
+    // CHECKPOINT: System config load (SPIFFS read - can be slow)
+    unsigned long beforeSysConfig = millis();
     SuspensionConfig config = storageManager.getConfig();
+    unsigned long sysConfigTime = millis() - beforeSysConfig;
+    if (sysConfigTime > 100) {
+      Serial.printf("⚠️  SLOW SYSTEM CONFIG LOAD: %lums (SPIFFS read)\n", sysConfigTime);
+    }
+    
     uint16_t telemetryIntervalMs = 1000 / config.telemetryRate;  // Convert Hz to milliseconds
     if (currentTime - lastBroadcast >= telemetryIntervalMs) {
-      if (mpuConnected) {
-        webServer.sendSensorData(roll, pitch, yaw, verticalAccel);
-        webServer.setSensorData(roll, pitch, yaw, verticalAccel); // Store for HTTP polling
+      unsigned long beforeBroadcast = millis();
+      
+      if (!disableWebSocketTelemetry) {
+        // CHECKPOINT: Start WebSocket broadcast operation
+        Serial.printf("→ [TELEMETRY] Starting broadcast at %lu ms\n", beforeBroadcast);
+        
+        if (mpuConnected) {
+          unsigned long beforeSend = millis();
+          webServer.sendSensorData(roll, pitch, yaw, verticalAccel);
+          unsigned long sendTime = millis() - beforeSend;
+          if (sendTime > 100) {
+            Serial.printf("⚠️  SLOW WEBSOCKET SEND (connected): %lums\n", sendTime);
+          }
+          
+          unsigned long beforeStore = millis();
+          webServer.setSensorData(roll, pitch, yaw, verticalAccel); // Store for HTTP polling
+          unsigned long storeTime = millis() - beforeStore;
+          if (storeTime > 50) {
+            Serial.printf("⚠️  SLOW SENSOR STORE: %lums\n", storeTime);
+          }
+        } else {
+          // Send NaN values when sensor offline - dashboard will display '--'
+          unsigned long beforeSend = millis();
+          webServer.sendSensorData(NAN, NAN, NAN, NAN);
+          unsigned long sendTime = millis() - beforeSend;
+          if (sendTime > 100) {
+            Serial.printf("⚠️  SLOW WEBSOCKET SEND (offline): %lums\n", sendTime);
+          }
+          
+          unsigned long beforeStore = millis();
+          webServer.setSensorData(NAN, NAN, NAN, NAN); // Store for HTTP polling
+          unsigned long storeTime = millis() - beforeStore;
+          if (storeTime > 50) {
+            Serial.printf("⚠️  SLOW SENSOR STORE: %lums\n", storeTime);
+          }
+        }
+        
+        unsigned long afterBroadcast = millis();
+        unsigned long broadcastTime = afterBroadcast - beforeBroadcast;
+        if (broadcastTime > 100) {
+          Serial.printf("⚠️  SLOW TELEMETRY BROADCAST: %lums\n", broadcastTime);
+        }
+        Serial.printf("✓ [TELEMETRY] Broadcast complete at %lu ms (took %lu ms)\n", afterBroadcast, broadcastTime);
       } else {
-        // Send NaN values when sensor offline - dashboard will display '--'
-        webServer.sendSensorData(NAN, NAN, NAN, NAN);
-        webServer.setSensorData(NAN, NAN, NAN, NAN); // Store for HTTP polling
+        // Diagnostic mode: skip WebSocket sends, keep HTTP polling updated
+        if (mpuConnected) {
+          webServer.setSensorData(roll, pitch, yaw, verticalAccel);
+        } else {
+          webServer.setSensorData(NAN, NAN, NAN, NAN);
+        }
       }
+      
       lastBroadcast = currentTime;
     }
     
@@ -307,20 +424,68 @@ void loop() {
   }
   
   // Read battery voltages periodically
+  // TODO: Battery monitoring disabled to improve stability - will re-enable in later release
+  /*
   if (currentTime - lastBatteryReadTime >= BATTERY_READ_INTERVAL) {
+    unsigned long beforeBatteryBlock = millis();
+    
     BatteriesConfig batteryConfig = storageManager.getBatteryConfig();
     
     // Read voltage for each configured battery
+    unsigned long beforeBatt1 = millis();
     batteryVoltages[0] = readBatteryVoltage(batteryConfig.battery1.plugAssignment);
+    unsigned long batt1Time = millis() - beforeBatt1;
+    if (batt1Time > 20) Serial.printf("⚠️  SLOW BATT1 READ: %lums\n", batt1Time);
+    
+    yield(); // Feed watchdog between ADC reads
+    
+    unsigned long beforeBatt2 = millis();
     batteryVoltages[1] = readBatteryVoltage(batteryConfig.battery2.plugAssignment);
+    unsigned long batt2Time = millis() - beforeBatt2;
+    if (batt2Time > 20) Serial.printf("⚠️  SLOW BATT2 READ: %lums\n", batt2Time);
+    
+    yield(); // Feed watchdog between ADC reads
+    
+    unsigned long beforeBatt3 = millis();
     batteryVoltages[2] = readBatteryVoltage(batteryConfig.battery3.plugAssignment);
+    unsigned long batt3Time = millis() - beforeBatt3;
+    if (batt3Time > 20) Serial.printf("⚠️  SLOW BATT3 READ: %lums\n", batt3Time);
+    
+    yield(); // Feed watchdog after all reads
     
     // Broadcast battery voltages to web clients
+    unsigned long beforeBattBcast = millis();
     webServer.sendBatteryData(batteryVoltages[0], batteryVoltages[1], batteryVoltages[2]);
     webServer.setBatteryData(batteryVoltages[0], batteryVoltages[1], batteryVoltages[2]); // Store for HTTP polling
+    unsigned long battBcastTime = millis() - beforeBattBcast;
+    if (battBcastTime > 50) Serial.printf("⚠️  SLOW BATT BROADCAST: %lums\n", battBcastTime);
+    
+    unsigned long totalBatteryTime = millis() - beforeBatteryBlock;
+    if (totalBatteryTime > 100) {
+      Serial.printf("⚠️  SLOW TOTAL BATTERY BLOCK: %lums\n", totalBatteryTime);
+    }
     
     lastBatteryReadTime = currentTime;
   }
+  */
   
+  // FINAL LOOP SUMMARY: Calculate total loop time and identify anomalies
+  unsigned long loopEndTime = millis();
+  unsigned long totalLoopTime = loopEndTime - loopStartTime;
+  static unsigned long maxLoopTime = 0;
+  static unsigned long crashDetectionWindow = 0;
+  
+  if (totalLoopTime > maxLoopTime) {
+    maxLoopTime = totalLoopTime;
+  }
+  
+  if (totalLoopTime > 1000) {
+    Serial.printf("\n⛔ CRITICAL: Loop took %lums (max so far: %lums)\n", totalLoopTime, maxLoopTime);
+    Serial.printf("   [WiFi check: recently checked at %lu ms]\n", beforeWiFiCheck);
+    Serial.printf("   → If crash follows shortly, potential blocking operation identified\n\n");
+    crashDetectionWindow = loopEndTime;
+  }
+  
+  // FINAL WATCHDOG FEED before loop ends
   yield();
 }

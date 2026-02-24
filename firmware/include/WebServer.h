@@ -133,13 +133,15 @@ private:
     Serial.println(HOME_WIFI_SSID);
     
     WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(false); // CRITICAL: Disable auto-reconnect to prevent blocking
     WiFi.begin(HOME_WIFI_SSID, HOME_WIFI_PASSWORD);
     
     unsigned long startAttemptTime = millis();
     
-    // Wait for connection with timeout
+    // Wait for connection with timeout - REDUCE TIMEOUT to 5 seconds to not starve watchdog
+    const unsigned long SHORT_TIMEOUT = 5000; // 5 seconds instead of 30
     while (WiFi.status() != WL_CONNECTED && 
-           millis() - startAttemptTime < WIFI_CONNECT_TIMEOUT) {
+           millis() - startAttemptTime < SHORT_TIMEOUT) {
       delay(500);
       Serial.print(".");
     }
@@ -154,7 +156,7 @@ private:
       Serial.println(WiFi.localIP());
     } else {
       // Connection failed, fall back to AP mode
-      Serial.println("Failed to connect to home WiFi");
+      Serial.println("Failed to connect to home WiFi (timeout after 5s)");
       Serial.println("Starting Access Point mode...");
       
       WiFi.mode(WIFI_AP);
@@ -172,6 +174,8 @@ private:
       Serial.println(WiFi.softAPIP());
       Serial.println("Access web interface at: http://192.168.4.1");
     }
+    
+    Serial.println("⚠️  WiFi auto-reconnect disabled to prevent watchdog issues");
   }
   
   void setupRoutes() {
@@ -193,18 +197,6 @@ private:
                     ",\"verticalAccel\":" + String(latestVerticalAccel, 2) + 
                     ",\"batteries\":[" + String(latestBattery1, 2) + "," + 
                     String(latestBattery2, 2) + "," + String(latestBattery3, 2) + "]}";
-      request->send(200, "application/json", json);
-    });
-    
-    // API endpoint for telemetry data (alias for /api/sensors for easier naming)
-    server.on("/api/telemetry", HTTP_GET, [this](AsyncWebServerRequest *request) {
-      String json = "{\"roll\":" + String(latestRoll, 1) + 
-                    ",\"pitch\":" + String(latestPitch, 1) + 
-                    ",\"yaw\":" + String(latestYaw, 1) + 
-                    ",\"verticalAccel\":" + String(latestVerticalAccel, 2) + 
-                    ",\"battery1\":" + String(latestBattery1, 2) + 
-                    ",\"battery2\":" + String(latestBattery2, 2) + 
-                    ",\"battery3\":" + String(latestBattery3, 2) + "}";
       request->send(200, "application/json", json);
     });
     
@@ -304,6 +296,39 @@ private:
             bool autoMode = doc["fpvAutoMode"];
             Serial.printf("Updating fpvAutoMode to: %s\n", autoMode ? "true" : "false");
             storageManager->updateParameter("fpvAutoMode", autoMode ? 1.0f : 0.0f);
+          }
+          
+          // Handle servo configuration updates
+          if (doc.containsKey("servos")) {
+            JsonObject servos = doc["servos"];
+            
+            // Process each servo
+            for (const char* servoName : {"frontLeft", "frontRight", "rearLeft", "rearRight"}) {
+              if (servos.containsKey(servoName)) {
+                JsonObject servo = servos[servoName];
+                
+                if (servo.containsKey("min")) {
+                  int minVal = servo["min"];
+                  Serial.printf("Updating %s min to: %d\n", servoName, minVal);
+                  storageManager->updateServoParameter(servoName, "min", minVal);
+                }
+                if (servo.containsKey("max")) {
+                  int maxVal = servo["max"];
+                  Serial.printf("Updating %s max to: %d\n", servoName, maxVal);
+                  storageManager->updateServoParameter(servoName, "max", maxVal);
+                }
+                if (servo.containsKey("trim")) {
+                  int trimVal = servo["trim"];
+                  Serial.printf("Updating %s trim to: %d\n", servoName, trimVal);
+                  storageManager->updateServoParameter(servoName, "trim", trimVal);
+                }
+                if (servo.containsKey("reversed")) {
+                  int reversed = servo["reversed"];
+                  Serial.printf("Updating %s reversed to: %d\n", servoName, reversed);
+                  storageManager->updateServoParameter(servoName, "reversed", reversed);
+                }
+              }
+            }
           }
           
           // Trigger LED blink feedback
@@ -416,6 +441,19 @@ private:
           request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
         }
       });
+
+    // Serve static files from SPIFFS
+    server.on("/test-gps.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+      request->send(SPIFFS, "/test-gps.html", "text/html");
+    });
+    
+    server.on("/test.webmanifest", HTTP_GET, [](AsyncWebServerRequest *request) {
+      request->send(SPIFFS, "/test.webmanifest", "application/manifest+json");
+    });
+    
+    server.on("/test-sw.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+      request->send(SPIFFS, "/test-sw.js", "application/javascript");
+    });
   }
 };
 
