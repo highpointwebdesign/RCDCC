@@ -3574,6 +3574,15 @@
         }
 
         function initTuningSliders() {
+            // Helper function to update tuning slider thumb label
+            function updateTuningThumbLabel(sliderId, value, decimals = 0) {
+                const slider = document.querySelector(`#${sliderId}`);
+                if (!slider) return;
+                const thumb = slider.querySelector('.range-slider__thumb[data-upper]')
+                    || slider.querySelector('.range-slider__thumb');
+                if (thumb) thumb.textContent = decimals > 0 ? value.toFixed(decimals) : Math.round(value);
+            }
+
             // Initialize Ride Height - Horizontal slider (0-100%)
             let rideHeightElement = document.querySelector('#sliderRideHeight');
             const rideHeightInstance = rangeSlider(rideHeightElement, {
@@ -3587,6 +3596,7 @@
                     const val = Math.round(value[1]);
                     tuningSliderValues.rideHeightOffset = val;
                     document.getElementById('rideHeightCurrent').textContent = val + '%';
+                    updateTuningThumbLabel('sliderRideHeight', val, 0);
                     
                     if (!isLoadingTuningConfig) {
                         clearTimeout(tuningSliderSaveTimers.rideHeight);
@@ -3597,6 +3607,7 @@
                 }
             });
             tuningSliderInstances.rideHeight = { element: rideHeightElement, instance: rideHeightInstance };
+            updateTuningThumbLabel('sliderRideHeight', 50, 0);
 
             // Initialize Damping - Horizontal slider (0.1-2.0)
             let dampingElement = document.querySelector('#sliderDamping');
@@ -3611,6 +3622,7 @@
                     console.log('🎚️ dampingInstance.onInput fired - value:', value, 'userInteraction:', userInteraction);
                     tuningSliderValues.damping = value[1];
                     document.getElementById('dampingCurrent').textContent = value[1].toFixed(1);
+                    updateTuningThumbLabel('sliderDamping', value[1], 1);
                     
                     // Save on user interaction (but not during config load)
                     if (!isLoadingTuningConfig) {
@@ -3623,6 +3635,7 @@
                 }
             });
             tuningSliderInstances.damping = { element: dampingElement, instance: dampingInstance };
+            updateTuningThumbLabel('sliderDamping', 0.8, 1);
 
             // Initialize Stiffness - Horizontal slider (0.5-3.0)
             let stiffnessElement = document.querySelector('#sliderStiffness');
@@ -3636,6 +3649,7 @@
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.stiffness = value[1];
                     document.getElementById('stiffnessCurrent').textContent = value[1].toFixed(1);
+                    updateTuningThumbLabel('sliderStiffness', value[1], 1);
                     
                     if (!isLoadingTuningConfig) {
                         clearTimeout(tuningSliderSaveTimers.stiffness);
@@ -3646,6 +3660,7 @@
                 }
             });
             tuningSliderInstances.stiffness = { element: stiffnessElement, instance: stiffnessInstance };
+            updateTuningThumbLabel('sliderStiffness', 1.0, 1);
 
             // Initialize Reaction Speed - Horizontal slider (0.1-5.0)
             let reactionElement = document.querySelector('#sliderReactionSpeed');
@@ -3659,6 +3674,7 @@
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.reactionSpeed = value[1];
                     document.getElementById('reactionSpeedCurrent').textContent = value[1].toFixed(1);
+                    updateTuningThumbLabel('sliderReactionSpeed', value[1], 1);
                     
                     if (!isLoadingTuningConfig) {
                         clearTimeout(tuningSliderSaveTimers.reactionSpeed);
@@ -3669,6 +3685,7 @@
                 }
             });
             tuningSliderInstances.reactionSpeed = { element: reactionElement, instance: reactionInstance };
+            updateTuningThumbLabel('sliderReactionSpeed', 1.0, 1);
 
             // Initialize Balance - Horizontal slider (0-100%)
             let balanceElement = document.querySelector('#sliderBalance');
@@ -3682,6 +3699,7 @@
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.frontRearBalance = Math.round(value[1]);
                     document.getElementById('balanceCurrent').textContent = tuningSliderValues.frontRearBalance + '%';
+                    updateTuningThumbLabel('sliderBalance', tuningSliderValues.frontRearBalance, 0);
                     
                     if (!isLoadingTuningConfig) {
                         clearTimeout(tuningSliderSaveTimers.balance);
@@ -3692,6 +3710,7 @@
                 }
             });
             tuningSliderInstances.balance = { element: balanceElement, instance: balanceInstance };
+            updateTuningThumbLabel('sliderBalance', 50, 0);
 
             // Initialize Sensor Refresh Rate - Horizontal slider (5-50 Hz)
             let sensorElement = document.querySelector('#sliderSensorRate');
@@ -3705,6 +3724,7 @@
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.sampleRate = Math.round(value[1]);
                     document.getElementById('sensorRateCurrent').textContent = tuningSliderValues.sampleRate;
+                    updateTuningThumbLabel('sliderSensorRate', tuningSliderValues.sampleRate, 0);
                     
                     if (!isLoadingTuningConfig) {
                         clearTimeout(tuningSliderSaveTimers.sensorRate);
@@ -3715,6 +3735,7 @@
                 }
             });
             tuningSliderInstances.sensorRate = { element: sensorElement, instance: sensorInstance };
+            updateTuningThumbLabel('sliderSensorRate', 25, 0);
         }
 
         // Track locked state for each slider
@@ -3793,7 +3814,7 @@
                                     saveServoParameter('frontLeft', 'max', value[1]);
                                 }
                                 servoSliderInstances.frontLeft.lastRangeValue = [value[0], value[1]];
-                            }, 800);
+                            }, 1500);
                         }
                     }
                 });
@@ -4053,6 +4074,15 @@
             // Set flag to prevent saving during config load
             isLoadingTuningConfig = true;
             
+            // Helper function to update tuning slider thumb label
+            function updateThumbnailLabel(sliderId, value, decimals = 0) {
+                const slider = document.querySelector(`#${sliderId}`);
+                if (!slider) return;
+                const thumb = slider.querySelector('.range-slider__thumb[data-upper]')
+                    || slider.querySelector('.range-slider__thumb');
+                if (thumb) thumb.textContent = decimals > 0 ? value.toFixed(decimals) : Math.round(value);
+            }
+            
             // Helper function to update a slider element
             function updateSliderElement(sliderKey, fieldName, minVal, newValue) {
                 if (config[fieldName] === undefined) return;
@@ -4081,36 +4111,42 @@
                 tuningSliderValues.rideHeightOffset = Math.round(config.rideHeightOffset);
                 updateSliderElement('rideHeight', 'rideHeightOffset', 0, config.rideHeightOffset);
                 document.getElementById('rideHeightCurrent').textContent = tuningSliderValues.rideHeightOffset + '%';
+                updateThumbnailLabel('sliderRideHeight', tuningSliderValues.rideHeightOffset, 0);
             }
             
             if (config.damping !== undefined) {
                 tuningSliderValues.damping = config.damping;
                 updateSliderElement('damping', 'damping', 0.1, config.damping);
                 document.getElementById('dampingCurrent').textContent = config.damping.toFixed(1);
+                updateThumbnailLabel('sliderDamping', config.damping, 1);
             }
             
             if (config.stiffness !== undefined) {
                 tuningSliderValues.stiffness = config.stiffness;
                 updateSliderElement('stiffness', 'stiffness', 0.5, config.stiffness);
                 document.getElementById('stiffnessCurrent').textContent = config.stiffness.toFixed(1);
+                updateThumbnailLabel('sliderStiffness', config.stiffness, 1);
             }
             
             if (config.reactionSpeed !== undefined) {
                 tuningSliderValues.reactionSpeed = config.reactionSpeed;
                 updateSliderElement('reactionSpeed', 'reactionSpeed', 0.1, config.reactionSpeed);
                 document.getElementById('reactionSpeedCurrent').textContent = config.reactionSpeed.toFixed(1);
+                updateThumbnailLabel('sliderReactionSpeed', config.reactionSpeed, 1);
             }
             
             if (config.frontRearBalance !== undefined) {
                 tuningSliderValues.frontRearBalance = Math.round(config.frontRearBalance);
                 updateSliderElement('balance', 'frontRearBalance', 0, config.frontRearBalance);
                 document.getElementById('balanceCurrent').textContent = tuningSliderValues.frontRearBalance + '%';
+                updateThumbnailLabel('sliderBalance', tuningSliderValues.frontRearBalance, 0);
             }
             
             if (config.sampleRate !== undefined) {
                 tuningSliderValues.sampleRate = Math.round(config.sampleRate);
                 updateSliderElement('sensorRate', 'sampleRate', 5, config.sampleRate);
                 document.getElementById('sensorRateCurrent').textContent = tuningSliderValues.sampleRate;
+                updateThumbnailLabel('sliderSensorRate', tuningSliderValues.sampleRate, 0);
             }
             
             isLoadingTuningConfig = false;
