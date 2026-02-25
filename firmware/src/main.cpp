@@ -128,7 +128,6 @@ void setup() {
     Serial.println("Check wiring: SDA=GPIO21, SCL=GPIO22, VCC=3.3V, GND=GND");
     Serial.println("MPU6050 should be at I2C address 0x68");
     webServer.init(storageManager);
-    webServer.sendStatus("Development Mode: MPU6050 not connected (using simulated data)");
   } else {
     Serial.println("MPU6050 initialized successfully");
     Serial.println("MPU6050 found at I2C address 0x68");
@@ -153,17 +152,14 @@ void setup() {
   webServer.setCalibrationCallback([&]() {
     if (mpuConnected) {
       sensorFusion.calibrate(mpu, [](const String& msg) {
-        webServer.sendStatus(msg);
+        Serial.println(msg);
       });
-    } else {
-      webServer.sendStatus("Cannot calibrate - MPU6050 not connected");
     }
   });
   
   // Set up orientation callback for web interface
   webServer.setOrientationCallback([&](uint8_t orientation) {
     sensorFusion.setOrientation(orientation);
-    webServer.sendStatus("MPU6050 orientation updated");
   });
   
   // Set up MPU status callback for web interface
@@ -180,11 +176,10 @@ void setup() {
   // Set up LED blink callback for config saves
   webServer.setLedBlinkCallback(startLedBlink);
   
-  // Calibrate to current position as level (sends status to web dashboard)
+  // Calibrate to current position as level
   if (mpuConnected) {
     sensorFusion.calibrate(mpu, [](const String& msg) {
-      Serial.println(msg);  // Output to Serial
-      webServer.sendStatus(msg);  // Output to Web
+      Serial.println(msg);  // Output to Serial only
     });
   }
   
@@ -201,9 +196,6 @@ void setup() {
   pinMode(BATTERY_ADC_PIN_B, INPUT); // GPIO 35
   pinMode(BATTERY_ADC_PIN_C, INPUT); // GPIO 32
   Serial.println("Battery monitoring ADC pins configured");
-  
-  // Send final ready status
-  webServer.sendStatus("System ready");
   
   Serial.println("Setup complete!");
 }
@@ -368,38 +360,12 @@ void loop() {
       unsigned long beforeBroadcast = millis();
       
       if (!disableWebSocketTelemetry) {
-        // CHECKPOINT: Start WebSocket broadcast operation
-        Serial.printf("→ [TELEMETRY] Starting broadcast at %lu ms\n", beforeBroadcast);
-        
+        // Store sensor data for HTTP polling
         if (mpuConnected) {
-          unsigned long beforeSend = millis();
-          webServer.sendSensorData(roll, pitch, yaw, verticalAccel);
-          unsigned long sendTime = millis() - beforeSend;
-          if (sendTime > 100) {
-            Serial.printf("⚠️  SLOW WEBSOCKET SEND (connected): %lums\n", sendTime);
-          }
-          
-          unsigned long beforeStore = millis();
-          webServer.setSensorData(roll, pitch, yaw, verticalAccel); // Store for HTTP polling
-          unsigned long storeTime = millis() - beforeStore;
-          if (storeTime > 50) {
-            Serial.printf("⚠️  SLOW SENSOR STORE: %lums\n", storeTime);
-          }
+          webServer.setSensorData(roll, pitch, yaw, verticalAccel);
         } else {
-          // Send NaN values when sensor offline - dashboard will display '--'
-          unsigned long beforeSend = millis();
-          webServer.sendSensorData(NAN, NAN, NAN, NAN);
-          unsigned long sendTime = millis() - beforeSend;
-          if (sendTime > 100) {
-            Serial.printf("⚠️  SLOW WEBSOCKET SEND (offline): %lums\n", sendTime);
-          }
-          
-          unsigned long beforeStore = millis();
-          webServer.setSensorData(NAN, NAN, NAN, NAN); // Store for HTTP polling
-          unsigned long storeTime = millis() - beforeStore;
-          if (storeTime > 50) {
-            Serial.printf("⚠️  SLOW SENSOR STORE: %lums\n", storeTime);
-          }
+          // Store NaN values when sensor offline - dashboard will display '--'
+          webServer.setSensorData(NAN, NAN, NAN, NAN);
         }
         
         unsigned long afterBroadcast = millis();

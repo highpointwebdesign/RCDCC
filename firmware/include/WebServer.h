@@ -11,7 +11,6 @@
 class WebServerManager {
 private:
   AsyncWebServer server{80};
-  AsyncWebSocket ws{"/ws"};
   StorageManager* storageManager = nullptr;
   std::function<void()> calibrationCallback = nullptr;
   std::function<bool()> mpuStatusCallback = nullptr;
@@ -34,16 +33,6 @@ public:
     // Start WiFi in AP mode
     startWiFiAP();
     
-    // Setup WebSocket
-    ws.onEvent([](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
-      if (type == WS_EVT_CONNECT) {
-        Serial.printf("WebSocket client #%u connected\n", client->id());
-      } else if (type == WS_EVT_DISCONNECT) {
-        Serial.printf("WebSocket client #%u disconnected\n", client->id());
-      }
-    });
-    server.addHandler(&ws);
-    
     // Setup web server routes
     setupRoutes();
     
@@ -52,46 +41,8 @@ public:
     Serial.println("Web server started on http://192.168.4.1");
   }
   
-  // Public method to send status messages to all connected clients
-  void sendStatus(const String& message) {
-    ws.textAll(message);
-  }
-  
-  // Store latest sensor/battery data
-  struct {
-    float roll = NAN, pitch = NAN, yaw = NAN, verticalAccel = NAN;
-    float battery1 = 0, battery2 = 0, battery3 = 0;
-  } latestData;
-  
-  // Send combined sensor and battery data to all connected clients
-  void sendTelemetry() {
-    String json = "{\"type\":\"telemetry\",\"roll\":" + String(latestData.roll, 1) + 
-                  ",\"pitch\":" + String(latestData.pitch, 1) + 
-                  ",\"yaw\":" + String(latestData.yaw, 1) + 
-                  ",\"verticalAccel\":" + String(latestData.verticalAccel, 2) + 
-                  ",\"voltages\":[" + 
-                  String(latestData.battery1, 2) + "," + 
-                  String(latestData.battery2, 2) + "," + 
-                  String(latestData.battery3, 2) + "]}";
-    ws.textAll(json);
-  }
-  
-  // Send sensor data to all connected clients
-  void sendSensorData(float roll, float pitch, float yaw, float verticalAccel) {
-    latestData.roll = roll;
-    latestData.pitch = pitch;
-    latestData.yaw = yaw;
-    latestData.verticalAccel = verticalAccel;
-    sendTelemetry();
-  }
-  
-  // Send battery voltage data to all connected clients
-  void sendBatteryData(float battery1, float battery2, float battery3) {
-    latestData.battery1 = battery1;
-    latestData.battery2 = battery2;
-    latestData.battery3 = battery3;
-    sendTelemetry();
-  }
+  // WebSocket telemetry and status functions have been removed
+  // All communication is now HTTP-based (poll model)
   
   // Set calibration callback for MPU6050 recalibration
   void setCalibrationCallback(std::function<void()> callback) {
@@ -202,10 +153,9 @@ private:
     
     // API endpoint to get current config
     server.on("/api/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
-      // Combine system config, servo config, and battery config into one response
+      // Return system config with servo config combined
       String configJson = storageManager->getConfigJSON();
       String servoConfigJson = storageManager->getServoConfigJSON();
-      String batteryConfigJson = storageManager->getBatteryConfigJSON();
       
       // Parse all JSON strings and combine them
       DynamicJsonDocument doc(4096);
@@ -218,18 +168,16 @@ private:
         if (!error2) {
           doc["servos"] = servoDoc;
         }
-        
-        // Add battery config under "batteries" key
-        DynamicJsonDocument batteryDoc(1024);
-        DeserializationError error3 = deserializeJson(batteryDoc, batteryConfigJson);
-        if (!error3) {
-          doc["batteries"] = batteryDoc["batteries"];
-        }
       }
       
       String combinedJson;
       serializeJson(doc, combinedJson);
       request->send(200, "application/json", combinedJson);
+    });
+    
+    // API endpoint for heartbeat/health check
+    server.on("/api/health-check", HTTP_GET, [this](AsyncWebServerRequest *request) {
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
     
     // API endpoint to update config
@@ -346,14 +294,12 @@ private:
     // API endpoint to reset config to defaults
     server.on("/api/reset", HTTP_POST, [this](AsyncWebServerRequest *request) {
       storageManager->resetToDefaults();
-      sendStatus("Settings reset to factory defaults");
       request->send(200, "application/json", "{\"status\":\"success\"}");
     });
     
     // API endpoint to recalibrate MPU6050
     server.on("/api/calibrate", HTTP_POST, [this](AsyncWebServerRequest *request) {
       if (calibrationCallback) {
-        sendStatus("Starting recalibration...");
         calibrationCallback();
         request->send(200, "application/json", "{\"status\":\"success\"}");
       } else {
@@ -390,58 +336,6 @@ private:
         }
       });
     
-    // API endpoint to update battery configuration
-    server.on("/api/batteries", HTTP_POST, [this](AsyncWebServerRequest *request) {}, nullptr, 
-      [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-        DynamicJsonDocument doc(2048);
-        DeserializationError error = deserializeJson(doc, data);
-        
-        if (!error) {
-          Serial.print("Battery config update received: ");
-          serializeJson(doc, Serial);
-          Serial.println();
-          
-          // Handle array format: {"batteries": [{...}, {...}, {...}]}
-          if (doc.containsKey("batteries") && doc["batteries"].is<JsonArray>()) {
-            JsonArray batteries = doc["batteries"].as<JsonArray>();
-            
-            for (size_t i = 0; i < batteries.size() && i < 3; i++) {
-              JsonObject battery = batteries[i];
-              int batteryNum = i + 1;
-              
-              if (battery.containsKey("name")) {
-                String name = battery["name"].as<String>();
-                storageManager->updateBatteryParameter(batteryNum, "name", name);
-              }
-              if (battery.containsKey("cellCount")) {
-                String cellCount = String(battery["cellCount"].as<int>());
-                storageManager->updateBatteryParameter(batteryNum, "cellCount", cellCount);
-              }
-              if (battery.containsKey("plugAssignment")) {
-                String plug = String(battery["plugAssignment"].as<int>());
-                storageManager->updateBatteryParameter(batteryNum, "plugAssignment", plug);
-              }
-              if (battery.containsKey("showOnDashboard")) {
-                String show = battery["showOnDashboard"].as<bool>() ? "true" : "false";
-                storageManager->updateBatteryParameter(batteryNum, "showOnDashboard", show);
-              }
-            }
-            
-            // Trigger LED blink feedback
-            if (ledBlinkCallback) {
-              ledBlinkCallback();
-            }
-            
-            request->send(200, "application/json", "{\"status\":\"success\"}");
-          } else {
-            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid batteries array\"}");
-          }
-        } else {
-          Serial.println("Battery config JSON parse error");
-          request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
-        }
-      });
-
     // Serve static files from SPIFFS
     server.on("/test-gps.html", HTTP_GET, [](AsyncWebServerRequest *request) {
       request->send(SPIFFS, "/test-gps.html", "text/html");

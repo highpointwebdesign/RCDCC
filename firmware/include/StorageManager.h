@@ -9,13 +9,11 @@ class StorageManager {
 private:
   SuspensionConfig config;
   ServoConfig servoConfig;
-  BatteriesConfig batteryConfig;
   
 public:
   void init() {
     loadDefaults();
     loadServoDefaults();
-    loadBatteryDefaults();
   }
   
   void loadDefaults() {
@@ -36,23 +34,6 @@ public:
     servoConfig.frontRight = {DEFAULT_SERVO_TRIM, DEFAULT_SERVO_MIN, DEFAULT_SERVO_MAX, DEFAULT_SERVO_REVERSED};
     servoConfig.rearLeft = {DEFAULT_SERVO_TRIM, DEFAULT_SERVO_MIN, DEFAULT_SERVO_MAX, DEFAULT_SERVO_REVERSED};
     servoConfig.rearRight = {DEFAULT_SERVO_TRIM, DEFAULT_SERVO_MIN, DEFAULT_SERVO_MAX, DEFAULT_SERVO_REVERSED};
-  }
-  
-  void loadBatteryDefaults() {
-    strncpy(batteryConfig.battery1.name, DEFAULT_BATTERY_NAME, sizeof(batteryConfig.battery1.name) - 1);
-    batteryConfig.battery1.cellCount = DEFAULT_BATTERY_CELL_COUNT;
-    batteryConfig.battery1.plugAssignment = DEFAULT_BATTERY_PLUG;
-    batteryConfig.battery1.showOnDashboard = DEFAULT_BATTERY_SHOW_DASHBOARD;
-    
-    strncpy(batteryConfig.battery2.name, DEFAULT_BATTERY_NAME, sizeof(batteryConfig.battery2.name) - 1);
-    batteryConfig.battery2.cellCount = DEFAULT_BATTERY_CELL_COUNT;
-    batteryConfig.battery2.plugAssignment = DEFAULT_BATTERY_PLUG;
-    batteryConfig.battery2.showOnDashboard = DEFAULT_BATTERY_SHOW_DASHBOARD;
-    
-    strncpy(batteryConfig.battery3.name, DEFAULT_BATTERY_NAME, sizeof(batteryConfig.battery3.name) - 1);
-    batteryConfig.battery3.cellCount = DEFAULT_BATTERY_CELL_COUNT;
-    batteryConfig.battery3.plugAssignment = DEFAULT_BATTERY_PLUG;
-    batteryConfig.battery3.showOnDashboard = DEFAULT_BATTERY_SHOW_DASHBOARD;
   }
   
   void loadConfig() {
@@ -117,29 +98,6 @@ public:
       }
     }
     
-    // Load battery configuration if available
-    if (doc.containsKey("batteries")) {
-      JsonObject batteries = doc["batteries"];
-      if (batteries.containsKey("battery1")) {
-        strncpy(batteryConfig.battery1.name, batteries["battery1"]["name"] | DEFAULT_BATTERY_NAME, sizeof(batteryConfig.battery1.name) - 1);
-        batteryConfig.battery1.cellCount = batteries["battery1"]["cellCount"] | DEFAULT_BATTERY_CELL_COUNT;
-        batteryConfig.battery1.plugAssignment = batteries["battery1"]["plugAssignment"] | DEFAULT_BATTERY_PLUG;
-        batteryConfig.battery1.showOnDashboard = batteries["battery1"]["showOnDashboard"] | DEFAULT_BATTERY_SHOW_DASHBOARD;
-      }
-      if (batteries.containsKey("battery2")) {
-        strncpy(batteryConfig.battery2.name, batteries["battery2"]["name"] | DEFAULT_BATTERY_NAME, sizeof(batteryConfig.battery2.name) - 1);
-        batteryConfig.battery2.cellCount = batteries["battery2"]["cellCount"] | DEFAULT_BATTERY_CELL_COUNT;
-        batteryConfig.battery2.plugAssignment = batteries["battery2"]["plugAssignment"] | DEFAULT_BATTERY_PLUG;
-        batteryConfig.battery2.showOnDashboard = batteries["battery2"]["showOnDashboard"] | DEFAULT_BATTERY_SHOW_DASHBOARD;
-      }
-      if (batteries.containsKey("battery3")) {
-        strncpy(batteryConfig.battery3.name, batteries["battery3"]["name"] | DEFAULT_BATTERY_NAME, sizeof(batteryConfig.battery3.name) - 1);
-        batteryConfig.battery3.cellCount = batteries["battery3"]["cellCount"] | DEFAULT_BATTERY_CELL_COUNT;
-        batteryConfig.battery3.plugAssignment = batteries["battery3"]["plugAssignment"] | DEFAULT_BATTERY_PLUG;
-        batteryConfig.battery3.showOnDashboard = batteries["battery3"]["showOnDashboard"] | DEFAULT_BATTERY_SHOW_DASHBOARD;
-      }
-    }
-    
     Serial.println("Config loaded from SPIFFS");
   }
   
@@ -183,27 +141,6 @@ public:
     rr["min"] = servoConfig.rearRight.minLimit;
     rr["max"] = servoConfig.rearRight.maxLimit;
     rr["reversed"] = servoConfig.rearRight.reversed;
-    
-    // Save battery configuration
-    JsonObject batteries = doc.createNestedObject("batteries");
-    
-    JsonObject b1 = batteries.createNestedObject("battery1");
-    b1["name"] = batteryConfig.battery1.name;
-    b1["cellCount"] = batteryConfig.battery1.cellCount;
-    b1["plugAssignment"] = batteryConfig.battery1.plugAssignment;
-    b1["showOnDashboard"] = batteryConfig.battery1.showOnDashboard;
-    
-    JsonObject b2 = batteries.createNestedObject("battery2");
-    b2["name"] = batteryConfig.battery2.name;
-    b2["cellCount"] = batteryConfig.battery2.cellCount;
-    b2["plugAssignment"] = batteryConfig.battery2.plugAssignment;
-    b2["showOnDashboard"] = batteryConfig.battery2.showOnDashboard;
-    
-    JsonObject b3 = batteries.createNestedObject("battery3");
-    b3["name"] = batteryConfig.battery3.name;
-    b3["cellCount"] = batteryConfig.battery3.cellCount;
-    b3["plugAssignment"] = batteryConfig.battery3.plugAssignment;
-    b3["showOnDashboard"] = batteryConfig.battery3.showOnDashboard;
     
     File file = SPIFFS.open(CONFIG_SPIFFS_PATH, "w");
     if (!file) {
@@ -313,59 +250,6 @@ public:
       else if (param == "min") target->minLimit = constrain(value, 30, 90);
       else if (param == "max") target->maxLimit = constrain(value, 90, 150);
       else if (param == "reversed") target->reversed = (value != 0);
-      
-      saveConfig();
-    }
-  }
-  
-  // Battery configuration methods
-  BatteriesConfig getBatteryConfig() const {
-    return batteryConfig;
-  }
-  
-  String getBatteryConfigJSON() {
-    DynamicJsonDocument doc(1024);
-    
-    JsonArray batteries = doc.createNestedArray("batteries");
-    
-    JsonObject b1 = batteries.createNestedObject();
-    b1["name"] = batteryConfig.battery1.name;
-    b1["cellCount"] = batteryConfig.battery1.cellCount;
-    b1["plugAssignment"] = batteryConfig.battery1.plugAssignment;
-    b1["showOnDashboard"] = batteryConfig.battery1.showOnDashboard;
-    
-    JsonObject b2 = batteries.createNestedObject();
-    b2["name"] = batteryConfig.battery2.name;
-    b2["cellCount"] = batteryConfig.battery2.cellCount;
-    b2["plugAssignment"] = batteryConfig.battery2.plugAssignment;
-    b2["showOnDashboard"] = batteryConfig.battery2.showOnDashboard;
-    
-    JsonObject b3 = batteries.createNestedObject();
-    b3["name"] = batteryConfig.battery3.name;
-    b3["cellCount"] = batteryConfig.battery3.cellCount;
-    b3["plugAssignment"] = batteryConfig.battery3.plugAssignment;
-    b3["showOnDashboard"] = batteryConfig.battery3.showOnDashboard;
-    
-    String output;
-    serializeJson(doc, output);
-    return output;
-  }
-  
-  void updateBatteryParameter(int batteryNum, const String& param, const String& value) {
-    BatteryConfig* target = nullptr;
-    
-    if (batteryNum == 1) target = &batteryConfig.battery1;
-    else if (batteryNum == 2) target = &batteryConfig.battery2;
-    else if (batteryNum == 3) target = &batteryConfig.battery3;
-    
-    if (target) {
-      if (param == "name") {
-        strncpy(target->name, value.c_str(), sizeof(target->name) - 1);
-        target->name[sizeof(target->name) - 1] = '\0';
-      }
-      else if (param == "cellCount") target->cellCount = constrain(value.toInt(), 2, 6);
-      else if (param == "plugAssignment") target->plugAssignment = constrain(value.toInt(), 0, 3);
-      else if (param == "showOnDashboard") target->showOnDashboard = (value == "true" || value == "1");
       
       saveConfig();
     }

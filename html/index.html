@@ -1348,7 +1348,7 @@
                             <span id="stiffnessDisplay">--</span>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Front/Rear Balance</span>
+                            <span>Rear/Front Balance</span>
                             <span id="frontRearBalanceDisplay">--</span>
                         </div>
                     </div>
@@ -1378,14 +1378,14 @@
                             <span>Telemetry Stream</span>
                             <span id="telemetryStatus">--</span>
                         </div>
-                        <hr class="my-2">
+                        <!-- <hr class="my-2"> -->
                         <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span style="font-size: 0.85rem;">Protocol</span>
-                            <span id="protocolDisplay" style="font-size: 0.85rem; font-family: monospace;">--</span>
+                            <span>Protocol</span>
+                            <span id="protocolDisplay">--</span>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span style="font-size: 0.85rem;">Secure Context</span>
-                            <span id="secureContextDisplay" style="font-size: 0.85rem;">--</span>
+                            <span>Secure Context</span>
+                            <span id="secureContextDisplay">--</span>
                         </div>
                     </div>
                 </div>
@@ -1420,7 +1420,7 @@
                     <span class="tab-label-short">Debug</span>
                 </button>
             </div>
-            
+
             <!-- Tab Content: Servo Configuration -->
             <div class="tab-pane active" id="tab-servo">
                 <div class="row g-3">
@@ -1432,37 +1432,37 @@
                     </div>
 
                     <!-- Auto Level Progress Container -->
-                                <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="bubble-level-card">
-                                                <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
-                                                <div class="bubble-level-face" id="bubbleLevelFace">
-                                                    <div class="bubble-level-crosshair horizontal"></div>
-                                                    <div class="bubble-level-crosshair vertical"></div>
-                                                    <div class="bubble-level-target"></div>
-                                                    <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
-                                                    <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
-                                                </div>
-                                                <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
-                                                <div class="form-check mt-3">
-                                                    <input class="form-check-input" type="checkbox" id="bubbleLevelAutoClose">
-                                                    <label class="form-check-label" for="bubbleLevelAutoClose">Close when auto-level completes</label>
-                                                </div>
-                                            </div>
-                                        </div>
+                    <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="bubble-level-card">
+                                    <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
+                                    <div class="bubble-level-face" id="bubbleLevelFace">
+                                        <div class="bubble-level-crosshair horizontal"></div>
+                                        <div class="bubble-level-crosshair vertical"></div>
+                                        <div class="bubble-level-target"></div>
+                                        <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
+                                        <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
+                                    </div>
+                                    <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
+                                    <div class="form-check mt-3">
+                                        <input class="form-check-input" type="checkbox" id="bubbleLevelAutoClose">
+                                        <label class="form-check-label" for="bubbleLevelAutoClose">Close when auto-level completes</label>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Servo Range Card -->
                     <div class="col-12 col-md-6">
                         <div class="card">
                             <div class="card-header">
-                                <i class="fas fa-arrow-up"></i>
+                                <i class="fa fa-arrows-alt" style="transform: rotate(-45deg);" aria-hidden="true"></i>
                                 Servo Range
                             </div>
                             <div class="card-body">
-                                <h6 class="mb-3">Front Left</h6>
+                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(-45deg);"></i> Front Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontLeft"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1470,10 +1470,10 @@
                                         <span>Max</span>
                                     </div>
                                 </div>
-                                
+
                                 <!-- <hr class="my-4"> -->
-                                
-                                <h6 class="mb-3">Front Right</h6>
+
+                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(45deg);"></i> Front Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontRight"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1481,10 +1481,10 @@
                                         <span>Max</span>
                                     </div>
                                 </div>
-                                
+
                                 <!-- <hr class="my-4"> -->
-                                
-                                <h6 class="mb-3">Rear Left</h6>
+
+                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(45deg);"></i> Rear Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearLeft"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1492,10 +1492,10 @@
                                         <span>Max</span>
                                     </div>
                                 </div>
-                                
+
                                 <!-- <hr class="my-4"> -->
-                                
-                                <h6 class="mb-3">Rear Right</h6>
+
+                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(-45deg);"></i> Rear Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearRight"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1515,7 +1515,7 @@
                                 Servo Trim
                             </div>
                             <div class="card-body">
-                                <h6 class="mb-3">Front Left</h6>
+                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(-45deg);"></i> Front Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontLeftTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1524,10 +1524,10 @@
                                         <span>Right</span>
                                     </div>
                                 </div>
-                                
+
                                 <!-- <hr class="my-4"> -->
-                                
-                                <h6 class="mb-3">Front Right</h6>
+
+                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(45deg);"></i> Front Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontRightTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1536,10 +1536,10 @@
                                         <span>Right</span>
                                     </div>
                                 </div>
-                                
+
                                 <!-- <hr class="my-4"> -->
-                                
-                                <h6 class="mb-3">Rear Left</h6>
+
+                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(45deg);"></i> Rear Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearLeftTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1548,10 +1548,10 @@
                                         <span>Right</span>
                                     </div>
                                 </div>
-                                
+
                                 <!-- <hr class="my-4"> -->
-                                
-                                <h6 class="mb-3">Rear Right</h6>
+
+                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(-45deg);"></i> Rear Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearRightTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1564,254 +1564,6 @@
                         </div>
                     </div>
 
-                                <div class="col-12 col-md-6">
-                                    <div class="card text-white bg-secondary">
-                                        <div class="card-header">
-                                            <i class="fas fa-arrow-up" style="transform: rotate(-45deg);"></i>
-                                            Front Left
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="row g-3">
-                                                <!-- Servo Range Sub-card -->
-                                                <div class="col-12">
-                                                    <div class="card">
-                                                        <div class="card-header">
-                                                            <i class="fas fa-arrows-left-right"></i>
-                                                            Servo Range (PWM)
-                                                        </div>
-                                                        <div class="card-body">
-                                                            <div style="margin: 20px 0;">
-                                                                <div id="sliderFrontLeft"></div>
-                                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                                    <span>Min</span>
-                                                                    <span>Max</span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="text-muted small mt-3">
-                                                                <div class="d-flex justify-content-between">
-                                                                    <span>Min PWM:</span>
-                                                                    <span id="frontLeftMin">--</span>
-                                                                </div>
-                                                                <div class="d-flex justify-content-between mt-1">
-                                                                    <span>Max PWM:</span>
-                                                                    <span id="frontLeftMax">--</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Servo Trim Sub-card -->
-                                                <div class="col-12">
-                                                    <div class="card">
-                                                        <div class="card-header">
-                                                            <i class="fas fa-sliders"></i>
-                                                            Servo Trim
-                                                        </div>
-                                                        <div class="card-body">
-                                                            <div style="margin: 20px 0;">
-                                                                <div id="sliderFrontLeftTrim"></div>
-                                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                                    <span>Left</span>
-                                                                    <span>Center</span>
-                                                                    <span>Right</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Front Right Servo Card -->
-                                <div class="col-12 col-md-6">
-                                    <div class="card text-white bg-secondary">
-                                        <div class="card-header">
-                                            <i class="fas fa-arrow-up" style="transform: rotate(45deg);"></i>
-                                            Front Right
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="row g-3">
-                                                <!-- Servo Range Sub-card -->
-                                                <div class="col-12">
-                                                    <div class="card">
-                                                        <div class="card-header">
-                                                            <i class="fas fa-arrows-left-right"></i>
-                                                            Servo Range (PWM)
-                                                        </div>
-                                                        <div class="card-body">
-                                                            <div style="margin: 20px 0;">
-                                                                <div id="sliderFrontRight"></div>
-                                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                                    <span>Min</span>
-                                                                    <span>Max</span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="text-muted small mt-3">
-                                                                <div class="d-flex justify-content-between">
-                                                                    <span>Min PWM:</span>
-                                                                    <span id="frontRightMin">--</span>
-                                                                </div>
-                                                                <div class="d-flex justify-content-between mt-1">
-                                                                    <span>Max PWM:</span>
-                                                                    <span id="frontRightMax">--</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Servo Trim Sub-card -->
-                                                <div class="col-12">
-                                                    <div class="card">
-                                                        <div class="card-header">
-                                                            <i class="fas fa-sliders"></i>
-                                                            Servo Trim
-                                                        </div>
-                                                        <div class="card-body">
-                                                            <div style="margin: 20px 0;">
-                                                                <div id="sliderFrontRightTrim"></div>
-                                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                                    <span>Left</span>
-                                                                    <span>Center</span>
-                                                                    <span>Right</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Rear Left Servo Card -->
-                                <div class="col-12 col-md-6">
-                                    <div class="card text-white bg-secondary">
-                                        <div class="card-header">
-                                            <i class="fas fa-arrow-down" style="transform: rotate(45deg);"></i>
-                                            Rear Left
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="row g-3">
-                                                <!-- Servo Range Sub-card -->
-                                                <div class="col-12">
-                                                    <div class="card">
-                                                        <div class="card-header">
-                                                            <i class="fas fa-arrows-left-right"></i>
-                                                            Servo Range (PWM)
-                                                        </div>
-                                                        <div class="card-body">
-                                                            <div style="margin: 20px 0;">
-                                                                <div id="sliderRearLeft"></div>
-                                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                                    <span>Min</span>
-                                                                    <span>Max</span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="text-muted small mt-3">
-                                                                <div class="d-flex justify-content-between">
-                                                                    <span>Min PWM:</span>
-                                                                    <span id="rearLeftMin">--</span>
-                                                                </div>
-                                                                <div class="d-flex justify-content-between mt-1">
-                                                                    <span>Max PWM:</span>
-                                                                    <span id="rearLeftMax">--</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Servo Trim Sub-card -->
-                                                <div class="col-12">
-                                                    <div class="card">
-                                                        <div class="card-header">
-                                                            <i class="fas fa-sliders"></i>
-                                                            Servo Trim
-                                                        </div>
-                                                        <div class="card-body">
-                                                            <div style="margin: 20px 0;">
-                                                                <div id="sliderRearLeftTrim"></div>
-                                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                                    <span>Left</span>
-                                                                    <span>Center</span>
-                                                                    <span>Right</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Rear Right Servo Card -->
-                                <div class="col-12 col-md-6">
-                                    <div class="card text-white bg-secondary">
-                                        <div class="card-header">
-                                            <i class="fas fa-arrow-down" style="transform: rotate(-45deg);"></i>
-                                            Rear Right
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="row g-3">
-                                                <!-- Servo Range Sub-card -->
-                                                <div class="col-12">
-                                                    <div class="card">
-                                                        <div class="card-header">
-                                                            <i class="fas fa-arrows-left-right"></i>
-                                                            Servo Range (PWM)
-                                                        </div>
-                                                        <div class="card-body">
-                                                            <div style="margin: 20px 0;">
-                                                                <div id="sliderRearRight"></div>
-                                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                                    <span>Min</span>
-                                                                    <span>Max</span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="text-muted small mt-3">
-                                                                <div class="d-flex justify-content-between">
-                                                                    <span>Min PWM:</span>
-                                                                    <span id="rearRightMin">--</span>
-                                                                </div>
-                                                                <div class="d-flex justify-content-between mt-1">
-                                                                    <span>Max PWM:</span>
-                                                                    <span id="rearRightMax">--</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Servo Trim Sub-card -->
-                                                <div class="col-12">
-                                                    <div class="card">
-                                                        <div class="card-header">
-                                                            <i class="fas fa-sliders"></i>
-                                                            Servo Trim
-                                                        </div>
-                                                        <div class="card-body">
-                                                            <div style="margin: 20px 0;">
-                                                                <div id="sliderRearRightTrim"></div>
-                                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                                    <span>Left</span>
-                                                                    <span>Center</span>
-                                                                    <span>Right</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
                     <div class="col-12">
                         <div class="alert alert-info" style="font-size: 0.875rem;">
                             <strong>Servo Tips:</strong><br>
@@ -1822,22 +1574,22 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Tab Content: Gyro Configuration -->
             <div class="tab-pane" id="tab-gyro">
                 <div class="row g-3">
                     <div class="col-12">
-                            <div class="mb-3">
-                                <label for="mpuOrientation" class="form-label">Physical Mounting</label>
-                                <select class="form-select" id="mpuOrientation">
-                                    <option value="0">Arrow Forward, Chip Up (Default)</option>
-                                    <option value="1">Arrow Up, Chip Forward</option>
-                                    <option value="2">Arrow Backward, Chip Up</option>
-                                    <option value="3">Arrow Down, Chip Forward</option>
-                                    <option value="4">Arrow Right, Chip Up</option>
-                                    <option value="5">Arrow Left, Chip Up</option>
-                                </select>
-                            </div>
+                        <div class="mb-3">
+                            <label for="mpuOrientation" class="form-label">Physical Mounting</label>
+                            <select class="form-select" id="mpuOrientation">
+                                <option value="0">Arrow Forward, Chip Up (Default)</option>
+                                <option value="1">Arrow Up, Chip Forward</option>
+                                <option value="2">Arrow Backward, Chip Up</option>
+                                <option value="3">Arrow Down, Chip Forward</option>
+                                <option value="4">Arrow Right, Chip Up</option>
+                                <option value="5">Arrow Left, Chip Up</option>
+                            </select>
+                        </div>
 
                         <div class="alert alert-info" style="font-size: 0.875rem;">
                             <strong>Calibration Tips:</strong><br>
@@ -1846,67 +1598,66 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Tab Content: Network Settings -->
             <div class="tab-pane" id="tab-network">
                 <div class="row g-3">
                     <div class="col-12">
-                            <div class="mb-4">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked> 
-                                    <label class="form-check-label" for="modeHomeWifi">
-                                        <i class="fas fa-wifi text-success"></i>
-                                        <strong>Home WiFi</strong>
-                                        <span class="badge bg-success ms-2">Recommended</span>
-                                    </label>
-                                    <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
-                                    <div id="helpHomeWifi" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
-                                        <strong>Home WiFi Mode:</strong><br>
-                                        • ESP32 connects to your home WiFi network<br>
-                                        • Check serial monitor for assigned IP address<br>
-                                        • IP address is saved automatically when changed<br>
-                                        • Test connection verifies ESP32 connectivity<br>
-                                        • IP may change if router reassigns it
-                                    </div>
-                                </div>
-                                <div class="form-check mt-2">
-                                    <input class="form-check-input" type="radio" name="networkMode" id="modeStandalone" value="standalone"> 
-                                    <label class="form-check-label" for="modeStandalone">
-                                        <i class="fas fa-signal text-warning"></i>
-                                        <strong>Stand Alone Mode</strong>
-                                    </label>
-                                    <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
-                                    <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
-                                        <strong>Stand Alone Mode:</strong><br>
-                                        1. ESP32 creates its own WiFi network<br>
-                                        2. SSID: <strong>ESP32-Suspension</strong><br>
-                                        3. Password: <strong>12345678</strong><br>
-                                        4. IP is always: <strong>192.168.4.1</strong><br>
-                                        5. Connect your phone to ESP32-Suspension WiFi<br>
-                                        6. IP field will auto-fill when this mode is selected
-                                    </div>
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked>
+                                <label class="form-check-label" for="modeHomeWifi">
+                                    <i class="fas fa-wifi text-success"></i>
+                                    <strong>Home WiFi</strong>
+                                    <span class="badge bg-success ms-2">Recommended</span>
+                                </label>
+                                <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
+                                <div id="helpHomeWifi" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
+                                    <strong>Home WiFi Mode:</strong><br>
+                                    • ESP32 connects to your home WiFi network<br>
+                                    • Check serial monitor for assigned IP address<br>
+                                    • IP address is saved automatically when changed<br>
+                                    • Test connection verifies ESP32 connectivity<br>
+                                    • IP may change if router reassigns it
                                 </div>
                             </div>
-
-                            <!-- IP Address Input -->
-                            <div class="mb-3">
-                                <label for="esp32IpAddress" class="form-label">ESP32 IP Address</label>
-                                <input type="text" class="form-control" id="esp32IpAddress" placeholder="192.168.1.100">
-                                <small class="form-text text-muted" id="ipHelpText">
-                                    Check network router for assigned IP
-                                </small>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="radio" name="networkMode" id="modeStandalone" value="standalone">
+                                <label class="form-check-label" for="modeStandalone">
+                                    <i class="fas fa-signal text-warning"></i>
+                                    <strong>Stand Alone Mode</strong>
+                                </label>
+                                <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')" style="cursor: pointer; width: 20px; height: 20px; background: var(--primary); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
+                                <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
+                                    <strong>Stand Alone Mode:</strong><br>
+                                    1. ESP32 creates its own WiFi network<br>
+                                    2. SSID: <strong>ESP32-Suspension</strong><br>
+                                    3. Password: <strong>12345678</strong><br>
+                                    4. IP is always: <strong>192.168.4.1</strong><br>
+                                    5. Connect your phone to ESP32-Suspension WiFi<br>
+                                    6. IP field will auto-fill when this mode is selected
+                                </div>
                             </div>
-
-                            <!-- Test Connection Button -->
-                            <button type="button" class="btn btn-primary w-100 mb-3" id="testConnectionBtn">
-                                <i class="fas fa-plug"></i>
-                                Test Connection
-                            </button>
                         </div>
+
+                        <!-- IP Address Input -->
+                        <div class="mb-3">
+                            <label for="esp32IpAddress" class="form-label">ESP32 IP Address</label>
+                            <input type="text" class="form-control" id="esp32IpAddress" placeholder="192.168.1.100">
+                            <small class="form-text text-muted" id="ipHelpText">
+                                Check network router for assigned IP
+                            </small>
+                        </div>
+
+                        <!-- Test Connection Button -->
+                        <button type="button" class="btn btn-primary w-100 mb-3" id="testConnectionBtn">
+                            <i class="fas fa-plug"></i>
+                            Test Connection
+                        </button>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Tab Content: Debugging -->
             <div class="tab-pane" id="tab-debugging">
                 <div class="row g-3">
@@ -1948,230 +1699,230 @@
             <div class="row g-3">
                 <!-- First Row: 3 Cards -->
                 <div class="col-12 col-sm-4">
-                                    <div class="card" data-slider="rideHeight">
-                                        <div class="card-header d-flex align-items-center">
-                                            <div>
-                                                <i class="fas fa-arrows-up-down"></i> Ride Height
-                                            </div>
-                                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'rideHeight')" title="Lock slider to prevent accidental changes"></i>
-                                        </div>
-                                        <div class="card-body">
-                                            <!-- Horizontal slider -->
-                                            <div style="margin: 20px 0;">
-                                                <div id="sliderRideHeight"></div>
-                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                    <span>Min</span>
-                                                    <span>Mid</span>
-                                                    <span>Max</span>
-                                                </div>
-                                            </div>
-                                            
-                                            <hr class="my-3">
-                                            
-                                            <!-- API data display -->
-                                            <div class="text-muted small">
-                                                <div>Current: <span id="rideHeightCurrent">--</span></div>
-                                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
-                                                    <div><strong>Formula:</strong> servoOffset = rideHeight × (maxServo - minServo) / 100</div>
-                                                    <div style="margin-top: 5px;">
-                                                        <div>0% = Lowest ride height (maximum compression)</div>
-                                                        <div>50% = Mid-range ride height (neutral)</div>
-                                                        <div>100% = Highest ride height (maximum extension)</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                    <div class="card" data-slider="rideHeight">
+                        <div class="card-header d-flex align-items-center">
+                            <div>
+                                <i class="fas fa-arrows-up-down"></i> Ride Height
+                            </div>
+                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'rideHeight')" title="Lock slider to prevent accidental changes"></i>
+                        </div>
+                        <div class="card-body">
+                            <!-- Horizontal slider -->
+                            <div style="margin: 20px 0;">
+                                <div id="sliderRideHeight"></div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                    <span>Min</span>
+                                    <span>Mid</span>
+                                    <span>Max</span>
                                 </div>
+                            </div>
 
-                                <div class="col-12 col-sm-4">
-                                    <div class="card" data-slider="damping">
-                                        <div class="card-header d-flex align-items-center">
-                                            <div>
-                                                <i class="fas fa-wave-square"></i> Damping
-                                            </div>
-                                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'damping')" title="Lock slider to prevent accidental changes"></i>
-                                        </div>
-                                        <div class="card-body">
-                                            <!-- Horizontal slider -->
-                                            <div style="margin: 20px 0;">
-                                                <div id="sliderDamping"></div>
-                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                    <span>Soft</span>
-                                                    <span>Normal</span>
-                                                    <span>Stiff</span>
-                                                </div>
-                                            </div>
-                                            
-                                            <hr class="my-3">
-                                            
-                                            <!-- API data display -->
-                                            <div class="text-muted small">
-                                                <div>Current: <span id="dampingCurrent">--</span></div>
-                                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
-                                                    <div><strong>Formula:</strong> verticalEffect = -verticalAccel × damping</div>
-                                                    <div style="margin-top: 5px;">
-                                                        <div>0.1 = Soft damping (minimal vertical compensation)</div>
-                                                        <div>0.8 = Default normal damping</div>
-                                                        <div>2.0 = Stiff damping (maximum vertical compensation)</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <hr class="my-3">
 
-                                <div class="col-12 col-sm-4">
-                                    <div class="card" data-slider="stiffness">
-                                        <div class="card-header d-flex align-items-center">
-                                            <div>
-                                                <i class="fas fa-compress"></i> Stiffness
-                                            </div>
-                                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'stiffness')" title="Lock slider to prevent accidental changes"></i>
-                                        </div>
-                                        <div class="card-body">
-                                            <!-- Horizontal slider -->
-                                            <div style="margin: 20px 0;">
-                                                <div id="sliderStiffness"></div>
-                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                    <span>Soft</span>
-                                                    <span>Normal</span>
-                                                    <span>Stiff</span>
-                                                </div>
-                                            </div>
-                                            
-                                            <hr class="my-3">
-                                            
-                                            <!-- API data display -->
-                                            <div class="text-muted small">
-                                                <div>Current: <span id="stiffnessCurrent">--</span></div>
-                                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
-                                                    <div><strong>Formula:</strong> rollEffect = roll × stiffness, pitchEffect = pitch × stiffness</div>
-                                                    <div style="margin-top: 5px;">
-                                                        <div>0.5 = Soft response (minimal roll/pitch correction)</div>
-                                                        <div>1.0 = Default normal response</div>
-                                                        <div>3.0 = Stiff response (maximum roll/pitch correction)</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                            <!-- API data display -->
+                            <div class="text-muted small">
+                                <div>Current: <span id="rideHeightCurrent">--</span></div>
+                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
+                                    <div><strong>Formula:</strong> servoOffset = rideHeight × (maxServo - minServo) / 100</div>
+                                    <div style="margin-top: 5px;">
+                                        <div>0% = Lowest ride height (maximum compression)</div>
+                                        <div>50% = Mid-range ride height (neutral)</div>
+                                        <div>100% = Highest ride height (maximum extension)</div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                                <!-- Second Row: 3 Cards -->
-                                <div class="col-12 col-sm-4">
-                                    <div class="card" data-slider="reactionSpeed">
-                                        <div class="card-header d-flex align-items-center">
-                                            <div>
-                                                <i class="fas fa-gauge-high"></i>
-                                                Reaction Speed
-                                            </div>
-                                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'reactionSpeed')" title="Lock slider to prevent accidental changes"></i>
-                                        </div>
-                                        <div class="card-body">
-                                            <!-- Horizontal slider -->
-                                            <div style="margin: 20px 0;">
-                                                <div id="sliderReactionSpeed"></div>
-                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                    <span>Slow</span>
-                                                    <span>Balanced</span>
-                                                    <span>Fast</span>
-                                                </div>
-                                            </div>
-                                            
-                                            <hr class="my-3">
-                                            
-                                            <!-- API data display -->
-                                            <div class="text-muted small">
-                                                <div>Current: <span id="reactionSpeedCurrent">--</span></div>
-                                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
-                                                    <div><strong>Formula:</strong> smoothing = 1.0 / (1.0 + (5.0 / reactionSpeed))</div>
-                                                    <div style="margin-top: 5px;">
-                                                        <div>0.1 = Very slow/smooth response (smoothing ≈ 0.02)</div>
-                                                        <div>1.0 = Default balanced response (smoothing ≈ 0.17)</div>
-                                                        <div>5.0 = Very fast/aggressive response (smoothing ≈ 0.5)</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                <div class="col-12 col-sm-4">
+                    <div class="card" data-slider="damping">
+                        <div class="card-header d-flex align-items-center">
+                            <div>
+                                <i class="fas fa-wave-square"></i> Damping
+                            </div>
+                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'damping')" title="Lock slider to prevent accidental changes"></i>
+                        </div>
+                        <div class="card-body">
+                            <!-- Horizontal slider -->
+                            <div style="margin: 20px 0;">
+                                <div id="sliderDamping"></div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                    <span>Soft</span>
+                                    <span>Normal</span>
+                                    <span>Stiff</span>
                                 </div>
+                            </div>
 
-                                <div class="col-12 col-sm-4">
-                                    <div class="card" data-slider="balance">
-                                        <div class="card-header d-flex align-items-center">
-                                            <div>
-                                                <i class="fas fa-scale-balanced"></i>
-                                                Balance (Rear/Front)
-                                            </div>
-                                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'balance')" title="Lock slider to prevent accidental changes"></i>
-                                        </div>
-                                        <div class="card-body">
-                                            <!-- Horizontal slider -->
-                                            <div style="margin: 20px 0;">
-                                                <div id="sliderBalance"></div>
-                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                    <span>Rear</span>
-                                                    <span>Balanced</span>
-                                                    <span>Front</span>
-                                                </div>
-                                            </div>
-                                            
-                                            <hr class="my-3">
-                                            
-                                            <!-- API data display -->
-                                            <div class="text-muted small">
-                                                <div>Current: <span id="balanceCurrent">--</span></div>
-                                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
-                                                    <div><strong>Formula:</strong> frontFactor = balance, rearFactor = 1.0 - balance</div>
-                                                    <div style="margin-top: 5px;">
-                                                        <div>0% = All rear (front: 0%, rear: 100% pitch effect)</div>
-                                                        <div>50% = Balanced (front: 50%, rear: 50% pitch effect)</div>
-                                                        <div>100% = All front (front: 100%, rear: 0% pitch effect)</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <hr class="my-3">
 
-                                <div class="col-12 col-sm-4">
-                                    <div class="card" data-slider="sensorRate">
-                                        <div class="card-header d-flex align-items-center">
-                                            <div>
-                                                <i class="fas fa-microchip"></i>
-                                                Sensor Refresh Rate
-                                            </div>
-                                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'sensorRate')" title="Lock slider to prevent accidental changes"></i>
-                                        </div>
-                                        <div class="card-body">
-                                            <!-- Horizontal slider -->
-                                            <div style="margin: 20px 0;">
-                                                <div id="sliderSensorRate"></div>
-                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                    <span>Low</span>
-                                                    <span>Balanced</span>
-                                                    <span>High</span>
-                                                </div>
-                                            </div>
-                                            
-                                            <hr class="my-3">
-                                            
-                                            <!-- API data display -->
-                                            <div class="text-muted small">
-                                                <div>Current: <span id="sensorRateCurrent">--</span> Hz</div>
-                                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
-                                                    <div>Controls sensor reading and suspension update frequency. Higher = faster response but more CPU load. 25 Hz is recommended.</div>
-                                                    <div style="margin-top: 5px;">
-                                                        <div>5 Hz = Low/Conservative (less CPU load)</div>
-                                                        <div>25 Hz = Recommended/Balanced (default)</div>
-                                                        <div>50 Hz = High/Fast (maximum CPU load)</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                            <!-- API data display -->
+                            <div class="text-muted small">
+                                <div>Current: <span id="dampingCurrent">--</span></div>
+                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
+                                    <div><strong>Formula:</strong> verticalEffect = -verticalAccel × damping</div>
+                                    <div style="margin-top: 5px;">
+                                        <div>0.1 = Soft damping (minimal vertical compensation)</div>
+                                        <div>0.8 = Default normal damping</div>
+                                        <div>2.0 = Stiff damping (maximum vertical compensation)</div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-sm-4">
+                    <div class="card" data-slider="stiffness">
+                        <div class="card-header d-flex align-items-center">
+                            <div>
+                                <i class="fas fa-compress"></i> Stiffness
+                            </div>
+                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'stiffness')" title="Lock slider to prevent accidental changes"></i>
+                        </div>
+                        <div class="card-body">
+                            <!-- Horizontal slider -->
+                            <div style="margin: 20px 0;">
+                                <div id="sliderStiffness"></div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                    <span>Soft</span>
+                                    <span>Normal</span>
+                                    <span>Stiff</span>
+                                </div>
+                            </div>
+
+                            <hr class="my-3">
+
+                            <!-- API data display -->
+                            <div class="text-muted small">
+                                <div>Current: <span id="stiffnessCurrent">--</span></div>
+                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
+                                    <div><strong>Formula:</strong> rollEffect = roll × stiffness, pitchEffect = pitch × stiffness</div>
+                                    <div style="margin-top: 5px;">
+                                        <div>0.5 = Soft response (minimal roll/pitch correction)</div>
+                                        <div>1.0 = Default normal response</div>
+                                        <div>3.0 = Stiff response (maximum roll/pitch correction)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Second Row: 3 Cards -->
+                <div class="col-12 col-sm-4">
+                    <div class="card" data-slider="reactionSpeed">
+                        <div class="card-header d-flex align-items-center">
+                            <div>
+                                <i class="fas fa-gauge-high"></i>
+                                Reaction Speed
+                            </div>
+                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'reactionSpeed')" title="Lock slider to prevent accidental changes"></i>
+                        </div>
+                        <div class="card-body">
+                            <!-- Horizontal slider -->
+                            <div style="margin: 20px 0;">
+                                <div id="sliderReactionSpeed"></div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                    <span>Slow</span>
+                                    <span>Balanced</span>
+                                    <span>Fast</span>
+                                </div>
+                            </div>
+
+                            <hr class="my-3">
+
+                            <!-- API data display -->
+                            <div class="text-muted small">
+                                <div>Current: <span id="reactionSpeedCurrent">--</span></div>
+                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
+                                    <div><strong>Formula:</strong> smoothing = 1.0 / (1.0 + (5.0 / reactionSpeed))</div>
+                                    <div style="margin-top: 5px;">
+                                        <div>0.1 = Very slow/smooth response (smoothing ≈ 0.02)</div>
+                                        <div>1.0 = Default balanced response (smoothing ≈ 0.17)</div>
+                                        <div>5.0 = Very fast/aggressive response (smoothing ≈ 0.5)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-sm-4">
+                    <div class="card" data-slider="balance">
+                        <div class="card-header d-flex align-items-center">
+                            <div>
+                                <i class="fas fa-scale-balanced"></i>
+                                Balance (Rear/Front)
+                            </div>
+                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'balance')" title="Lock slider to prevent accidental changes"></i>
+                        </div>
+                        <div class="card-body">
+                            <!-- Horizontal slider -->
+                            <div style="margin: 20px 0;">
+                                <div id="sliderBalance"></div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                    <span>Rear</span>
+                                    <span>Balanced</span>
+                                    <span>Front</span>
+                                </div>
+                            </div>
+
+                            <hr class="my-3">
+
+                            <!-- API data display -->
+                            <div class="text-muted small">
+                                <div>Current: <span id="balanceCurrent">--</span></div>
+                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
+                                    <div><strong>Formula:</strong> frontFactor = balance, rearFactor = 1.0 - balance</div>
+                                    <div style="margin-top: 5px;">
+                                        <div>0% = All rear (front: 0%, rear: 100% pitch effect)</div>
+                                        <div>50% = Balanced (front: 50%, rear: 50% pitch effect)</div>
+                                        <div>100% = All front (front: 100%, rear: 0% pitch effect)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-sm-4">
+                    <div class="card" data-slider="sensorRate">
+                        <div class="card-header d-flex align-items-center">
+                            <div>
+                                <i class="fas fa-microchip"></i>
+                                Sensor Refresh Rate
+                            </div>
+                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'sensorRate')" title="Lock slider to prevent accidental changes"></i>
+                        </div>
+                        <div class="card-body">
+                            <!-- Horizontal slider -->
+                            <div style="margin: 20px 0;">
+                                <div id="sliderSensorRate"></div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                    <span>Low</span>
+                                    <span>Balanced</span>
+                                    <span>High</span>
+                                </div>
+                            </div>
+
+                            <hr class="my-3">
+
+                            <!-- API data display -->
+                            <div class="text-muted small">
+                                <div>Current: <span id="sensorRateCurrent">--</span> Hz</div>
+                                <div style="margin-top: 10px; font-size: 0.7rem; line-height: 1.4;">
+                                    <div>Controls sensor reading and suspension update frequency. Higher = faster response but more CPU load. 25 Hz is recommended.</div>
+                                    <div style="margin-top: 5px;">
+                                        <div>5 Hz = Low/Conservative (less CPU load)</div>
+                                        <div>25 Hz = Recommended/Balanced (default)</div>
+                                        <div>50 Hz = High/Fast (maximum CPU load)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -2253,11 +2004,11 @@
                             <i class="fas fa-chevron-down float-end accordion-chevron"></i>
                         </div>
                         <div id="collapseTuningData" class="collapse show" data-accordion-id="tuningdata">
-                        <div class="card-body">
-                            <div class="data-display" id="tuningData">{
+                            <div class="card-body">
+                                <div class="data-display" id="tuningData">{
   "loading": "Fetching tuning data..."
 }</div>
-                        </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2272,7 +2023,7 @@
                     <div class="card">
                         <div class="card-body">
                             <!-- Placeholder for future FPV controls -->
-                             Coming soon
+                            Coming soon
                         </div>
                     </div>
                 </div>
@@ -2479,7 +2230,7 @@
                     toastEl.classList.remove('show');
                     setTimeout(() => {
                         toastEl.remove();
-                    }, 500);
+                    }, 800);
                 }, duration);
                 
                 // Tap to close
@@ -2487,7 +2238,7 @@
                     toastEl.classList.remove('show');
                     setTimeout(() => {
                         toastEl.remove();
-                    }, 500);
+                    }, 800);
                 });
             },
             
@@ -3668,7 +3419,7 @@
             
             // Update Front/Rear Balance
             if (config.frontRearBalance !== undefined) {
-                const balancePercent = (config.frontRearBalance * 100).toFixed(0);
+                const balancePercent = Math.round(config.frontRearBalance);
                 const display = document.getElementById('frontRearBalanceDisplay');
                 if (display) display.textContent = `${balancePercent}%`;
             }
@@ -3829,7 +3580,7 @@
                 value: [0, 50],
                 min: 0,
                 max: 100,
-                step: 1,
+                step: 2,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -3841,7 +3592,7 @@
                         clearTimeout(tuningSliderSaveTimers.rideHeight);
                         tuningSliderSaveTimers.rideHeight = setTimeout(() => {
                             saveTuningSliderValue('rideHeight', tuningSliderValues.rideHeightOffset);
-                        }, 500);
+                        }, 800);
                     }
                 }
             });
@@ -3853,7 +3604,7 @@
                 value: [0.1, 0.8],
                 min: 0.1,
                 max: 2.0,
-                step: 0.1,
+                step: 0.2,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -3867,7 +3618,7 @@
                         clearTimeout(tuningSliderSaveTimers.damping);
                         tuningSliderSaveTimers.damping = setTimeout(() => {
                             saveTuningSliderValue('damping', tuningSliderValues.damping);
-                        }, 500);
+                        }, 800);
                     }
                 }
             });
@@ -3879,7 +3630,7 @@
                 value: [0.5, 1.0],
                 min: 0.5,
                 max: 3.0,
-                step: 0.1,
+                step: 0.2,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -3890,7 +3641,7 @@
                         clearTimeout(tuningSliderSaveTimers.stiffness);
                         tuningSliderSaveTimers.stiffness = setTimeout(() => {
                             saveTuningSliderValue('stiffness', tuningSliderValues.stiffness);
-                        }, 500);
+                        }, 800);
                     }
                 }
             });
@@ -3902,7 +3653,7 @@
                 value: [0.1, 1.0],
                 min: 0.1,
                 max: 5.0,
-                step: 0.1,
+                step: 0.2,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -3913,7 +3664,7 @@
                         clearTimeout(tuningSliderSaveTimers.reactionSpeed);
                         tuningSliderSaveTimers.reactionSpeed = setTimeout(() => {
                             saveTuningSliderValue('reactionSpeed', tuningSliderValues.reactionSpeed);
-                        }, 500);
+                        }, 800);
                     }
                 }
             });
@@ -3925,7 +3676,7 @@
                 value: [0, 50],
                 min: 0,
                 max: 100,
-                step: 1,
+                step: 2,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -3936,7 +3687,7 @@
                         clearTimeout(tuningSliderSaveTimers.balance);
                         tuningSliderSaveTimers.balance = setTimeout(() => {
                             saveTuningSliderValue('balance', tuningSliderValues.frontRearBalance);
-                        }, 500);
+                        }, 800);
                     }
                 }
             });
@@ -3948,7 +3699,7 @@
                 value: [5, 25],
                 min: 5,
                 max: 50,
-                step: 1,
+                step: 2,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -3959,7 +3710,7 @@
                         clearTimeout(tuningSliderSaveTimers.sensorRate);
                         tuningSliderSaveTimers.sensorRate = setTimeout(() => {
                             saveTuningSliderValue('sensorRate', tuningSliderValues.sampleRate);
-                        }, 500);
+                        }, 800);
                     }
                 }
             });
@@ -4026,11 +3777,11 @@
                     value: [defaultMin, defaultMax],
                     min: 0,
                     max: 180,
-                    step: 1,
+                    step: 2,
                     onInput: function(value) {
                         updateThumbLabels('sliderFrontLeft', value);
                         
-                        // Save with 500ms debounce - only save values that changed
+                        // Save with 800ms debounce - only save values that changed
                         if (!isLoadingTuningConfig) {
                             clearTimeout(servoSliderSaveTimers.frontLeft.range);
                             servoSliderSaveTimers.frontLeft.range = setTimeout(() => {
@@ -4042,7 +3793,7 @@
                                     saveServoParameter('frontLeft', 'max', value[1]);
                                 }
                                 servoSliderInstances.frontLeft.lastRangeValue = [value[0], value[1]];
-                            }, 500);
+                            }, 800);
                         }
                     }
                 });
@@ -4059,18 +3810,18 @@
                     value: [-20, 0],
                     min: -20,
                     max: 20,
-                    step: 1,
+                    step: 2,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderFrontLeftTrim', value[1]);
                         
-                        // Save with 500ms debounce
+                        // Save with 800ms debounce
                         if (!isLoadingTuningConfig) {
                             clearTimeout(servoSliderSaveTimers.frontLeft.trim);
                             servoSliderSaveTimers.frontLeft.trim = setTimeout(() => {
                                 saveServoParameter('frontLeft', 'trim', value[1]);
-                            }, 500);
+                            }, 800);
                         }
                     }
                 });
@@ -4087,11 +3838,11 @@
                     value: [defaultMin, defaultMax],
                     min: 0,
                     max: 180,
-                    step: 1,
+                    step: 2,
                     onInput: function(value) {
                         updateThumbLabels('sliderFrontRight', value);
                         
-                        // Save with 500ms debounce - only save values that changed
+                        // Save with 800ms debounce - only save values that changed
                         if (!isLoadingTuningConfig) {
                             clearTimeout(servoSliderSaveTimers.frontRight.range);
                             servoSliderSaveTimers.frontRight.range = setTimeout(() => {
@@ -4103,7 +3854,7 @@
                                     saveServoParameter('frontRight', 'max', value[1]);
                                 }
                                 servoSliderInstances.frontRight.lastRangeValue = [value[0], value[1]];
-                            }, 500);
+                            }, 800);
                         }
                     }
                 });
@@ -4120,18 +3871,18 @@
                     value: [-20, 0],
                     min: -20,
                     max: 20,
-                    step: 1,
+                    step: 2,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderFrontRightTrim', value[1]);
                         
-                        // Save with 500ms debounce
+                        // Save with 800ms debounce
                         if (!isLoadingTuningConfig) {
                             clearTimeout(servoSliderSaveTimers.frontRight.trim);
                             servoSliderSaveTimers.frontRight.trim = setTimeout(() => {
                                 saveServoParameter('frontRight', 'trim', value[1]);
-                            }, 500);
+                            }, 800);
                         }
                     }
                 });
@@ -4148,11 +3899,11 @@
                     value: [defaultMin, defaultMax],
                     min: 0,
                     max: 180,
-                    step: 1,
+                    step: 2,
                     onInput: function(value) {
                         updateThumbLabels('sliderRearLeft', value);
                         
-                        // Save with 500ms debounce - only save values that changed
+                        // Save with 800ms debounce - only save values that changed
                         if (!isLoadingTuningConfig) {
                             clearTimeout(servoSliderSaveTimers.rearLeft.range);
                             servoSliderSaveTimers.rearLeft.range = setTimeout(() => {
@@ -4164,7 +3915,7 @@
                                     saveServoParameter('rearLeft', 'max', value[1]);
                                 }
                                 servoSliderInstances.rearLeft.lastRangeValue = [value[0], value[1]];
-                            }, 500);
+                            }, 800);
                         }
                     }
                 });
@@ -4181,18 +3932,18 @@
                     value: [-20, 0],
                     min: -20,
                     max: 20,
-                    step: 1,
+                    step: 2,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderRearLeftTrim', value[1]);
                         
-                        // Save with 500ms debounce
+                        // Save with 800ms debounce
                         if (!isLoadingTuningConfig) {
                             clearTimeout(servoSliderSaveTimers.rearLeft.trim);
                             servoSliderSaveTimers.rearLeft.trim = setTimeout(() => {
                                 saveServoParameter('rearLeft', 'trim', value[1]);
-                            }, 500);
+                            }, 800);
                         }
                     }
                 });
@@ -4209,11 +3960,11 @@
                     value: [defaultMin, defaultMax],
                     min: 0,
                     max: 180,
-                    step: 1,
+                    step: 2,
                     onInput: function(value) {
                         updateThumbLabels('sliderRearRight', value);
                         
-                        // Save with 500ms debounce - only save values that changed
+                        // Save with 800ms debounce - only save values that changed
                         if (!isLoadingTuningConfig) {
                             clearTimeout(servoSliderSaveTimers.rearRight.range);
                             servoSliderSaveTimers.rearRight.range = setTimeout(() => {
@@ -4225,7 +3976,7 @@
                                     saveServoParameter('rearRight', 'max', value[1]);
                                 }
                                 servoSliderInstances.rearRight.lastRangeValue = [value[0], value[1]];
-                            }, 500);
+                            }, 800);
                         }
                     }
                 });
@@ -4242,18 +3993,18 @@
                     value: [-20, 0],
                     min: -20,
                     max: 20,
-                    step: 1,
+                    step: 2,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderRearRightTrim', value[1]);
                         
-                        // Save with 500ms debounce
+                        // Save with 800ms debounce
                         if (!isLoadingTuningConfig) {
                             clearTimeout(servoSliderSaveTimers.rearRight.trim);
                             servoSliderSaveTimers.rearRight.trim = setTimeout(() => {
                                 saveServoParameter('rearRight', 'trim', value[1]);
-                            }, 500);
+                            }, 800);
                         }
                     }
                 });
@@ -4619,7 +4370,7 @@
                 if (refreshConfig) {
                     setTimeout(() => {
                         fetchConfigFromESP32(false);
-                    }, 500);
+                    }, 800);
                 }
             } catch (error) {
                 if (error.name === 'AbortError') return;
@@ -4663,7 +4414,7 @@
                 // Re-fetch config to verify persistence
                 setTimeout(() => {
                     fetchConfigFromESP32(false);
-                }, 500);
+                }, 800);
             })
             .catch(error => {
                 if (error.name === 'AbortError') return;
@@ -4705,7 +4456,7 @@
                 // Re-fetch config to verify persistence
                 setTimeout(() => {
                     fetchConfigFromESP32(false);
-                }, 500);
+                }, 800);
             })
             .catch(error => {
                 if (error.name === 'AbortError') return;
@@ -4743,7 +4494,7 @@
                 if (!document.getElementById(rangeSliderId) || !document.getElementById(trimSliderId)) return;
 
                 createRSlider(rangeSliderId, {
-                    values: buildValueArray(0, 180, 1),
+                    values: buildValueArray(0, 180, 2),
                     range: true,
                     set: [formatSliderValue(30), formatSliderValue(150)],
                     scale: false,
@@ -4768,7 +4519,7 @@
                 });
 
                 createRSlider(trimSliderId, {
-                    values: buildValueArray(-15, 15, 1),
+                    values: buildValueArray(-20, 20, 2),
                     range: false,
                     set: [formatSliderValue(0)],
                     scale: false,
@@ -4831,7 +4582,7 @@
             
             // Sample rate slider
             createRSlider('sampleRateSlider', {
-                values: buildValueArray(5, 25, 1),
+                values: buildValueArray(5, 25, 2),
                 range: false,
                 set: [formatSliderValue(25)],
                 scale: false,
