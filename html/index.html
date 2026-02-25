@@ -1080,6 +1080,43 @@
             color: var(--danger);
         }
 
+        /* Servo Range + Trim Sliders - Labeled Thumbs */
+        #sliderFrontLeft .range-slider__thumb,
+        #sliderFrontRight .range-slider__thumb,
+        #sliderRearLeft .range-slider__thumb,
+        #sliderRearRight .range-slider__thumb,
+        #sliderFrontLeftTrim .range-slider__thumb,
+        #sliderFrontRightTrim .range-slider__thumb,
+        #sliderRearLeftTrim .range-slider__thumb,
+        #sliderRearRightTrim .range-slider__thumb {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        #sliderFrontLeft .range-slider__thumb[data-lower],
+        #sliderFrontRight .range-slider__thumb[data-lower],
+        #sliderRearLeft .range-slider__thumb[data-lower],
+        #sliderRearRight .range-slider__thumb[data-lower] {
+            width: 32px;
+            height: 32px;
+        }
+
+        #sliderFrontLeft .range-slider__thumb[data-upper],
+        #sliderFrontRight .range-slider__thumb[data-upper],
+        #sliderRearLeft .range-slider__thumb[data-upper],
+        #sliderRearRight .range-slider__thumb[data-upper],
+        #sliderFrontLeftTrim .range-slider__thumb[data-upper],
+        #sliderFrontRightTrim .range-slider__thumb[data-upper],
+        #sliderRearLeftTrim .range-slider__thumb[data-upper],
+        #sliderRearRightTrim .range-slider__thumb[data-upper] {
+            width: 32px;
+            height: 32px;
+        }
+
         /* toast-box */
         .toast-box {
         position: fixed;
@@ -1433,18 +1470,8 @@
                                         <span>Max</span>
                                     </div>
                                 </div>
-                                <div class="text-muted small mt-3">
-                                    <div class="d-flex justify-content-between">
-                                        <span>Min PWM:</span>
-                                        <span id="frontLeftMin">--</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-1">
-                                        <span>Max PWM:</span>
-                                        <span id="frontLeftMax">--</span>
-                                    </div>
-                                </div>
                                 
-                                <hr class="my-4">
+                                <!-- <hr class="my-4"> -->
                                 
                                 <h6 class="mb-3">Front Right</h6>
                                 <div style="margin: 20px 0;">
@@ -1454,18 +1481,8 @@
                                         <span>Max</span>
                                     </div>
                                 </div>
-                                <div class="text-muted small mt-3">
-                                    <div class="d-flex justify-content-between">
-                                        <span>Min PWM:</span>
-                                        <span id="frontRightMin">--</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-1">
-                                        <span>Max PWM:</span>
-                                        <span id="frontRightMax">--</span>
-                                    </div>
-                                </div>
                                 
-                                <hr class="my-4">
+                                <!-- <hr class="my-4"> -->
                                 
                                 <h6 class="mb-3">Rear Left</h6>
                                 <div style="margin: 20px 0;">
@@ -1475,18 +1492,8 @@
                                         <span>Max</span>
                                     </div>
                                 </div>
-                                <div class="text-muted small mt-3">
-                                    <div class="d-flex justify-content-between">
-                                        <span>Min PWM:</span>
-                                        <span id="rearLeftMin">--</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-1">
-                                        <span>Max PWM:</span>
-                                        <span id="rearLeftMax">--</span>
-                                    </div>
-                                </div>
                                 
-                                <hr class="my-4">
+                                <!-- <hr class="my-4"> -->
                                 
                                 <h6 class="mb-3">Rear Right</h6>
                                 <div style="margin: 20px 0;">
@@ -1494,16 +1501,6 @@
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                         <span>Min</span>
                                         <span>Max</span>
-                                    </div>
-                                </div>
-                                <div class="text-muted small mt-3">
-                                    <div class="d-flex justify-content-between">
-                                        <span>Min PWM:</span>
-                                        <span id="rearRightMin">--</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-1">
-                                        <span>Max PWM:</span>
-                                        <span id="rearRightMax">--</span>
                                     </div>
                                 </div>
                             </div>
@@ -1527,11 +1524,8 @@
                                         <span>Right</span>
                                     </div>
                                 </div>
-                                <div class="text-muted small">
-                                    <div>Trim: <span id="frontLeftTrimCurrent">0</span></div>
-                                </div>
                                 
-                                <hr class="my-4">
+                                <!-- <hr class="my-4"> -->
                                 
                                 <h6 class="mb-3">Front Right</h6>
                                 <div style="margin: 20px 0;">
@@ -1542,11 +1536,8 @@
                                         <span>Right</span>
                                     </div>
                                 </div>
-                                <div class="text-muted small">
-                                    <div>Trim: <span id="frontRightTrimCurrent">0</span></div>
-                                </div>
                                 
-                                <hr class="my-4">
+                                <!-- <hr class="my-4"> -->
                                 
                                 <h6 class="mb-3">Rear Left</h6>
                                 <div style="margin: 20px 0;">
@@ -1557,11 +1548,8 @@
                                         <span>Right</span>
                                     </div>
                                 </div>
-                                <div class="text-muted small">
-                                    <div>Trim: <span id="rearLeftTrimCurrent">0</span></div>
-                                </div>
                                 
-                                <hr class="my-4">
+                                <!-- <hr class="my-4"> -->
                                 
                                 <h6 class="mb-3">Rear Right</h6>
                                 <div style="margin: 20px 0;">
@@ -1571,9 +1559,6 @@
                                         <span>Center</span>
                                         <span>Right</span>
                                     </div>
-                                </div>
-                                <div class="text-muted small">
-                                    <div>Trim: <span id="rearRightTrimCurrent">0</span></div>
                                 </div>
                             </div>
                         </div>
@@ -1631,9 +1616,6 @@
                                                                     <span>Center</span>
                                                                     <span>Right</span>
                                                                 </div>
-                                                            </div>
-                                                            <div class="text-muted small">
-                                                                <div>Trim: <span id="frontLeftTrimCurrent">0</span></div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1697,9 +1679,6 @@
                                                                     <span>Right</span>
                                                                 </div>
                                                             </div>
-                                                            <div class="text-muted small">
-                                                                <div>Trim: <span id="frontRightTrimCurrent">0</span></div>
-                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1762,9 +1741,6 @@
                                                                     <span>Right</span>
                                                                 </div>
                                                             </div>
-                                                            <div class="text-muted small">
-                                                                <div>Trim: <span id="rearLeftTrimCurrent">0</span></div>
-                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1826,9 +1802,6 @@
                                                                     <span>Center</span>
                                                                     <span>Right</span>
                                                                 </div>
-                                                            </div>
-                                                            <div class="text-muted small">
-                                                                <div>Trim: <span id="rearRightTrimCurrent">0</span></div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -4024,6 +3997,23 @@
 
         // ==================== Servo Slider Initialization ====================
         function initServoSliders() {
+            // Helper function to update thumb labels
+            function updateThumbLabels(sliderId, values) {
+                const slider = document.querySelector(`#${sliderId}`);
+                if (!slider) return;
+                const thumbs = slider.querySelectorAll('.range-slider__thumb');
+                if (thumbs[0]) thumbs[0].textContent = Math.round(values[0]);
+                if (thumbs[1]) thumbs[1].textContent = Math.round(values[1]);
+            }
+
+            function updateTrimThumbLabel(sliderId, value) {
+                const slider = document.querySelector(`#${sliderId}`);
+                if (!slider) return;
+                const thumb = slider.querySelector('.range-slider__thumb[data-upper]')
+                    || slider.querySelector('.range-slider__thumb');
+                if (thumb) thumb.textContent = Math.round(value);
+            }
+
             // Servo PWM units: 0-180 degrees (standard servo range)
             // Safe defaults: min=10, max=170 to prevent mechanical damage
             const defaultMin = 10;
@@ -4038,8 +4028,7 @@
                     max: 180,
                     step: 1,
                     onInput: function(value) {
-                        document.getElementById('frontLeftMin').textContent = Math.round(value[0]);
-                        document.getElementById('frontLeftMax').textContent = Math.round(value[1]);
+                        updateThumbLabels('sliderFrontLeft', value);
                         
                         // Save with 500ms debounce - only save values that changed
                         if (!isLoadingTuningConfig) {
@@ -4059,23 +4048,22 @@
                 });
                 servoSliderInstances.frontLeft.rangeElement = frontLeftElement;
                 servoSliderInstances.frontLeft.rangeInstance = frontLeftInstance;
-                // Set initial display values
-                document.getElementById('frontLeftMin').textContent = defaultMin;
-                document.getElementById('frontLeftMax').textContent = defaultMax;
+                // Set initial display values on thumbs
+                updateThumbLabels('sliderFrontLeft', [defaultMin, defaultMax]);
             }
 
             // Front Left Servo Trim
             let frontLeftTrimElement = document.querySelector('#sliderFrontLeftTrim');
             if (frontLeftTrimElement) {
                 const frontLeftTrimInstance = rangeSlider(frontLeftTrimElement, {
-                    value: [-50, 0],
-                    min: -100,
-                    max: 100,
+                    value: [-20, 0],
+                    min: -20,
+                    max: 20,
                     step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
-                        document.getElementById('frontLeftTrimCurrent').textContent = Math.round(value[1]);
+                        updateTrimThumbLabel('sliderFrontLeftTrim', value[1]);
                         
                         // Save with 500ms debounce
                         if (!isLoadingTuningConfig) {
@@ -4088,8 +4076,8 @@
                 });
                 servoSliderInstances.frontLeft.trimElement = frontLeftTrimElement;
                 servoSliderInstances.frontLeft.trimInstance = frontLeftTrimInstance;
-                // Set initial display value
-                document.getElementById('frontLeftTrimCurrent').textContent = '0';
+                // Set initial display value on thumb
+                updateTrimThumbLabel('sliderFrontLeftTrim', 0);
             }
 
             // Front Right Servo
@@ -4101,8 +4089,7 @@
                     max: 180,
                     step: 1,
                     onInput: function(value) {
-                        document.getElementById('frontRightMin').textContent = Math.round(value[0]);
-                        document.getElementById('frontRightMax').textContent = Math.round(value[1]);
+                        updateThumbLabels('sliderFrontRight', value);
                         
                         // Save with 500ms debounce - only save values that changed
                         if (!isLoadingTuningConfig) {
@@ -4122,23 +4109,22 @@
                 });
                 servoSliderInstances.frontRight.rangeElement = frontRightElement;
                 servoSliderInstances.frontRight.rangeInstance = frontRightInstance;
-                // Set initial display values
-                document.getElementById('frontRightMin').textContent = defaultMin;
-                document.getElementById('frontRightMax').textContent = defaultMax;
+                // Set initial display values on thumbs
+                updateThumbLabels('sliderFrontRight', [defaultMin, defaultMax]);
             }
 
             // Front Right Servo Trim
             let frontRightTrimElement = document.querySelector('#sliderFrontRightTrim');
             if (frontRightTrimElement) {
                 const frontRightTrimInstance = rangeSlider(frontRightTrimElement, {
-                    value: [-50, 0],
-                    min: -100,
-                    max: 100,
+                    value: [-20, 0],
+                    min: -20,
+                    max: 20,
                     step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
-                        document.getElementById('frontRightTrimCurrent').textContent = Math.round(value[1]);
+                        updateTrimThumbLabel('sliderFrontRightTrim', value[1]);
                         
                         // Save with 500ms debounce
                         if (!isLoadingTuningConfig) {
@@ -4151,8 +4137,8 @@
                 });
                 servoSliderInstances.frontRight.trimElement = frontRightTrimElement;
                 servoSliderInstances.frontRight.trimInstance = frontRightTrimInstance;
-                // Set initial display value
-                document.getElementById('frontRightTrimCurrent').textContent = '0';
+                // Set initial display value on thumb
+                updateTrimThumbLabel('sliderFrontRightTrim', 0);
             }
 
             // Rear Left Servo
@@ -4164,8 +4150,7 @@
                     max: 180,
                     step: 1,
                     onInput: function(value) {
-                        document.getElementById('rearLeftMin').textContent = Math.round(value[0]);
-                        document.getElementById('rearLeftMax').textContent = Math.round(value[1]);
+                        updateThumbLabels('sliderRearLeft', value);
                         
                         // Save with 500ms debounce - only save values that changed
                         if (!isLoadingTuningConfig) {
@@ -4185,23 +4170,22 @@
                 });
                 servoSliderInstances.rearLeft.rangeElement = rearLeftElement;
                 servoSliderInstances.rearLeft.rangeInstance = rearLeftInstance;
-                // Set initial display values
-                document.getElementById('rearLeftMin').textContent = defaultMin;
-                document.getElementById('rearLeftMax').textContent = defaultMax;
+                // Set initial display values on thumbs
+                updateThumbLabels('sliderRearLeft', [defaultMin, defaultMax]);
             }
 
             // Rear Left Servo Trim
             let rearLeftTrimElement = document.querySelector('#sliderRearLeftTrim');
             if (rearLeftTrimElement) {
                 const rearLeftTrimInstance = rangeSlider(rearLeftTrimElement, {
-                    value: [-50, 0],
-                    min: -100,
-                    max: 100,
+                    value: [-20, 0],
+                    min: -20,
+                    max: 20,
                     step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
-                        document.getElementById('rearLeftTrimCurrent').textContent = Math.round(value[1]);
+                        updateTrimThumbLabel('sliderRearLeftTrim', value[1]);
                         
                         // Save with 500ms debounce
                         if (!isLoadingTuningConfig) {
@@ -4214,8 +4198,8 @@
                 });
                 servoSliderInstances.rearLeft.trimElement = rearLeftTrimElement;
                 servoSliderInstances.rearLeft.trimInstance = rearLeftTrimInstance;
-                // Set initial display value
-                document.getElementById('rearLeftTrimCurrent').textContent = '0';
+                // Set initial display value on thumb
+                updateTrimThumbLabel('sliderRearLeftTrim', 0);
             }
 
             // Rear Right Servo
@@ -4227,8 +4211,7 @@
                     max: 180,
                     step: 1,
                     onInput: function(value) {
-                        document.getElementById('rearRightMin').textContent = Math.round(value[0]);
-                        document.getElementById('rearRightMax').textContent = Math.round(value[1]);
+                        updateThumbLabels('sliderRearRight', value);
                         
                         // Save with 500ms debounce - only save values that changed
                         if (!isLoadingTuningConfig) {
@@ -4248,23 +4231,22 @@
                 });
                 servoSliderInstances.rearRight.rangeElement = rearRightElement;
                 servoSliderInstances.rearRight.rangeInstance = rearRightInstance;
-                // Set initial display values
-                document.getElementById('rearRightMin').textContent = defaultMin;
-                document.getElementById('rearRightMax').textContent = defaultMax;
+                // Set initial display values on thumbs
+                updateThumbLabels('sliderRearRight', [defaultMin, defaultMax]);
             }
 
             // Rear Right Servo Trim
             let rearRightTrimElement = document.querySelector('#sliderRearRightTrim');
             if (rearRightTrimElement) {
                 const rearRightTrimInstance = rangeSlider(rearRightTrimElement, {
-                    value: [-50, 0],
-                    min: -100,
-                    max: 100,
+                    value: [-20, 0],
+                    min: -20,
+                    max: 20,
                     step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
-                        document.getElementById('rearRightTrimCurrent').textContent = Math.round(value[1]);
+                        updateTrimThumbLabel('sliderRearRightTrim', value[1]);
                         
                         // Save with 500ms debounce
                         if (!isLoadingTuningConfig) {
@@ -4277,8 +4259,8 @@
                 });
                 servoSliderInstances.rearRight.trimElement = rearRightTrimElement;
                 servoSliderInstances.rearRight.trimInstance = rearRightTrimInstance;
-                // Set initial display value
-                document.getElementById('rearRightTrimCurrent').textContent = '0';
+                // Set initial display value on thumb
+                updateTrimThumbLabel('sliderRearRightTrim', 0);
             }
 
             // Force layout recalculation to render slider colors correctly
@@ -4432,11 +4414,12 @@
                     sliderData.rangeInstance.value([rangeMin, rangeMax]);
                     sliderData.lastRangeValue = [rangeMin, rangeMax];
                     
-                    // Update display elements
-                    const minElement = document.getElementById(servoName + 'Min');
-                    const maxElement = document.getElementById(servoName + 'Max');
-                    if (minElement) minElement.textContent = rangeMin;
-                    if (maxElement) maxElement.textContent = rangeMax;
+                    // Update thumb labels
+                    if (sliderData.rangeElement) {
+                        const thumbs = sliderData.rangeElement.querySelectorAll('.range-slider__thumb');
+                        if (thumbs[0]) thumbs[0].textContent = Math.round(rangeMin);
+                        if (thumbs[1]) thumbs[1].textContent = Math.round(rangeMax);
+                    }
                 } else {
                     console.warn(`No rangeInstance for ${servoName}`);
                 }
@@ -4445,12 +4428,15 @@
                 if (sliderData.trimInstance) {
                     const trimValue = servoConfig.trim !== undefined ? servoConfig.trim : 0;
                     console.log(`Setting ${servoName} trim to ${trimValue}`);
-                    // Trim slider has fixed min:-100, max:100 range with right thumb as trim value
-                    sliderData.trimInstance.value([-100, trimValue]);
+                    // Trim slider has fixed min:-20, max:20 range with right thumb as trim value
+                    sliderData.trimInstance.value([-20, trimValue]);
                     
-                    // Update display element
-                    const trimElement = document.getElementById(servoName + 'TrimCurrent');
-                    if (trimElement) trimElement.textContent = trimValue;
+                    // Update thumb label
+                    if (sliderData.trimElement) {
+                        const trimThumb = sliderData.trimElement.querySelector('.range-slider__thumb[data-upper]')
+                            || sliderData.trimElement.querySelector('.range-slider__thumb');
+                        if (trimThumb) trimThumb.textContent = Math.round(trimValue);
+                    }
                 } else {
                     console.warn(`No trimInstance for ${servoName}`);
                 }
