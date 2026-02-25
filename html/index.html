@@ -70,9 +70,12 @@
             position: sticky;
             top: 0;
             z-index: 2100;
-            background: rgba(243, 244, 246, 0.9);
-            backdrop-filter: blur(6px);
-            /* padding: 0.75rem 0; */
+            background: linear-gradient(135deg, rgba(243, 244, 246, 0.98) 0%, rgba(230, 230, 230, 0.95) 100%);
+            backdrop-filter: blur(10px);
+            border-bottom: 3px solid transparent;
+            border-image: linear-gradient(90deg, var(--primary) 0%, var(--info) 100%) 1;
+            padding: 1rem 0;
+            box-shadow: 0 8px 32px -8px rgba(37, 99, 235, 0.15);
         }
         
         .header-left {
@@ -91,9 +94,25 @@
             justify-content: center;
             color: white;
             font-size: 1.75rem;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 24px rgba(37, 99, 235, 0.4);
             border: 2px solid #1e40af;
             overflow: hidden;
+            transition: all 0.3s ease;
+            animation: brandPulse 3s ease-in-out infinite;
+        }
+        
+        .brand-icon:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.15), 0 0 32px rgba(37, 99, 235, 0.6);
+        }
+        
+        @keyframes brandPulse {
+            0%, 100% {
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 24px rgba(37, 99, 235, 0.4);
+            }
+            50% {
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 32px rgba(37, 99, 235, 0.7);
+            }
         }
 
         .brand-icon img {
