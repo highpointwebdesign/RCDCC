@@ -1709,17 +1709,18 @@
         <section id="tuning" class="page-section">
             <h2 class="section-title">Suspension Tuning</h2>
             <div class="row g-3">
-                <!-- First Row: 3 Cards -->
-                <div class="col-12 col-sm-4">
-                    <div class="card" data-slider="rideHeight">
+                <!-- Parameters Card -->
+                <div class="col-12">
+                    <div class="card" id="tuningParametersCard">
                         <div class="card-header d-flex align-items-center">
                             <div>
-                                <i class="fas fa-arrows-up-down"></i> Ride Height
+                                <i class="fas fa-sliders"></i> Parameters
                             </div>
-                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'rideHeight')" title="Lock slider to prevent accidental changes"></i>
+                            <i class="fas fa-lock-open slider-lock-icon" id="tuningLockIcon" onclick="toggleTuningLock(this)" title="Lock all sliders to prevent accidental changes"></i>
                         </div>
                         <div class="card-body">
-                            <!-- Horizontal slider -->
+                            <!-- Ride Height -->
+                            <h6 class="mb-3"><i class="fas fa-arrows-up-down"></i> Ride Height</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderRideHeight"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1728,20 +1729,9 @@
                                     <span>Max</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="col-12 col-sm-4">
-                    <div class="card" data-slider="damping">
-                        <div class="card-header d-flex align-items-center">
-                            <div>
-                                <i class="fas fa-wave-square"></i> Damping
-                            </div>
-                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'damping')" title="Lock slider to prevent accidental changes"></i>
-                        </div>
-                        <div class="card-body">
-                            <!-- Horizontal slider -->
+                            <!-- Damping -->
+                            <h6 class="mb-3"><i class="fas fa-wave-square"></i> Damping</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderDamping"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1750,20 +1740,9 @@
                                     <span>Stiff</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="col-12 col-sm-4">
-                    <div class="card" data-slider="stiffness">
-                        <div class="card-header d-flex align-items-center">
-                            <div>
-                                <i class="fas fa-compress"></i> Stiffness
-                            </div>
-                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'stiffness')" title="Lock slider to prevent accidental changes"></i>
-                        </div>
-                        <div class="card-body">
-                            <!-- Horizontal slider -->
+                            <!-- Stiffness -->
+                            <h6 class="mb-3"><i class="fas fa-compress"></i> Stiffness</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderStiffness"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1772,22 +1751,9 @@
                                     <span>Stiff</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Second Row: 3 Cards -->
-                <div class="col-12 col-sm-4">
-                    <div class="card" data-slider="reactionSpeed">
-                        <div class="card-header d-flex align-items-center">
-                            <div>
-                                <i class="fas fa-gauge-high"></i>
-                                Reaction Speed
-                            </div>
-                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'reactionSpeed')" title="Lock slider to prevent accidental changes"></i>
-                        </div>
-                        <div class="card-body">
-                            <!-- Horizontal slider -->
+                            <!-- Reaction Speed -->
+                            <h6 class="mb-3"><i class="fas fa-gauge-high"></i> Reaction Speed</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderReactionSpeed"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1796,21 +1762,9 @@
                                     <span>Fast</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="col-12 col-sm-4">
-                    <div class="card" data-slider="balance">
-                        <div class="card-header d-flex align-items-center">
-                            <div>
-                                <i class="fas fa-scale-balanced"></i>
-                                Balance (Rear/Front)
-                            </div>
-                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'balance')" title="Lock slider to prevent accidental changes"></i>
-                        </div>
-                        <div class="card-body">
-                            <!-- Horizontal slider -->
+                            <!-- Balance (Rear/Front) -->
+                            <h6 class="mb-3"><i class="fas fa-scale-balanced"></i> Balance (Rear/Front)</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderBalance"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1819,21 +1773,9 @@
                                     <span>Front</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="col-12 col-sm-4">
-                    <div class="card" data-slider="sensorRate">
-                        <div class="card-header d-flex align-items-center">
-                            <div>
-                                <i class="fas fa-microchip"></i>
-                                Sensor Refresh Rate
-                            </div>
-                            <i class="fas fa-lock-open slider-lock-icon" onclick="toggleSliderLock(this, 'sensorRate')" title="Lock slider to prevent accidental changes"></i>
-                        </div>
-                        <div class="card-body">
-                            <!-- Horizontal slider -->
+                            <!-- Sensor Refresh Rate -->
+                            <h6 class="mb-3"><i class="fas fa-microchip"></i> Sensor Refresh Rate</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderSensorRate"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1851,10 +1793,13 @@
             <div class="row g-3 mt-3">
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header">
-                            <i class="fas fa-calculator"></i> Formulas
+                        <div class="card-header d-flex align-items-center justify-content-between" style="cursor: pointer;" onclick="toggleFormulasCard()">
+                            <div>
+                                <i class="fas fa-calculator"></i> Formulas
+                            </div>
+                            <i class="fas fa-chevron-down" id="formulasChevron"></i>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" id="formulasCardBody">
                             <div class="row">
                                 <!-- Ride Height Formula -->
                                 <div class="col-12 col-md-6 mb-3">
@@ -3088,6 +3033,30 @@
 
             // Initialize bubble level container
             initBubbleLevelContainer();
+            
+            // Restore tuning parameters lock state from localStorage
+            const tuningLocked = localStorage.getItem('tuningParametersLocked') === 'true';
+            const tuningLockIcon = document.getElementById('tuningLockIcon');
+            const tuningCard = document.getElementById('tuningParametersCard');
+            if (tuningLocked && tuningLockIcon && tuningCard) {
+                tuningCard.classList.add('slider-locked');
+                tuningLockIcon.classList.remove('fa-lock-open');
+                tuningLockIcon.classList.add('fa-lock');
+                // Set all individual slider locks to true
+                Object.keys(tuningSliderLocks).forEach(key => {
+                    tuningSliderLocks[key] = true;
+                });
+            }
+            
+            // Restore formulas card collapse state from localStorage
+            const formulasCollapsed = localStorage.getItem('formulasCardCollapsed') === 'true';
+            const formulasCardBody = document.getElementById('formulasCardBody');
+            const formulasChevron = document.getElementById('formulasChevron');
+            if (formulasCollapsed && formulasCardBody && formulasChevron) {
+                formulasCardBody.style.display = 'none';
+                formulasChevron.classList.remove('fa-chevron-down');
+                formulasChevron.classList.add('fa-chevron-right');
+            }
 
             // Page navigation - footer nav buttons
             document.querySelectorAll('.footer-nav button').forEach(btn => {
@@ -4259,27 +4228,63 @@
             isLoadingTuningConfig = false;
         }
 
-        function toggleSliderLock(iconElement, sliderId) {
+        function toggleTuningLock(iconElement) {
             // Play click sound
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
             clickSound.play().catch(e => console.log('Sound play failed:', e));
             
-            // Toggle the lock state
-            tuningSliderLocks[sliderId] = !tuningSliderLocks[sliderId];
+            // Get current state from localStorage or default to false
+            const isLocked = localStorage.getItem('tuningParametersLocked') === 'true';
+            const newState = !isLocked;
+            
+            // Save to localStorage
+            localStorage.setItem('tuningParametersLocked', newState.toString());
             
             // Find the card container
             const card = iconElement.closest('.card');
             
-            if (tuningSliderLocks[sliderId]) {
-                // Lock the slider
+            if (newState) {
+                // Lock all sliders
                 card.classList.add('slider-locked');
                 iconElement.classList.remove('fa-lock-open');
                 iconElement.classList.add('fa-lock');
+                
+                // Set all individual slider locks to true
+                Object.keys(tuningSliderLocks).forEach(key => {
+                    tuningSliderLocks[key] = true;
+                });
             } else {
-                // Unlock the slider
+                // Unlock all sliders
                 card.classList.remove('slider-locked');
                 iconElement.classList.remove('fa-lock');
                 iconElement.classList.add('fa-lock-open');
+                
+                // Set all individual slider locks to false
+                Object.keys(tuningSliderLocks).forEach(key => {
+                    tuningSliderLocks[key] = false;
+                });
+            }
+        }
+        
+        function toggleFormulasCard() {
+            const cardBody = document.getElementById('formulasCardBody');
+            const chevron = document.getElementById('formulasChevron');
+            
+            if (!cardBody || !chevron) return;
+            
+            // Toggle visibility
+            const isCollapsed = cardBody.style.display === 'none';
+            
+            if (isCollapsed) {
+                cardBody.style.display = 'block';
+                chevron.classList.remove('fa-chevron-right');
+                chevron.classList.add('fa-chevron-down');
+                localStorage.setItem('formulasCardCollapsed', 'false');
+            } else {
+                cardBody.style.display = 'none';
+                chevron.classList.remove('fa-chevron-down');
+                chevron.classList.add('fa-chevron-right');
+                localStorage.setItem('formulasCardCollapsed', 'true');
             }
         }
         
