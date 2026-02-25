@@ -35,6 +35,7 @@
             --warning: #f59e0b;
             --danger: #dc2626;
             --info: #0ea5e9;
+            --dark: #374151;
             --light-bg: #f3f4f6;
             --card-bg: #ffffff;
             --text-primary: #111827;
@@ -316,29 +317,117 @@
             }
         }
         
-        /* Settings page accordion styles */
-        .settings-accordion-header {
-            transition: background-color 0.2s ease;
+        /* Settings page tab styles */
+        .settings-tabs {
+            display: flex;
+            /* border-bottom: 2px solid var(--border-color); */
+            /* margin-bottom: 1.5rem; */
+            gap: 0;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
         
-        .settings-accordion-header:hover {
+        .settings-tab {
+            padding: 0.75rem 1.25rem;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        .settings-tab:hover {
+            color: var(--text-color);
             background-color: rgba(0, 0, 0, 0.03);
         }
         
-        .accordion-chevron {
-            transition: transform 0.3s ease;
-            font-size: 0.875rem;
+        .settings-tab.active {
+            color: white;
+            border-bottom-color: transparent;
         }
         
-        .settings-accordion-header[aria-expanded="true"] .accordion-chevron {
-            transform: rotate(180deg);
+        .settings-tab[data-tab="servo"].active {
+            background-color: var(--primary);
+        }
+        
+        .settings-tab[data-tab="gyro"].active {
+            background-color: var(--info);
+        }
+        
+        .settings-tab[data-tab="network"].active {
+            background-color: var(--success);
+        }
+        
+        .settings-tab[data-tab="debugging"].active {
+            background-color: var(--dark);
+        }
+        
+        .settings-tab i {
+            margin-right: 0.5rem;
+        }
+
+        .tab-label-short {
+            display: none;
+        }
+        
+        .tab-pane {
+            display: none;
+            padding: 1.5rem;
+            padding-top: 1.5rem;
+            padding-left: 0;
+            padding-right: 0;
+            padding-bottom: 1.5rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s ease;
+        }
+        
+        .tab-pane.active {
+            display: block;
+        }
+        
+        #tab-servo.active {
+            background-color: rgba(37, 99, 235, 0.06);
+        }
+        
+        #tab-gyro.active {
+            background-color: rgba(14, 165, 233, 0.06);
+        }
+        
+        #tab-network.active {
+            background-color: rgba(22, 163, 74, 0.06);
+        }
+        
+        #tab-debugging.active {
+            background-color: rgba(55, 65, 81, 0.06);
         }
 
         @media (max-width: 767.98px) {
-            #settings > .row.g-3 > .col-12 > .card {
-                margin-left: -1.5rem;
-                margin-right: -1.5rem;
-                border-radius: 0;
+            .settings-tabs {
+                margin-left: -1rem;
+                margin-right: -1rem;
+                padding: 0 1rem;
+            }
+            
+            .settings-tab {
+                font-size: 0.8125rem;
+                padding: 0.625rem 1rem;
+            }
+
+            .settings-tab i {
+                display: none;
+            }
+
+            .tab-label-full {
+                display: none;
+            }
+
+            .tab-label-short {
+                display: inline;
             }
         }
         
@@ -1270,37 +1359,42 @@
 
         <!-- Settings Section -->
         <section id="settings" class="page-section">
-            <div class="row g-3">
-                
-                <!-- Servo Configuration Card -->
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header settings-accordion-header d-flex align-items-center">
-                            <div style="flex: 1; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;" data-bs-toggle="collapse" data-bs-target="#collapseServo" aria-expanded="false" aria-controls="collapseServo">
-                                <span style="flex: 1;">
-                                    <i class="fas fa-compress"></i>
-                                    Servo Configuration
-                                </span>
-                                <i class="fas fa-chevron-down accordion-chevron"></i>
-                            </div>
-                            
-                        </div>
-                        <div id="collapseServo" class="collapse" data-accordion-id="servo">
-                        <div class="card-body">
-                            
-                            <div class="row g-3">
-                                <div class="col-12">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <button type="button" class="btn btn-primary w-100" id="autoLevelBtn">
-                                                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                                Auto Level
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+            <h2 class="section-title">Settings</h2>
+            <!-- Settings Tabs Navigation -->
+            <div class="settings-tabs">
+                <button class="settings-tab active" data-tab="servo">
+                    <i class="fas fa-compress"></i>
+                    <span class="tab-label-full">Servo Configuration</span>
+                    <span class="tab-label-short">Servo</span>
+                </button>
+                <button class="settings-tab" data-tab="gyro">
+                    <i class="fas fa-compass"></i>
+                    <span class="tab-label-full">Gyro Configuration</span>
+                    <span class="tab-label-short">Gyro</span>
+                </button>
+                <button class="settings-tab" data-tab="network">
+                    <i class="fas fa-wifi"></i>
+                    <span class="tab-label-full">Network Settings</span>
+                    <span class="tab-label-short">Wifi</span>
+                </button>
+                <button class="settings-tab" data-tab="debugging">
+                    <i class="fas fa-bug"></i>
+                    <span class="tab-label-full">Debugging</span>
+                    <span class="tab-label-short">Debug</span>
+                </button>
+            </div>
+            
+            <!-- Tab Content: Servo Configuration -->
+            <div class="tab-pane active" id="tab-servo">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <button type="button" class="btn btn-primary w-100" id="autoLevelBtn">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            Auto Level
+                        </button>
+                    </div>
 
-                                <!-- Auto Level Progress Container -->
+                    <!-- Auto Level Progress Container -->
                                 <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
                                     <div class="card">
                                         <div class="card-body">
@@ -1322,6 +1416,168 @@
                                         </div>
                                     </div>
                                 </div>
+
+                    <!-- Servo Range Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fas fa-arrow-up"></i>
+                                Servo Range
+                            </div>
+                            <div class="card-body">
+                                <h6 class="mb-3">Front Left</h6>
+                                <div style="margin: 20px 0;">
+                                    <div id="sliderFrontLeft"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Min</span>
+                                        <span>Max</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted small mt-3">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Min PWM:</span>
+                                        <span id="frontLeftMin">--</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <span>Max PWM:</span>
+                                        <span id="frontLeftMax">--</span>
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-4">
+                                
+                                <h6 class="mb-3">Front Right</h6>
+                                <div style="margin: 20px 0;">
+                                    <div id="sliderFrontRight"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Min</span>
+                                        <span>Max</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted small mt-3">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Min PWM:</span>
+                                        <span id="frontRightMin">--</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <span>Max PWM:</span>
+                                        <span id="frontRightMax">--</span>
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-4">
+                                
+                                <h6 class="mb-3">Rear Left</h6>
+                                <div style="margin: 20px 0;">
+                                    <div id="sliderRearLeft"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Min</span>
+                                        <span>Max</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted small mt-3">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Min PWM:</span>
+                                        <span id="rearLeftMin">--</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <span>Max PWM:</span>
+                                        <span id="rearLeftMax">--</span>
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-4">
+                                
+                                <h6 class="mb-3">Rear Right</h6>
+                                <div style="margin: 20px 0;">
+                                    <div id="sliderRearRight"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Min</span>
+                                        <span>Max</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted small mt-3">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Min PWM:</span>
+                                        <span id="rearRightMin">--</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <span>Max PWM:</span>
+                                        <span id="rearRightMax">--</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Servo Trim Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fas fa-sliders"></i>
+                                Servo Trim
+                            </div>
+                            <div class="card-body">
+                                <h6 class="mb-3">Front Left</h6>
+                                <div style="margin: 20px 0;">
+                                    <div id="sliderFrontLeftTrim"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Left</span>
+                                        <span>Center</span>
+                                        <span>Right</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted small">
+                                    <div>Trim: <span id="frontLeftTrimCurrent">0</span></div>
+                                </div>
+                                
+                                <hr class="my-4">
+                                
+                                <h6 class="mb-3">Front Right</h6>
+                                <div style="margin: 20px 0;">
+                                    <div id="sliderFrontRightTrim"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Left</span>
+                                        <span>Center</span>
+                                        <span>Right</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted small">
+                                    <div>Trim: <span id="frontRightTrimCurrent">0</span></div>
+                                </div>
+                                
+                                <hr class="my-4">
+                                
+                                <h6 class="mb-3">Rear Left</h6>
+                                <div style="margin: 20px 0;">
+                                    <div id="sliderRearLeftTrim"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Left</span>
+                                        <span>Center</span>
+                                        <span>Right</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted small">
+                                    <div>Trim: <span id="rearLeftTrimCurrent">0</span></div>
+                                </div>
+                                
+                                <hr class="my-4">
+                                
+                                <h6 class="mb-3">Rear Right</h6>
+                                <div style="margin: 20px 0;">
+                                    <div id="sliderRearRightTrim"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Left</span>
+                                        <span>Center</span>
+                                        <span>Right</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted small">
+                                    <div>Trim: <span id="rearRightTrimCurrent">0</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                                 <div class="col-12 col-md-6">
                                     <div class="card text-white bg-secondary">
@@ -1583,27 +1839,21 @@
                                 </div>
                             </div>
 
-                            <div class="alert alert-info mt-3" style="font-size: 0.875rem;">
-                                <strong>Servo Tips:</strong><br>
-                                • This page is for ONE-TIME setup and static leveling<br>
-                                • For dynamic ride height during driving, use Suspension Tuning page<br>
-                                • Changes are automatically saved
-                            </div>
-                        </div>
+                    <div class="col-12">
+                        <div class="alert alert-info" style="font-size: 0.875rem;">
+                            <strong>Servo Tips:</strong><br>
+                            • This page is for ONE-TIME setup and static leveling<br>
+                            • For dynamic ride height during driving, use Suspension Tuning page<br>
+                            • Changes are automatically saved
                         </div>
                     </div>
                 </div>
-
-                <!-- Gyro Configuration Card -->
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header settings-accordion-header" data-bs-toggle="collapse" data-bs-target="#collapseGyro" aria-expanded="false" aria-controls="collapseGyro" style="cursor: pointer;">
-                            <i class="fas fa-compass"></i>
-                            Gyro Configuration
-                            <i class="fas fa-chevron-down float-end accordion-chevron"></i>
-                        </div>
-                        <div id="collapseGyro" class="collapse" data-accordion-id="gyro">
-                        <div class="card-body">
+            </div>
+            
+            <!-- Tab Content: Gyro Configuration -->
+            <div class="tab-pane" id="tab-gyro">
+                <div class="row g-3">
+                    <div class="col-12">
                             <div class="mb-3">
                                 <label for="mpuOrientation" class="form-label">Physical Mounting</label>
                                 <select class="form-select" id="mpuOrientation">
@@ -1616,25 +1866,18 @@
                                 </select>
                             </div>
 
-                            <div class="alert alert-info" style="font-size: 0.875rem;">
-                                <strong>Calibration Tips:</strong><br>
-                                • Select how your MPU6050 sensor is physically mounted. The arrow is printed on the chip. Correct orientation is critical for accurate roll/pitch readings. This is a one-time setup based on your installation.
-                            </div>
-                        </div>
+                        <div class="alert alert-info" style="font-size: 0.875rem;">
+                            <strong>Calibration Tips:</strong><br>
+                            • Select how your MPU6050 sensor is physically mounted. The arrow is printed on the chip. Correct orientation is critical for accurate roll/pitch readings. This is a one-time setup based on your installation.
                         </div>
                     </div>
                 </div>
-
-                <!-- Network Settings Card -->
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header settings-accordion-header" data-bs-toggle="collapse" data-bs-target="#collapseNetwork" aria-expanded="false" aria-controls="collapseNetwork" style="cursor: pointer;">
-                            <i class="fas fa-wifi"></i>
-                            Network Settings
-                            <i class="fas fa-chevron-down float-end accordion-chevron"></i>
-                        </div>
-                        <div id="collapseNetwork" class="collapse" data-accordion-id="network">
-                        <div class="card-body">
+            </div>
+            
+            <!-- Tab Content: Network Settings -->
+            <div class="tab-pane" id="tab-network">
+                <div class="row g-3">
+                    <div class="col-12">
                             <div class="mb-4">
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked> 
@@ -1686,55 +1929,40 @@
                                 <i class="fas fa-plug"></i>
                                 Test Connection
                             </button>
-
-                            <!-- Connection Test Result -->
-                            <div id="connectionTestResult" style="display: none;" class="alert mb-0" role="alert"></div>
-                        </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Debugging Card -->
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header settings-accordion-header" data-bs-toggle="collapse" data-bs-target="#collapseDebugging" aria-expanded="false" aria-controls="collapseDebugging" style="cursor: pointer;">
-                            <i class="fas fa-bug"></i>
-                            Debugging
-                            <i class="fas fa-chevron-down float-end accordion-chevron"></i>
-                        </div>
-                        <div id="collapseDebugging" class="collapse" data-accordion-id="debugging">
-                        <div class="card-body">
-                            <div class="row g-3">
-                                <!-- Console Card -->
-                                <div class="col-12 col-md-6">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <i class="fas fa-terminal"></i>
-                                            Console
-                                            <button class="btn btn-sm btn-outline-secondary float-end" id="consoleClearBtn" title="Clear console" style="pointer-events: auto;">Clear</button>
-                                        </div>
-                                        <div class="card-body" id="consoleOutput" style="background-color: #1e1e1e; color: #00ff00; font-family: 'Courier New', monospace; font-size: 0.85rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; border-radius: 4px; padding: 10px;">
-                                            <!-- Console logs will appear here -->
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Configuration Data Card -->
-                                <div class="col-12 col-md-6">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <i class="fas fa-cog"></i>
-                                            Configuration Data
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="data-display" id="configData">{
-  "loading": "Fetching configuration..."
-}</div>
-                                        </div>
-                                    </div>
-                                </div>
+            </div>
+            
+            <!-- Tab Content: Debugging -->
+            <div class="tab-pane" id="tab-debugging">
+                <div class="row g-3">
+                    <!-- Console Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fas fa-terminal"></i>
+                                Console
+                                <button class="btn btn-sm btn-outline-secondary float-end" id="consoleClearBtn" title="Clear console" style="pointer-events: auto;">Clear</button>
+                            </div>
+                            <div class="card-body" id="consoleOutput" style="background-color: #1e1e1e; color: #00ff00; font-family: 'Courier New', monospace; font-size: 0.85rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; border-radius: 4px; padding: 10px;">
+                                <!-- Console logs will appear here -->
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Configuration Data Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fas fa-cog"></i>
+                                Configuration Data
+                            </div>
+                            <div class="card-body">
+                                <div class="data-display" id="configData">{
+  "loading": "Fetching configuration..."
+}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -3094,7 +3322,7 @@
             // initGyroControls(); // Commented out - slider library not yet connected
             initBatteryControls();
             initNetworkSettings();
-            initSettingsAccordions();
+            initSettingsTabs();
 
             // Initialize bubble level container
             initBubbleLevelContainer();
@@ -3157,7 +3385,7 @@
                 if (element) {
                     element.addEventListener('click', function() {
                         navigateToSection('settings');
-                        setTimeout(() => openSettingsAccordion('network'), 0);
+                        setTimeout(() => openSettingsTab('network'), 0);
                     });
                 }
             });
@@ -4671,7 +4899,6 @@
         // Test ESP32 connection
         function testEsp32Connection() {
             const ipInput = document.getElementById('esp32IpAddress');
-            const resultDiv = document.getElementById('connectionTestResult');
             const testBtn = document.getElementById('testConnectionBtn');
             
             if (!ipInput) return;
@@ -4679,24 +4906,14 @@
             const newIp = ipInput.value.trim();
             
             if (!newIp) {
-                if (resultDiv) {
-                    resultDiv.classList.remove('alert-success', 'alert-danger');
-                    resultDiv.classList.add('alert-danger');
-                    resultDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Please enter an IP address';
-                    resultDiv.style.display = 'block';
-                }
+                toast.error('Please enter an IP address');
                 return;
             }
             
             // Validate IP format
             const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
             if (!ipPattern.test(newIp)) {
-                if (resultDiv) {
-                    resultDiv.classList.remove('alert-success', 'alert-danger');
-                    resultDiv.classList.add('alert-danger');
-                    resultDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Invalid IP address format';
-                    resultDiv.style.display = 'block';
-                }
+                toast.error('Invalid IP address format');
                 return;
             }
             
@@ -4705,7 +4922,6 @@
                 testBtn.disabled = true;
                 testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
             }
-            if (resultDiv) resultDiv.style.display = 'none';
             
             // Test HTTP connection to /api/config endpoint
             const testUrl = `http://${newIp}/api/config`;
@@ -4723,12 +4939,7 @@
             })
             .then(data => {
                 // Success - config endpoint responded
-                if (resultDiv) {
-                    resultDiv.classList.remove('alert-success', 'alert-danger');
-                    resultDiv.classList.add('alert-success');
-                    resultDiv.innerHTML = '<i class="fas fa-check-circle"></i> Connection successful! ESP32 is reachable.';
-                    resultDiv.style.display = 'block';
-                }
+                toast.success('Connection successful! ESP32 is reachable.');
                 if (testBtn) {
                     testBtn.disabled = false;
                     testBtn.innerHTML = '<i class="fas fa-plug"></i> Test Connection';
@@ -4752,12 +4963,7 @@
                     errorMsg += error.message;
                 }
                 
-                if (resultDiv) {
-                    resultDiv.classList.remove('alert-success', 'alert-danger');
-                    resultDiv.classList.add('alert-danger');
-                    resultDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${errorMsg}`;
-                    resultDiv.style.display = 'block';
-                }
+                toast.error(errorMsg);
                 if (testBtn) {
                     testBtn.disabled = false;
                     testBtn.innerHTML = '<i class="fas fa-plug"></i> Test Connection';
@@ -4802,10 +5008,6 @@
                 ipInput.addEventListener('input', function() {
                     clearTimeout(ipChangeTimeout);
                     const newIp = this.value.trim();
-                    
-                    // Hide test result when typing
-                    const resultDiv = document.getElementById('connectionTestResult');
-                    if (resultDiv) resultDiv.style.display = 'none';
                     
                     // Debounce save for 1.5 seconds
                     ipChangeTimeout = setTimeout(() => {
@@ -4872,67 +5074,43 @@
             }
         }
 
-        // ==================== Settings Accordion State Management ====================
+        // ==================== Settings Tab Management ====================
 
-        const SETTINGS_ACCORDIONS = {
-            servo: 'collapseServo',
-            gyro: 'collapseGyro',
-            battery: 'collapseBattery',
-            network: 'collapseNetwork',
-            livedata: 'collapseLiveData',
-            config: 'collapseConfig'
-        };
-
-        function openSettingsAccordion(accordionKey) {
-            const accordionId = SETTINGS_ACCORDIONS[accordionKey];
-            if (!accordionId) return;
-
-            const accordion = document.getElementById(accordionId);
-            if (!accordion || !window.bootstrap?.Collapse) return;
-
-            const collapse = window.bootstrap.Collapse.getOrCreateInstance(accordion, { toggle: false });
-            collapse.show();
-
-            const header = accordion.previousElementSibling;
-            const target = header || accordion;
-            setTimeout(() => {
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 150);
+        function openSettingsTab(tabKey) {
+            const tabButton = document.querySelector(`.settings-tab[data-tab="${tabKey}"]`);
+            if (tabButton) {
+                tabButton.click();
+            }
         }
         
-        // Initialize accordion state persistence
-        function initSettingsAccordions() {
-            // Restore accordion states from localStorage
-            Object.entries(SETTINGS_ACCORDIONS).forEach(([accordionKey, accordionId]) => {
-                const accordion = document.getElementById(accordionId);
-                if (!accordion) return;
-                
-                const savedState = localStorage.getItem(`accordion_${accordionKey}`);
-                
-                // Default to collapsed (closed) if no saved state
-                if (savedState === 'open') {
-                    // Use Bootstrap's class to show accordion
-                    accordion.classList.add('show');
-                }
+        // Initialize settings tabs
+        function initSettingsTabs() {
+            // Restore last active tab from localStorage
+            const savedTab = localStorage.getItem('settings_active_tab') || 'servo';
+            
+            // Set up tab click handlers
+            document.querySelectorAll('.settings-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabName = this.dataset.tab;
+                    
+                    // Remove active class from all tabs and panes
+                    document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+                    
+                    // Add active class to clicked tab and corresponding pane
+                    this.classList.add('active');
+                    const pane = document.getElementById(`tab-${tabName}`);
+                    if (pane) {
+                        pane.classList.add('active');
+                    }
+                    
+                    // Save active tab to localStorage
+                    localStorage.setItem('settings_active_tab', tabName);
+                });
             });
             
-            // Save state when accordion is shown or hidden using Bootstrap collapse events
-            Object.entries(SETTINGS_ACCORDIONS).forEach(([accordionKey, accordionId]) => {
-                const accordion = document.getElementById(accordionId);
-                if (!accordion) return;
-                
-                accordion.addEventListener('shown.bs.collapse', function() {
-                    localStorage.setItem(`accordion_${accordionKey}`, 'open');
-                    const header = this.previousElementSibling;
-                    if (header) header.setAttribute('aria-expanded', 'true');
-                });
-                
-                accordion.addEventListener('hidden.bs.collapse', function() {
-                    localStorage.setItem(`accordion_${accordionKey}`, 'closed');
-                    const header = this.previousElementSibling;
-                    if (header) header.setAttribute('aria-expanded', 'false');
-                });
-            });
+            // Activate the saved tab
+            openSettingsTab(savedTab);
         }
 
         function offlineMode() {
