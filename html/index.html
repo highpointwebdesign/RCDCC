@@ -1468,10 +1468,13 @@
 
                     <!-- Servo Range Card -->
                     <div class="col-12 col-md-6">
-                        <div class="card">
-                            <div class="card-header">
-                                <i class="fa fa-arrows-alt" style="transform: rotate(-45deg);" aria-hidden="true"></i>
-                                Servo Range
+                        <div class="card" id="servoRangeCard">
+                            <div class="card-header d-flex align-items-center">
+                                <div>
+                                    <i class="fa fa-arrows-alt" style="transform: rotate(-45deg);" aria-hidden="true"></i>
+                                    Servo Range
+                                </div>
+                                <i class="fas fa-lock-open slider-lock-icon" id="servoRangeLockIcon" onclick="toggleServoRangeLock(this)" title="Lock sliders to prevent accidental changes"></i>
                             </div>
                             <div class="card-body">
                                 <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(-45deg);"></i> Front Left</h6>
@@ -1521,10 +1524,13 @@
 
                     <!-- Servo Trim Card -->
                     <div class="col-12 col-md-6">
-                        <div class="card">
-                            <div class="card-header">
-                                <i class="fas fa-sliders"></i>
-                                Servo Trim
+                        <div class="card" id="servoTrimCard">
+                            <div class="card-header d-flex align-items-center">
+                                <div>
+                                    <i class="fas fa-sliders"></i>
+                                    Servo Trim
+                                </div>
+                                <i class="fas fa-lock-open slider-lock-icon" id="servoTrimLockIcon" onclick="toggleServoTrimLock(this)" title="Lock sliders to prevent accidental changes"></i>
                             </div>
                             <div class="card-body">
                                 <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(-45deg);"></i> Front Left</h6>
@@ -3057,6 +3063,26 @@
                 formulasChevron.classList.remove('fa-chevron-down');
                 formulasChevron.classList.add('fa-chevron-right');
             }
+            
+            // Restore servo range lock state from localStorage
+            servoRangeLocked = localStorage.getItem('servoRangeLocked') === 'true';
+            const servoRangeLockIcon = document.getElementById('servoRangeLockIcon');
+            const servoRangeCard = document.getElementById('servoRangeCard');
+            if (servoRangeLocked && servoRangeLockIcon && servoRangeCard) {
+                servoRangeCard.classList.add('slider-locked');
+                servoRangeLockIcon.classList.remove('fa-lock-open');
+                servoRangeLockIcon.classList.add('fa-lock');
+            }
+            
+            // Restore servo trim lock state from localStorage
+            servoTrimLocked = localStorage.getItem('servoTrimLocked') === 'true';
+            const servoTrimLockIcon = document.getElementById('servoTrimLockIcon');
+            const servoTrimCard = document.getElementById('servoTrimCard');
+            if (servoTrimLocked && servoTrimLockIcon && servoTrimCard) {
+                servoTrimCard.classList.add('slider-locked');
+                servoTrimLockIcon.classList.remove('fa-lock-open');
+                servoTrimLockIcon.classList.add('fa-lock');
+            }
 
             // Page navigation - footer nav buttons
             document.querySelectorAll('.footer-nav button').forEach(btn => {
@@ -3749,6 +3775,10 @@
             sensorRate: false
         };
 
+        // Track locked state for servo sliders
+        let servoRangeLocked = false;
+        let servoTrimLocked = false;
+
         // Flag to prevent saving while loading config
         let isLoadingTuningConfig = false;
 
@@ -3804,7 +3834,7 @@
                         updateThumbLabels('sliderFrontLeft', value);
                         
                         // Save with 800ms debounce - only save values that changed
-                        if (!isLoadingTuningConfig) {
+                        if (!isLoadingTuningConfig && !servoRangeLocked) {
                             clearTimeout(servoSliderSaveTimers.frontLeft.range);
                             servoSliderSaveTimers.frontLeft.range = setTimeout(() => {
                                 const lastValue = servoSliderInstances.frontLeft.lastRangeValue;
@@ -3839,7 +3869,7 @@
                         updateTrimThumbLabel('sliderFrontLeftTrim', value[1]);
                         
                         // Save with 800ms debounce
-                        if (!isLoadingTuningConfig) {
+                        if (!isLoadingTuningConfig && !servoTrimLocked) {
                             clearTimeout(servoSliderSaveTimers.frontLeft.trim);
                             servoSliderSaveTimers.frontLeft.trim = setTimeout(() => {
                                 saveServoParameter('frontLeft', 'trim', value[1]);
@@ -3865,7 +3895,7 @@
                         updateThumbLabels('sliderFrontRight', value);
                         
                         // Save with 800ms debounce - only save values that changed
-                        if (!isLoadingTuningConfig) {
+                        if (!isLoadingTuningConfig && !servoRangeLocked) {
                             clearTimeout(servoSliderSaveTimers.frontRight.range);
                             servoSliderSaveTimers.frontRight.range = setTimeout(() => {
                                 const lastValue = servoSliderInstances.frontRight.lastRangeValue;
@@ -3900,7 +3930,7 @@
                         updateTrimThumbLabel('sliderFrontRightTrim', value[1]);
                         
                         // Save with 800ms debounce
-                        if (!isLoadingTuningConfig) {
+                        if (!isLoadingTuningConfig && !servoTrimLocked) {
                             clearTimeout(servoSliderSaveTimers.frontRight.trim);
                             servoSliderSaveTimers.frontRight.trim = setTimeout(() => {
                                 saveServoParameter('frontRight', 'trim', value[1]);
@@ -3926,7 +3956,7 @@
                         updateThumbLabels('sliderRearLeft', value);
                         
                         // Save with 800ms debounce - only save values that changed
-                        if (!isLoadingTuningConfig) {
+                        if (!isLoadingTuningConfig && !servoRangeLocked) {
                             clearTimeout(servoSliderSaveTimers.rearLeft.range);
                             servoSliderSaveTimers.rearLeft.range = setTimeout(() => {
                                 const lastValue = servoSliderInstances.rearLeft.lastRangeValue;
@@ -3961,7 +3991,7 @@
                         updateTrimThumbLabel('sliderRearLeftTrim', value[1]);
                         
                         // Save with 800ms debounce
-                        if (!isLoadingTuningConfig) {
+                        if (!isLoadingTuningConfig && !servoTrimLocked) {
                             clearTimeout(servoSliderSaveTimers.rearLeft.trim);
                             servoSliderSaveTimers.rearLeft.trim = setTimeout(() => {
                                 saveServoParameter('rearLeft', 'trim', value[1]);
@@ -3987,7 +4017,7 @@
                         updateThumbLabels('sliderRearRight', value);
                         
                         // Save with 800ms debounce - only save values that changed
-                        if (!isLoadingTuningConfig) {
+                        if (!isLoadingTuningConfig && !servoRangeLocked) {
                             clearTimeout(servoSliderSaveTimers.rearRight.range);
                             servoSliderSaveTimers.rearRight.range = setTimeout(() => {
                                 const lastValue = servoSliderInstances.rearRight.lastRangeValue;
@@ -4022,7 +4052,7 @@
                         updateTrimThumbLabel('sliderRearRightTrim', value[1]);
                         
                         // Save with 800ms debounce
-                        if (!isLoadingTuningConfig) {
+                        if (!isLoadingTuningConfig && !servoTrimLocked) {
                             clearTimeout(servoSliderSaveTimers.rearRight.trim);
                             servoSliderSaveTimers.rearRight.trim = setTimeout(() => {
                                 saveServoParameter('rearRight', 'trim', value[1]);
@@ -4285,6 +4315,60 @@
                 chevron.classList.remove('fa-chevron-down');
                 chevron.classList.add('fa-chevron-right');
                 localStorage.setItem('formulasCardCollapsed', 'true');
+            }
+        }
+        
+        function toggleServoRangeLock(iconElement) {
+            // Play click sound
+            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
+            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            
+            // Toggle the lock state
+            servoRangeLocked = !servoRangeLocked;
+            
+            // Save to localStorage
+            localStorage.setItem('servoRangeLocked', servoRangeLocked.toString());
+            
+            // Find the card container
+            const card = iconElement.closest('.card');
+            
+            if (servoRangeLocked) {
+                // Lock the sliders
+                card.classList.add('slider-locked');
+                iconElement.classList.remove('fa-lock-open');
+                iconElement.classList.add('fa-lock');
+            } else {
+                // Unlock the sliders
+                card.classList.remove('slider-locked');
+                iconElement.classList.remove('fa-lock');
+                iconElement.classList.add('fa-lock-open');
+            }
+        }
+        
+        function toggleServoTrimLock(iconElement) {
+            // Play click sound
+            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
+            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            
+            // Toggle the lock state
+            servoTrimLocked = !servoTrimLocked;
+            
+            // Save to localStorage
+            localStorage.setItem('servoTrimLocked', servoTrimLocked.toString());
+            
+            // Find the card container
+            const card = iconElement.closest('.card');
+            
+            if (servoTrimLocked) {
+                // Lock the sliders
+                card.classList.add('slider-locked');
+                iconElement.classList.remove('fa-lock-open');
+                iconElement.classList.add('fa-lock');
+            } else {
+                // Unlock the sliders
+                card.classList.remove('slider-locked');
+                iconElement.classList.remove('fa-lock');
+                iconElement.classList.add('fa-lock-open');
             }
         }
         
