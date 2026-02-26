@@ -44,6 +44,7 @@
             --text-primary: #111827;
             --text-muted: #6b7280;
             --border-color: #d1d5db;
+            --high-impact-color: #f9c21b;
         }
         
         * {
@@ -249,6 +250,14 @@
         }
         
         /* Auto Level button active/busy state */
+        #autoLevelBtn {
+            background-color: var(--high-impact-color);
+            color: #000000;
+            border-color: var(--high-impact-color);
+            pointer-events: none;
+            font-weight: bold;
+        }
+        
         #autoLevelBtn.active {
             background-color: var(--primary);
             color: white;
@@ -400,36 +409,38 @@
             cursor: pointer;
             font-size: 0.875rem;
             font-weight: 500;
-            color: var(--text-muted);
+            color: #000000;
             transition: all 0.2s ease;
             white-space: nowrap;
             flex-shrink: 0;
         }
         
         .settings-tab:hover {
-            color: var(--text-color);
-            background-color: rgba(0, 0, 0, 0.03);
+            color: var(--high-impact-color);
+            background-color: #000;
+            /* border-bottom: 2px solid var(--danger); */
         }
         
         .settings-tab.active {
-            color: white;
-            border-bottom-color: transparent;
+            color: var(--high-impact-color);
+            /* border-bottom-color: var(--danger); */
+            background-color: #000;
         }
         
         .settings-tab[data-tab="servo"].active {
-            background-color: var(--dark);
+            background-color: #000;
         }
         
         .settings-tab[data-tab="gyro"].active {
-            background-color: var(--dark);
+            background-color: #000;
         }
         
         .settings-tab[data-tab="network"].active {
-            background-color: var(--dark);
+            background-color: #000;
         }
         
         .settings-tab[data-tab="debugging"].active {
-            background-color: var(--dark);
+            background-color: #000;
         }
         
         .settings-tab i {
@@ -563,12 +574,12 @@
             top: 8px;
             border-radius: 999px;
             border: 1px solid var(--border-color);
-            background-color: #e5e7eb;
+            background-color: var(--high-impact-color);
         }
 
         .rs-container .rs-selected {
-            background-color: var(--primary);
-            border-color: #1d4ed8;
+            background-color: var(--high-impact-color);
+            border-color: var(--high-impact-color);
         }
 
         .rs-container .rs-pointer {
@@ -1055,11 +1066,15 @@
         }
 
         .footer-nav button:hover {
-            color: var(--primary);
+            color: var(--high-impact-color);
+        }
+
+        .footer-nav button:hover i {
+            color: var(--high-impact-color);
         }
 
         .footer-nav button.active {
-            color: #ffffff;
+            color: var(--high-impact-color);
             font-weight: 700;
         }
 
@@ -1070,6 +1085,7 @@
 
         .footer-nav i {
             font-size: 1.1rem;
+            color: inherit;
         }
 
         /* Page Sections */
@@ -1132,7 +1148,7 @@
             cursor: pointer;
             margin-left: auto;
             font-size: 0.9rem;
-            color: var(--danger);
+            color: var(--high-impact-color);
             transition: color 0.2s;
             padding: 4px 8px;
         }
@@ -1170,7 +1186,8 @@
             justify-content: center;
             font-size: 0.65rem;
             font-weight: 600;
-            color: #fff;
+            color: #000000;
+            background-color: var(--high-impact-color);
         }
 
         #sliderFrontLeft .range-slider__thumb[data-lower],
@@ -1197,6 +1214,16 @@
         #sliderRearRightTrim .range-slider__thumb[data-upper] {
             width: 32px;
             height: 32px;
+        }
+
+        .range-slider .range-slider__range {
+            position: absolute;
+            z-index: 1;
+            transform: translate(0, -50%);
+            top: 50%;
+            width: 100%;
+            height: 100%;
+            background: var(--high-impact-color);
         }
 
         /* toast-box */
@@ -1332,7 +1359,7 @@
             
             <div class="header-actions">
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="setLevelBtn">
-                    <i class="fa-solid fa-bullseye action-icon" aria-hidden="true"></i>
+                    <i class="fa-brands fa-files-pinwheel action-icon" aria-hidden="true"></i>
                     <span class="action-text">Reset Gyro</span>
                 </button>
                 <button type="button" class="btn btn-link btn-sm" id="connectionSettingsHeaderGear"><i class="fas fa-wifi" id="wifiIcon" style="color: var(--text-muted);"></i></button>
@@ -1383,7 +1410,7 @@
                             <i class="fa-solid fa-compass" style="color: var(--danger);"></i>
                             Roll/Pitch
                         </div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="rollPitchRefreshBtn" style="background-color: black; color: white;">Refresh</button>
+                        <i class="fa fa-refresh" aria-hidden="true" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values." ></i>
                     </div>
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
@@ -1541,13 +1568,13 @@
                         <div class="card" id="servoRangeCard">
                             <div class="card-header d-flex align-items-center" style="background-color: black; color: white;">
                                 <div>
-                                    <i class="fa fa-arrows-alt" style="transform: rotate(-45deg); color:red" aria-hidden="true"></i>
+                                    <i class="fa fa-arrows-alt" style="transform: rotate(-45deg); color: var(--danger);" aria-hidden="true"></i>
                                     Servo Range
                                 </div>
                                 <i class="fas fa-lock-open slider-lock-icon" id="servoRangeLockIcon" onclick="toggleServoRangeLock(this)" title="Lock sliders to prevent accidental changes"></i>
                             </div>
                             <div class="card-body">
-                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(-45deg);"></i> Front Left</h6>
+                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(-45deg); color: var(--danger);"></i> Front Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontLeft"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1558,7 +1585,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(45deg);"></i> Front Right</h6>
+                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(45deg); color: var(--danger);"></i> Front Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontRight"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1569,7 +1596,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(45deg);"></i> Rear Left</h6>
+                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(45deg); color: var(--danger);"></i> Rear Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearLeft"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1580,7 +1607,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(-45deg);"></i> Rear Right</h6>
+                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(-45deg); color: var(--danger);"></i> Rear Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearRight"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1603,7 +1630,7 @@
                                 <i class="fas fa-lock-open slider-lock-icon" id="servoTrimLockIcon" onclick="toggleServoTrimLock(this)" title="Lock sliders to prevent accidental changes"></i>
                             </div>
                             <div class="card-body">
-                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(-45deg);"></i> Front Left</h6>
+                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(-45deg); color: var(--danger);"></i> Front Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontLeftTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1615,7 +1642,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(45deg);"></i> Front Right</h6>
+                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(45deg); color: var(--danger);"></i> Front Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontRightTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1627,7 +1654,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(45deg);"></i> Rear Left</h6>
+                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(45deg); color: var(--danger);"></i> Rear Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearLeftTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1639,7 +1666,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(-45deg);"></i> Rear Right</h6>
+                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(-45deg); color: var(--danger);"></i> Rear Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearRightTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1796,7 +1823,7 @@
                         </div>
                         <div class="card-body">
                             <!-- Ride Height -->
-                            <h6 class="mb-3"><i class="fas fa-arrows-up-down"></i> Ride Height</h6>
+                            <h6 class="mb-3"><i class="fas fa-arrows-up-down" style="color: var(--danger);"></i> Ride Height</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderRideHeight"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1807,7 +1834,7 @@
                             </div>
 
                             <!-- Damping -->
-                            <h6 class="mb-3"><i class="fas fa-wave-square"></i> Damping</h6>
+                            <h6 class="mb-3"><i class="fas fa-wave-square" style="color: var(--danger);"></i> Damping</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderDamping"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1818,7 +1845,7 @@
                             </div>
 
                             <!-- Stiffness -->
-                            <h6 class="mb-3"><i class="fas fa-compress"></i> Stiffness</h6>
+                            <h6 class="mb-3"><i class="fas fa-compress" style="color: var(--danger);"></i> Stiffness</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderStiffness"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1829,7 +1856,7 @@
                             </div>
 
                             <!-- Reaction Speed -->
-                            <h6 class="mb-3"><i class="fas fa-gauge-high"></i> Reaction Speed</h6>
+                            <h6 class="mb-3"><i class="fas fa-gauge-high" style="color: var(--danger);"></i> Reaction Speed</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderReactionSpeed"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1840,7 +1867,7 @@
                             </div>
 
                             <!-- Balance (Rear/Front) -->
-                            <h6 class="mb-3"><i class="fas fa-scale-balanced"></i> Balance (Rear/Front)</h6>
+                            <h6 class="mb-3"><i class="fas fa-scale-balanced" style="color: var(--danger);"></i> Balance (Rear/Front)</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderBalance"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1851,7 +1878,7 @@
                             </div>
 
                             <!-- Sensor Refresh Rate -->
-                            <h6 class="mb-3"><i class="fas fa-microchip"></i> Sensor Refresh Rate</h6>
+                            <h6 class="mb-3"><i class="fas fa-microchip" style="color: var(--danger);"></i> Sensor Refresh Rate</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderSensorRate"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1873,7 +1900,7 @@
                             <div>
                                 <i class="fas fa-calculator" style="color: var(--danger);"></i> Formulas
                             </div>
-                            <i class="fas fa-chevron-down" id="formulasChevron"></i>
+                            <i class="fas fa-chevron-down" id="formulasChevron" style="color: var(--high-impact-color);"></i>
                         </div>
                         <div class="card-body" id="formulasCardBody">
                             <div class="row">
@@ -2588,10 +2615,10 @@
         }
 
         async function fetchRollPitchSnapshot() {
-            const button = document.getElementById('rollPitchRefreshBtn');
-            if (button) {
-                button.disabled = true;
-                button.textContent = 'Refreshing...';
+            const iconClick = document.getElementById('rollPitchRefreshBtn');
+            // replace this with a rotating fa fa-refresh icon to indicate loading state instead of changing button text
+            if (iconClick) {
+                iconClick.classList.add('fa-spin');
             }
 
             try {
@@ -2614,9 +2641,8 @@
             } catch (error) {
                 toast.error('Failed to fetch roll/pitch');
             } finally {
-                if (button) {
-                    button.disabled = false;
-                    button.textContent = 'Refresh';
+                if (iconClick) {
+                    iconClick.classList.remove('fa-spin');
                 }
             }
         }
