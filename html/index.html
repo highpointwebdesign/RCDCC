@@ -1728,6 +1728,55 @@
                         </div>
                     </div>
 
+                    <!-- Servo Rotation Card -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header" style="background-color: #000000; color: #ffffff;">
+                                <div>
+                                    <i class="fas fa-rotate-right" style="color: var(--danger);"></i>
+                                    Servo Rotation
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div style="margin-bottom: 1.5rem;">
+                                    <div>
+                                        <i class="fas fa-arrow-up" style="transform: rotate(-45deg); color: var(--danger);"></i>
+                                        <strong>Front Left</strong>
+                                        <span class="ms-2 badge" id="servoFLRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><i class="fas fa-rotate-right me-1"></i>CW</span>
+                                        <input class="form-check-input" type="checkbox" id="servoFLReversed" style="display: none;">
+                                    </div>
+                                </div>
+
+                                <div style="margin-bottom: 1.5rem;">
+                                    <div>
+                                        <i class="fas fa-arrow-up" style="transform: rotate(45deg); color: var(--danger);"></i>
+                                        <strong>Front Right</strong>
+                                        <span class="ms-2 badge" id="servoFRRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><i class="fas fa-rotate-right me-1"></i>CW</span>
+                                        <input class="form-check-input" type="checkbox" id="servoFRReversed" style="display: none;">
+                                    </div>
+                                </div>
+
+                                <div style="margin-bottom: 1.5rem;">
+                                    <div>
+                                        <i class="fas fa-arrow-down" style="transform: rotate(45deg); color: var(--danger);"></i>
+                                        <strong>Rear Left</strong>
+                                        <span class="ms-2 badge" id="servoRLRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><i class="fas fa-rotate-right me-1"></i>CW</span>
+                                        <input class="form-check-input" type="checkbox" id="servoRLReversed" style="display: none;">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div>
+                                        <i class="fas fa-arrow-down" style="transform: rotate(-45deg); color: var(--danger);"></i>
+                                        <strong>Rear Right</strong>
+                                        <span class="ms-2 badge" id="servoRRRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><i class="fas fa-rotate-right me-1"></i>CW</span>
+                                        <input class="form-check-input" type="checkbox" id="servoRRReversed" style="display: none;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-12">
                         <div class="alert alert-info" style="font-size: 0.875rem;">
                             <strong>Servo Tips:</strong><br>
@@ -3154,7 +3203,7 @@
             // initLightControls(); // Commented out - slider library not yet connected
             
             // Initialize settings controls
-            // initServoControls(); // Commented out - slider library not yet connected
+            initServoControls(); // Initialize servo rotation badge click handlers
             // initGyroControls(); // Commented out - slider library not yet connected
             initBatteryControls();
             initNetworkSettings();
@@ -4600,10 +4649,17 @@
                     // Set trim slider (offset from center)
                     const trimOffset = Number.isFinite(servo.trim) ? servo.trim : 0;
                     setRSliderValue(trimSliderId, formatSliderValue(trimOffset), { silent: true });
-                    
-                    // Set reversed checkbox
-                    const checkbox = document.getElementById(`servo${abbrev}Reversed`);
-                    if (checkbox) checkbox.checked = servo.reversed || false;
+                }
+                
+                // Always update reversed checkbox and badge (independent of rSliders)
+                const checkbox = document.getElementById(`servo${abbrev}Reversed`);
+                const badge = document.getElementById(`servo${abbrev}RevBadge`);
+                const isReversed = servo.reversed || false;
+                if (checkbox) checkbox.checked = isReversed;
+                if (badge) {
+                    const icon = isReversed ? '<i class="fas fa-rotate-left me-1"></i>' : '<i class="fas fa-rotate-right me-1"></i>';
+                    const text = isReversed ? 'CCW' : 'CW';
+                    badge.innerHTML = icon + text;
                 }
             });
             
@@ -4812,61 +4868,87 @@
                 const rangeSliderId = `servo${abbrev}RangeSlider`;
                 const trimSliderId = `servo${abbrev}TrimSlider`;
                 
-                if (!document.getElementById(rangeSliderId) || !document.getElementById(trimSliderId)) return;
+                // Initialize rSliders only if elements exist
+                if (document.getElementById(rangeSliderId) && document.getElementById(trimSliderId)) {
+                    createRSlider(rangeSliderId, {
+                        values: buildValueArray(0, 180, 2),
+                        range: true,
+                        set: [formatSliderValue(30), formatSliderValue(150)],
+                        scale: false,
+                        labels: false,
+                        tooltip: false,
+                        onChange: function (value) {
+                            const rangeDisplay = document.getElementById(`servo${abbrev}RangeDisplay`);
+                            const values = parseRSliderValue(value);
+                            const min = Math.round(values[0] ?? 0);
+                            const max = Math.round(values[1] ?? 0);
 
-                createRSlider(rangeSliderId, {
-                    values: buildValueArray(0, 180, 2),
-                    range: true,
-                    set: [formatSliderValue(30), formatSliderValue(150)],
-                    scale: false,
-                    labels: false,
-                    tooltip: false,
-                    onChange: function (value) {
-                        const rangeDisplay = document.getElementById(`servo${abbrev}RangeDisplay`);
-                        const values = parseRSliderValue(value);
-                        const min = Math.round(values[0] ?? 0);
-                        const max = Math.round(values[1] ?? 0);
+                            if (rangeDisplay) {
+                                rangeDisplay.innerHTML = `<span class="servo-range-min">${min}°</span> - <span class="servo-range-max">${max}°</span>`;
+                            }
 
-                        if (rangeDisplay) {
-                            rangeDisplay.innerHTML = `<span class="servo-range-min">${min}°</span> - <span class="servo-range-max">${max}°</span>`;
+                            if (canSaveRSlider(rangeSliderId)) {
+                                const trimValue = getRSliderValue(trimSliderId)[0];
+                                const actualTrim = Number.isFinite(trimValue) ? Math.round(trimValue) : 0;
+                                saveServoValues(key, abbrev, min, actualTrim, max, rangeSliderId, trimSliderId);
+                            }
                         }
+                    });
 
-                        if (canSaveRSlider(rangeSliderId)) {
-                            const trimValue = getRSliderValue(trimSliderId)[0];
-                            const actualTrim = Number.isFinite(trimValue) ? Math.round(trimValue) : 0;
-                            saveServoValues(key, abbrev, min, actualTrim, max, rangeSliderId, trimSliderId);
+                    createRSlider(trimSliderId, {
+                        values: buildValueArray(-20, 20, 2),
+                        range: false,
+                        set: [formatSliderValue(0)],
+                        scale: false,
+                        labels: false,
+                        tooltip: false,
+                        onChange: function (value) {
+                            const trimDisplay = document.getElementById(`servo${abbrev}TrimDisplay`);
+                            const trimVal = Math.round(parseRSliderValue(value)[0] ?? 0);
+
+                            if (trimDisplay) {
+                                trimDisplay.textContent = trimVal >= 0 ? `+${trimVal}°` : `${trimVal}°`;
+                            }
+
+                            if (canSaveRSlider(trimSliderId)) {
+                                const rangeValues = getRSliderValue(rangeSliderId);
+                                const min = Math.round(rangeValues[0] ?? 0);
+                                const max = Math.round(rangeValues[1] ?? 0);
+                                saveServoValues(key, abbrev, min, trimVal, max, rangeSliderId, trimSliderId);
+                            }
                         }
-                    }
-                });
-
-                createRSlider(trimSliderId, {
-                    values: buildValueArray(-20, 20, 2),
-                    range: false,
-                    set: [formatSliderValue(0)],
-                    scale: false,
-                    labels: false,
-                    tooltip: false,
-                    onChange: function (value) {
-                        const trimDisplay = document.getElementById(`servo${abbrev}TrimDisplay`);
-                        const trimVal = Math.round(parseRSliderValue(value)[0] ?? 0);
-
-                        if (trimDisplay) {
-                            trimDisplay.textContent = trimVal >= 0 ? `+${trimVal}°` : `${trimVal}°`;
-                        }
-
-                        if (canSaveRSlider(trimSliderId)) {
-                            const rangeValues = getRSliderValue(rangeSliderId);
-                            const min = Math.round(rangeValues[0] ?? 0);
-                            const max = Math.round(rangeValues[1] ?? 0);
-                            saveServoValues(key, abbrev, min, trimVal, max, rangeSliderId, trimSliderId);
-                        }
-                    }
-                });
+                    });
+                }
                 
-                // Reversed checkbox
+                // Always initialize reversed checkbox and badge click handler (independent of rSliders)
                 const checkbox = document.getElementById(`servo${abbrev}Reversed`);
+                const badge = document.getElementById(`servo${abbrev}RevBadge`);
+                
+                if (badge) {
+                    console.log(`Attaching click handler to badge: servo${abbrev}RevBadge`);
+                    badge.addEventListener('click', function() {
+                        console.log(`Badge clicked: ${abbrev}`);
+                        // Toggle the checkbox state
+                        if (checkbox) {
+                            checkbox.checked = !checkbox.checked;
+                            console.log(`Checkbox toggled to: ${checkbox.checked}`);
+                            // Trigger change event
+                            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    });
+                }
+                
                 if (checkbox) {
+                    console.log(`Attaching change handler to checkbox: servo${abbrev}Reversed`);
                     checkbox.addEventListener('change', function() {
+                        console.log(`Checkbox changed: ${abbrev} = ${this.checked}`);
+                        // Update badge display
+                        // reversed=false (unchecked) = CW, reversed=true (checked) = CCW
+                        if (badge) {
+                            const icon = this.checked ? '<i class="fas fa-rotate-left me-1"></i>' : '<i class="fas fa-rotate-right me-1"></i>';
+                            const text = this.checked ? 'CCW' : 'CW';
+                            badge.innerHTML = icon + text;
+                        }
                         updateServoParam(key, 'reversed', this.checked);
                     });
                 }
