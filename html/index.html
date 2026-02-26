@@ -1774,15 +1774,17 @@
             <!-- Tab Content: Network Settings -->
             <div class="tab-pane" id="tab-network">
                 <div class="row g-3">
-                    <!-- Connection Method Card -->
+                    <!-- Network Settings Card -->
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header" style="background-color: black; color: white;">
                                 <i class="fas fa-wifi" style="color: var(--danger);"></i>
-                                Connection Method
+                                Network Settings
                             </div>
                             <div class="card-body">
-                                <div style="color: #000;">
+                                <!-- Connection Method Section -->
+                                <div style="color: #000; margin-bottom: 2rem;">
+                                    <h6 class="mb-3">Select Connection Method</h6>
                                     <div class="form-check">
                                         <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked>
                                         <label class="form-check-label" for="modeHomeWifi">
@@ -1818,24 +1820,15 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- IP Address Card -->
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <i class="fas fa-network-wired" style="color: var(--danger);"></i>
-                                Device Configuration
-                            </div>
-                            <div class="card-body">
+                                <!-- IP Address Configuration Section -->
+                                <hr class="my-3">
                                 <label for="esp32IpAddress" class="form-label">Enter RCDCC IP Address</label>
                                 <input type="text" class="form-control" id="esp32IpAddress" placeholder="192.168.1.100">
                                 <small class="form-text text-muted" id="ipHelpText">
                                     Check network router for assigned IP
                                 </small>
-                                <button type="button" class="btn btn-primary w-100 mt-3" id="testConnectionBtn">
+                                <button type="button" class="btn btn-primary w-100 mt-3" id="testConnectionBtn" style="background-color: var(--high-impact-color); border-color: var(--high-impact-color); color: #000;">
                                     <i class="fas fa-plug"></i>
                                     Test Connection
                                 </button>
