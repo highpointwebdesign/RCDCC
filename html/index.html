@@ -458,7 +458,7 @@
         
         .tab-pane {
             display: none;
-            padding: 1.5rem;
+            padding: 1.5rem 0rem;
             border-radius: 0.5rem 0.5rem 0.5rem 0.5rem;
             transition: background-color 0.2s ease;
         }
@@ -2081,85 +2081,22 @@
         <section id="lights" class="page-section">
             <h2 class="section-title">Light Control</h2>
             <div class="row g-3">
-                <!-- Headlights Card -->
-                <div class="col-12 col-md-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <i class="fas fa-lightbulb"></i>
-                            Headlights
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-4">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="headlightsOn">
-                                    <label class="form-check-label" for="headlightsOn">Headlights</label>
-                                </div>
-                            </div>
-                            <div class="mb-4">
-                                <label for="headlightBrightness" class="form-label d-flex justify-content-between align-items-center">
-                                    <span>Brightness</span>
-                                    <span id="brightnessLabel" class="badge bg-primary">High</span>
-                                </label>
-                                <input type="text" id="headlightBrightness" class="servo-trim-slider" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tail Lights Card -->
-                <div class="col-12 col-md-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <i class="fas fa-car"></i>
-                            Tail Lights
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-4">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="taillightsOn">
-                                    <label class="form-check-label" for="taillightsOn">Tail Lights</label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Underglow Card -->
-                <div class="col-12 col-md-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <i class="fas fa-stars"></i>
-                            Underglow
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-4">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="underglowOn">
-                                    <label class="form-check-label" for="underglowOn">Underglow LEDs</label>
-                                </div>
-                            </div>
-                            <div class="mb-4">
-                                <label for="underglowColor" class="form-label">Color</label>
-                                <input type="color" class="form-control form-control-color w-100" id="underglowColor" value="#2563eb">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tuning Data Card -->
+                <!-- Features Card -->
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header settings-accordion-header" data-bs-toggle="collapse" data-bs-target="#collapseTuningData" aria-expanded="true" aria-controls="collapseTuningData" style="cursor: pointer;">
-                            <i class="fas fa-sliders"></i>
-                            Tuning &amp; Configuration Data
-                            <i class="fas fa-chevron-down float-end accordion-chevron"></i>
+                        <div class="card-header" style="background-color: black; color: white;">
+                            <i class="fas fa-lightbulb" style="color: var(--danger);"></i>
+                            Features
                         </div>
-                        <div id="collapseTuningData" class="collapse show" data-accordion-id="tuningdata">
-                            <div class="card-body">
-                                <div class="data-display" id="tuningData">{
-  "loading": "Fetching tuning data..."
-}</div>
-                            </div>
+                        <div class="card-body">
+                            <ul style="margin: 0; padding-left: 1.5rem;">
+                                <li>Headlights</li>
+                                <li>Taillights</li>
+                                <li>Underglow</li>
+                                <li>Light Bar</li>
+                                <li>Marker Lights</li>
+                                <li>Running Lights</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
@@ -2170,11 +2107,18 @@
         <section id="fpv" class="page-section">
             <h2 class="section-title">FPV Controls</h2>
             <div class="row g-3">
+                <!-- Features Card -->
                 <div class="col-12">
                     <div class="card">
+                        <div class="card-header" style="background-color: black; color: white;">
+                            <i class="fas fa-video" style="color: var(--danger);"></i>
+                            Features
+                        </div>
                         <div class="card-body">
-                            <!-- Placeholder for future FPV controls -->
-                            Coming soon
+                            <ul style="margin: 0; padding-left: 1.5rem;">
+                                <li>DJI Air Unit 03 Auto Full Power Mode</li>
+                                <li>Gyro Reset</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
