@@ -258,10 +258,10 @@
         }
         
         #autoLevelBtn.active {
-            background-color: var(--primary);
-            color: white;
-            border-color: var(--primary);
-            opacity: 0.9;
+            background-color: var(--high-impact-color);
+            color: #000;
+            border-color: var(--high-impact-color);
+            /* opacity: 0.9; */
         }
         
         /* Disable clicks only when button is disabled */
@@ -2161,21 +2161,24 @@
     <div class="modal fade" id="autoLevelSetupModal" tabindex="-1" aria-labelledby="autoLevelSetupTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header bg-light">
+                <div class="modal-header" style="background-color: #000;
+    color: var(--card-bg);">
                     <h5 class="modal-title" id="autoLevelSetupTitle">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <i class="fa-solid fa-wand-magic-sparkles" style="background-color: #000;
+    color: var(--danger);"></i>
                         Auto Level Setup
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div style="text-align: center; margin-bottom: 1.5rem;">
-                        <i class="fas fa-info-circle" style="font-size: 2rem; color: var(--primary); margin-bottom: 0.5rem;"></i>
-                        <p style="margin: 0; font-size: 1.1rem; font-weight: 600;">Place vehicle on a flat surface</p>
-                        <p style="margin: 0.5rem 0 0 0; color: var(--text-muted);">The vehicle must be level for accurate calibration</p>
+                        <p>
+                            <i class="fas fa-info-circle" style="font-size: 2rem; color: var(--high-impact-color); margin-bottom: 0.5rem;"></i>
+                            <span style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #000;">Place vehicle on a flat surface</span>
+                        </p>
                     </div>
                     
-                    <div class="form-check form-switch" style="margin-bottom: 1.5rem;">
+                    <!-- <div class="form-check form-switch" style="margin-bottom: 1.5rem;">
                         <input class="form-check-input" type="checkbox" id="resetTrimsCheckbox" checked>
                         <label class="form-check-label" for="resetTrimsCheckbox">
                             <strong>Reset all trims to neutral before auto-level</strong>
@@ -2183,11 +2186,11 @@
                                 Centers all trim sliders to neutral position for clean baseline calibration.
                             </div>
                         </label>
-                    </div>
+                    </div> -->
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-success btn-lg" id="autoLevelStartBtn">
+                    <button type="button" class="btn btn-lg" id="autoLevelStartBtn" style="background-color: var(--high-impact-color); color:#000;">
                         <i class="fa-solid fa-play"></i>
                         Start Auto Level
                     </button>
@@ -2200,21 +2203,21 @@
     <div class="modal fade" id="autoLevelResultModal" tabindex="-1" aria-labelledby="autoLevelResultTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header" style="background-color: #000000; color: var(--high-impact-color);">
                     <h5 class="modal-title" id="autoLevelResultTitle">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--danger);"></i>
                         Result
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" style="background-color: var(--high-impact-color); columns: #000000;" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body text-center">
+                <div class="modal-body text-center" style="color: #000">
                     <div style="font-size: 3rem; margin-bottom: 1rem;">
                         <i class="fa-solid fa-circle-exclamation" id="autoLevelResultIcon" style="color: #ffc107;"></i>
                     </div>
                     <p id="autoLevelResultMessage" style="font-size: 1.1rem; margin: 0;">Auto-level complete.</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn" data-bs-dismiss="modal"  style="background-color: var(--high-impact-color); color: #000;">Close</button>
                 </div>
             </div>
         </div>
@@ -2804,9 +2807,8 @@
                 return;
             }
             
-            // Show the setup modal
-            const modal = new bootstrap.Modal(document.getElementById('autoLevelSetupModal'));
-            modal.show();
+            // Start auto-level immediately (no modal)
+            executeAutoLevel(false);
         }
 
         async function executeAutoLevel(resetTrims = false) {
@@ -3042,34 +3044,31 @@
                     await delay(3000);
                 }
                 
-                // Close bubble level and show result modal
+                // Close bubble level
                 closeBubbleLevelContainer();
-                const resultModal = new bootstrap.Modal(document.getElementById('autoLevelResultModal'));
-                const resultTitle = document.getElementById('autoLevelResultTitle');
-                const resultMessage = document.getElementById('autoLevelResultMessage');
-                const resultIcon = document.getElementById('autoLevelResultIcon');
                 
                 if (levelAchieved) {
-                    if (resultTitle) resultTitle.textContent = 'Success!';
-                    if (resultMessage) resultMessage.innerHTML = '<strong>Vehicle leveled successfully!</strong><br/>All trim adjustments have been applied and saved.';
-                    if (resultIcon) {
-                        resultIcon.className = 'fas fa-check-circle';
-                        resultIcon.style.color = '#28a745';
-                    }
+                    // Show success toast (no modal needed for success)
+                    toast.success('Vehicle leveled successfully! All trim adjustments have been applied and saved.', { duration: 4000 });
                 } else {
+                    // Show error modal for failure cases
+                    const resultModal = new bootstrap.Modal(document.getElementById('autoLevelResultModal'));
+                    const resultTitle = document.getElementById('autoLevelResultTitle');
+                    const resultMessage = document.getElementById('autoLevelResultMessage');
+                    const resultIcon = document.getElementById('autoLevelResultIcon');
+                    
                     if (resultTitle) resultTitle.textContent = 'Auto Level Failed';
                     if (resultMessage) resultMessage.innerHTML = '<strong>Vehicle is too unlevel.</strong><br/>The suspension cannot correct such extreme tilt. Please ensure the vehicle is on a relatively flat surface before auto-leveling.';
                     if (resultIcon) {
                         resultIcon.className = 'fas fa-exclamation-triangle';
                         resultIcon.style.color = '#ffc107';
                     }
+                    resultModal.show();
                 }
-                resultModal.show();
                 
             } catch (error) {
                 console.error('Auto-leveling failed:', error);
                 setBubbleLevelStatus('Error occurred.');
-                toast.error('Auto-leveling error: ' + error.message);
                 
                 // Close bubble level and show error modal
                 closeBubbleLevelContainer();
