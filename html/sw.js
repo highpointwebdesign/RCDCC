@@ -1,5 +1,5 @@
-// Service Worker for TRX-4 Active Suspension PWA
-const CACHE_NAME = 'trx4-suspension-v1';
+// Service Worker for R/C Dynamic Chassis Control PWA
+const CACHE_NAME = 'rcdcc-v1';
 const urlsToCache = [
   '/index.html',
   '/css/',

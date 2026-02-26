@@ -1,7 +1,7 @@
 {
-  "name": "TRX-4 Active Suspension",
-  "short_name": "TRX-4",
-  "description": "TRX-4 Active Suspension Control Dashboard with GPS and Telemetry",
+  "name": "R/C Dynamic Chassis Control",
+  "short_name": "RCDCC",
+  "description": "R/C Dynamic Chassis Control Dashboard - Real-time suspension tuning, telemetry, and GPS tracking",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -10,16 +10,28 @@
   "background_color": "#ffffff",
   "icons": [
     {
-      "src": "./android-chrome-192x192.png",
+      "src": "./icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "./android-chrome-512x512.png",
+      "src": "./icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "permissions": [

@@ -11,7 +11,10 @@
     <meta name="theme-color" content="#2563eb">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="TRX-4">
+    <meta name="apple-mobile-web-app-title" content="RCDCC">
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512x512.png">
     
     <!-- Permissions Policy for Geolocation -->
     <meta http-equiv="Permissions-Policy" content="geolocation=(self)">
@@ -48,8 +51,10 @@
         }
         
         body {
-            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-            color: var(--text-primary);
+            /* background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); */
+            background-color: #ffffff;
+            /* color: var(--text-primary); */
+            color: #ffffff;
             min-height: 100vh;
             padding: 6rem 1.5rem 5rem 1.5rem;
             /* padding-bottom: 5rem; */
@@ -71,33 +76,32 @@
             left: 0;
             right: 0;
             z-index: 2100;
-            background: #ffffff;
+            background: #000000;
             backdrop-filter: blur(10px);
-            border-bottom: 3px solid transparent;
-            border-image: linear-gradient(90deg, var(--primary) 0%, var(--info) 100%) 1;
+            border-bottom: 3px solid var(--primary);
             padding: 1rem 1.5rem;
-            box-shadow: 0 8px 32px -8px rgba(37, 99, 235, 0.15);
+            box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.5);
         }
         
         .header-left {
             display: flex;
             align-items: center;
             gap: 1rem;
-            padding-left:1rem;  
+            /* padding-left:1rem;   */
         }
         
         .brand-icon {
-            width: 56px;
-            height: 56px;
+            width: 62px;
+            height: 62px;
             border-radius: 0.75rem;
-            background: linear-gradient(135deg, var(--primary) 0%, #1d4ed8 100%);
+            /* background: linear-gradient(135deg, var(--primary) 0%, #1d4ed8 100%); */
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-size: 1.75rem;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-            border: 2px solid #1e40af;
+            /* border: 2px solid #000000; */
             overflow: hidden;
         }
 
@@ -111,18 +115,10 @@
             line-height: 1;
         }
         
-        .brand-title h1 {
-            font-size: 1.875rem;
-            font-weight: 900;
-            margin: 0;
-            letter-spacing: -0.025em;
-        }
-        
-        .brand-title p {
-            font-size: 0.875rem;
-            color: var(--text-muted);
-            font-weight: 600;
-            margin: 0;
+        .brand-title img {
+            height: 45px;
+            width: auto;
+            object-fit: contain;
         }
         
         .header-actions {
@@ -130,6 +126,16 @@
             align-items: center;
             gap: 0.75rem;
             flex-wrap: wrap;
+        }
+        
+        .header-actions .btn {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            border-color: rgba(255, 255, 255, 0.2) !important;
+            color: white !important;
+        }
+        
+        .header-actions .btn:hover {
+            background-color: rgba(255, 255, 255, 0.2) !important;
         }
 
         .header-actions .action-icon {
@@ -142,11 +148,11 @@
 
         /* Scrolled Header State */
         .dashboard-header.scrolled {
-            background: var(--primary) !important;
+            background: #000000 !important;
             border-bottom: none;
             border-image: none;
             padding: 0.5rem 1.5rem;
-            box-shadow: 0 4px 20px rgba(37, 99, 235, 0.25);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
             transition: all 0.3s ease;
         }
 
@@ -163,11 +169,16 @@
         .dashboard-header.scrolled .brand-title {
             line-height: 1;
         }
+        
+        .dashboard-header.scrolled .brand-title img {
+            display: none;
+        }
 
         .dashboard-header.scrolled .brand-title h1 {
             font-size: 1.25rem;
             color: white;
             margin: 0;
+            display: block;
         }
 
         .dashboard-header.scrolled .brand-title p {
@@ -406,15 +417,15 @@
         }
         
         .settings-tab[data-tab="servo"].active {
-            background-color: var(--primary);
+            background-color: var(--dark);
         }
         
         .settings-tab[data-tab="gyro"].active {
-            background-color: var(--info);
+            background-color: var(--dark);
         }
         
         .settings-tab[data-tab="network"].active {
-            background-color: var(--success);
+            background-color: var(--dark);
         }
         
         .settings-tab[data-tab="debugging"].active {
@@ -452,19 +463,19 @@
         }
         
         #tab-servo.active {
-            background-color: rgba(37, 99, 235, 0.06);
+            /* background-color: rgba(37, 99, 235, 0.06); */
         }
         
         #tab-gyro.active {
-            background-color: rgba(14, 165, 233, 0.06);
+            /* background-color: rgba(14, 165, 233, 0.06); */
         }
         
         #tab-network.active {
-            background-color: rgba(22, 163, 74, 0.06);
+            /* background-color: rgba(22, 163, 74, 0.06); */
         }
         
         #tab-debugging.active {
-            background-color: rgba(55, 65, 81, 0.06);
+            /* background-color: rgba(55, 65, 81, 0.06); */
         }
 
         @media (max-width: 767.98px) {
@@ -472,6 +483,7 @@
                 margin-left: -1rem;
                 margin-right: -1rem;
                 padding: 0 1rem;
+                border-bottom: 1px solid black;
             }
             
             .settings-tab {
@@ -955,7 +967,7 @@
         
         /* Section Title */
         .section-title {
-            font-size: 0.875rem;
+            font-size: 1.5rem;
             font-weight: 700;
             color: #1f2937;
             margin-bottom: 1.5rem;
@@ -985,6 +997,7 @@
             
             .section-title {
                 margin-top: 1.5rem;
+                padding-top: .25rem;
             }
         }
         
@@ -1018,7 +1031,7 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: #ffffff;
+            background: #000000;
             border-top: 2px solid var(--border-color);
             box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
             display: grid;
@@ -1046,7 +1059,7 @@
         }
 
         .footer-nav button.active {
-            color: var(--primary);
+            color: #ffffff;
             font-weight: 700;
         }
 
@@ -1119,14 +1132,14 @@
             cursor: pointer;
             margin-left: auto;
             font-size: 0.9rem;
-            color: var(--text-muted);
+            color: var(--danger);
             transition: color 0.2s;
             padding: 4px 8px;
         }
 
-        .slider-lock-icon:hover {
-            color: var(--primary);
-        }
+        /* .slider-lock-icon:hover {
+            color: var(--light-bg);
+        } */
 
         .slider-locked .range-slider {
             opacity: 0.5;
@@ -1134,7 +1147,7 @@
         }
 
         .slider-locked .slider-lock-icon {
-            color: var(--danger);
+            color: var(--success);
         }
 
         /* Tuning + Servo Range + Trim Sliders - Labeled Thumbs */
@@ -1306,16 +1319,14 @@
         <!-- Header (visible on all pages) -->
         <div class="dashboard-header">
             <div class="header-left">
-                <div class="brand-icon">
-                    <img src="img/app-icon-512.png" alt="App icon">
-                </div>
+                <!-- <div class="brand-icon">
+                    <img src="brand-logo-image.png" alt="App icon">
+                </div> -->
                 <div class="brand-title d-md-none">
-                    <h1>RCDCC</h1>
-                    <p>Real-time monitoring</p>
+                    <img src="brand-logo-text.png" alt="RCDCC Logo">
                 </div>
                 <div class="brand-title d-none d-md-block">
-                    <h1>R/C Dynamic Chassis Control</h1>
-                    <p>Real-time vehicle monitoring</p>
+                    <img src="brand-logo-text.png" alt="R/C Dynamic Chassis Control Logo">
                 </div>
             </div>
             
@@ -1330,6 +1341,7 @@
         
         <!-- Dashboard Section -->
         <section id="dashboard" class="page-section active">
+            <h2 class="section-title">Dashboard</h2>
         <!-- Main Metrics Grid -->
         <div class="row g-3">
             
@@ -1365,12 +1377,13 @@
             <!-- Roll/Pitch Snapshot Card -->
             <div class="col-12 col-md-6 col-lg-4">
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black;
+    color: white;">
                         <div>
-                            <i class="fa-solid fa-compass"></i>
+                            <i class="fa-solid fa-compass" style="color: var(--danger);"></i>
                             Roll/Pitch
                         </div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="rollPitchRefreshBtn">Refresh</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="rollPitchRefreshBtn" style="background-color: black; color: white;">Refresh</button>
                     </div>
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
@@ -1392,9 +1405,9 @@
             <!-- Suspension Settings Card -->
             <div class="col-12 col-md-6 col-lg-4">
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                         <div>
-                            <i class="fas fa-sliders"></i>
+                            <i class="fas fa-sliders" style="color: var(--danger);"></i>
                             Suspension Settings
                         </div>
                         <i class="fa-solid fa-gear" id="suspensionSettingsGear" style="cursor: pointer;" title="Go to Tuning"></i>
@@ -1431,9 +1444,9 @@
             <!-- Connection Card -->
             <div class="col-12 col-md-6 col-lg-4">
                 <div class="card" id="connectionCard">
-                    <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                         <div>
-                            <i class="fas fa-wifi"></i>
+                            <i class="fas fa-wifi" style="color: var(--danger);"></i>
                             Connection
                         </div>
                         <i class="fa-solid fa-gear" id="connectionSettingsGear" style="cursor: pointer;" title="Go to Settings"></i>
@@ -1481,7 +1494,7 @@
                 <button class="settings-tab" data-tab="network">
                     <i class="fas fa-wifi"></i>
                     <span class="tab-label-full">Network Settings</span>
-                    <span class="tab-label-short">Wifi</span>
+                    <span class="tab-label-short">WiFi</span>
                 </button>
                 <button class="settings-tab" data-tab="debugging">
                     <i class="fas fa-bug"></i>
@@ -1526,9 +1539,9 @@
                     <!-- Servo Range Card -->
                     <div class="col-12 col-md-6">
                         <div class="card" id="servoRangeCard">
-                            <div class="card-header d-flex align-items-center">
+                            <div class="card-header d-flex align-items-center" style="background-color: black; color: white;">
                                 <div>
-                                    <i class="fa fa-arrows-alt" style="transform: rotate(-45deg);" aria-hidden="true"></i>
+                                    <i class="fa fa-arrows-alt" style="transform: rotate(-45deg); color:red" aria-hidden="true"></i>
                                     Servo Range
                                 </div>
                                 <i class="fas fa-lock-open slider-lock-icon" id="servoRangeLockIcon" onclick="toggleServoRangeLock(this)" title="Lock sliders to prevent accidental changes"></i>
@@ -1582,9 +1595,9 @@
                     <!-- Servo Trim Card -->
                     <div class="col-12 col-md-6">
                         <div class="card" id="servoTrimCard">
-                            <div class="card-header d-flex align-items-center">
+                            <div class="card-header d-flex align-items-center" style="background-color: #000000; color: #ffffff;">
                                 <div>
-                                    <i class="fas fa-sliders"></i>
+                                    <i class="fas fa-sliders" style="background-color: black; color: red;"></i>
                                     Servo Trim
                                 </div>
                                 <i class="fas fa-lock-open slider-lock-icon" id="servoTrimLockIcon" onclick="toggleServoTrimLock(this)" title="Lock sliders to prevent accidental changes"></i>
@@ -1739,8 +1752,8 @@
                     <!-- Console Card -->
                     <div class="col-12 col-md-6">
                         <div class="card">
-                            <div class="card-header">
-                                <i class="fas fa-terminal"></i>
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <i class="fas fa-terminal" style="color: var(--danger);"></i>
                                 Console
                                 <button class="btn btn-sm btn-outline-secondary float-end" id="consoleClearBtn" title="Clear console" style="pointer-events: auto;">Clear</button>
                             </div>
@@ -1753,8 +1766,8 @@
                     <!-- Configuration Data Card -->
                     <div class="col-12 col-md-6">
                         <div class="card">
-                            <div class="card-header">
-                                <i class="fas fa-cog"></i>
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <i class="fas fa-cog" style="color: var(--danger);"></i>
                                 Configuration Data
                             </div>
                             <div class="card-body">
@@ -1775,9 +1788,9 @@
                 <!-- Parameters Card -->
                 <div class="col-12">
                     <div class="card" id="tuningParametersCard">
-                        <div class="card-header d-flex align-items-center">
+                        <div class="card-header d-flex align-items-center" style="background-color: black; color: white;">
                             <div>
-                                <i class="fas fa-sliders"></i> Parameters
+                                <i class="fas fa-sliders" style="color: var(--danger);"></i> Parameters
                             </div>
                             <i class="fas fa-lock-open slider-lock-icon" id="tuningLockIcon" onclick="toggleTuningLock(this)" title="Lock all sliders to prevent accidental changes"></i>
                         </div>
@@ -1856,9 +1869,9 @@
             <div class="row g-3 mt-3">
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header d-flex align-items-center justify-content-between" style="cursor: pointer;" onclick="toggleFormulasCard()">
+                        <div class="card-header d-flex align-items-center justify-content-between" style="cursor: pointer; background-color: #000000; color: #ffffff;" onclick="toggleFormulasCard()">
                             <div>
-                                <i class="fas fa-calculator"></i> Formulas
+                                <i class="fas fa-calculator" style="color: var(--danger);"></i> Formulas
                             </div>
                             <i class="fas fa-chevron-down" id="formulasChevron"></i>
                         </div>
@@ -3143,7 +3156,7 @@
 
             // Header scroll shrink effect
             const dashboardHeader = document.querySelector('.dashboard-header');
-            const brandTitleH1s = document.querySelectorAll('.brand-title h1');
+            const brandTitles = document.querySelectorAll('.brand-title');
             
             function updateHeaderScroll() {
                 const scrollPosition = window.scrollY;
@@ -3152,26 +3165,31 @@
                 if (isScrolled) {
                     dashboardHeader.classList.add('scrolled');
                     // Update the title to show current page
-                    if (brandTitleH1s.length > 0) {
+                    brandTitles.forEach(brandTitle => {
+                        let h1 = brandTitle.querySelector('h1');
+                        if (!h1) {
+                            h1 = document.createElement('h1');
+                            brandTitle.appendChild(h1);
+                        }
+                        
                         const activeSection = document.querySelector('.page-section.active');
                         if (activeSection) {
                             const sectionTitle = activeSection.querySelector('.section-title');
                             if (sectionTitle) {
-                                brandTitleH1s.forEach(h1 => {
-                                    h1.textContent = sectionTitle.textContent;
-                                });
+                                h1.textContent = sectionTitle.textContent;
+                                h1.style.display = 'block';
                             }
                         }
-                    }
+                    });
                 } else {
                     dashboardHeader.classList.remove('scrolled');
-                    // Reset to brand title
-                    if (brandTitleH1s.length > 0) {
-                        const resumeTitle = window.matchMedia('(max-width: 768px)').matches ? 'RCDCC' : 'R/C Dynamic Chassis Control';
-                        brandTitleH1s.forEach(h1 => {
-                            h1.textContent = resumeTitle;
-                        });
-                    }
+                    // Hide h1 elements and show images again
+                    brandTitles.forEach(brandTitle => {
+                        const h1 = brandTitle.querySelector('h1');
+                        if (h1) {
+                            h1.style.display = 'none';
+                        }
+                    });
                 }
             }
             
@@ -3285,24 +3303,15 @@
 
         function updateConnectionStatus(connected) {
             const icon = document.getElementById('wifiIcon');
-            const card = document.getElementById('connectionCard');
             if (connected) {
                 icon.classList.remove('connecting', 'disconnected');
                 icon.style.color = 'var(--success)';
-                if (card) {
-                    card.classList.remove('bg-danger');
-                    card.classList.add('text-white', 'bg-success');
-                }
                 const status = document.getElementById('telemetryStatus');
                 if (status) status.textContent = 'Live';
             } else {
                 icon.classList.remove('connecting');
                 icon.classList.add('disconnected');
                 icon.style.color = 'var(--text-muted)';
-                if (card) {
-                    card.classList.remove('bg-success');
-                    card.classList.add('text-white', 'bg-danger');
-                }
                 const status = document.getElementById('telemetryStatus');
                 if (status) status.textContent = 'Inactive';
             }
