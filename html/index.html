@@ -1213,6 +1213,12 @@
             color: var(--success);
         }
 
+        .slider-locked .badge {
+            opacity: 0.5;
+            pointer-events: none;
+            cursor: not-allowed;
+        }
+
         /* Tuning + Servo Range + Trim Sliders - Labeled Thumbs */
         #sliderRideHeight .range-slider__thumb,
         #sliderDamping .range-slider__thumb,
@@ -1405,13 +1411,13 @@
             </div>
             
             <div class="header-actions">
-                <i class="fa-solid fa-circle-nodes" title="Reset Gyro" id="setLevelBtn" style="color: var(--high-impact-color);"></i>
+                <i class="fa-solid fa-atom" title="Reset Gyro" id="setLevelBtn" style="color: var(--high-impact-color);"></i>
                 <!-- <button type="button" class="btn btn-outline-secondary btn-sm" id="setLevelBtn">
                     <i class="fa-brands fa-files-pinwheel action-icon" aria-hidden="true"></i>
                     <span class="action-text">Reset Gyro</span>
                 </button> -->
                 <!-- <button type="button" class="btn btn-link btn-sm" id="connectionSettingsHeaderGear"><i class="fas fa-wifi" id="wifiIcon" style="color: var(--text-muted);"></i></button> -->
-                <i class="fa-solid fa-atom"></i></button>
+                <i class="fas fa-wifi" id="wifiIcon" ></i></button>
             </div>
         </div>
         
@@ -1456,7 +1462,7 @@
                     <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black;
     color: white;">
                         <div>
-                            <i class="fa-solid fa-compass" style="color: var(--danger);"></i>
+                            <i class="fa-solid fa-atom" style="color: var(--danger);"></i>
                             Roll/Pitch
                         </div>
                         <i class="fa fa-refresh" aria-hidden="true" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values." style="cursor: pointer; color:var(--high-impact-color)" ></i>
