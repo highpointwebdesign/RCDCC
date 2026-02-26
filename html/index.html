@@ -140,6 +140,55 @@
             display: inline;
         }
 
+        /* Scrolled Header State */
+        .dashboard-header.scrolled {
+            background: var(--primary) !important;
+            border-bottom: none;
+            border-image: none;
+            padding: 0.5rem 1.5rem;
+            box-shadow: 0 4px 20px rgba(37, 99, 235, 0.25);
+            transition: all 0.3s ease;
+        }
+
+        .dashboard-header.scrolled .brand-icon {
+            display: none;
+        }
+
+        .dashboard-header.scrolled .header-left {
+            gap: 0;
+            padding-left: 0;
+            flex: 1;
+        }
+
+        .dashboard-header.scrolled .brand-title {
+            line-height: 1;
+        }
+
+        .dashboard-header.scrolled .brand-title h1 {
+            font-size: 1.25rem;
+            color: white;
+            margin: 0;
+        }
+
+        .dashboard-header.scrolled .brand-title p {
+            display: none;
+        }
+
+        .dashboard-header.scrolled .header-actions .btn {
+            background-color: rgba(255, 255, 255, 0.15) !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+            color: white !important;
+        }
+
+        .dashboard-header.scrolled .header-actions .btn:hover {
+            background-color: rgba(255, 255, 255, 0.25) !important;
+            border-color: rgba(255, 255, 255, 0.5) !important;
+        }
+
+        .dashboard-header.scrolled .header-actions .btn i {
+            color: white;
+        }
+
         .toast {
             font-size: 1rem !important;
             padding: 20px !important;
@@ -3092,6 +3141,42 @@
                 servoTrimLockIcon.classList.add('fa-lock');
             }
 
+            // Header scroll shrink effect
+            const dashboardHeader = document.querySelector('.dashboard-header');
+            const brandTitleH1s = document.querySelectorAll('.brand-title h1');
+            
+            function updateHeaderScroll() {
+                const scrollPosition = window.scrollY;
+                const isScrolled = scrollPosition > 50;
+                
+                if (isScrolled) {
+                    dashboardHeader.classList.add('scrolled');
+                    // Update the title to show current page
+                    if (brandTitleH1s.length > 0) {
+                        const activeSection = document.querySelector('.page-section.active');
+                        if (activeSection) {
+                            const sectionTitle = activeSection.querySelector('.section-title');
+                            if (sectionTitle) {
+                                brandTitleH1s.forEach(h1 => {
+                                    h1.textContent = sectionTitle.textContent;
+                                });
+                            }
+                        }
+                    }
+                } else {
+                    dashboardHeader.classList.remove('scrolled');
+                    // Reset to brand title
+                    if (brandTitleH1s.length > 0) {
+                        const resumeTitle = window.matchMedia('(max-width: 768px)').matches ? 'RCDCC' : 'R/C Dynamic Chassis Control';
+                        brandTitleH1s.forEach(h1 => {
+                            h1.textContent = resumeTitle;
+                        });
+                    }
+                }
+            }
+            
+            window.addEventListener('scroll', updateHeaderScroll, { passive: true });
+
             // Page navigation - footer nav buttons
             document.querySelectorAll('.footer-nav button').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -3185,6 +3270,10 @@
             
             // Save current page to localStorage
             localStorage.setItem('currentPage', sectionId);
+            
+            // Trigger header scroll update for title change
+            const scrollEvent = new Event('scroll');
+            window.dispatchEvent(scrollEvent);
             
             window.scrollTo(0, 0);
         }
