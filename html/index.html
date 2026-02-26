@@ -254,7 +254,6 @@
             background-color: var(--high-impact-color);
             color: #000000;
             border-color: var(--high-impact-color);
-            pointer-events: none;
             font-weight: bold;
         }
         
@@ -262,8 +261,12 @@
             background-color: var(--primary);
             color: white;
             border-color: var(--primary);
-            pointer-events: none;
             opacity: 0.9;
+        }
+        
+        /* Disable clicks only when button is disabled */
+        #autoLevelBtn:disabled {
+            pointer-events: none;
         }
         
         #autoLevelBtn.active::after {
@@ -3269,6 +3272,13 @@
             if (autoLevelBtn) {
                 autoLevelBtn.addEventListener('click', handleAutoLevel);
                 console.log('Auto Level button click listener attached');
+                
+                // Check if button is visible
+                console.log('Button parent tab-pane:', autoLevelBtn.closest('.tab-pane'));
+                console.log('Tab-pane is active:', autoLevelBtn.closest('.tab-pane')?.classList.contains('active'));
+                console.log('Button computed style display:', window.getComputedStyle(autoLevelBtn).display);
+                console.log('Button computed style visibility:', window.getComputedStyle(autoLevelBtn).visibility);
+                console.log('Button computed style pointer-events:', window.getComputedStyle(autoLevelBtn).pointerEvents);
             } else {
                 console.error('Auto Level button not found during initialization!');
             }
