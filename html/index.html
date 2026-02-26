@@ -1411,7 +1411,7 @@
                     <span class="action-text">Reset Gyro</span>
                 </button> -->
                 <!-- <button type="button" class="btn btn-link btn-sm" id="connectionSettingsHeaderGear"><i class="fas fa-wifi" id="wifiIcon" style="color: var(--text-muted);"></i></button> -->
-                <i class="fas fa-wifi" id="wifiIcon" ></i></button>
+                <i class="fa-solid fa-atom"></i></button>
             </div>
         </div>
         
@@ -1729,13 +1729,17 @@
                     </div>
 
                     <!-- Servo Rotation Card -->
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header" style="background-color: #000000; color: #ffffff;">
+                    <div class="col-12 col-md-6">
+                        <div class="card" id="servoRotationCard">
+                            <div class="card-header d-flex align-items-center" style="background-color: #000000; color: #ffffff;">
                                 <div>
-                                    <i class="fas fa-rotate-right" style="color: var(--danger);"></i>
+                                    <span style="position: relative; display: inline-block; width: 1.5em; height: 1em; color: var(--danger);">
+                                        <i class="fa-solid fa-rotate-left" style="position: absolute; left: 0;"></i>
+                                        <i class="fa-solid fa-rotate-right" style="position: absolute; right: 8px; transform: rotate(-209deg);"></i>
+                                    </span>
                                     Servo Rotation
                                 </div>
+                                <i class="fas fa-lock-open slider-lock-icon" id="servoRotationLockIcon" onclick="toggleServoRotationLock(this)" title="Lock to prevent accidental changes"></i>
                             </div>
                             <div class="card-body">
                                 <div style="margin-bottom: 1.5rem;">
@@ -3255,6 +3259,16 @@
                 servoTrimLockIcon.classList.remove('fa-lock-open');
                 servoTrimLockIcon.classList.add('fa-lock');
             }
+            
+            // Restore servo rotation lock state from localStorage
+            servoRotationLocked = localStorage.getItem('servoRotationLocked') === 'true';
+            const servoRotationLockIcon = document.getElementById('servoRotationLockIcon');
+            const servoRotationCard = document.getElementById('servoRotationCard');
+            if (servoRotationLocked && servoRotationLockIcon && servoRotationCard) {
+                servoRotationCard.classList.add('slider-locked');
+                servoRotationLockIcon.classList.remove('fa-lock-open');
+                servoRotationLockIcon.classList.add('fa-lock');
+            }
 
             // Header scroll shrink effect
             const dashboardHeader = document.querySelector('.dashboard-header');
@@ -3997,6 +4011,7 @@
         // Track locked state for servo sliders
         let servoRangeLocked = false;
         let servoTrimLocked = false;
+        let servoRotationLocked = false;
 
         // Flag to prevent saving while loading config
         let isLoadingTuningConfig = false;
@@ -4591,6 +4606,33 @@
             }
         }
         
+        function toggleServoRotationLock(iconElement) {
+            // Play click sound
+            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
+            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            
+            // Toggle the lock state
+            servoRotationLocked = !servoRotationLocked;
+            
+            // Save to localStorage
+            localStorage.setItem('servoRotationLocked', servoRotationLocked.toString());
+            
+            // Find the card container
+            const card = iconElement.closest('.card');
+            
+            if (servoRotationLocked) {
+                // Lock the badges
+                card.classList.add('slider-locked');
+                iconElement.classList.remove('fa-lock-open');
+                iconElement.classList.add('fa-lock');
+            } else {
+                // Unlock the badges
+                card.classList.remove('slider-locked');
+                iconElement.classList.remove('fa-lock');
+                iconElement.classList.add('fa-lock-open');
+            }
+        }
+        
         function initLightControls() {
             // Headlight Brightness slider
             const brightnessLabel = document.getElementById('brightnessLabel');
@@ -4928,6 +4970,11 @@
                     console.log(`Attaching click handler to badge: servo${abbrev}RevBadge`);
                     badge.addEventListener('click', function() {
                         console.log(`Badge clicked: ${abbrev}`);
+                        // Don't allow clicks if servo rotation is locked
+                        if (servoRotationLocked) {
+                            console.log('Servo rotation is locked, ignoring click');
+                            return;
+                        }
                         // Toggle the checkbox state
                         if (checkbox) {
                             checkbox.checked = !checkbox.checked;
