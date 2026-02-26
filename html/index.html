@@ -1750,19 +1750,26 @@
             <div class="tab-pane" id="tab-gyro">
                 <div class="row g-3">
                     <div class="col-12">
-                        <div class="mb-3">
-                            <h6><i class="fa-solid fa-hexagon-nodes"></i> DCC Mounting</h6>
-                            <label for="mpuOrientation" class="form-label">Select Orientation</label>
-                            <select class="form-select" id="mpuOrientation">
-                                <option value="0">Arrow Forward, Chip Up (Default)</option>
-                                <option value="1">Arrow Up, Chip Forward</option>
-                                <option value="2">Arrow Backward, Chip Up</option>
-                                <option value="3">Arrow Down, Chip Forward</option>
-                                <option value="4">Arrow Right, Chip Up</option>
-                                <option value="5">Arrow Left, Chip Up</option>
-                            </select>
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <i class="fa-solid fa-arrows-to-dot" style="color: var(--danger);"></i>
+                                RCDCC Mounting
+                            </div>
+                            <div class="card-body">
+                                <label for="mpuOrientation" class="form-label">Select Orientation</label>
+                                <select class="form-select" id="mpuOrientation">
+                                    <option value="0">Arrow Forward, Chip Up (Default)</option>
+                                    <option value="1">Arrow Up, Chip Forward</option>
+                                    <option value="2">Arrow Backward, Chip Up</option>
+                                    <option value="3">Arrow Down, Chip Forward</option>
+                                    <option value="4">Arrow Right, Chip Up</option>
+                                    <option value="5">Arrow Left, Chip Up</option>
+                                </select>
+                            </div>
                         </div>
+                    </div>
 
+                    <div class="col-12">
                         <div class="alert alert-info" style="font-size: 0.875rem;">
                             <strong>Calibration Tips:</strong><br>
                             • Select how your DCC is physically mounted. The arrow is printed on the box. Correct orientation is critical for accurate roll/pitch readings. This is a one-time setup based on your installation.
@@ -1774,59 +1781,73 @@
             <!-- Tab Content: Network Settings -->
             <div class="tab-pane" id="tab-network">
                 <div class="row g-3">
+                    <!-- Connection Method Card -->
                     <div class="col-12">
-                        <label class="form-label mb-3" style="font-weight: 600; color: #000;">Select Connection Method</label>
-                        <div class="mb-4" style="color: #000;">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked>
-                                <label class="form-check-label" for="modeHomeWifi">
-                                    <i class="fas fa-wifi text-success"></i>
-                                    <strong>Home WiFi</strong>
-                                    <span class="badge bg-success ms-2">Recommended</span>
-                                </label>
-                                <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')" style="cursor: pointer; width: 20px; height: 20px; background: #000; color: var(--high-impact-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
-                                <div id="helpHomeWifi" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
-                                    <strong>Home WiFi Mode:</strong><br>
-                                    • ESP32 connects to your home WiFi network<br>
-                                    • Check serial monitor for assigned IP address<br>
-                                    • IP address is saved automatically when changed<br>
-                                    • Test connection verifies ESP32 connectivity<br>
-                                    • IP may change if router reassigns it
-                                </div>
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <i class="fas fa-wifi" style="color: var(--danger);"></i>
+                                Connection Method
                             </div>
-                            <div class="form-check mt-2">
-                                <input class="form-check-input" type="radio" name="networkMode" id="modeStandalone" value="standalone">
-                                <label class="form-check-label" for="modeStandalone">
-                                    <i class="fas fa-signal text-warning"></i>
-                                    <strong>Stand Alone Mode</strong>
-                                </label>
-                                <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')" style="cursor: pointer; width: 20px; height: 20px; background: #000; color: var(--high-impact-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
-                                <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
-                                    <strong>Stand Alone Mode:</strong><br>
-                                    1. ESP32 creates its own WiFi network<br>
-                                    2. SSID: <strong>ESP32-Suspension</strong><br>
-                                    3. Password: <strong>12345678</strong><br>
-                                    4. IP is always: <strong>192.168.4.1</strong><br>
-                                    5. Connect your phone to ESP32-Suspension WiFi<br>
-                                    6. IP field will auto-fill when this mode is selected
+                            <div class="card-body">
+                                <div style="color: #000;">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked>
+                                        <label class="form-check-label" for="modeHomeWifi">
+                                            <i class="fas fa-wifi text-success"></i>
+                                            <strong>Home WiFi</strong>
+                                            <span class="badge bg-success ms-2">Recommended</span>
+                                        </label>
+                                        <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')" style="cursor: pointer; width: 20px; height: 20px; background: #000; color: var(--high-impact-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
+                                        <div id="helpHomeWifi" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
+                                            <strong>Home WiFi Mode:</strong><br>
+                                            • ESP32 connects to your home WiFi network<br>
+                                            • Check serial monitor for assigned IP address<br>
+                                            • IP address is saved automatically when changed<br>
+                                            • Test connection verifies ESP32 connectivity<br>
+                                            • IP may change if router reassigns it
+                                        </div>
+                                    </div>
+                                    <div class="form-check mt-3">
+                                        <input class="form-check-input" type="radio" name="networkMode" id="modeStandalone" value="standalone">
+                                        <label class="form-check-label" for="modeStandalone">
+                                            <i class="fas fa-signal text-warning"></i>
+                                            <strong>Stand Alone Mode</strong>
+                                        </label>
+                                        <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')" style="cursor: pointer; width: 20px; height: 20px; background: #000; color: var(--high-impact-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
+                                        <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
+                                            <strong>Stand Alone Mode:</strong><br>
+                                            1. ESP32 creates its own WiFi network<br>
+                                            2. SSID: <strong>ESP32-Suspension</strong><br>
+                                            3. Password: <strong>12345678</strong><br>
+                                            4. IP is always: <strong>192.168.4.1</strong><br>
+                                            5. Connect your phone to ESP32-Suspension WiFi<br>
+                                            6. IP field will auto-fill when this mode is selected
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- IP Address Input -->
-                        <div class="mb-3">
-                            <label for="esp32IpAddress" class="form-label">Enter RCDCC IP Address</label>
-                            <input type="text" class="form-control" id="esp32IpAddress" placeholder="192.168.1.100">
-                            <small class="form-text text-muted" id="ipHelpText">
-                                Check network router for assigned IP
-                            </small>
+                    <!-- IP Address Card -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <i class="fas fa-network-wired" style="color: var(--danger);"></i>
+                                Device Configuration
+                            </div>
+                            <div class="card-body">
+                                <label for="esp32IpAddress" class="form-label">Enter RCDCC IP Address</label>
+                                <input type="text" class="form-control" id="esp32IpAddress" placeholder="192.168.1.100">
+                                <small class="form-text text-muted" id="ipHelpText">
+                                    Check network router for assigned IP
+                                </small>
+                                <button type="button" class="btn btn-primary w-100 mt-3" id="testConnectionBtn">
+                                    <i class="fas fa-plug"></i>
+                                    Test Connection
+                                </button>
+                            </div>
                         </div>
-
-                        <!-- Test Connection Button -->
-                        <button type="button" class="btn btn-primary w-100 mb-3" id="testConnectionBtn">
-                            <i class="fas fa-plug"></i>
-                            Test Connection
-                        </button>
                     </div>
                 </div>
             </div>
