@@ -480,6 +480,53 @@
             display: block;
         }
         
+        /* Ensure proper text color in all tab panes */
+        .tab-pane {
+            color: #000000;
+        }
+        
+        .tab-pane h6,
+        .tab-pane .form-label,
+        .tab-pane .form-check-label,
+        .tab-pane label,
+        .tab-pane .mb-3,
+        .tab-pane .mb-4 {
+            color: #000000;
+        }
+        
+        .tab-pane .form-control,
+        .tab-pane .form-select {
+            color: #000000;
+            background-color: #ffffff;
+            border: 1px solid #d1d5db;
+        }
+        
+        .tab-pane .form-control::placeholder {
+            color: #9ca3af;
+        }
+        
+        .tab-pane .form-control:focus,
+        .tab-pane .form-select:focus {
+            color: #000000;
+            background-color: #ffffff;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+        }
+        
+        .tab-pane .alert {
+            background-color: #f0f4ff;
+            border-color: #bfdbfe;
+            color: #1e40af;
+        }
+        
+        .tab-pane .badge {
+            color: #ffffff;
+        }
+        
+        .tab-pane strong {
+            color: #000000;
+        }
+        
         #tab-servo.active {
             /* background-color: rgba(37, 99, 235, 0.06); */
         }
