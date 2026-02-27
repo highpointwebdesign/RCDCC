@@ -9,6 +9,7 @@ class StorageManager {
 private:
   SuspensionConfig config;
   ServoConfig servoConfig;
+  bool servoTrimResetWarning = false;
   
 public:
   void init() {
@@ -69,33 +70,52 @@ public:
     config.mpuOrientation = doc["mpuOrientation"] | DEFAULT_MPU6050_ORIENTATION;
     config.fpvAutoMode = doc["fpvAutoMode"] | DEFAULT_FPV_AUTO_MODE;
     
+    bool trimWasReset = false;
+    auto sanitizeTrim = [&](const char* servoName, int value) {
+      if (value < -20 || value > 20) {
+        trimWasReset = true;
+        servoTrimResetWarning = true;
+        Serial.printf("Servo %s trim out of range (%d) - reset to 0\n", servoName, value);
+        return 0;
+      }
+      return value;
+    };
+    
     // Load servo calibration if available
     if (doc.containsKey("servos")) {
       JsonObject servos = doc["servos"];
       if (servos.containsKey("frontLeft")) {
-        servoConfig.frontLeft.trim = servos["frontLeft"]["trim"] | DEFAULT_SERVO_TRIM;
+        int trimValue = servos["frontLeft"]["trim"] | DEFAULT_SERVO_TRIM;
+        servoConfig.frontLeft.trim = sanitizeTrim("frontLeft", trimValue);
         servoConfig.frontLeft.minLimit = servos["frontLeft"]["min"] | DEFAULT_SERVO_MIN;
         servoConfig.frontLeft.maxLimit = servos["frontLeft"]["max"] | DEFAULT_SERVO_MAX;
         servoConfig.frontLeft.reversed = servos["frontLeft"]["reversed"] | DEFAULT_SERVO_REVERSED;
       }
       if (servos.containsKey("frontRight")) {
-        servoConfig.frontRight.trim = servos["frontRight"]["trim"] | DEFAULT_SERVO_TRIM;
+        int trimValue = servos["frontRight"]["trim"] | DEFAULT_SERVO_TRIM;
+        servoConfig.frontRight.trim = sanitizeTrim("frontRight", trimValue);
         servoConfig.frontRight.minLimit = servos["frontRight"]["min"] | DEFAULT_SERVO_MIN;
         servoConfig.frontRight.maxLimit = servos["frontRight"]["max"] | DEFAULT_SERVO_MAX;
         servoConfig.frontRight.reversed = servos["frontRight"]["reversed"] | DEFAULT_SERVO_REVERSED;
       }
       if (servos.containsKey("rearLeft")) {
-        servoConfig.rearLeft.trim = servos["rearLeft"]["trim"] | DEFAULT_SERVO_TRIM;
+        int trimValue = servos["rearLeft"]["trim"] | DEFAULT_SERVO_TRIM;
+        servoConfig.rearLeft.trim = sanitizeTrim("rearLeft", trimValue);
         servoConfig.rearLeft.minLimit = servos["rearLeft"]["min"] | DEFAULT_SERVO_MIN;
         servoConfig.rearLeft.maxLimit = servos["rearLeft"]["max"] | DEFAULT_SERVO_MAX;
         servoConfig.rearLeft.reversed = servos["rearLeft"]["reversed"] | DEFAULT_SERVO_REVERSED;
       }
       if (servos.containsKey("rearRight")) {
-        servoConfig.rearRight.trim = servos["rearRight"]["trim"] | DEFAULT_SERVO_TRIM;
+        int trimValue = servos["rearRight"]["trim"] | DEFAULT_SERVO_TRIM;
+        servoConfig.rearRight.trim = sanitizeTrim("rearRight", trimValue);
         servoConfig.rearRight.minLimit = servos["rearRight"]["min"] | DEFAULT_SERVO_MIN;
         servoConfig.rearRight.maxLimit = servos["rearRight"]["max"] | DEFAULT_SERVO_MAX;
         servoConfig.rearRight.reversed = servos["rearRight"]["reversed"] | DEFAULT_SERVO_REVERSED;
       }
+    }
+    
+    if (trimWasReset) {
+      saveConfig();
     }
     
     Serial.println("Config loaded from SPIFFS");
@@ -237,6 +257,12 @@ public:
     return output;
   }
   
+  bool consumeServoTrimResetWarning() {
+    bool warning = servoTrimResetWarning;
+    servoTrimResetWarning = false;
+    return warning;
+  }
+  
   void updateServoParameter(const String& servo, const String& param, int value) {
     ServoCalibration* target = nullptr;
     
@@ -246,9 +272,17 @@ public:
     else if (servo == "rearRight") target = &servoConfig.rearRight;
     
     if (target) {
-      if (param == "trim") target->trim = constrain(value, -45, 45);
-      else if (param == "min") target->minLimit = constrain(value, 30, 90);
-      else if (param == "max") target->maxLimit = constrain(value, 90, 150);
+      if (param == "trim") {
+        if (value < -20 || value > 20) {
+          target->trim = 0;
+          servoTrimResetWarning = true;
+          Serial.printf("Servo %s trim out of range (%d) - reset to 0\n", servo.c_str(), value);
+        } else {
+          target->trim = value;
+        }
+      }
+      else if (param == "min") target->minLimit = constrain(value, 0, 180);
+      else if (param == "max") target->maxLimit = constrain(value, 0, 180);
       else if (param == "reversed") target->reversed = (value != 0);
       
       saveConfig();

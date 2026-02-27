@@ -20,13 +20,11 @@
     <meta http-equiv="Permissions-Policy" content="geolocation=(self)">
     
     <!-- Bootstrap 5.3.2 CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/bootstrap.min.css" rel="stylesheet">
     
     <!-- Font Awesome 6.4.0 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Google Fonts - Space Grotesk -->
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- <script src="https://kit.fontawesome.com/40e567a1ca.js" crossorigin="anonymous"></script> -->
     
     <!-- Range Slider CSS -->
     <link rel="stylesheet" href="plugins/range-slider/style.css">
@@ -48,7 +46,7 @@
         }
         
         * {
-            font-family: 'Space Grotesk', sans-serif;
+            font-family: Verdana, Roboto, Tahoma, sans-serif;
         }
         
         body {
@@ -247,6 +245,16 @@
             top: 50%;
             left: -15%;
             transform: translateY(-50%) rotate(-45deg);
+        }
+        
+        /* Atom pulsate animation - similar to wifi scan */
+        @keyframes atomPulsate {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+        
+        #setLevelBtn.pulsating {
+            animation: atomPulsate 1.5s ease-in-out infinite;
         }
         
         /* Auto Level button active/busy state */
@@ -611,9 +619,9 @@
             font-weight: 700;
         }
         
-        .rs-container {
+        /* .rs-container {
             font-family: 'Space Grotesk', sans-serif;
-        }
+        } */
 
         .rs-container .rs-bg,
         .rs-container .rs-selected {
@@ -1411,13 +1419,13 @@
             </div>
             
             <div class="header-actions">
-                <i class="fa-solid fa-atom" title="Reset Gyro" id="setLevelBtn" style="color: var(--high-impact-color);"></i>
+                <i class="fa-solid fa-atom" title="Reset Gyro" id="setLevelBtn" style="color: var(--high-impact-color); cursor: pointer; font-size: 1.5rem;"></i>
                 <!-- <button type="button" class="btn btn-outline-secondary btn-sm" id="setLevelBtn">
                     <i class="fa-brands fa-files-pinwheel action-icon" aria-hidden="true"></i>
                     <span class="action-text">Reset Gyro</span>
                 </button> -->
                 <!-- <button type="button" class="btn btn-link btn-sm" id="connectionSettingsHeaderGear"><i class="fas fa-wifi" id="wifiIcon" style="color: var(--text-muted);"></i></button> -->
-                <i class="fas fa-wifi" id="wifiIcon" ></i></button>
+                <i class="fas fa-wifi" id="wifiIcon" style="cursor: pointer; font-size:1.5rem; padding-left: 5px;"></i>
             </div>
         </div>
         
@@ -1535,8 +1543,12 @@
                     </div>
                     <div class="card-body">
                         <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>ESP32 IP</span>
+                            <span>RCDCC IP</span>
                             <span id="deviceIpDisplay">--</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Connection Method</span>
+                            <span id="connectionMethodDisplay">--</span>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Telemetry Stream</span>
@@ -1619,7 +1631,7 @@
                     </div>
 
                     <!-- Servo Range Card -->
-                    <div class="col-12 col-md-6">
+                    <div class="col-12 col-md-6 col-lg-4">
                         <div class="card" id="servoRangeCard">
                             <div class="card-header d-flex align-items-center" style="background-color: black; color: white;">
                                 <div>
@@ -1675,7 +1687,7 @@
                     </div>
 
                     <!-- Servo Trim Card -->
-                    <div class="col-12 col-md-6">
+                    <div class="col-12 col-md-6 col-lg-4">
                         <div class="card" id="servoTrimCard">
                             <div class="card-header d-flex align-items-center" style="background-color: #000000; color: #ffffff;">
                                 <div>
@@ -1735,7 +1747,7 @@
                     </div>
 
                     <!-- Servo Rotation Card -->
-                    <div class="col-12 col-md-6">
+                    <div class="col-12 col-md-6 col-lg-4">
                         <div class="card" id="servoRotationCard">
                             <div class="card-header d-flex align-items-center" style="background-color: #000000; color: #ffffff;">
                                 <div>
@@ -1847,8 +1859,7 @@
                                     <div class="form-check">
                                         <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked>
                                         <label class="form-check-label" for="modeHomeWifi">
-                                            <i class="fas fa-wifi text-success"></i>
-                                            <strong>Home WiFi</strong>
+                                            <strong>Home WiFi</strong>  (use when on the workbench)
                                             <span class="badge bg-success ms-2">Recommended</span>
                                         </label>
                                         <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')" style="cursor: pointer; width: 20px; height: 20px; background: #000; color: var(--high-impact-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
@@ -1856,7 +1867,7 @@
                                             <strong>Home WiFi Mode:</strong><br>
                                             • ESP32 connects to your home WiFi network<br>
                                             • Check serial monitor for assigned IP address<br>
-                                            • IP address is saved automatically when changed<br>
+                                            • Enter the IP and click "Save & Apply" to connect<br>
                                             • Test connection verifies ESP32 connectivity<br>
                                             • IP may change if router reassigns it
                                         </div>
@@ -1864,8 +1875,7 @@
                                     <div class="form-check mt-3">
                                         <input class="form-check-input" type="radio" name="networkMode" id="modeStandalone" value="standalone">
                                         <label class="form-check-label" for="modeStandalone">
-                                            <i class="fas fa-signal text-warning"></i>
-                                            <strong>Stand Alone Mode</strong>
+                                            <strong>Stand Alone Mode</strong>  (use this connection while out on the trails)
                                         </label>
                                         <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')" style="cursor: pointer; width: 20px; height: 20px; background: #000; color: var(--high-impact-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
                                         <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
@@ -1875,7 +1885,7 @@
                                             3. Password: <strong>12345678</strong><br>
                                             4. IP is always: <strong>192.168.4.1</strong><br>
                                             5. Connect your phone to ESP32-Suspension WiFi<br>
-                                            6. IP field will auto-fill when this mode is selected
+                                            6. Click "Save & Apply" to switch to this mode
                                         </div>
                                     </div>
                                 </div>
@@ -1890,6 +1900,10 @@
                                 <button type="button" class="btn btn-primary w-100 mt-3" id="testConnectionBtn" style="background-color: var(--high-impact-color); border-color: var(--high-impact-color); color: #000;">
                                     <i class="fas fa-plug"></i>
                                     Test Connection
+                                </button>
+                                <button type="button" class="btn btn-success w-100 mt-2" id="saveNetworkBtn" style="background-color: var(--high-impact-color); border-color: var(--high-impact-color); color: #000;">
+                                    <i class="fas fa-save"></i>
+                                    Save & Apply
                                 </button>
                             </div>
                         </div>
@@ -1906,7 +1920,10 @@
                             <div class="card-header" style="background-color: black; color: white;">
                                 <i class="fas fa-terminal" style="color: var(--danger);"></i>
                                 Console
-                                <div class="float-end"><i class="fa-regular fa-trash-can"  id="consoleClearBtn" title="Clear console" style="pointer-events: auto; color:var(--high-impact-color);"></i></div>
+                                <div class="float-end" style="display: flex; gap: 10px; align-items: center;">
+                                    <i class="fas fa-copy" id="consoleCopyBtn" title="Copy console to clipboard" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);"></i>
+                                    <i class="fas fa-eraser" id="consoleClearBtn" title="Clear console" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);"></i>
+                                </div>
                             </div>
                             <div class="card-body" id="consoleOutput" style="background-color: #1e1e1e; color: #00ff00; font-family: 'Courier New', monospace; font-size: 0.85rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; border-radius: 4px; padding: 10px;">
                                 <!-- Console logs will appear here -->
@@ -1917,9 +1934,12 @@
                     <!-- Configuration Data Card -->
                     <div class="col-12 col-md-6">
                         <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <i class="fas fa-cog" style="color: var(--danger);"></i>
-                                Configuration Data
+                            <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <i class="fas fa-cog" style="color: var(--danger);"></i>
+                                    Configuration Data
+                                </div>
+                                <i class="fas fa-copy" id="configCopyBtn" title="Copy configuration to clipboard" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);"></i>
                             </div>
                             <div class="card-body">
                                 <div class="data-display" id="configData">{
@@ -1937,7 +1957,7 @@
             <h2 class="section-title">Suspension Tuning</h2>
             <div class="row g-3">
                 <!-- Parameters Card -->
-                <div class="col-12">
+                <div class="col-12 col-md-6 col-lg-4">
                     <div class="card" id="tuningParametersCard">
                         <div class="card-header d-flex align-items-center" style="background-color: black; color: white;">
                             <div>
@@ -2014,11 +2034,9 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
+           
             <!-- Formulas Card -->
-            <div class="row g-3 mt-3">
-                <div class="col-12">
+                <div class="col-12 col-md-6 col-lg-4">
                     <div class="card">
                         <div class="card-header d-flex align-items-center justify-content-between" style="cursor: pointer; background-color: #000000; color: #ffffff;" onclick="toggleFormulasCard()">
                             <div>
@@ -2287,7 +2305,7 @@
 <button type="button" class="btn btn-primary" onclick="onlineMode()">Go Online</button> -->
     
     <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
     
     <!-- Range Slider JS -->
     <script src="plugins/range-slider/rangeslider.umd.min.js"></script>
@@ -2539,7 +2557,7 @@
         async function handleSetAsLevel() {
             const button = document.getElementById('setLevelBtn');
             if (!button || button.disabled) return;
-            button.classList.add('ra-rotate');
+            button.classList.add('ra-rotate', 'pulsating');
             // setButtonBusy(button, 'Calibrating...');
             
             // Clear roll/pitch display while resetting
@@ -2571,6 +2589,7 @@
                 await delay(500);
                 await fetchRollPitchSnapshot();
             }
+            button.classList.remove('pulsating');
             restoreButton(button);
         }
 
@@ -3169,6 +3188,9 @@
             const ipDisplay = document.getElementById('deviceIpDisplay');
             if (ipDisplay) ipDisplay.textContent = ESP32_IP;
             
+            // Display connection method on dashboard
+            updateConnectionMethodDisplay();
+            
             // Display protocol and secure context for debugging (PWA)
             const protocolDisplay = document.getElementById('protocolDisplay');
             const secureContextDisplay = document.getElementById('secureContextDisplay');
@@ -3403,11 +3425,79 @@
                 });
             }
             
+            // Console Copy button
+            const consoleCopyBtn = document.getElementById('consoleCopyBtn');
+            if (consoleCopyBtn) {
+                consoleCopyBtn.addEventListener('click', function() {
+                    const consoleOutput = document.getElementById('consoleOutput');
+                    if (consoleOutput && consoleOutput.textContent) {
+                        copyToClipboard(consoleOutput.textContent, consoleCopyBtn);
+                    }
+                });
+            }
+            
+            // Config Copy button
+            const configCopyBtn = document.getElementById('configCopyBtn');
+            if (configCopyBtn) {
+                configCopyBtn.addEventListener('click', function() {
+                    const configData = document.getElementById('configData');
+                    if (configData && configData.textContent) {
+                        copyToClipboard(configData.textContent, configCopyBtn);
+                    }
+                });
+            }
+            
             // Restore page from localStorage
             const lastPage = localStorage.getItem('currentPage') || 'dashboard';
             navigateToSection(lastPage);
 
         });
+
+        // Helper function to copy text to clipboard with fallback
+        function copyToClipboard(text, element) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                // Modern Clipboard API
+                navigator.clipboard.writeText(text).then(() => {
+                    console.log('Text copied to clipboard');
+                    showCopyFeedback(element);
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                    fallbackCopy(text, element);
+                });
+            } else {
+                // Fallback for older browsers
+                fallbackCopy(text, element);
+            }
+        }
+
+        // Fallback copy method using execCommand
+        function fallbackCopy(text, element) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                console.log('Text copied to clipboard (fallback)');
+                showCopyFeedback(element);
+            } catch (err) {
+                console.error('Failed to copy (fallback): ', err);
+            }
+            document.body.removeChild(textarea);
+        }
+
+        // Show visual feedback for copy action
+        function showCopyFeedback(element) {
+            if (element) {
+                const originalTitle = element.title;
+                element.title = 'Copied!';
+                setTimeout(() => {
+                    element.title = originalTitle;
+                }, 2000);
+            }
+        }
 
         // Helper function to navigate to a section
         function navigateToSection(sectionId) {
@@ -3427,6 +3517,10 @@
             window.dispatchEvent(scrollEvent);
             
             window.scrollTo(0, 0);
+
+            if (sectionId === 'settings') {
+                setTimeout(refreshServoSliderRender, 50);
+            }
         }
         
         
@@ -3633,6 +3727,12 @@
                     
                     // Update servo sliders from config data
                     updateServoSliders(data);
+                    
+                    if (data.warnings && data.warnings.servoTrimReset) {
+                        const warningMessage = data.warnings.message
+                            || 'Unexpected servo trim value was reset to 0. Check settings before driving.';
+                        toast.warning(warningMessage, { duration: 10000 });
+                    }
                     
                     // Display config data in the Config Data card (Settings page)
                     const configData = document.getElementById('configData');
@@ -5064,6 +5164,23 @@
 
         // ==================== Network Settings Functions ====================
         
+        // Update connection method display on dashboard
+        function updateConnectionMethodDisplay() {
+            const connectionMethodDisplay = document.getElementById('connectionMethodDisplay');
+            if (!connectionMethodDisplay) return;
+            
+            const currentIp = localStorage.getItem('esp32Ip') || '192.168.87.32';
+            const isStandaloneMode = currentIp === '192.168.4.1';
+            
+            if (isStandaloneMode) {
+                connectionMethodDisplay.textContent = 'Stand Alone Mode';
+                connectionMethodDisplay.style.color = 'var(--high-impact-color)';
+            } else {
+                connectionMethodDisplay.textContent = 'Home WiFi';
+                connectionMethodDisplay.style.color = 'var(--success)';
+            }
+        }
+        
         // Update ESP32 IP address
         function updateEsp32Ip(newIp) {
             if (!newIp || newIp.trim() === '') {
@@ -5132,17 +5249,10 @@
             })
             .then(data => {
                 // Success - config endpoint responded
-                toast.success('Connection successful! ESP32 is reachable.');
+                toast.success('Connection successful! Click "Save & Apply" to use this connection method.');
                 if (testBtn) {
                     testBtn.disabled = false;
                     testBtn.innerHTML = '<i class="fas fa-plug"></i> Test Connection';
-                }
-                
-                // Auto-save the IP if test is successful
-                if (newIp !== localStorage.getItem('esp32Ip')) {
-                    setTimeout(() => {
-                        updateEsp32Ip(newIp);
-                    }, 1500);
                 }
             })
             .catch(error => {
@@ -5156,12 +5266,54 @@
                     errorMsg += error.message;
                 }
                 
-                toast.error(errorMsg);
+                toast.error(errorMsg, { duration: 5000 });
                 if (testBtn) {
                     testBtn.disabled = false;
                     testBtn.innerHTML = '<i class="fas fa-plug"></i> Test Connection';
                 }
             });
+        }
+
+        // Save and apply connection settings
+        function saveAndApplyConnection() {
+            const ipInput = document.getElementById('esp32IpAddress');
+            const saveBtn = document.getElementById('saveNetworkBtn');
+            
+            if (!ipInput) return;
+            
+            const newIp = ipInput.value.trim();
+            
+            if (!newIp) {
+                toast.error('Please enter an IP address');
+                return;
+            }
+            
+            // Validate IP format
+            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+            if (!ipPattern.test(newIp)) {
+                toast.error('Invalid IP address format');
+                return;
+            }
+            
+            // Disable button and show saving state
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('esp32Ip', newIp);
+            
+            // Update connection method display
+            updateConnectionMethodDisplay();
+            
+            // Show success message
+            toast.success('Connection settings saved! Reloading to apply changes...', { duration: 2000 });
+            
+            // Reload page to apply new connection
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
         }
 
         // Initialize network settings controls
@@ -5195,30 +5347,16 @@
                 });
             });
             
-            // Auto-save on IP change (with debounce)
-            let ipChangeTimeout;
-            if (ipInput) {
-                ipInput.addEventListener('input', function() {
-                    clearTimeout(ipChangeTimeout);
-                    const newIp = this.value.trim();
-                    
-                    // Debounce save for 1.5 seconds
-                    ipChangeTimeout = setTimeout(() => {
-                        if (newIp && newIp !== localStorage.getItem('esp32Ip')) {
-                            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-                            if (ipPattern.test(newIp)) {
-                                localStorage.setItem('esp32Ip', newIp);
-                                toast.success('IP saved (reload page to reconnect)');
-                            }
-                        }
-                    }, 1500);
-                });
-            }
-            
             // Test connection button
             const testBtn = document.getElementById('testConnectionBtn');
             if (testBtn) {
                 testBtn.addEventListener('click', testEsp32Connection);
+            }
+            
+            // Save & Apply button
+            const saveBtn = document.getElementById('saveNetworkBtn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', saveAndApplyConnection);
             }
             
         }
@@ -5236,13 +5374,8 @@
             
             // Update help text
             if (helpText) {
-                helpText.innerHTML = '<i class="fas fa-info-circle"></i> Stand Alone Mode always uses 192.168.4.1 (read-only)';
+                helpText.innerHTML = '<i class="fas fa-info-circle"></i> Stand Alone Mode always uses 192.168.4.1 (click Save to apply)';
             }
-            
-            // Save to localStorage
-            localStorage.setItem('esp32Ip', '192.168.4.1');
-            
-            toast.info('Stand Alone Mode: IP set to 192.168.4.1');
         }
 
         function setHomeWifiMode() {
@@ -5257,7 +5390,7 @@
             
             // Update help text
             if (helpText) {
-                helpText.textContent = 'Check network router for assigned IP';
+                helpText.textContent = 'Enter your network IP and click Save to apply';
             }
             
             // If IP was on standalone, clear it so user enters their network IP
@@ -5268,6 +5401,15 @@
         }
 
         // ==================== Settings Tab Management ====================
+
+        function refreshServoSliderRender() {
+            const servoPane = document.getElementById('tab-servo');
+            if (!servoPane || !servoPane.classList.contains('active')) return;
+            requestAnimationFrame(() => {
+                document.body.offsetHeight; // Trigger reflow
+                window.dispatchEvent(new Event('resize'));
+            });
+        }
 
         function openSettingsTab(tabKey) {
             const tabButton = document.querySelector(`.settings-tab[data-tab="${tabKey}"]`);
@@ -5299,6 +5441,10 @@
                     
                     // Save active tab to localStorage
                     localStorage.setItem('settings_active_tab', tabName);
+
+                    if (tabName === 'servo') {
+                        setTimeout(refreshServoSliderRender, 50);
+                    }
                 });
             });
             

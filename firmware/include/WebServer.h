@@ -170,6 +170,12 @@ private:
         }
       }
       
+      if (storageManager->consumeServoTrimResetWarning()) {
+        JsonObject warnings = doc.createNestedObject("warnings");
+        warnings["servoTrimReset"] = true;
+        warnings["message"] = "Unexpected servo trim value was reset to 0. Check settings before driving.";
+      }
+      
       String combinedJson;
       serializeJson(doc, combinedJson);
       request->send(200, "application/json", combinedJson);
