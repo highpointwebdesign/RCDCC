@@ -323,6 +323,111 @@
             animation: rotateCounterClockwise 5s linear infinite;
         }
 
+        /* ========== Utility Classes ========== */
+        
+        /* Icon utilities */
+        .icon-action {
+            cursor: pointer;
+            color: var(--high-impact-color);
+            transition: opacity 0.2s;
+        }
+        
+        .icon-action:hover {
+            opacity: 0.8;
+        }
+        
+        .icon-danger {
+            color: var(--danger);
+        }
+        
+        .icon-rotate-45 { transform: rotate(45deg); }
+        .icon-rotate-minus45 { transform: rotate(-45deg); }
+        .icon-rotate-90 { transform: rotate(90deg); }
+        
+        /* Card header utilities */
+        .card-header-dark {
+            background-color: #000000;
+            color: #ffffff;
+        }
+        
+        .card-header-dark-flex {
+            background-color: #000000;
+            color: #ffffff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        /* Help icon */
+        .help-icon {
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+            background: #000;
+            color: var(--high-impact-color);
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 0.5rem;
+            transition: transform 0.2s;
+        }
+        
+        .help-icon:hover {
+            transform: scale(1.1);
+        }
+        
+        /* Flex utilities */
+        .flex-space-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .flex-slider-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        
+        /* Spacing utilities */
+        .slider-section {
+            margin: 20px 0;
+        }
+        
+        .section-spacing {
+            margin-bottom: 1.5rem;
+        }
+        
+        /* Button utilities */
+        .btn-gold {
+            background-color: var(--high-impact-color);
+            border-color: var(--high-impact-color);
+            color: #000;
+        }
+        
+        .btn-gold:hover {
+            opacity: 0.9;
+        }
+        
+        /* Console output */
+        .console-output {
+            background-color: #1e1e1e;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        
         /* Bubble level modal */
         .bubble-level-modal .modal-content {
             background: var(--card-bg);
@@ -1464,13 +1569,12 @@
             <!-- Roll/Pitch Snapshot Card -->
             <div class="col-12 col-md-6 col-lg-4">
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black;
-    color: white;">
+                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                         <div>
-                            <span class="material-symbols-outlined" style="color: var(--danger);">landscape</span>
+                            <span class="material-symbols-outlined icon-danger">landscape</span>
                             Roll/Pitch
                         </div>
-                        <span class="material-symbols-outlined" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values." style="cursor: pointer; color:var(--high-impact-color)">refresh</span>
+                        <span class="material-symbols-outlined icon-action" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values.">refresh</span>
                     </div>
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
@@ -1492,12 +1596,12 @@
             <!-- Suspension Settings Card -->
             <div class="col-12 col-md-6 col-lg-4">
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
+                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                         <div>
-                            <span class="material-symbols-outlined" style="color: var(--danger);">tune</span>
+                            <span class="material-symbols-outlined icon-danger">tune</span>
                             Suspension Settings
                         </div>
-                        <span class="material-symbols-outlined" id="suspensionSettingsGear" title="Modify suspension tuning parameters." style="cursor: pointer; color:var(--high-impact-color)">rule_settings</span>
+                        <span class="material-symbols-outlined icon-action" id="suspensionSettingsGear" title="Modify suspension tuning parameters.">rule_settings</span>
                     </div>
                     <div class="card-body">
                         <div class="d-flex align-items-center justify-content-between">
@@ -1531,12 +1635,12 @@
             <!-- Connection Card -->
             <div class="col-12 col-md-6 col-lg-4">
                 <div class="card" id="connectionCard">
-                    <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
+                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                         <div>
-                            <span class="material-symbols-outlined" title="Current network status." style="cursor: pointer; color:var(--danger)">wifi</span>
+                            <span class="material-symbols-outlined icon-danger" title="Current network status.">wifi</span>
                             Connection
                         </div>
-                        <span class="material-symbols-outlined" id="connectionSettingsGear" title="Modify system settings." style="cursor: pointer; color:var(--high-impact-color)">network_manage
+                        <span class="material-symbols-outlined icon-action" id="connectionSettingsGear" title="Modify system settings.">network_manage
 </span>
                         
                     </div>
@@ -1609,7 +1713,7 @@
                 <div class="row g-3">
                     <div class="col-12">
                         <button type="button" class="btn btn-primary w-100" id="autoLevelBtn">
-                            <span class="material-symbols-outlined" style="background-color: var(--high-impact-color); color: #000;">wand_stars</span>
+                            <span class="material-symbols-outlined icon-danger">wand_stars</span>
                         Auto Level Setup
                     </h5>
                             Auto Level
@@ -1649,7 +1753,7 @@
                                 </span>
                                     Servo Range
                                 </div>
-                                <span class="material-symbols-outlined" id="servoRangeLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoRangeLock(this)" style="cursor: pointer;">lock</span>
+                                <span class="material-symbols-outlined icon-action" id="servoRangeLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoRangeLock(this)">lock</span>
                             </div>
                             <div class="card-body">
                                 <h6 class="mb-3">
@@ -1677,7 +1781,7 @@
                                 <!-- <hr class="my-4"> -->
 
                                 <h6 class="mb-3">
-                                    <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_cool_down</span> Rear Left</h6>
+                                    <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span> Rear Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearLeft"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1689,7 +1793,7 @@
                                 <!-- <hr class="my-4"> -->
 
                                 <h6 class="mb-3">
-                                    <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_cool_down</span> Rear Right</h6>
+                                    <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span> Rear Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearRight"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1704,16 +1808,16 @@
                     <!-- Servo Trim Card -->
                     <div class="col-12 col-md-6 col-lg-4">
                         <div class="card" id="servoTrimCard">
-                            <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #000000; color: #ffffff;">
+                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                                 <div>
-                                    <span class="material-symbols-outlined"  style="background-color: black; color: red;">tune</span>
+                                    <span class="material-symbols-outlined icon-danger">tune</span>
                                     Servo Trim
                                 </div>
-                                <span class="material-symbols-outlined" id="servoTrimLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoTrimLock(this)" style="cursor: pointer;">lock</span>
+                                <span class="material-symbols-outlined icon-action" id="servoTrimLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoTrimLock(this)">lock</span>
                             </div>
                             <div class="card-body">
-                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span> Front Left</h6>
-                                <div style="margin: 20px 0;">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span> Front Left</h6>
+                                <div class="slider-section">
                                     <div id="sliderFrontLeftTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                         <span>Left</span>
@@ -1736,7 +1840,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_cool_down</span> Rear Left</h6>
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span> Rear Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearLeftTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1748,7 +1852,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_cool_down</span> Rear Right</h6>
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span> Rear Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearRightTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1771,13 +1875,13 @@
                                     </span>
                                     Servo Rotation
                                 </div>
-                                <span class="material-symbols-outlined" id="servoRotationLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoRotationLock(this)" style="cursor: pointer;">lock</span>
+                                <span class="material-symbols-outlined icon-action" id="servoRotationLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoRotationLock(this)">lock</span>
                             </div>
                             <div class="card-body">
                                 <div style="margin-bottom: 1.5rem;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div class="flex-space-between">
                                         <div>
-                                            <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span>
+                                            <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span>
                                             <strong>Front Left</strong>
                                         </div>
                                         <div>
@@ -1896,7 +2000,7 @@
                                             <strong>Home WiFi</strong>
                                             <span class="badge bg-success ms-2">Recommended</span>
                                         </label>
-                                        <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')" style="cursor: pointer; width: 20px; height: 20px; background: #000; color: var(--high-impact-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
+                                        <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')">?</span>
                                         <div id="helpHomeWifi" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
                                             <strong>Home WiFi Mode:</strong><br>
                                             • ESP32 connects to your home WiFi network<br>
@@ -1911,7 +2015,7 @@
                                         <label class="form-check-label" for="modeStandalone">
                                             <strong>Stand Alone Mode</strong>
                                         </label>
-                                        <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')" style="cursor: pointer; width: 20px; height: 20px; background: #000; color: var(--high-impact-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
+                                        <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')">?</span>
                                         <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
                                             <strong>Stand Alone Mode:</strong><br>
                                             1. ESP32 creates its own WiFi network<br>
@@ -1933,10 +2037,10 @@
                                 </small>
                                
                     
-                                <button type="button" class="btn btn-primary w-100 mt-2" id="testConnectionBtn" style="background-color: var(--high-impact-color); border-color: var(--high-impact-color); color: #000;">
+                                <button type="button" class="btn btn-primary w-100 mt-2 btn-gold" id="testConnectionBtn">
                                     <span class="material-symbols-outlined" >network_check</span> Test Connection
                                 </button>
-                                <button type="button" class="btn btn-success w-100 mt-2" id="saveNetworkBtn" style="background-color: var(--high-impact-color); border-color: var(--high-impact-color); color: #000;">
+                                <button type="button" class="btn btn-success w-100 mt-2 btn-gold" id="saveNetworkBtn">
                                     <span class="material-symbols-outlined" >cloud_upload</span> Save & Apply
                                 </button>
                             </div>
@@ -1957,11 +2061,11 @@
                                 </span>
                                 Console
                                 <div class="float-end" style="display: flex; gap: 10px; align-items: center;">
-                                    <span class="material-symbols-outlined" id="consoleCopyBtn" title="Copy console to clipboard" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);">content_copy</span>
-                                    <span class="material-symbols-outlined" id="consoleClearBtn" title="Clear console" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);">delete</span>
+                                    <span class="material-symbols-outlined icon-action" id="consoleCopyBtn" title="Copy console to clipboard">content_copy</span>
+                                    <span class="material-symbols-outlined icon-action" id="consoleClearBtn" title="Clear console">delete</span>
                                 </div>
                             </div>
-                            <div class="card-body" id="consoleOutput" style="background-color: #1e1e1e; color: #00ff00; font-family: 'Courier New', monospace; font-size: 0.85rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; border-radius: 4px; padding: 10px;">
+    <div class="console-output" id="consoleOutput">
                                 <!-- Console logs will appear here -->
                             </div>
                         </div>
@@ -1977,7 +2081,7 @@
                                 </span>
                                     Configuration Data
                                 </div>
-                                <span class="material-symbols-outlined" id="configCopyBtn" title="Copy configuration to clipboard" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);">content_copy</span>
+                                <span class="material-symbols-outlined icon-action" id="configCopyBtn" title="Copy configuration to clipboard">content_copy</span>
                                 
                             </div>
                             <div class="card-body">
@@ -2002,7 +2106,7 @@
                             <div>
                                 <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Parameters
                             </div>
-                            <span class="material-symbols-outlined" id="tuningLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleTuningLock(this)" style="cursor: pointer;">lock</span>
+                            <span class="material-symbols-outlined icon-action" id="tuningLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleTuningLock(this)">lock</span>
                         </div>
                         <div class="card-body">
                             <!-- Ride Height -->
@@ -2020,8 +2124,8 @@
                             </div>
 
                             <!-- Damping -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger);">airwave</span> Damping</h6>
-                            <div style="margin: 20px 0;">
+                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">airwave</span> Damping</h6>
+                            <div class="slider-section">
                                 <div id="sliderDamping"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                     <span>Soft</span>
@@ -2031,8 +2135,8 @@
                             </div>
 
                             <!-- Stiffness -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger);">unfold_less</span> Stiffness</h6>
-                            <div style="margin: 20px 0;">
+                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">unfold_less</span> Stiffness</h6>
+                            <div class="slider-section">
                                 <div id="sliderStiffness"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                     <span>Soft</span>
@@ -2042,8 +2146,8 @@
                             </div>
 
                             <!-- Reaction Speed -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger);">speed</span> Reaction Speed</h6>
-                            <div style="margin: 20px 0;">
+                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">speed</span> Reaction Speed</h6>
+                            <div class="slider-section">
                                 <div id="sliderReactionSpeed"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                     <span>Slow</span>
@@ -2053,8 +2157,8 @@
                             </div>
 
                             <!-- Balance (Rear/Front) -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger);">weight</span> Balance (Rear/Front)</h6>
-                            <div style="margin: 20px 0;">
+                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">weight</span> Balance (Rear/Front)</h6>
+                            <div class="slider-section">
                                 <div id="sliderBalance"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                     <span>Rear</span>
@@ -2064,8 +2168,8 @@
                             </div>
 
                             <!-- Sensor Refresh Rate -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger);">memory</span> Sensor Refresh Rate</h6>
-                            <div style="margin: 20px 0;">
+                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">memory</span> Sensor Refresh Rate</h6>
+                            <div class="slider-section">
                                 <div id="sliderSensorRate"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                     <span>Low</span>
@@ -2080,7 +2184,7 @@
             <!-- Formulas Card -->
                 <div class="col-12 col-md-6 col-lg-4">
                     <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer; background-color: #000000; color: #ffffff;" onclick="toggleFormulasCard()">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" onclick="toggleFormulasCard()">
                             <div>
                                 <span class="material-symbols-outlined" style="color: var(--danger);">function</span> Formulas
                             </div>
@@ -2307,7 +2411,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary w-100 mt-2" id="autoLevelStartBtn" style="background-color: var(--high-impact-color); color:#000;">
+                    <button type="button" class="btn btn-primary w-100 mt-2 btn-gold" id="autoLevelStartBtn">
                         <span class="material-symbols-outlined" >play_circle</span>
                         Start Auto Level
                     </button>
@@ -2326,7 +2430,7 @@
                         <span class="material-symbols-outlined" style="color: var(--danger);">wand_stars</span>
                         Result
                     </h5>
-                    <button type="button" class="btn-close" style="background-color: var(--high-impact-color); columns: #000000;" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn btn-close btn-gold" style="background-color: var(--high-impact-color); columns: #000000;" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body text-center" style="color: #000">
                         <!-- <div style="font-size: 3rem; margin-bottom: 1rem;">
@@ -2335,7 +2439,7 @@
                     <p id="autoLevelResultMessage" style="font-size: 1.1rem; margin: 0;">Auto-level complete.</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn" data-bs-dismiss="modal"  style="background-color: var(--high-impact-color); color: #000;">Close</button>
+                    <button type="button" class="btn btn-gold" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
