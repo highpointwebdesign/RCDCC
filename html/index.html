@@ -45,10 +45,17 @@
             --text-muted: #6b7280;
             --border-color: #000;
             --high-impact-color: #f9c21b;
+            --lime-green: #32CD32;
         }
         
         * {
             font-family: Verdana, Roboto, Tahoma, sans-serif;
+        }
+
+        span.material-symbols-outlined{
+            font-size: 24px;
+            vertical-align: middle;
+            line-height: 1;
         }
         
         body {
@@ -293,6 +300,27 @@
         
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+
+        /* CW and CCW icon animations */
+        @keyframes rotateClockwise {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes rotateCounterClockwise {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(-360deg); }
+        }
+
+        /* Apply animation to CW icons */
+        .material-symbols-outlined.rotate-cw {
+            animation: rotateClockwise 5s linear infinite;
+        }
+
+        /* Apply animation to CCW icons */
+        .material-symbols-outlined.rotate-ccw {
+            animation: rotateCounterClockwise 5s linear infinite;
         }
 
         /* Bubble level modal */
@@ -1412,22 +1440,17 @@
                 <!-- <div class="brand-icon">
                     <img src="brand-logo-image.png" alt="App icon">
                 </div> -->
-                <div class="brand-title d-md-none">
+                <div class="brand-title d-md-none" onclick="navigateToSection('dashboard')" style="cursor: pointer;">
                     <img src="brand-logo-text.png" alt="RCDCC Logo">
                 </div>
-                <div class="brand-title d-none d-md-block">
+                <div class="brand-title d-none d-md-block" onclick="navigateToSection('dashboard')" style="cursor: pointer;">
                     <img src="brand-logo-text.png" alt="R/C Dynamic Chassis Control Logo">
                 </div>
             </div>
             
             <div class="header-actions">
-                <span class="material-symbols-outlined" title="Reset Gyro" id="setLevelBtn" style="color: var(--high-impact-color); cursor: pointer; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center;">camera</span>
-                <!-- <button type="button" class="btn btn-outline-secondary btn-sm" id="setLevelBtn">
-                    <i class="fa-brands fa-files-pinwheel action-icon" aria-hidden="true"></i>
-                    <span class="action-text">Reset Gyro</span>
-                </button> -->
-                <!-- <button type="button" class="btn btn-link btn-sm" id="connectionSettingsHeaderGear"><i class="fas fa-wifi" id="wifiIcon" style="color: var(--text-muted);"></i></button> -->
-                <span class="material-symbols-outlined" id="wifiIcon" style="cursor: pointer; font-size: 1.5rem; padding-left: 5px; display: inline-flex; align-items: center; justify-content: center;">wifi</span>
+                <span class="material-symbols-outlined" title="Reset Gyro" id="setLevelBtn" role="button" tabindex="0" style="color: var(--high-impact-color); cursor: pointer; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center;">camera</span>
+                <span class="material-symbols-outlined" id="wifiIcon" role="button" tabindex="0" style="cursor: pointer; font-size: 1.5rem; padding-left: 5px; display: inline-flex; align-items: center; justify-content: center;">wifi</span>
             </div>
         </div>
         
@@ -1436,34 +1459,6 @@
             <h2 class="section-title">Dashboard</h2>
         <!-- Main Metrics Grid -->
         <div class="row g-3">
-            
-            <!-- Pitch Card -->
-            <!-- <div class="col-6 col-md-6 col-lg-4">
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fa-solid fa-truck-front"></i>
-                        Pitch
-                    </div>
-                    <div class="card-body text-center">
-                        <h2 class="display-4 text-primary mb-0" id="pitchValue">0.0</h2>
-                        <small class="text-muted">degrees</small>
-                    </div>
-                </div>
-            </div> -->
-
-            <!-- Roll Card -->
-            <!-- <div class="col-6 col-md-6 col-lg-4">
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fa-solid fa-truck-monster"></i>
-                        Roll
-                    </div>
-                    <div class="card-body text-center">
-                        <h2 class="display-4 text-success mb-0" id="rollValue">0.0</h2>
-                        <small class="text-muted">degrees</small>
-                    </div>
-                </div>
-            </div> -->
 
 
             <!-- Roll/Pitch Snapshot Card -->
@@ -1472,10 +1467,10 @@
                     <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black;
     color: white;">
                         <div>
-                            <i class="fa-solid fa-atom" style="color: var(--danger);"></i>
+                            <span class="material-symbols-outlined" style="color: var(--danger);">landscape</span>
                             Roll/Pitch
                         </div>
-                        <i class="fa fa-refresh" aria-hidden="true" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values." style="cursor: pointer; color:var(--high-impact-color)" ></i>
+                        <span class="material-symbols-outlined" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values." style="cursor: pointer; color:var(--high-impact-color)">refresh</span>
                     </div>
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
@@ -1499,10 +1494,10 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                         <div>
-                            <i class="fas fa-sliders" style="color: var(--danger);"></i>
+                            <span class="material-symbols-outlined" style="color: var(--danger);">tune</span>
                             Suspension Settings
                         </div>
-                        <i class="fa-solid fa-gear" id="suspensionSettingsGear" style="cursor: pointer; color:var(--high-impact-color)" title="Go to Tuning"></i>
+                        <span class="material-symbols-outlined" id="suspensionSettingsGear" title="Modify suspension tuning parameters." style="cursor: pointer; color:var(--high-impact-color)">rule_settings</span>
                     </div>
                     <div class="card-body">
                         <div class="d-flex align-items-center justify-content-between">
@@ -1538,10 +1533,12 @@
                 <div class="card" id="connectionCard">
                     <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                         <div>
-                            <i class="fas fa-wifi" style="color: var(--danger);"></i>
+                            <span class="material-symbols-outlined" title="Current network status." style="cursor: pointer; color:var(--danger)">wifi</span>
                             Connection
                         </div>
-                        <i class="fa-solid fa-gear" id="connectionSettingsGear" style="cursor: pointer; color:var(--high-impact-color)" title="Go to Settings"></i>
+                        <span class="material-symbols-outlined" id="connectionSettingsGear" title="Modify system settings." style="cursor: pointer; color:var(--high-impact-color)">network_manage
+</span>
+                        
                     </div>
                     <div class="card-body">
                         <div class="d-flex align-items-center justify-content-between mt-2">
@@ -1578,22 +1575,30 @@
             <!-- Settings Tabs Navigation -->
             <div class="settings-tabs">
                 <button class="settings-tab active" data-tab="servo">
-                    <i class="fas fa-compress"></i>
+                    <span class="material-symbols-outlined">
+                    design_services
+                    </span>
                     <span class="tab-label-full">Servo Configuration</span>
                     <span class="tab-label-short">Servo</span>
                 </button>
                 <button class="settings-tab" data-tab="gyro">
-                    <i class="fas fa-compass"></i>
+                    <span class="material-symbols-outlined">
+                    explore
+                    </span>
                     <span class="tab-label-full">Gyro Configuration</span>
                     <span class="tab-label-short">Gyro</span>
                 </button>
                 <button class="settings-tab" data-tab="network">
-                    <i class="fas fa-wifi"></i>
+                    <span class="material-symbols-outlined">
+                    wifi
+                    </span>
                     <span class="tab-label-full">Network Settings</span>
                     <span class="tab-label-short">WiFi</span>
                 </button>
                 <button class="settings-tab" data-tab="debugging">
-                    <i class="fas fa-bug"></i>
+                    <span class="material-symbols-outlined">
+                    pest_control
+                    </span>
                     <span class="tab-label-full">Debugging</span>
                     <span class="tab-label-short">Debug</span>
                 </button>
@@ -1604,7 +1609,9 @@
                 <div class="row g-3">
                     <div class="col-12">
                         <button type="button" class="btn btn-primary w-100" id="autoLevelBtn">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span class="material-symbols-outlined" style="background-color: var(--high-impact-color); color: #000;">wand_stars</span>
+                        Auto Level Setup
+                    </h5>
                             Auto Level
                         </button>
                     </div>
@@ -1635,15 +1642,19 @@
                     <!-- Servo Range Card -->
                     <div class="col-12 col-md-6 col-lg-4">
                         <div class="card" id="servoRangeCard">
-                            <div class="card-header d-flex align-items-center" style="background-color: black; color: white;">
+                            <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                                 <div>
-                                    <i class="fa fa-arrows-alt" style="transform: rotate(-45deg); color: var(--danger);" aria-hidden="true"></i>
+                                    <span class="material-symbols-outlined" style="color: var(--danger);">
+                                radar
+                                </span>
                                     Servo Range
                                 </div>
-                                <i class="fas fa-lock-open slider-lock-icon" id="servoRangeLockIcon" onclick="toggleServoRangeLock(this)" title="Lock sliders to prevent accidental changes"></i>
+                                <span class="material-symbols-outlined" id="servoRangeLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoRangeLock(this)">lock</span>
                             </div>
                             <div class="card-body">
-                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(-45deg); color: var(--danger);"></i> Front Left</h6>
+                                <h6 class="mb-3">
+                                    <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span>
+                                    Front Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontLeft"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1654,7 +1665,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(45deg); color: var(--danger);"></i> Front Right</h6>
+                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span> Front Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontRight"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1665,7 +1676,8 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(45deg); color: var(--danger);"></i> Rear Left</h6>
+                                <h6 class="mb-3">
+                                    <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_cool_down</span> Rear Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearLeft"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1676,7 +1688,8 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(-45deg); color: var(--danger);"></i> Rear Right</h6>
+                                <h6 class="mb-3">
+                                    <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_cool_down</span> Rear Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearRight"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1691,15 +1704,15 @@
                     <!-- Servo Trim Card -->
                     <div class="col-12 col-md-6 col-lg-4">
                         <div class="card" id="servoTrimCard">
-                            <div class="card-header d-flex align-items-center" style="background-color: #000000; color: #ffffff;">
+                            <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #000000; color: #ffffff;">
                                 <div>
-                                    <i class="fas fa-sliders" style="background-color: black; color: red;"></i>
+                                    <span class="material-symbols-outlined"  style="background-color: black; color: red;">tune</span>
                                     Servo Trim
                                 </div>
-                                <i class="fas fa-lock-open slider-lock-icon" id="servoTrimLockIcon" onclick="toggleServoTrimLock(this)" title="Lock sliders to prevent accidental changes"></i>
+                                <span class="material-symbols-outlined" id="servoTrimLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoTrimLock(this)">lock</span>
                             </div>
                             <div class="card-body">
-                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(-45deg); color: var(--danger);"></i> Front Left</h6>
+                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span> Front Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontLeftTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1711,7 +1724,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-up" style="transform: rotate(45deg); color: var(--danger);"></i> Front Right</h6>
+                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span> Front Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderFrontRightTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1723,7 +1736,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(45deg); color: var(--danger);"></i> Rear Left</h6>
+                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_cool_down</span> Rear Left</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearLeftTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1735,7 +1748,7 @@
 
                                 <!-- <hr class="my-4"> -->
 
-                                <h6 class="mb-3"><i class="fas fa-arrow-down" style="transform: rotate(-45deg); color: var(--danger);"></i> Rear Right</h6>
+                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_cool_down</span> Rear Right</h6>
                                 <div style="margin: 20px 0;">
                                     <div id="sliderRearRightTrim"></div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1751,49 +1764,64 @@
                     <!-- Servo Rotation Card -->
                     <div class="col-12 col-md-6 col-lg-4">
                         <div class="card" id="servoRotationCard">
-                            <div class="card-header d-flex align-items-center" style="background-color: #000000; color: #ffffff;">
+                            <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #000000; color: #ffffff;">
                                 <div>
                                     <span style="position: relative; display: inline-block; width: 1.5em; height: 1em; color: var(--danger);">
-                                        <i class="fa-solid fa-rotate-left" style="position: absolute; left: 0;"></i>
-                                        <i class="fa-solid fa-rotate-right" style="position: absolute; right: 8px; transform: rotate(-209deg);"></i>
+                                        <span class="material-symbols-outlined">360</span>
                                     </span>
                                     Servo Rotation
                                 </div>
-                                <i class="fas fa-lock-open slider-lock-icon" id="servoRotationLockIcon" onclick="toggleServoRotationLock(this)" title="Lock to prevent accidental changes"></i>
+                                <span class="material-symbols-outlined" id="servoRotationLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoRotationLock(this)">lock</span>
                             </div>
                             <div class="card-body">
                                 <div style="margin-bottom: 1.5rem;">
-                                    <div>
-                                        <i class="fas fa-arrow-up" style="transform: rotate(-45deg); color: var(--danger);"></i>
-                                        <strong>Front Left</strong>
-                                        <span class="ms-2 badge" id="servoFLRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><i class="fas fa-rotate-right me-1"></i>CW</span>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span>
+                                            <strong>Front Left</strong>
+                                        </div>
+                                        <div>
+                                            <span class="badge" id="servoFLRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><span class="material-symbols-outlined" style="color: var(--high-impact-color);">rotate_left</span>CW</span>
+                                        </div>
                                         <input class="form-check-input" type="checkbox" id="servoFLReversed" style="display: none;">
                                     </div>
                                 </div>
 
                                 <div style="margin-bottom: 1.5rem;">
-                                    <div>
-                                        <i class="fas fa-arrow-up" style="transform: rotate(45deg); color: var(--danger);"></i>
-                                        <strong>Front Right</strong>
-                                        <span class="ms-2 badge" id="servoFRRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><i class="fas fa-rotate-right me-1"></i>CW</span>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
+                                            <strong>Front Right</strong>
+                                        </div>
+                                        <div>
+                                            <span class="badge" id="servoFRRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><span class="material-symbols-outlined" style="color: var(--high-impact-color);">rotate_left</span>CW</span>
+                                        </div>
                                         <input class="form-check-input" type="checkbox" id="servoFRReversed" style="display: none;">
                                     </div>
                                 </div>
 
                                 <div style="margin-bottom: 1.5rem;">
-                                    <div>
-                                        <i class="fas fa-arrow-down" style="transform: rotate(45deg); color: var(--danger);"></i>
-                                        <strong>Rear Left</strong>
-                                        <span class="ms-2 badge" id="servoRLRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><i class="fas fa-rotate-right me-1"></i>CW</span>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_cool_down</span>
+                                            <strong>Rear Left</strong>
+                                        </div>
+                                        <div>
+                                            <span class="badge" id="servoRLRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><span class="material-symbols-outlined" style="color: var(--high-impact-color);">rotate_left</span>CW</span>
+                                        </div>
                                         <input class="form-check-input" type="checkbox" id="servoRLReversed" style="display: none;">
                                     </div>
                                 </div>
 
                                 <div>
-                                    <div>
-                                        <i class="fas fa-arrow-down" style="transform: rotate(-45deg); color: var(--danger);"></i>
-                                        <strong>Rear Right</strong>
-                                        <span class="ms-2 badge" id="servoRRRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><i class="fas fa-rotate-right me-1"></i>CW</span>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_cool_down</span>
+                                            <strong>Rear Right</strong>
+                                        </div>
+                                        <div>
+                                            <span class="badge" id="servoRRRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><span class="material-symbols-outlined" style="color: var(--high-impact-color);">rotate_left</span>CW</span>
+                                        </div>
                                         <input class="form-check-input" type="checkbox" id="servoRRReversed" style="display: none;">
                                     </div>
                                 </div>
@@ -1818,7 +1846,9 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header" style="background-color: black; color: white;">
-                                <i class="fa-solid fa-arrows-to-dot" style="color: var(--danger);"></i>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                arrows_input
+                                </span>
                                 RCDCC Mounting
                             </div>
                             <div class="card-body">
@@ -1851,7 +1881,9 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header" style="background-color: black; color: white;">
-                                <i class="fas fa-wifi" style="color: var(--danger);"></i>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                wifi
+                                </span>
                                 Network Settings
                             </div>
                             <div class="card-body">
@@ -1861,7 +1893,7 @@
                                     <div class="form-check">
                                         <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked>
                                         <label class="form-check-label" for="modeHomeWifi">
-                                            <strong>Home WiFi</strong>  (use when on the workbench)
+                                            <strong>Home WiFi</strong>
                                             <span class="badge bg-success ms-2">Recommended</span>
                                         </label>
                                         <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')" style="cursor: pointer; width: 20px; height: 20px; background: #000; color: var(--high-impact-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
@@ -1877,7 +1909,7 @@
                                     <div class="form-check mt-3">
                                         <input class="form-check-input" type="radio" name="networkMode" id="modeStandalone" value="standalone">
                                         <label class="form-check-label" for="modeStandalone">
-                                            <strong>Stand Alone Mode</strong>  (use this connection while out on the trails)
+                                            <strong>Stand Alone Mode</strong>
                                         </label>
                                         <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')" style="cursor: pointer; width: 20px; height: 20px; background: #000; color: var(--high-impact-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin-left: 0.5rem;">?</span>
                                         <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
@@ -1899,13 +1931,13 @@
                                 <small class="form-text text-muted" id="ipHelpText">
                                     Check network router for assigned IP
                                 </small>
-                                <button type="button" class="btn btn-primary w-100 mt-3" id="testConnectionBtn" style="background-color: var(--high-impact-color); border-color: var(--high-impact-color); color: #000;">
-                                    <i class="fas fa-plug"></i>
-                                    Test Connection
+                               
+                    
+                                <button type="button" class="btn btn-primary w-100 mt-2" id="testConnectionBtn" style="background-color: var(--high-impact-color); border-color: var(--high-impact-color); color: #000;">
+                                    <span class="material-symbols-outlined" >network_check</span> Test Connection
                                 </button>
                                 <button type="button" class="btn btn-success w-100 mt-2" id="saveNetworkBtn" style="background-color: var(--high-impact-color); border-color: var(--high-impact-color); color: #000;">
-                                    <i class="fas fa-save"></i>
-                                    Save & Apply
+                                    <span class="material-symbols-outlined" >cloud_upload</span> Save & Apply
                                 </button>
                             </div>
                         </div>
@@ -1920,11 +1952,13 @@
                     <div class="col-12 col-md-6">
                         <div class="card">
                             <div class="card-header" style="background-color: black; color: white;">
-                                <i class="fas fa-terminal" style="color: var(--danger);"></i>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                terminal
+                                </span>
                                 Console
                                 <div class="float-end" style="display: flex; gap: 10px; align-items: center;">
-                                    <i class="fas fa-copy" id="consoleCopyBtn" title="Copy console to clipboard" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);"></i>
-                                    <i class="fas fa-eraser" id="consoleClearBtn" title="Clear console" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);"></i>
+                                    <span class="material-symbols-outlined" id="consoleCopyBtn" title="Copy console to clipboard" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);">content_copy</span>
+                                    <span class="material-symbols-outlined" id="consoleClearBtn" title="Clear console" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);">delete</span>
                                 </div>
                             </div>
                             <div class="card-body" id="consoleOutput" style="background-color: #1e1e1e; color: #00ff00; font-family: 'Courier New', monospace; font-size: 0.85rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; border-radius: 4px; padding: 10px;">
@@ -1938,10 +1972,13 @@
                         <div class="card">
                             <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
                                 <div>
-                                    <i class="fas fa-cog" style="color: var(--danger);"></i>
+                                    <span class="material-symbols-outlined" style="color: var(--danger);">
+                                settings
+                                </span>
                                     Configuration Data
                                 </div>
-                                <i class="fas fa-copy" id="configCopyBtn" title="Copy configuration to clipboard" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);"></i>
+                                <span class="material-symbols-outlined" id="configCopyBtn" title="Copy configuration to clipboard" style="pointer-events: auto; cursor: pointer; color:var(--high-impact-color);">content_copy</span>
+                                
                             </div>
                             <div class="card-body">
                                 <div class="data-display" id="configData">{
@@ -1961,15 +1998,18 @@
                 <!-- Parameters Card -->
                 <div class="col-12 col-md-6 col-lg-4">
                     <div class="card" id="tuningParametersCard">
-                        <div class="card-header d-flex align-items-center" style="background-color: black; color: white;">
+                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                             <div>
-                                <i class="fas fa-sliders" style="color: var(--danger);"></i> Parameters
+                                <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Parameters
                             </div>
-                            <i class="fas fa-lock-open slider-lock-icon" id="tuningLockIcon" onclick="toggleTuningLock(this)" title="Lock all sliders to prevent accidental changes"></i>
+                            <span class="material-symbols-outlined" id="tuningLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleTuningLock(this)">lock</span>
                         </div>
                         <div class="card-body">
                             <!-- Ride Height -->
-                            <h6 class="mb-3"><i class="fas fa-arrows-up-down" style="color: var(--danger);"></i> Ride Height</h6>
+                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger); transform: rotate(90deg);">
+                                arrows_outward
+                                </span>
+                            Ride Height</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderRideHeight"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1980,7 +2020,7 @@
                             </div>
 
                             <!-- Damping -->
-                            <h6 class="mb-3"><i class="fas fa-wave-square" style="color: var(--danger);"></i> Damping</h6>
+                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger);">airwave</span> Damping</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderDamping"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -1991,7 +2031,7 @@
                             </div>
 
                             <!-- Stiffness -->
-                            <h6 class="mb-3"><i class="fas fa-compress" style="color: var(--danger);"></i> Stiffness</h6>
+                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger);">unfold_less</span> Stiffness</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderStiffness"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -2002,7 +2042,7 @@
                             </div>
 
                             <!-- Reaction Speed -->
-                            <h6 class="mb-3"><i class="fas fa-gauge-high" style="color: var(--danger);"></i> Reaction Speed</h6>
+                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger);">speed</span> Reaction Speed</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderReactionSpeed"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -2013,7 +2053,7 @@
                             </div>
 
                             <!-- Balance (Rear/Front) -->
-                            <h6 class="mb-3"><i class="fas fa-scale-balanced" style="color: var(--danger);"></i> Balance (Rear/Front)</h6>
+                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger);">weight</span> Balance (Rear/Front)</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderBalance"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -2024,7 +2064,7 @@
                             </div>
 
                             <!-- Sensor Refresh Rate -->
-                            <h6 class="mb-3"><i class="fas fa-microchip" style="color: var(--danger);"></i> Sensor Refresh Rate</h6>
+                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger);">memory</span> Sensor Refresh Rate</h6>
                             <div style="margin: 20px 0;">
                                 <div id="sliderSensorRate"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -2040,11 +2080,11 @@
             <!-- Formulas Card -->
                 <div class="col-12 col-md-6 col-lg-4">
                     <div class="card">
-                        <div class="card-header d-flex align-items-center justify-content-between" style="cursor: pointer; background-color: #000000; color: #ffffff;" onclick="toggleFormulasCard()">
+                        <div class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer; background-color: #000000; color: #ffffff;" onclick="toggleFormulasCard()">
                             <div>
-                                <i class="fas fa-calculator" style="color: var(--danger);"></i> Formulas
+                                <span class="material-symbols-outlined" style="color: var(--danger);">function</span> Formulas
                             </div>
-                            <i class="fas fa-chevron-down" id="formulasChevron" style="color: var(--high-impact-color);"></i>
+                            <span class="material-symbols-outlined" id="formulasChevron"  style="color: var(--high-impact-color);">keyboard_arrow_down</span>
                         </div>
                         <div class="card-body" id="formulasCardBody">
                             <div class="row">
@@ -2052,7 +2092,7 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <i class="fas fa-arrows-up-down"></i> Ride Height
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">height</span> Ride Height
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Formula:</strong> servoOffset = rideHeight × (maxServo - minServo) / 100</div>
@@ -2069,7 +2109,8 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <i class="fas fa-wave-square"></i> Damping
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">waves</span> Damping
+                                            
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Formula:</strong> verticalEffect = -verticalAccel × damping</div>
@@ -2086,7 +2127,7 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <i class="fas fa-compress"></i> Stiffness
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">compress</span> Stiffness
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Formula:</strong> rollEffect = roll × stiffness, pitchEffect = pitch × stiffness</div>
@@ -2103,7 +2144,8 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <i class="fas fa-gauge-high"></i> Reaction Speed
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">swap_driving_apps_wheel</span>
+                                            Reaction Speed
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Formula:</strong> smoothing = 1.0 / (1.0 + (5.0 / reactionSpeed))</div>
@@ -2120,7 +2162,7 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <i class="fas fa-scale-balanced"></i> Balance (Rear/Front)
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">weight</span> Balance (Rear/Front)
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Formula:</strong> frontFactor = balance, rearFactor = 1.0 - balance</div>
@@ -2137,7 +2179,7 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <i class="fas fa-microchip"></i> Sensor Refresh Rate
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">memory</span> Sensor Refresh Rate
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div>Controls sensor reading and suspension update frequency. Higher = faster response but more CPU load. 25 Hz is recommended.</div>
@@ -2164,7 +2206,7 @@
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
-                            <i class="fas fa-lightbulb" style="color: var(--danger);"></i>
+                            <span class="material-symbols-outlined" style="color: var(--danger);">cognition_2</span>
                             Features
                         </div>
                         <div class="card-body">
@@ -2190,7 +2232,7 @@
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
-                            <i class="fas fa-video" style="color: var(--danger);"></i>
+                            <span class="material-symbols-outlined" style="color: var(--danger);">videocam</span>
                             Features
                         </div>
                         <div class="card-body">
@@ -2212,23 +2254,23 @@
     <!-- Sticky Footer Navigation -->
     <nav class="footer-nav">
         <button class="active" id="nav-dashboard" data-target="dashboard">
-            <i class="fas fa-house"></i>
+            <span class="material-symbols-outlined">castle</span>
             <span>Dashboard</span>
         </button>
         <button id="nav-tuning" data-target="tuning">
-            <i class="fas fa-sliders"></i>
+            <span class="material-symbols-outlined">tune</span>
             <span>Tuning</span>
         </button>
         <button id="nav-lights" data-target="lights">
-            <i class="fas fa-lightbulb"></i>
+            <span class="material-symbols-outlined">lightbulb</span>
             <span>Lights</span>
         </button>
         <button id="nav-fpv" data-target="fpv">
-            <i class="fas fa-video"></i>
+            <span class="material-symbols-outlined">videocam</span>
             <span>FPV</span>
         </button>
         <button id="nav-settings" data-target="settings">
-            <i class="fas fa-gear"></i>
+            <span class="material-symbols-outlined">settings</span>
             <span>Settings</span>
         </button>
     </nav>
@@ -2239,11 +2281,9 @@
     <div class="modal fade" id="autoLevelSetupModal" tabindex="-1" aria-labelledby="autoLevelSetupTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header" style="background-color: #000;
-    color: var(--card-bg);">
+                <div class="modal-header" style="background-color: #000; color: var(--card-bg);">
                     <h5 class="modal-title" id="autoLevelSetupTitle">
-                        <i class="fa-solid fa-wand-magic-sparkles" style="background-color: #000;
-    color: var(--danger);"></i>
+                    <span class="material-symbols-outlined" style="background-color: #000; color: var(--danger);">wand_stars</span>
                         Auto Level Setup
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -2251,7 +2291,6 @@
                 <div class="modal-body">
                     <div style="text-align: center; margin-bottom: 1.5rem;">
                         <p>
-                            <i class="fas fa-info-circle" style="font-size: 2rem; color: var(--high-impact-color); margin-bottom: 0.5rem;"></i>
                             <span style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #000;">Place vehicle on a flat surface</span>
                         </p>
                     </div>
@@ -2268,8 +2307,8 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-lg" id="autoLevelStartBtn" style="background-color: var(--high-impact-color); color:#000;">
-                        <i class="fa-solid fa-play"></i>
+                    <button type="button" class="btn btn-primary w-100 mt-2" id="autoLevelStartBtn" style="background-color: var(--high-impact-color); color:#000;">
+                        <span class="material-symbols-outlined" >play_circle</span>
                         Start Auto Level
                     </button>
                 </div>
@@ -2283,15 +2322,16 @@
             <div class="modal-content">
                 <div class="modal-header" style="background-color: #000000; color: var(--high-impact-color);">
                     <h5 class="modal-title" id="autoLevelResultTitle">
-                        <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--danger);"></i>
+                        
+                        <span class="material-symbols-outlined" style="color: var(--danger);">wand_stars</span>
                         Result
                     </h5>
                     <button type="button" class="btn-close" style="background-color: var(--high-impact-color); columns: #000000;" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body text-center" style="color: #000">
-                    <div style="font-size: 3rem; margin-bottom: 1rem;">
-                        <i class="fa-solid fa-circle-exclamation" id="autoLevelResultIcon" style="color: #ffc107;"></i>
-                    </div>
+                        <!-- <div style="font-size: 3rem; margin-bottom: 1rem;">
+                            <span class="material-symbols-outlined" id="autoLevelResultIcon" style="color: #ffc107;">dangerous</span>
+                        </div> -->
                     <p id="autoLevelResultMessage" style="font-size: 1.1rem; margin: 0;">Auto-level complete.</p>
                 </div>
                 <div class="modal-footer">
@@ -2709,9 +2749,9 @@
 
         async function fetchRollPitchSnapshot() {
             const iconClick = document.getElementById('rollPitchRefreshBtn');
-            // replace this with a rotating fa fa-refresh icon to indicate loading state instead of changing button text
+            // Add spin animation to Material Symbols refresh icon
             if (iconClick) {
-                iconClick.classList.add('fa-spin');
+                iconClick.classList.add('spin');
             }
 
             try {
@@ -2735,7 +2775,7 @@
                 toast.error('Failed to fetch roll/pitch');
             } finally {
                 if (iconClick) {
-                    iconClick.classList.remove('fa-spin');
+                    iconClick.classList.remove('spin');
                 }
             }
         }
@@ -3139,8 +3179,8 @@
                     if (resultTitle) resultTitle.textContent = 'Auto Level Failed';
                     if (resultMessage) resultMessage.innerHTML = '<strong>Vehicle is too unlevel.</strong><br/>The suspension cannot correct such extreme tilt. Please ensure the vehicle is on a relatively flat surface before auto-leveling.';
                     if (resultIcon) {
-                        resultIcon.className = 'fas fa-exclamation-triangle';
-                        resultIcon.style.color = '#ffc107';
+                        resultIcon.className = 'dangerous';
+                        resultIcon.style.color = 'var(--danger)';
                     }
                     resultModal.show();
                 }
@@ -3156,12 +3196,12 @@
                 const resultMessage = document.getElementById('autoLevelResultMessage');
                 const resultIcon = document.getElementById('autoLevelResultIcon');
                 
-                if (resultTitle) resultTitle.textContent = 'Error';
-                if (resultMessage) resultMessage.innerHTML = `<strong>An error occurred during auto-level.</strong><br/>${error.message}`;
-                if (resultIcon) {
-                    resultIcon.className = 'fas fa-times-circle';
-                    resultIcon.style.color = '#dc3545';
-                }
+                if (resultTitle) resultTitle.innerHTML = 'Error';
+                if (resultMessage) resultMessage.innerHTML = `<span style="color: var(--danger);"><strong>An error occurred during auto-level.</strong><br/>${error.message}</span>`;
+                // if (resultIcon) {
+                //     resultIcon.className = 'material-symbols-outlined';
+                //     resultIcon.style.color = 'var(--danger)';
+                // }
                 resultModal.show();
             } finally {
                 // Restore button state
@@ -3250,54 +3290,62 @@
             const tuningLocked = localStorage.getItem('tuningParametersLocked') === 'true';
             const tuningLockIcon = document.getElementById('tuningLockIcon');
             const tuningCard = document.getElementById('tuningParametersCard');
-            if (tuningLocked && tuningLockIcon && tuningCard) {
-                tuningCard.classList.add('slider-locked');
-                tuningLockIcon.classList.remove('fa-lock-open');
-                tuningLockIcon.classList.add('fa-lock');
-                // Set all individual slider locks to true
-                Object.keys(tuningSliderLocks).forEach(key => {
-                    tuningSliderLocks[key] = true;
-                });
+            if (tuningLockIcon && tuningCard) {
+                if (tuningLocked) {
+                    tuningCard.classList.add('slider-locked');
+                    tuningLockIcon.textContent = 'lock';
+                    tuningLockIcon.style.color = 'var(--lime-green)'; // Lime green
+                    // Set all individual slider locks to true
+                    Object.keys(tuningSliderLocks).forEach(key => {
+                        tuningSliderLocks[key] = true;
+                    });
+                } else {
+                    tuningCard.classList.remove('slider-locked');
+                    tuningLockIcon.textContent = 'lock_open_right';
+                    tuningLockIcon.style.color = 'var(--high-impact-color)'; // Yellow
+                    Object.keys(tuningSliderLocks).forEach(key => {
+                        tuningSliderLocks[key] = false;
+                    });
+                }
             }
             
             // Restore formulas card collapse state from localStorage
             const formulasCollapsed = localStorage.getItem('formulasCardCollapsed') === 'true';
             const formulasCardBody = document.getElementById('formulasCardBody');
             const formulasChevron = document.getElementById('formulasChevron');
-            if (formulasCollapsed && formulasCardBody && formulasChevron) {
-                formulasCardBody.style.display = 'none';
-                formulasChevron.classList.remove('fa-chevron-down');
-                formulasChevron.classList.add('fa-chevron-right');
+            if (formulasCardBody && formulasChevron) {
+                formulasCardBody.style.display = formulasCollapsed ? 'none' : 'block';
+                formulasChevron.textContent = formulasCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
             }
             
             // Restore servo range lock state from localStorage
             servoRangeLocked = localStorage.getItem('servoRangeLocked') === 'true';
             const servoRangeLockIcon = document.getElementById('servoRangeLockIcon');
             const servoRangeCard = document.getElementById('servoRangeCard');
-            if (servoRangeLocked && servoRangeLockIcon && servoRangeCard) {
-                servoRangeCard.classList.add('slider-locked');
-                servoRangeLockIcon.classList.remove('fa-lock-open');
-                servoRangeLockIcon.classList.add('fa-lock');
+            if (servoRangeLockIcon && servoRangeCard) {
+                servoRangeCard.classList.toggle('slider-locked', servoRangeLocked);
+                servoRangeLockIcon.textContent = servoRangeLocked ? 'lock' : 'lock_open_right';
+                servoRangeLockIcon.style.color = servoRangeLocked ? 'var(--lime-green)' : 'var(--high-impact-color)'; // Lime green if locked, yellow if unlocked
             }
             
             // Restore servo trim lock state from localStorage
             servoTrimLocked = localStorage.getItem('servoTrimLocked') === 'true';
             const servoTrimLockIcon = document.getElementById('servoTrimLockIcon');
             const servoTrimCard = document.getElementById('servoTrimCard');
-            if (servoTrimLocked && servoTrimLockIcon && servoTrimCard) {
-                servoTrimCard.classList.add('slider-locked');
-                servoTrimLockIcon.classList.remove('fa-lock-open');
-                servoTrimLockIcon.classList.add('fa-lock');
+            if (servoTrimLockIcon && servoTrimCard) {
+                servoTrimCard.classList.toggle('slider-locked', servoTrimLocked);
+                servoTrimLockIcon.textContent = servoTrimLocked ? 'lock' : 'lock_open_right';
+                servoTrimLockIcon.style.color = servoTrimLocked ? 'var(--lime-green)' : 'var(--high-impact-color)'; // Lime green if locked, yellow if unlocked
             }
             
             // Restore servo rotation lock state from localStorage
             servoRotationLocked = localStorage.getItem('servoRotationLocked') === 'true';
             const servoRotationLockIcon = document.getElementById('servoRotationLockIcon');
             const servoRotationCard = document.getElementById('servoRotationCard');
-            if (servoRotationLocked && servoRotationLockIcon && servoRotationCard) {
-                servoRotationCard.classList.add('slider-locked');
-                servoRotationLockIcon.classList.remove('fa-lock-open');
-                servoRotationLockIcon.classList.add('fa-lock');
+            if (servoRotationLockIcon && servoRotationCard) {
+                servoRotationCard.classList.toggle('slider-locked', servoRotationLocked);
+                servoRotationLockIcon.textContent = servoRotationLocked ? 'lock' : 'lock_open_right';
+                servoRotationLockIcon.style.color = servoRotationLocked ? 'var(--lime-green)' : 'var(--high-impact-color)'; // Lime green if locked, yellow if unlocked
             }
 
             // Header scroll shrink effect
@@ -4618,8 +4666,8 @@
             if (newState) {
                 // Lock all sliders
                 card.classList.add('slider-locked');
-                iconElement.classList.remove('fa-lock-open');
-                iconElement.classList.add('fa-lock');
+                iconElement.textContent = 'lock';
+                iconElement.style.color = 'var(--lime-green)'; // Lime green
                 
                 // Set all individual slider locks to true
                 Object.keys(tuningSliderLocks).forEach(key => {
@@ -4628,8 +4676,8 @@
             } else {
                 // Unlock all sliders
                 card.classList.remove('slider-locked');
-                iconElement.classList.remove('fa-lock');
-                iconElement.classList.add('fa-lock-open');
+                iconElement.textContent = 'lock_open_right';
+                iconElement.style.color = 'var(--high-impact-color)'; // Yellow
                 
                 // Set all individual slider locks to false
                 Object.keys(tuningSliderLocks).forEach(key => {
@@ -4649,13 +4697,11 @@
             
             if (isCollapsed) {
                 cardBody.style.display = 'block';
-                chevron.classList.remove('fa-chevron-right');
-                chevron.classList.add('fa-chevron-down');
+                chevron.textContent = 'keyboard_arrow_down';
                 localStorage.setItem('formulasCardCollapsed', 'false');
             } else {
                 cardBody.style.display = 'none';
-                chevron.classList.remove('fa-chevron-down');
-                chevron.classList.add('fa-chevron-right');
+                chevron.textContent = 'keyboard_arrow_right';
                 localStorage.setItem('formulasCardCollapsed', 'true');
             }
         }
@@ -4677,13 +4723,13 @@
             if (servoRangeLocked) {
                 // Lock the sliders
                 card.classList.add('slider-locked');
-                iconElement.classList.remove('fa-lock-open');
-                iconElement.classList.add('fa-lock');
+                iconElement.textContent = 'lock';
+                iconElement.style.color = 'var(--lime-green)'; // Lime green
             } else {
                 // Unlock the sliders
                 card.classList.remove('slider-locked');
-                iconElement.classList.remove('fa-lock');
-                iconElement.classList.add('fa-lock-open');
+                iconElement.textContent = 'lock_open_right';
+                iconElement.style.color = 'var(--high-impact-color)'; // Yellow
             }
         }
         
@@ -4704,13 +4750,13 @@
             if (servoTrimLocked) {
                 // Lock the sliders
                 card.classList.add('slider-locked');
-                iconElement.classList.remove('fa-lock-open');
-                iconElement.classList.add('fa-lock');
+                iconElement.textContent = 'lock';
+                iconElement.style.color = 'var(--lime-green)'; // Lime green
             } else {
                 // Unlock the sliders
                 card.classList.remove('slider-locked');
-                iconElement.classList.remove('fa-lock');
-                iconElement.classList.add('fa-lock-open');
+                iconElement.textContent = 'lock_open_right';
+                iconElement.style.color = 'var(--high-impact-color)'; // Yellow
             }
         }
         
@@ -4731,13 +4777,13 @@
             if (servoRotationLocked) {
                 // Lock the badges
                 card.classList.add('slider-locked');
-                iconElement.classList.remove('fa-lock-open');
-                iconElement.classList.add('fa-lock');
+                iconElement.textContent = 'lock';
+                iconElement.style.color = 'var(--lime-green)'; // Lime green
             } else {
                 // Unlock the badges
                 card.classList.remove('slider-locked');
-                iconElement.classList.remove('fa-lock');
-                iconElement.classList.add('fa-lock-open');
+                iconElement.textContent = 'lock_open_right';
+                iconElement.style.color = 'var(--high-impact-color)'; // Yellow
             }
         }
         
@@ -4807,7 +4853,7 @@
                 const isReversed = servo.reversed || false;
                 if (checkbox) checkbox.checked = isReversed;
                 if (badge) {
-                    const icon = isReversed ? '<i class="fas fa-rotate-left me-1"></i>' : '<i class="fas fa-rotate-right me-1"></i>';
+                    const icon = isReversed ? '<span class="material-symbols-outlined rotate-ccw">rotate_left</span>' : '<span class="material-symbols-outlined rotate-cw">rotate_right</span>';
                     const text = isReversed ? 'CCW' : 'CW';
                     badge.innerHTML = icon + text;
                 }
@@ -5100,7 +5146,7 @@
                         // Update badge display
                         // reversed=false (unchecked) = CW, reversed=true (checked) = CCW
                         if (badge) {
-                            const icon = this.checked ? '<i class="fas fa-rotate-left me-1"></i>' : '<i class="fas fa-rotate-right me-1"></i>';
+                            const icon = this.checked ? '<span class="material-symbols-outlined rotate-ccw">rotate_left</span>' : '<span class="material-symbols-outlined rotate-cw">rotate_right</span>';
                             const text = this.checked ? 'CCW' : 'CW';
                             badge.innerHTML = icon + text;
                         }
@@ -5232,7 +5278,7 @@
             // Disable button and show testing state
             if (testBtn) {
                 testBtn.disabled = true;
-                testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+                testBtn.innerHTML = 'Testing...';
             }
             
             // Test HTTP connection to /api/config endpoint
@@ -5254,7 +5300,7 @@
                 toast.success('Connection successful! Click "Save & Apply" to use this connection method.');
                 if (testBtn) {
                     testBtn.disabled = false;
-                    testBtn.innerHTML = '<i class="fas fa-plug"></i> Test Connection';
+                    testBtn.innerHTML = '<span class="material-symbols-outlined">network_check</span> Test Connection';
                 }
             })
             .catch(error => {
@@ -5271,7 +5317,7 @@
                 toast.error(errorMsg, { duration: 5000 });
                 if (testBtn) {
                     testBtn.disabled = false;
-                    testBtn.innerHTML = '<i class="fas fa-plug"></i> Test Connection';
+                    testBtn.innerHTML = '<span class="material-symbols-outlined">network_check</span> Test Connection';
                 }
             });
         }
@@ -5300,7 +5346,7 @@
             // Disable button and show saving state
             if (saveBtn) {
                 saveBtn.disabled = true;
-                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                saveBtn.innerHTML = 'Saving...';
             }
             
             // Save to localStorage
@@ -5376,7 +5422,7 @@
             
             // Update help text
             if (helpText) {
-                helpText.innerHTML = '<i class="fas fa-info-circle"></i> Stand Alone Mode always uses 192.168.4.1 (click Save to apply)';
+                helpText.innerHTML = '<span class="material-symbols-outlined">info</span> Stand Alone Mode always uses 192.168.4.1 (click Save to apply)';
             }
         }
 
@@ -5392,7 +5438,7 @@
             
             // Update help text
             if (helpText) {
-                helpText.textContent = 'Enter your network IP and click Save to apply';
+                helpText.innerHTML = '<span class="material-symbols-outlined">info</span> Enter your network IP and click Save to apply';
             }
             
             // If IP was on standalone, clear it so user enters their network IP
