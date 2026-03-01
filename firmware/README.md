@@ -53,7 +53,7 @@ firmware/
 
 ### Access Point Mode (Default)
 ```
-SSID: ESP32-Suspension
+SSID: RCDCC
 Password: 12345678
 IP: 192.168.4.1
 ```

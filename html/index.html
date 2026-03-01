@@ -33,7 +33,7 @@
     
     <style>
         :root {
-            --primary: #2563eb;
+            --primary: #f9c21b;
             --lime-green: #16a34a;
             --warning: #f59e0b;
             --danger: #dc2626;
@@ -869,9 +869,88 @@
             height: 1.125em;
             font-size: 1rem;
         }
+
+        .form-check-input:checked {
+            background-color: var(--high-impact-color);
+            border-color: var(--high-impact-color);
+        }
         
         .form-switch {
             margin-bottom: 1rem;
+        }
+        
+        /* Custom Network Mode Toggle Switches */
+        .network-mode-toggle {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border: 2px solid #d1d5db;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #ffffff;
+            position: relative;
+        }
+        
+        .network-mode-toggle:hover {
+            border-color: #9ca3af;
+        }
+        
+        .network-mode-toggle.active {
+            border-color: var(--high-impact-color);
+            background: rgba(249, 194, 27, 0.05);
+        }
+        
+        .network-mode-toggle input[type="checkbox"] {
+            display: none;
+        }
+        
+        .network-mode-toggle .toggle-switch {
+            width: 44px;
+            height: 24px;
+            background: #d1d5db;
+            border-radius: 12px;
+            position: relative;
+            margin-right: 1rem;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+        
+        .network-mode-toggle .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #ffffff;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .network-mode-toggle.active .toggle-switch {
+            background: var(--high-impact-color);
+        }
+        
+        .network-mode-toggle.active .toggle-switch::after {
+            left: 22px;
+        }
+        
+        .network-mode-toggle .toggle-label {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .network-mode-toggle .toggle-label-main {
+            font-weight: 600;
+            color: #111827;
+        }
+        
+        .network-mode-toggle.active .toggle-label-main {
+            color: var(--high-impact-color);
         }
         
         .servo-value-labels {
@@ -2017,38 +2096,42 @@
                             <div class="card-body">
                                 <!-- Connection Method Section -->
                                 <div style="color: #000; margin-bottom: 2rem;">
-                                    <h6 class="mb-3"><strong>Select Connection Method</strong>  </h6>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked>
+                                    <h6 class="mb-3"><strong>Select Connection Method</strong></h6>
+                                    
+                                    <!-- Home WiFi Mode Toggle -->
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="modeHomeWifi" checked>
                                         <label class="form-check-label" for="modeHomeWifi">
-                                            Home WiFi    
+                                            <span>Home WiFi</span>
                                             <span class="badge bg-success ms-2">Recommended</span>
                                         </label>
                                         <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')">?</span>
-                                        <div id="helpHomeWifi" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
-                                            <strong>Home WiFi Mode:</strong>  <br>
-                                            • ESP32 connects to your home WiFi network<br>
-                                            • Check serial monitor for assigned IP address<br>
-                                            • Enter the IP and click "Save & Apply" to connect<br>
-                                            • Test connection verifies ESP32 connectivity<br>
-                                            • IP may change if router reassigns it
-                                        </div>
                                     </div>
-                                    <div class="form-check mt-3">
-                                        <input class="form-check-input" type="radio" name="networkMode" id="modeStandalone" value="standalone">
+                                    <div id="helpHomeWifi" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 1rem;">
+                                        <strong>Home WiFi Mode:</strong>  <br>
+                                        • RCDCC module connects to your home WiFi network<br>
+                                        • Check serial monitor for assigned IP address<br>
+                                        • Enter the IP and click "Save & Apply" to connect<br>
+                                        • Test connection verifies RCDCC module connectivity<br>
+                                        • IP may change if router reassigns it
+                                    </div>
+                                    
+                                    <!-- Standalone Mode Toggle -->
+                                    <div class="form-check form-switch mt-3">
+                                        <input class="form-check-input" type="checkbox" id="modeStandalone">
                                         <label class="form-check-label" for="modeStandalone">
-                                            Stand Alone Mode
+                                            <span>Stand Alone Mode</span>
                                         </label>
                                         <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')">?</span>
-                                        <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
-                                            <strong>Stand Alone Mode:</strong><br>
-                                            1. ESP32 creates its own WiFi network<br>
-                                            2. SSID: <strong>ESP32-Suspension</strong><br>
-                                            3. Password: <strong>12345678</strong><br>
-                                            4. IP is always: <strong>192.168.4.1</strong><br>
-                                            5. Connect your phone to ESP32-Suspension WiFi<br>
-                                            6. Click "Save & Apply" to switch to this mode
-                                        </div>
+                                    </div>
+                                    <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
+                                        <strong>Stand Alone Mode:</strong><br>
+                                        1. RCDCC module creates its own WiFi network<br>
+                                        2. SSID: <strong>RCDCC</strong><br>
+                                        3. Password: <strong>12345678</strong><br>
+                                        4. IP is always: <strong>192.168.4.1</strong><br>
+                                        5. Connect your phone to RCDCC WiFi<br>
+                                        6. Click "Save & Apply" to switch to this mode
                                     </div>
                                 </div>
 
@@ -2090,7 +2173,7 @@
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" id="enableNotificationSounds" checked>
                                     <label class="form-check-label" for="enableNotificationSounds">
-                                        <strong>Enable Sounds</strong>
+                                        <span>Enable Sounds</span>
                                     </label>
                                 </div>
                                 <p style="color: #666; font-size: 0.875rem; margin-top: 1rem;">
@@ -3195,10 +3278,10 @@
                         await delay(1500);
                     }
                     
-                    console.log('Phase 0: Trim reset complete, fetching updated config from ESP32...');
+                    console.log('Phase 0: Trim reset complete, fetching updated config from RCDCCC module...');
                     setBubbleLevelStatus('Neutral position set. Confirming data saved correctly...');
                     
-                    // Fetch latest config from ESP32 to confirm all values were saved
+                    // Fetch latest config from RCDCCC module to confirm all values were saved
                     const response = await fetch(`http://${ESP32_IP}/api/config`, { cache: 'no-store' });
                     if (response.ok) {
                         const updatedConfig = await response.json();
@@ -3209,7 +3292,7 @@
                                     servoState[servo].trim = updatedConfig.servos[servo].trim || 0;
                                 }
                             });
-                            console.log('Phase 0: Config refreshed from ESP32');
+                            console.log('Phase 0: Config refreshed from RCDCCC module.');
                         }
                     }
                     
@@ -4021,7 +4104,7 @@
                     if (tuningData) tuningData.textContent = JSON.stringify(data, null, 2);
                     
                     if (showToast && !hasShownInitialConfigToast) {
-                        toast.success('Configuration loaded from ESP32');
+                        toast.success('Configuration loaded from RCDCC module');
                         hasShownInitialConfigToast = true;
                     }
                 })
@@ -4032,7 +4115,7 @@
                     if (configData) configData.textContent = `Error: ${error.message}`;
                     const tuningData = document.getElementById('tuningData');
                     if (tuningData) tuningData.textContent = `Error: ${error.message}`;
-                    toast.warning('Could not load configuration from ESP32');
+                    toast.warning('Could not load configuration from RCDCC module');
                 })
                 .finally(() => {
                     clearTimeout(timeout);
@@ -5582,7 +5665,7 @@
             updateConnectionMethodDisplay();
             
             // Show success message
-            toast.success('Connection settings saved! Reloading to apply changes...', { duration: 2000 });
+            toast.success('Applying changes...', { duration: 2000 });
             
             // Reload page to apply new connection
             setTimeout(() => {
@@ -5599,27 +5682,48 @@
             
             // Detect initial mode based on IP
             const isStandaloneMode = currentIp === '192.168.4.1';
-            const standalonRadio = document.getElementById('modeStandalone');
-            const homeRadio = document.getElementById('modeHomeWifi');
+            const standaloneSwitch = document.getElementById('modeStandalone');
+            const homeSwitch = document.getElementById('modeHomeWifi');
             
             if (isStandaloneMode) {
-                if (standalonRadio) standalonRadio.checked = true;
+                if (standaloneSwitch) standaloneSwitch.checked = true;
+                if (homeSwitch) homeSwitch.checked = false;
                 setStandaloneMode();
             } else {
-                if (homeRadio) homeRadio.checked = true;
+                if (homeSwitch) homeSwitch.checked = true;
+                if (standaloneSwitch) standaloneSwitch.checked = false;
                 setHomeWifiMode();
             }
             
-            // Handle mode selection changes
-            document.querySelectorAll('input[name="networkMode"]').forEach(radio => {
-                radio.addEventListener('change', function() {
-                    if (this.value === 'standalone') {
+            // Handle Home WiFi toggle switch
+            if (homeSwitch) {
+                homeSwitch.addEventListener('change', function() {
+                    if (this.checked) {
+                        // Turn off standalone when home is turned on
+                        if (standaloneSwitch) standaloneSwitch.checked = false;
+                        setHomeWifiMode();
+                    } else {
+                        // If unchecked, turn on standalone
+                        if (standaloneSwitch) standaloneSwitch.checked = true;
+                        setStandaloneMode();
+                    }
+                });
+            }
+            
+            // Handle Standalone toggle switch
+            if (standaloneSwitch) {
+                standaloneSwitch.addEventListener('change', function() {
+                    if (this.checked) {
+                        // Turn off home wifi when standalone is turned on
+                        if (homeSwitch) homeSwitch.checked = false;
                         setStandaloneMode();
                     } else {
+                        // If unchecked, turn on home wifi
+                        if (homeSwitch) homeSwitch.checked = true;
                         setHomeWifiMode();
                     }
                 });
-            });
+            }
             
             // Test connection button
             const testBtn = document.getElementById('testConnectionBtn');

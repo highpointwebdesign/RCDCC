@@ -52,7 +52,7 @@
 #define WIFI_CONNECT_TIMEOUT 30000  // 30 seconds timeout
 
 // WiFi configuration - Access Point mode (fallback)
-#define WIFI_AP_SSID "ESP32-Suspension"
+#define WIFI_AP_SSID "RCDCC"
 #define WIFI_AP_PASSWORD "12345678"
 #define WIFI_AP_IP 192, 168, 4, 1
 #define WIFI_AP_GATEWAY 192, 168, 4, 1
