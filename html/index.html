@@ -34,7 +34,7 @@
     <style>
         :root {
             --primary: #2563eb;
-            --success: #16a34a;
+            --lime-green: #16a34a;
             --warning: #f59e0b;
             --danger: #dc2626;
             --info: #0ea5e9;
@@ -414,6 +414,13 @@
             opacity: 0.9;
         }
         
+        .btn-gold:disabled {
+            background-color: var(--high-impact-color);
+            border-color: var(--high-impact-color);
+            color: #000;
+            opacity: 0.7;
+        }
+        
         /* Console output */
         .console-output {
             background-color: #1e1e1e;
@@ -471,7 +478,7 @@
         }
 
         .bubble-level-face.level {
-            border-color: var(--success);
+            border-color: var(--lime-green);
             box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.15), inset 0 4px 12px rgba(15, 23, 42, 0.12);
         }
 
@@ -515,7 +522,7 @@
             bottom: 16px;
             padding: 0.2rem 0.6rem;
             border-radius: 999px;
-            background: var(--success);
+            background: var(--lime-green);
             color: #ffffff;
             font-size: 0.75rem;
             font-weight: 700;
@@ -972,7 +979,7 @@
         }
         
         .metric-icon.green {
-            color: var(--success);
+            color: var(--lime-green);
         }
         
         .metric-icon.orange {
@@ -996,7 +1003,7 @@
         }
         
         .metric-value.green {
-            color: var(--success);
+            color: var(--lime-green);
         }
         
         .metric-value.orange {
@@ -1033,7 +1040,7 @@
         }
         
         .metric-bar-fill.green {
-            background: linear-gradient(90deg, var(--success) 0%, #15803d 100%);
+            background: linear-gradient(90deg, var(--lime-green) 0%, #15803d 100%);
         }
         
         .metric-bar-fill.orange {
@@ -1147,7 +1154,7 @@
         }
         
         .stat-icon.green {
-            color: var(--success);
+            color: var(--lime-green);
         }
         
         .stat-icon.sky {
@@ -1353,7 +1360,7 @@
         }
 
         .slider-locked .slider-lock-icon {
-            color: var(--success);
+            color: var(--lime-green);
         }
 
         .slider-locked .badge {
@@ -1713,10 +1720,8 @@
                 <div class="row g-3">
                     <div class="col-12">
                         <button type="button" class="btn btn-primary w-100" id="autoLevelBtn">
-                            <span class="material-symbols-outlined icon-danger">wand_stars</span>
-                        Auto Level Setup
-                    </h5>
-                            Auto Level
+                            <span class="material-symbols-outlined">wand_stars</span>
+                            Auto Level Setup
                         </button>
                     </div>
 
@@ -2037,10 +2042,10 @@
                                 </small>
                                
                     
-                                <button type="button" class="btn btn-primary w-100 mt-2 btn-gold" id="testConnectionBtn">
+                                <button type="button" class="btn w-100 mt-2 btn-gold" id="testConnectionBtn">
                                     <span class="material-symbols-outlined" >network_check</span> Test Connection
                                 </button>
-                                <button type="button" class="btn btn-success w-100 mt-2 btn-gold" id="saveNetworkBtn">
+                                <button type="button" class="btn w-100 mt-2 btn-gold" id="saveNetworkBtn">
                                     <span class="material-symbols-outlined" >cloud_upload</span> Save & Apply
                                 </button>
                             </div>
@@ -2135,7 +2140,7 @@
                             </div>
 
                             <!-- Stiffness -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">unfold_less</span> Stiffness</h6>
+                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">compress</span> Stiffness</h6>
                             <div class="slider-section">
                                 <div id="sliderStiffness"></div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
@@ -2310,7 +2315,7 @@
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">cognition_2</span>
+                            <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
                             Features
                         </div>
                         <div class="card-body">
@@ -2385,9 +2390,9 @@
     <div class="modal fade" id="autoLevelSetupModal" tabindex="-1" aria-labelledby="autoLevelSetupTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header" style="background-color: #000; color: var(--card-bg);">
+                <div class="modal-header" >
                     <h5 class="modal-title" id="autoLevelSetupTitle">
-                    <span class="material-symbols-outlined" style="background-color: #000; color: var(--danger);">wand_stars</span>
+                    <span class="material-symbols-outlined" style="background-color: var(--high-impact-color); color: #000;">wand_stars</span>
                         Auto Level Setup
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -3347,7 +3352,7 @@
                 
                 // Color-code the protocol
                 if (protocol === 'https:') {
-                    protocolDisplay.style.color = 'var(--success)';
+                    protocolDisplay.style.color = 'var(--lime-green)';
                 } else if (protocol === 'http:') {
                     protocolDisplay.style.color = 'var(--warning)';
                 } else if (protocol === 'file:') {
@@ -3360,7 +3365,7 @@
                 
                 if (isSecure) {
                     secureContextDisplay.textContent = 'Yes';
-                    secureContextDisplay.style.color = 'var(--success)';
+                    secureContextDisplay.style.color = 'var(--lime-green)';
                 } else {
                     secureContextDisplay.textContent = 'No';
                     secureContextDisplay.style.color = 'var(--danger)';
@@ -3686,7 +3691,7 @@
             const icon = document.getElementById('wifiIcon');
             if (connected) {
                 icon.classList.remove('connecting', 'disconnected');
-                icon.style.color = 'var(--success)';
+                icon.style.color = 'var(--lime-green)';
                 const status = document.getElementById('telemetryStatus');
                 if (status) status.textContent = 'Live';
             } else {
@@ -5329,7 +5334,7 @@
                 connectionMethodDisplay.style.color = 'var(--high-impact-color)';
             } else {
                 connectionMethodDisplay.textContent = 'Home WiFi';
-                connectionMethodDisplay.style.color = 'var(--success)';
+                connectionMethodDisplay.style.color = 'var(--lime-green)';
             }
         }
         
