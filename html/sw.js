@@ -66,8 +66,9 @@ self.addEventListener('fetch', event => {
         // Return cached version or fetch from network
         return response || fetch(event.request)
           .then(fetchResponse => {
-            // Cache new resources
-            if (fetchResponse && fetchResponse.status === 200) {
+            // Cache new resources (only http/https schemes)
+            if (fetchResponse && fetchResponse.status === 200 && 
+                (event.request.url.startsWith('http://') || event.request.url.startsWith('https://'))) {
               const responseToCache = fetchResponse.clone();
               caches.open(CACHE_NAME)
                 .then(cache => {

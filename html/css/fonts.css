@@ -29,11 +29,13 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Material Symbols Outlined from Google Fonts */
-/* Using Variable Font for flexibility */
+/* Material Symbols Outlined - Local Variable Font */
 @font-face {
   font-family: 'Material Symbols Outlined';
-  src: url('https://fonts.gstatic.com/s/materialsymbolsoutlined/v137/_cJHfPwB3sfqF3OtYmrMnVQvD20-.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 700;
+  src: url('../assets/Material_Symbols_Outlined/MaterialSymbolsOutlined-VariableFont_FILL,GRAD,opsz,wght.ttf') format('truetype');
+  font-display: block;
 }
 
 /* Material Icons base class */
@@ -52,6 +54,16 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* Spin animation for Material Symbols icons */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.material-symbols-outlined.spin {
+  animation: spin 1s linear infinite;
 }
 
 /* Fallback to system fonts if Google Fonts fail to load */

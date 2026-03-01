@@ -271,7 +271,7 @@
             background-color: var(--high-impact-color);
             color: #000000;
             border-color: var(--high-impact-color);
-            font-weight: bold;
+            /* font-weight: bold; */
         }
         
         #autoLevelBtn.active {
@@ -286,16 +286,8 @@
             pointer-events: none;
         }
         
-        #autoLevelBtn.active::after {
-            content: '';
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            margin-left: 8px;
-            border: 2px solid;
-            border-color: white white transparent transparent;
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
+        #autoLevelBtn .material-symbols-outlined.pulsating {
+            animation: atomPulsate 1.5s ease-in-out infinite;
         }
         
         @keyframes spin {
@@ -419,6 +411,11 @@
             border-color: var(--high-impact-color);
             color: #000;
             opacity: 0.7;
+        }
+
+        .btn-gold:hover {
+            background-color: var(--high-impact-color);
+            color:#000
         }
         
         /* Console output */
@@ -594,6 +591,10 @@
             background-color: #000;
         }
         
+        .settings-tab[data-tab="sounds"].active {
+            background-color: #000;
+        }
+        
         .settings-tab[data-tab="debugging"].active {
             background-color: #000;
         }
@@ -699,7 +700,8 @@
                 padding: 0.625rem 1rem;
             }
 
-            .settings-tab i {
+            .settings-tab i,
+            .settings-tab .material-symbols-outlined {
                 display: none;
             }
 
@@ -1579,22 +1581,34 @@
                     <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                         <div>
                             <span class="material-symbols-outlined icon-danger">landscape</span>
-                            Roll/Pitch
+                            Roll/Pitch/GPS
                         </div>
                         <span class="material-symbols-outlined icon-action" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values.">refresh</span>
                     </div>
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
                             <span>Roll</span>
-                            <strong id="rollPitchRollValue">--</strong>
+                            <span id="rollPitchRollValue">--</span>
                         </div>
                         <div class="d-flex justify-content-between mt-2">
                             <span>Pitch</span>
-                            <strong id="rollPitchPitchValue">--</strong>
+                            <span id="rollPitchPitchValue">--</span>
                         </div>
-                        <div class="d-flex justify-content-between mt-3">
-                            <small class="text-muted">Last update</small>
-                            <small class="text-muted" id="rollPitchUpdatedAt">--</small>
+                        <div class="d-flex justify-content-between mt-2">
+                            <span >Latitude</span>
+                            <span class="value" id="latitude">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2">
+                            <span >Longitude</span>
+                            <span class="value" id="longitude">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2">
+                            <span >Accuracy</span>
+                            <span class="value" id="accuracy">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2">
+                            <span >Altitude</span>
+                            <span class="value" id="altitude">--</span>
                         </div>
                     </div>
                 </div>
@@ -1704,7 +1718,14 @@
                     wifi
                     </span>
                     <span class="tab-label-full">Network Settings</span>
-                    <span class="tab-label-short">WiFi</span>
+                    <span class="tab-label-short">Network</span>
+                </button>
+                <button class="settings-tab" data-tab="sounds">
+                    <span class="material-symbols-outlined">
+                    volume_up
+                    </span>
+                    <span class="tab-label-full">Sounds</span>
+                    <span class="tab-label-short">Sound</span>
                 </button>
                 <button class="settings-tab" data-tab="debugging">
                     <span class="material-symbols-outlined">
@@ -1719,9 +1740,9 @@
             <div class="tab-pane active" id="tab-servo">
                 <div class="row g-3">
                     <div class="col-12">
-                        <button type="button" class="btn btn-primary w-100" id="autoLevelBtn">
+                        <button type="button" class="btn w-100 mt-2 btn-gold" id="autoLevelBtn">
                             <span class="material-symbols-outlined">wand_stars</span>
-                            Auto Level Setup
+                            Initiate Auto Level
                         </button>
                     </div>
 
@@ -1739,10 +1760,6 @@
                                         <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
                                     </div>
                                     <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
-                                    <div class="form-check mt-3">
-                                        <input class="form-check-input" type="checkbox" id="bubbleLevelAutoClose">
-                                        <label class="form-check-label" for="bubbleLevelAutoClose">Close when auto-level completes</label>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1887,7 +1904,7 @@
                                     <div class="flex-space-between">
                                         <div>
                                             <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span>
-                                            <strong>Front Left</strong>
+                                            Front Left
                                         </div>
                                         <div>
                                             <span class="badge" id="servoFLRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><span class="material-symbols-outlined" style="color: var(--high-impact-color);">rotate_left</span>CW</span>
@@ -1900,7 +1917,7 @@
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <div>
                                             <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
-                                            <strong>Front Right</strong>
+                                            Front Right
                                         </div>
                                         <div>
                                             <span class="badge" id="servoFRRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><span class="material-symbols-outlined" style="color: var(--high-impact-color);">rotate_left</span>CW</span>
@@ -1913,7 +1930,7 @@
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <div>
                                             <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_cool_down</span>
-                                            <strong>Rear Left</strong>
+                                            Rear Left
                                         </div>
                                         <div>
                                             <span class="badge" id="servoRLRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><span class="material-symbols-outlined" style="color: var(--high-impact-color);">rotate_left</span>CW</span>
@@ -1926,7 +1943,7 @@
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <div>
                                             <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_cool_down</span>
-                                            <strong>Rear Right</strong>
+                                            Rear Right
                                         </div>
                                         <div>
                                             <span class="badge" id="servoRRRevBadge" style="background-color: var(--high-impact-color); cursor: pointer; color: #000;"><span class="material-symbols-outlined" style="color: var(--high-impact-color);">rotate_left</span>CW</span>
@@ -1943,7 +1960,9 @@
                             <strong>Servo Tips:</strong><br>
                             • This page is for ONE-TIME setup and static leveling<br>
                             • For dynamic ride height during driving, use Suspension Tuning page<br>
-                            • Changes are automatically saved
+                            • Changes are automatically saved<br>
+                            • If your chassis doesn't respond as expected, double-check servo connections and orientations<br>
+                            • <a href="test-gps.html">test GPS</a>
                         </div>
                     </div>
                 </div>
@@ -1961,7 +1980,7 @@
                                 RCDCC Mounting
                             </div>
                             <div class="card-body">
-                                <label for="mpuOrientation" class="form-label">Select Orientation</label>
+                                <label for="mpuOrientation" class="form-label"><strong>Select Orientation</strong></label>
                                 <select class="form-select" id="mpuOrientation">
                                     <option value="0">Arrow Forward, Chip Up (Default)</option>
                                     <option value="1">Arrow Up, Chip Forward</option>
@@ -1998,16 +2017,16 @@
                             <div class="card-body">
                                 <!-- Connection Method Section -->
                                 <div style="color: #000; margin-bottom: 2rem;">
-                                    <h6 class="mb-3">Select Connection Method</h6>
+                                    <h6 class="mb-3"><strong>Select Connection Method</strong>  </h6>
                                     <div class="form-check">
                                         <input class="form-check-input" type="radio" name="networkMode" id="modeHomeWifi" value="home" checked>
                                         <label class="form-check-label" for="modeHomeWifi">
-                                            <strong>Home WiFi</strong>
+                                            Home WiFi    
                                             <span class="badge bg-success ms-2">Recommended</span>
                                         </label>
                                         <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')">?</span>
                                         <div id="helpHomeWifi" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
-                                            <strong>Home WiFi Mode:</strong><br>
+                                            <strong>Home WiFi Mode:</strong>  <br>
                                             • ESP32 connects to your home WiFi network<br>
                                             • Check serial monitor for assigned IP address<br>
                                             • Enter the IP and click "Save & Apply" to connect<br>
@@ -2018,7 +2037,7 @@
                                     <div class="form-check mt-3">
                                         <input class="form-check-input" type="radio" name="networkMode" id="modeStandalone" value="standalone">
                                         <label class="form-check-label" for="modeStandalone">
-                                            <strong>Stand Alone Mode</strong>
+                                            Stand Alone Mode
                                         </label>
                                         <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')">?</span>
                                         <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
@@ -2033,13 +2052,14 @@
                                     </div>
                                 </div>
 
-                                <!-- IP Address Configuration Section -->
-                                <hr class="my-3">
-                                <label for="esp32IpAddress" class="form-label">Enter RCDCC IP Address</label>
-                                <input type="text" class="form-control" id="esp32IpAddress" placeholder="192.168.1.100">
-                                <small class="form-text text-muted" id="ipHelpText">
-                                    Check network router for assigned IP
-                                </small>
+                                <div style="color: #000; margin-bottom: 2rem;">
+                                    <h6 class="mb-3"><strong>Enter RCDCC IP Address</strong></h6>
+                                    <div class="form-check">
+                                        <!-- <label for="esp32IpAddress" class="form-label"><strong>Enter RCDCC IP Address</strong></label> -->
+                                        <input type="text" class="form-control" id="esp32IpAddress" placeholder="192.168.87.100">
+                                    </div>
+                                </div>
+
                                
                     
                                 <button type="button" class="btn w-100 mt-2 btn-gold" id="testConnectionBtn">
@@ -2048,6 +2068,34 @@
                                 <button type="button" class="btn w-100 mt-2 btn-gold" id="saveNetworkBtn">
                                     <span class="material-symbols-outlined" >cloud_upload</span> Save & Apply
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Sounds -->
+            <div class="tab-pane" id="tab-sounds">
+                <div class="row g-3">
+                    <!-- Notification Sounds Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                notifications_active
+                                </span>
+                                Notification Sounds
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="enableNotificationSounds" checked>
+                                    <label class="form-check-label" for="enableNotificationSounds">
+                                        <strong>Enable Sounds</strong>
+                                    </label>
+                                </div>
+                                <p style="color: #666; font-size: 0.875rem; margin-top: 1rem;">
+                                    When enabled, notification toasts will include audio alerts for success, warning, error, and info messages.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -2514,6 +2562,8 @@
         const rSliderInitState = new Set();
 
         // Custom toast implementation using toast-box with toasty sounds
+        let notificationSoundsEnabled = localStorage.getItem('notificationSoundsEnabled') !== 'false'; // Default to true
+        
         window.toast = {
             sounds: {
                 info: new Audio("./toasty/dist/sounds/info/1.mp3"),
@@ -2541,8 +2591,8 @@
                 // Add to body
                 document.body.appendChild(toastEl);
                 
-                // Play sound
-                if (this.sounds[type]) {
+                // Play sound if enabled
+                if (notificationSoundsEnabled && this.sounds[type]) {
                     this.sounds[type].play().catch(() => {});
                 }
                 
@@ -2705,11 +2755,58 @@
             button.disabled = false;
         }
 
+        // Capture GPS coordinates and update display
+        function captureGPSCoordinates() {
+            if (!('geolocation' in navigator)) {
+                console.log('Geolocation not supported');
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const lat = position.coords.latitude.toFixed(6);
+                    const lon = position.coords.longitude.toFixed(6);
+                    const accMeters = position.coords.accuracy.toFixed(1);
+                    const accFeet = (accMeters * 3.28084).toFixed(1);
+                    const altMeters = position.coords.altitude ? position.coords.altitude.toFixed(1) : null;
+                    const altFeet = altMeters ? (altMeters * 3.28084).toFixed(1) : 'N/A';
+                    
+                    const latEl = document.getElementById('latitude');
+                    const lonEl = document.getElementById('longitude');
+                    const accEl = document.getElementById('accuracy');
+                    const altEl = document.getElementById('altitude');
+                    
+                    if (latEl) latEl.textContent = lat + '°';
+                    if (lonEl) lonEl.textContent = lon + '°';
+                    if (accEl) accEl.textContent = '±' + accFeet + ' ft';
+                    if (altEl) altEl.textContent = altFeet + ' ft';
+                    
+                    console.log(`GPS captured: Lat ${lat}, Lon ${lon}, Acc ±${accFeet}ft, Alt ${altFeet}ft`);
+                },
+                error => {
+                    console.warn('GPS capture failed:', error.message);
+                    const latEl = document.getElementById('latitude');
+                    const lonEl = document.getElementById('longitude');
+                    const accEl = document.getElementById('accuracy');
+                    const altEl = document.getElementById('altitude');
+                    if (latEl) latEl.textContent = 'Error';
+                    if (lonEl) lonEl.textContent = 'Error';
+                    if (accEl) accEl.textContent = 'Error';
+                    if (altEl) altEl.textContent = 'Error';
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
         async function handleSetAsLevel() {
             const button = document.getElementById('setLevelBtn');
             if (!button || button.disabled) return;
-            button.classList.add('ra-rotate', 'pulsating');
-            // setButtonBusy(button, 'Calibrating...');
+            button.classList.add('pulsating');
+            const icon = button.querySelector('.material-symbols-outlined');
+            if (icon) icon.classList.add('rotate-cw');
+            
+            // Capture GPS coordinates
+            captureGPSCoordinates();
             
             // Clear roll/pitch display while resetting
             const rollDisplay = document.getElementById('rollPitchRollValue');
@@ -2741,6 +2838,7 @@
                 await fetchRollPitchSnapshot();
             }
             button.classList.remove('pulsating');
+            if (icon) icon.classList.remove('rotate-cw');
             restoreButton(button);
         }
 
@@ -2834,10 +2932,6 @@
             }
         }
 
-        function shouldAutoCloseBubbleModal() {
-            const checkbox = document.getElementById('bubbleLevelAutoClose');
-            return !!(checkbox && checkbox.checked);
-        }
         
         async function getSensorData() {
             const response = await fetch(`http://${ESP32_IP}/api/sensors`, { cache: 'no-store' });
@@ -2867,7 +2961,6 @@
                 const sensor = await getSensorData();
                 const rollDisplay = document.getElementById('rollPitchRollValue');
                 const pitchDisplay = document.getElementById('rollPitchPitchValue');
-                const updatedAt = document.getElementById('rollPitchUpdatedAt');
 
                 if (rollDisplay) {
                     const rollVal = sensor.roll.toFixed(0);
@@ -2879,7 +2972,6 @@
                     const pitchDirection = sensor.pitch > 0 ? 'nose up' : sensor.pitch < 0 ? 'nose down' : 'level';
                     pitchDisplay.textContent = `${pitchVal}° (${pitchDirection})`;
                 }
-                if (updatedAt) updatedAt.textContent = new Date().toLocaleTimeString();
             } catch (error) {
                 toast.error('Failed to fetch roll/pitch');
             } finally {
@@ -3051,6 +3143,10 @@
             button.classList.add('active');
             button.disabled = true;
             if (setLevelBtn) setLevelBtn.disabled = true;
+            
+            // Make wand icon pulsate
+            const wandIcon = button.querySelector('.material-symbols-outlined');
+            if (wandIcon) wandIcon.classList.add('pulsating');
             
             // Constants
             const MAX_ADJUSTMENT = 20;
@@ -3317,6 +3413,10 @@
                 button.classList.remove('active');
                 button.disabled = false;
                 if (setLevelBtn) setLevelBtn.disabled = false;
+                
+                // Stop wand icon pulsating
+                const wandIcon = button.querySelector('.material-symbols-outlined');
+                if (wandIcon) wandIcon.classList.remove('pulsating');
             }
         }
 
@@ -3388,9 +3488,25 @@
             // Initialize settings controls
             initServoControls(); // Initialize servo rotation badge click handlers
             // initGyroControls(); // Commented out - slider library not yet connected
-            initBatteryControls();
             initNetworkSettings();
             initSettingsTabs();
+
+            // Initialize notification sounds toggle
+            const enableSoundsCheckbox = document.getElementById('enableNotificationSounds');
+            if (enableSoundsCheckbox) {
+                // Set initial state from localStorage
+                enableSoundsCheckbox.checked = localStorage.getItem('notificationSoundsEnabled') !== 'false';
+                
+                // Add change listener
+                enableSoundsCheckbox.addEventListener('change', function() {
+                    notificationSoundsEnabled = this.checked;
+                    localStorage.setItem('notificationSoundsEnabled', this.checked);
+                    toast.success('Notification sounds ' + (this.checked ? 'enabled' : 'disabled'));
+                });
+            }
+
+            // Initialize GPS coordinates
+            captureGPSCoordinates()
 
             // Initialize bubble level container
             initBubbleLevelContainer();
@@ -3550,7 +3666,10 @@
             // Roll/Pitch refresh button (on-demand)
             const rollPitchRefreshBtn = document.getElementById('rollPitchRefreshBtn');
             if (rollPitchRefreshBtn) {
-                rollPitchRefreshBtn.addEventListener('click', fetchRollPitchSnapshot);
+                rollPitchRefreshBtn.addEventListener('click', () => {
+                    captureGPSCoordinates();
+                    fetchRollPitchSnapshot();
+                });
             }
             
             // Suspension Settings gear click - navigate to Tuning
@@ -5314,11 +5433,6 @@
             });
         }
 
-        // Initialize battery controls
-        function initBatteryControls() {
-            // Battery monitoring has been disabled
-        }
-
         // ==================== Network Settings Functions ====================
         
         // Update connection method display on dashboard
@@ -5387,7 +5501,8 @@
             // Disable button and show testing state
             if (testBtn) {
                 testBtn.disabled = true;
-                testBtn.innerHTML = 'Testing...';
+                const icon = testBtn.querySelector('.material-symbols-outlined');
+                if (icon) icon.classList.add('pulsating');
             }
             
             // Test HTTP connection to /api/config endpoint
@@ -5406,10 +5521,11 @@
             })
             .then(data => {
                 // Success - config endpoint responded
-                toast.success('Connection successful! Click "Save & Apply" to use this connection method.');
+                toast.success('Connection successful!');
                 if (testBtn) {
                     testBtn.disabled = false;
-                    testBtn.innerHTML = '<span class="material-symbols-outlined">network_check</span> Test Connection';
+                    const icon = testBtn.querySelector('.material-symbols-outlined');
+                    if (icon) icon.classList.remove('pulsating');
                 }
             })
             .catch(error => {
@@ -5426,7 +5542,8 @@
                 toast.error(errorMsg, { duration: 5000 });
                 if (testBtn) {
                     testBtn.disabled = false;
-                    testBtn.innerHTML = '<span class="material-symbols-outlined">network_check</span> Test Connection';
+                    const icon = testBtn.querySelector('.material-symbols-outlined');
+                    if (icon) icon.classList.remove('pulsating');
                 }
             });
         }
@@ -5546,9 +5663,9 @@
             }
             
             // Update help text
-            if (helpText) {
-                helpText.innerHTML = '<span class="material-symbols-outlined">info</span> Enter your network IP and click Save to apply';
-            }
+            // if (helpText) {
+            //     helpText.innerHTML = '<span class="material-symbols-outlined">info</span> Enter your network IP and click Save to apply';
+            // }
             
             // If IP was on standalone, clear it so user enters their network IP
             if (ipInput && ipInput.value === '192.168.4.1') {
