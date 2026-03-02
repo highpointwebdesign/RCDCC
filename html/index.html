@@ -3447,7 +3447,8 @@
                 
                 if (!levelAchieved) {
                     setBubbleLevelStatus('Vehicle is too unlevel for auto level to correct');
-                    toast.error('Auto level failed - the vehicle is too unlevel for auto level to correct', { duration: 5000 });
+                    // Persistent failure toast - stays until clicked (duration: 0)
+                    toast.error('Auto level failed - the vehicle is too unlevel for auto level to correct. Please ensure it is on a relatively flat surface and try again.', { duration: 0 });
                     await delay(3000);
                 }
                 
@@ -3455,42 +3456,17 @@
                 closeBubbleLevelContainer();
                 
                 if (levelAchieved) {
-                    // Show success toast (no modal needed for success)
+                    // Show success toast (auto-dismisses after 4 seconds)
                     toast.success('Vehicle leveled successfully! All trim adjustments have been applied and saved.', { duration: 4000 });
-                } else {
-                    // Show error modal for failure cases
-                    const resultModal = new bootstrap.Modal(document.getElementById('autoLevelResultModal'));
-                    const resultTitle = document.getElementById('autoLevelResultTitle');
-                    const resultMessage = document.getElementById('autoLevelResultMessage');
-                    const resultIcon = document.getElementById('autoLevelResultIcon');
-                    
-                    if (resultTitle) resultTitle.textContent = 'Auto Level Failed';
-                    if (resultMessage) resultMessage.innerHTML = '<strong>Vehicle is too unlevel.</strong><br/>The suspension cannot correct such extreme tilt. Please ensure the vehicle is on a relatively flat surface before auto-leveling.';
-                    if (resultIcon) {
-                        resultIcon.className = 'dangerous';
-                        resultIcon.style.color = 'var(--danger)';
-                    }
-                    resultModal.show();
                 }
                 
             } catch (error) {
                 console.error('Auto-leveling failed:', error);
                 setBubbleLevelStatus('Error occurred.');
                 
-                // Close bubble level and show error modal
+                // Close bubble level and show persistent error toast
                 closeBubbleLevelContainer();
-                const resultModal = new bootstrap.Modal(document.getElementById('autoLevelResultModal'));
-                const resultTitle = document.getElementById('autoLevelResultTitle');
-                const resultMessage = document.getElementById('autoLevelResultMessage');
-                const resultIcon = document.getElementById('autoLevelResultIcon');
-                
-                if (resultTitle) resultTitle.innerHTML = 'Error';
-                if (resultMessage) resultMessage.innerHTML = `<span style="color: var(--danger);"><strong>An error occurred during auto-level.</strong><br/>${error.message}</span>`;
-                // if (resultIcon) {
-                //     resultIcon.className = 'material-symbols-outlined';
-                //     resultIcon.style.color = 'var(--danger)';
-                // }
-                resultModal.show();
+                toast.error(`Auto-level error: ${error.message}`, { duration: 0 });
             } finally {
                 // Restore button state
                 button.classList.remove('active');
