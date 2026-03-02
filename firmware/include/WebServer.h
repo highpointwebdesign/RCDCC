@@ -16,6 +16,7 @@ private:
   std::function<bool()> mpuStatusCallback = nullptr;
   std::function<void(uint8_t)> orientationCallback = nullptr;
   std::function<void()> ledBlinkCallback = nullptr;
+  std::function<void()> ledUpdateCallback = nullptr;
   
   // Latest sensor data for HTTP polling
   float latestRoll = 0.0f;
@@ -59,6 +60,10 @@ public:
   
   void setLedBlinkCallback(std::function<void()> callback) {
     ledBlinkCallback = callback;
+  }
+  
+  void setLedUpdateCallback(std::function<void()> callback) {
+    ledUpdateCallback = callback;
   }
   
   // Store latest sensor data for HTTP polling
@@ -183,6 +188,14 @@ private:
     
     // API endpoint for heartbeat/health check
     server.on("/api/health-check", HTTP_GET, [this](AsyncWebServerRequest *request) {
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+    
+    // API endpoint to flash LED (for notifications)
+    server.on("/api/flash-led", HTTP_GET, [this](AsyncWebServerRequest *request) {
+      if (ledBlinkCallback) {
+        ledBlinkCallback();
+      }
       request->send(200, "application/json", "{\"status\":\"ok\"}");
     });
     
@@ -336,6 +349,38 @@ private:
             request->send(200, "application/json", "{\"status\":\"success\"}");
           } else {
             request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing parameters\"}");
+          }
+        } else {
+          request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        }
+      });
+    
+    // LED configuration endpoint
+    server.on("/api/led-config", HTTP_POST, [this](AsyncWebServerRequest *request) {}, nullptr, 
+      [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        DynamicJsonDocument doc(512);
+        DeserializationError error = deserializeJson(doc, data);
+        
+        if (!error) {
+          if (doc.containsKey("ledColor")) {
+            String colorName = doc["ledColor"].as<String>();
+            Serial.printf("Updating LED color to: %s\n", colorName.c_str());
+            
+            storageManager->setLEDColor(colorName);
+            
+            // Update the LED color immediately
+            if (ledUpdateCallback) {
+              ledUpdateCallback();
+            }
+            
+            // Trigger LED blink feedback
+            if (ledBlinkCallback) {
+              ledBlinkCallback();
+            }
+            
+            request->send(200, "application/json", "{\"status\":\"success\"}");
+          } else {
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing ledColor parameter\"}");
           }
         } else {
           request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");

@@ -17,6 +17,10 @@
 #define PWM_RL_PIN 14  // Rear Left
 #define PWM_RR_PIN 15  // Rear Right
 
+// Addressable LED configuration
+#define STATUS_LED_PIN 12  // GPIO pin for addressable LED (WS2812B/NeoPixel)
+#define STATUS_LED_COUNT 1 // Number of LEDs in the strip
+
 // Default suspension parameters
 #define DEFAULT_REACTION_SPEED 1.0f
 #define DEFAULT_RIDE_HEIGHT 90.0f
@@ -116,5 +120,19 @@ struct BatteriesConfig {
   BatteryConfig battery2;
   BatteryConfig battery3;
 };
+
+// LED color enumeration
+enum LEDColor {
+  LED_COLOR_RED = 0,
+  LED_COLOR_GREEN = 1,
+  LED_COLOR_BLUE = 2
+};
+
+// LED configuration structure
+struct LEDConfig {
+  LEDColor color;  // Selected color for status LED
+};
+
+#define DEFAULT_LED_COLOR LED_COLOR_RED
 
 #endif

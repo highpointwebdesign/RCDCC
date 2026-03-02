@@ -2034,6 +2034,39 @@
                         </div>
                     </div>
 
+                    <!-- LED Status Color Card -->
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <div class="card" id="ledColorCard">
+                            <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #000000; color: #ffffff;">
+                                <div>
+                                    <span style="position: relative; display: inline-block; width: 1.5em; height: 1em; color: var(--danger);">
+                                        <span class="material-symbols-outlined">lightbulb</span>
+                                    </span>
+                                    LED Status Color
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="ledColorSelect" class="form-label">
+                                        <span class="material-symbols-outlined" style="vertical-align: middle; color: var(--danger);">palette</span>
+                                        Status Indicator Color
+                                    </label>
+                                    <select class="form-select" id="ledColorSelect" onchange="updateLEDColor()">
+                                        <option value="red" data-rgb="255,0,0">Red</option>
+                                        <option value="green" data-rgb="0,255,0">Green</option>
+                                        <option value="blue" data-rgb="0,0,255">Blue</option>
+                                    </select>
+                                    <div class="form-text">
+                                        <small>Choose the color for the addressable LED status indicator. The LED will flash this color during system notifications and status updates.</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-center mt-3">
+                                    <div id="ledPreview" style="width: 40px; height: 40px; border-radius: 50%; background-color: rgb(255, 0, 0); border: 2px solid #fff; box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-12">
                         <div class="alert alert-info" style="font-size: 0.875rem;">
                             <strong>Servo Tips:</strong><br>
@@ -5159,6 +5192,18 @@
                 if (sampleRateLabel) sampleRateLabel.textContent = getSampleRateLabel(config.sampleRate);
             }
             
+            // Load LED color configuration
+            const ledSelect = document.getElementById('ledColorSelect');
+            const ledPreview = document.getElementById('ledPreview');
+            if (ledSelect && config.ledColor) {
+                ledSelect.value = config.ledColor;
+                const selectedOption = ledSelect.options[ledSelect.selectedIndex];
+                const rgbValues = selectedOption.getAttribute('data-rgb');
+                if (ledPreview && rgbValues) {
+                    ledPreview.style.backgroundColor = `rgb(${rgbValues})`;
+                    ledPreview.style.boxShadow = `0 0 10px rgba(${rgbValues}, 0.5)`;
+                }
+            }
             
             // Load battery configuration
             if (config.batteries && Array.isArray(config.batteries)) {
@@ -5241,6 +5286,49 @@
                     if (checkbox) checkbox.checked = fullConfig.servos[servoKey].reversed;
                 }
                 throw error;
+            } finally {
+                clearTimeout(timeout);
+                unregisterAjaxController(controller);
+            }
+        }
+
+        // Update LED Color
+        async function updateLEDColor() {
+            const selectElement = document.getElementById('ledColorSelect');
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            const colorName = selectedOption.value;
+            const rgbValues = selectedOption.getAttribute('data-rgb');
+            
+            // Update preview
+            const previewElement = document.getElementById('ledPreview');
+            previewElement.style.backgroundColor = `rgb(${rgbValues})`;
+            previewElement.style.boxShadow = `0 0 10px rgba(${rgbValues}, 0.5)`;
+            
+            // Build payload
+            const payload = {
+                ledColor: colorName
+            };
+            
+            const controller = registerAjaxController(new AbortController());
+            const timeout = setTimeout(() => controller.abort(), 8000);
+            
+            try {
+                const response = await fetch(`http://${ESP32_IP}/api/led-config`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    signal: controller.signal,
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                await response.json();
+                toast.success('LED color saved');
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+                toast.error('Failed to save LED color');
+                console.error('LED color update failed:', error);
             } finally {
                 clearTimeout(timeout);
                 unregisterAjaxController(controller);

@@ -6,6 +6,7 @@
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <MPU6050.h>
+#include <Adafruit_NeoPixel.h>
 #include "Config.h"
 #include "SensorFusion.h"
 #include "SuspensionSimulator.h"
@@ -24,6 +25,41 @@ PWMOutputs pwmOutputs;
 // LED feedback pin
 #define LED_PIN 2
 unsigned long ledBlinkEndTime = 0;
+
+// Addressable LED (NeoPixel)
+Adafruit_NeoPixel statusLED(STATUS_LED_COUNT, STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
+uint32_t currentLEDColor = 0;
+
+// Function to get RGB values from LED color enum
+void getLEDColorRGB(LEDColor color, uint8_t& r, uint8_t& g, uint8_t& b) {
+  switch(color) {
+    case LED_COLOR_RED:
+      r = 255; g = 0; b = 0;
+      break;
+    case LED_COLOR_GREEN:
+      r = 0; g = 255; b = 0;
+      break;
+    case LED_COLOR_BLUE:
+      r = 0; g = 0; b = 255;
+      break;
+    default:
+      r = 255; g = 0; b = 0; // Default to red
+  }
+}
+
+// Function to update addressable LED color from config
+void updateStatusLEDColor() {
+  LEDConfig ledConfig = storageManager.getLEDConfig();
+  uint8_t r, g, b;
+  getLEDColorRGB(ledConfig.color, r, g, b);
+  currentLEDColor = statusLED.Color(r, g, b);
+}
+
+// Function to flash the addressable LED
+void flashStatusLED() {
+  statusLED.setPixelColor(0, currentLEDColor);
+  statusLED.show();
+}
 
 // Timing variables
 unsigned long lastMPUReadTime = 0;
@@ -68,6 +104,7 @@ float readBatteryVoltage(uint8_t plugAssignment) {
 // Function to start LED blink (250ms)
 void startLedBlink() {
   digitalWrite(LED_PIN, HIGH);
+  flashStatusLED(); // Flash addressable LED too
   ledBlinkEndTime = millis() + 250; // Turn off after 250ms
 }
 
@@ -148,6 +185,14 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   
+  // Initialize addressable LED (NeoPixel)
+  statusLED.begin();
+  statusLED.setBrightness(50); // Set brightness (0-255)
+  statusLED.clear();
+  statusLED.show();
+  updateStatusLEDColor(); // Load color from config
+  Serial.println("Status LED initialized");
+  
   // Set up recalibration callback for web interface
   webServer.setCalibrationCallback([&]() {
     if (mpuConnected) {
@@ -175,6 +220,9 @@ void setup() {
   
   // Set up LED blink callback for config saves
   webServer.setLedBlinkCallback(startLedBlink);
+  
+  // Set up LED update callback for color changes
+  webServer.setLedUpdateCallback(updateStatusLEDColor);
   
   // Calibrate to current position as level
   if (mpuConnected) {
@@ -232,6 +280,8 @@ void loop() {
   // Handle LED blink timeout
   if (ledBlinkEndTime > 0 && currentTime >= ledBlinkEndTime) {
     digitalWrite(LED_PIN, LOW);
+    statusLED.clear(); // Turn off addressable LED
+    statusLED.show();
     ledBlinkEndTime = 0;
   }
   

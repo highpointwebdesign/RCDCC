@@ -9,12 +9,14 @@ class StorageManager {
 private:
   SuspensionConfig config;
   ServoConfig servoConfig;
+  LEDConfig ledConfig;
   bool servoTrimResetWarning = false;
   
 public:
   void init() {
     loadDefaults();
     loadServoDefaults();
+    loadLEDDefaults();
   }
   
   void loadDefaults() {
@@ -35,6 +37,10 @@ public:
     servoConfig.frontRight = {DEFAULT_SERVO_TRIM, DEFAULT_SERVO_MIN, DEFAULT_SERVO_MAX, DEFAULT_SERVO_REVERSED};
     servoConfig.rearLeft = {DEFAULT_SERVO_TRIM, DEFAULT_SERVO_MIN, DEFAULT_SERVO_MAX, DEFAULT_SERVO_REVERSED};
     servoConfig.rearRight = {DEFAULT_SERVO_TRIM, DEFAULT_SERVO_MIN, DEFAULT_SERVO_MAX, DEFAULT_SERVO_REVERSED};
+  }
+  
+  void loadLEDDefaults() {
+    ledConfig.color = DEFAULT_LED_COLOR;
   }
   
   void loadConfig() {
@@ -114,6 +120,15 @@ public:
       }
     }
     
+    // Load LED configuration
+    if (doc.containsKey("ledColor")) {
+      String colorStr = doc["ledColor"] | "red";
+      if (colorStr == "red") ledConfig.color = LED_COLOR_RED;
+      else if (colorStr == "green") ledConfig.color = LED_COLOR_GREEN;
+      else if (colorStr == "blue") ledConfig.color = LED_COLOR_BLUE;
+      else ledConfig.color = DEFAULT_LED_COLOR;
+    }
+    
     if (trimWasReset) {
       saveConfig();
     }
@@ -161,6 +176,12 @@ public:
     rr["min"] = servoConfig.rearRight.minLimit;
     rr["max"] = servoConfig.rearRight.maxLimit;
     rr["reversed"] = servoConfig.rearRight.reversed;
+    
+    // Save LED configuration
+    const char* colorStr = "red";
+    if (ledConfig.color == LED_COLOR_GREEN) colorStr = "green";
+    else if (ledConfig.color == LED_COLOR_BLUE) colorStr = "blue";
+    doc["ledColor"] = colorStr;
     
     File file = SPIFFS.open(CONFIG_SPIFFS_PATH, "w");
     if (!file) {
@@ -215,6 +236,12 @@ public:
     doc["sampleRate"] = config.sampleRate;
     doc["telemetryRate"] = config.telemetryRate;
     doc["mpuOrientation"] = config.mpuOrientation;
+    
+    // Add LED color
+    const char* colorStr = "red";
+    if (ledConfig.color == LED_COLOR_GREEN) colorStr = "green";
+    else if (ledConfig.color == LED_COLOR_BLUE) colorStr = "blue";
+    doc["ledColor"] = colorStr;
     
     String output;
     serializeJson(doc, output);
@@ -287,6 +314,17 @@ public:
       
       saveConfig();
     }
+  }
+  
+  LEDConfig getLEDConfig() const {
+    return ledConfig;
+  }
+  
+  void setLEDColor(const String& colorName) {
+    if (colorName == "red") ledConfig.color = LED_COLOR_RED;
+    else if (colorName == "green") ledConfig.color = LED_COLOR_GREEN;
+    else if (colorName == "blue") ledConfig.color = LED_COLOR_BLUE;
+    saveConfig();
   }
 };
 
