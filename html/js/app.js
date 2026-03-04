@@ -2,7 +2,7 @@ window.onerror = function (msg, url, line) {
     console.log("JS ERROR:", msg, "Line:", line);
 };
         // ==================== Configuration ====================
-        const ESP32_IP = localStorage.getItem('esp32Ip') || '192.168.87.32';
+        const ESP32_IP = localStorage.getItem('esp32Ip') || window.location.hostname || '192.168.4.1';
         
         // ==================== Version Configuration ====================
         // Update this version number when releasing new app versions
@@ -15,13 +15,15 @@ window.onerror = function (msg, url, line) {
         
         // Helper function to get the correct API URL
         function getApiUrl(endpoint) {
-            // Check if we're running on live-server (localhost:8081 or 127.0.0.1:8081)
+            // If we're on the ESP32 directly (192.168.x.x), use absolute path with http
+            const isLocalESP32 = window.location.hostname.startsWith('192.168.') || window.location.hostname === '192.168.4.1';
             const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            if (isDevelopment && window.location.port === '8081') {
-                // During development, route to the ESP32 IP
+            
+            if (isLocalESP32 || isDevelopment && window.location.port === '8081') {
+                // Use the actual server IP/hostname
                 return `http://${ESP32_IP}${endpoint}`;
             }
-            // When running on ESP32 itself, use relative path
+            // Fallback: use relative path
             return endpoint;
         }
         
