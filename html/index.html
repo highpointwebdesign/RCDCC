@@ -2843,6 +2843,36 @@
                         <div class="form-text">Give this group a descriptive name so you remember what it controls.</div>
                     </div>
 
+                    <!-- Brightness Slider -->
+                    <div class="mb-4">
+                        <label for="lightGroupBrightnessSlider" class="form-label"><strong>Brightness</strong></label>
+                        <div class="d-flex align-items-center gap-3">
+                            <input type="range" class="form-range flex-grow-1" id="lightGroupBrightnessSlider" 
+                                   min="0" max="100" step="10" value="100">
+                            <span id="lightGroupBrightnessValue" style="min-width: 50px; font-weight: 600; font-size: 1.1rem;">100%</span>
+                        </div>
+                        <div class="form-text">Set the brightness level for this light group (0% - 100%).</div>
+                    </div>
+
+                    <!-- Color Picker -->
+                    <div class="mb-4">
+                        <label for="lightGroupColorPicker" class="form-label"><strong>Color</strong></label>
+                        <div class="d-flex align-items-center gap-3 mb-2">
+                            <input type="color" class="form-control form-control-color" id="lightGroupColorPicker" value="#ff0000" title="Choose a color">
+                            <span id="lightGroupColorHex" style="font-family: monospace; font-weight: 600;">#FF0000</span>
+                        </div>
+                        <div class="form-text mb-2">Select a color for this light group.</div>
+                        
+                        <!-- Favorite Color Presets -->
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="text-muted"><strong>Favorite Colors:</strong></small>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;" onclick="resetColorPresets()">Reset to Defaults</button>
+                        </div>
+                        <div id="colorPresetsContainer" class="d-flex gap-2 flex-wrap">
+                            <!-- Presets will be rendered here by JavaScript -->
+                        </div>
+                    </div>
+
                     <!-- LED Selection Section -->
                     <div class="mb-4">
                         <label class="form-label"><strong>Select LED Positions</strong></label>
@@ -4519,7 +4549,83 @@
         // ==================== Light Groups Management ====================
         const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
         const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
+        const COLOR_PRESETS_KEY = 'lightGroupColorPresets';
+        const DEFAULT_COLOR_PRESETS = [
+            '#ff0000', // Red
+            '#00ff00', // Green
+            '#0000ff', // Blue
+            '#ffff00', // Yellow
+            '#ff00ff', // Magenta
+            '#00ffff', // Cyan
+            '#ff8800', // Orange
+            '#8800ff', // Purple
+            '#ffffff'  // White
+        ];
         let lightGroups = [];
+        let colorPresets = [];
+
+        // Load color presets from localStorage or use defaults
+        function loadColorPresets() {
+            const stored = localStorage.getItem(COLOR_PRESETS_KEY);
+            colorPresets = stored ? JSON.parse(stored) : [...DEFAULT_COLOR_PRESETS];
+            renderColorPresets();
+        }
+
+        // Save color presets to localStorage
+        function saveColorPresets() {
+            localStorage.setItem(COLOR_PRESETS_KEY, JSON.stringify(colorPresets));
+            renderColorPresets();
+        }
+
+        // Render color preset buttons
+        function renderColorPresets() {
+            const container = document.getElementById('colorPresetsContainer');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            colorPresets.forEach((color, index) => {
+                const presetBtn = document.createElement('div');
+                presetBtn.style.cssText = 'position: relative; display: inline-block;';
+                
+                const colorBtn = document.createElement('button');
+                colorBtn.type = 'button';
+                colorBtn.className = 'btn btn-sm';
+                colorBtn.style.cssText = `background-color: ${color}; width: 40px; height: 40px; border: 2px solid #ddd; position: relative;`;
+                colorBtn.title = `Use ${color}`;
+                colorBtn.onclick = () => setLightGroupColor(color);
+                
+                const editIcon = document.createElement('span');
+                editIcon.className = 'material-symbols-outlined';
+                editIcon.textContent = 'edit';
+                editIcon.style.cssText = 'position: absolute; top: -8px; right: -8px; font-size: 16px; background: white; border-radius: 50%; padding: 2px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.3);';
+                editIcon.title = 'Save current color to this slot';
+                editIcon.onclick = (e) => {
+                    e.stopPropagation();
+                    updateColorPreset(index);
+                };
+                
+                presetBtn.appendChild(colorBtn);
+                presetBtn.appendChild(editIcon);
+                container.appendChild(presetBtn);
+            });
+        }
+
+        // Update a specific preset slot with the current color
+        function updateColorPreset(index) {
+            colorPresets[index] = currentColor;
+            saveColorPresets();
+            window.toast.success(`Preset ${index + 1} updated to ${currentColor.toUpperCase()}`);
+        }
+
+        // Reset presets to defaults
+        function resetColorPresets() {
+            if (confirm('Reset all favorite colors to defaults?')) {
+                colorPresets = [...DEFAULT_COLOR_PRESETS];
+                saveColorPresets();
+                window.toast.success('Color presets reset to defaults!');
+            }
+        }
 
         function loadLightGroups() {
             const stored = localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY);
@@ -4548,10 +4654,16 @@
                     const item = document.createElement('div');
                     item.className = 'light-group-item';
                     const ledDisplay = formatLedRanges(group.indices);
+                    const brightnessPercent = group.brightness !== undefined ? 
+                        Math.round(group.brightness * 100 / 255) : 100;
+                    const color = group.color || '#ff0000';
                     item.innerHTML = `
                         <div class="light-group-info">
-                            <div class="light-group-name">${group.name}</div>
-                            <div class="light-group-range">LEDs: ${ledDisplay}</div>
+                            <div class="light-group-name">
+                                <span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 3px; vertical-align: middle; margin-right: 8px;"></span>
+                                ${group.name}
+                            </div>
+                            <div class="light-group-range">LEDs: ${ledDisplay} • Brightness: ${brightnessPercent}% • Color: ${color.toUpperCase()}</div>
                         </div>
                         <div class="light-group-actions">
                             <button onclick="editLightGroup(${index})" title="Edit this group">Edit</button>
@@ -4566,6 +4678,8 @@
         // Store current editing context
         let currentEditingGroupIndex = null;
         let currentSelectedLEDs = new Set();
+        let currentBrightness = 100; // Default 100% (255 in 0-255 scale)
+        let currentColor = '#ff0000'; // Default red
 
         function openLightGroupModal(index = null) {
             currentEditingGroupIndex = index;
@@ -4574,6 +4688,10 @@
             const modal = document.getElementById('lightGroupEditorModal');
             const titleSpan = document.getElementById('lightGroupEditMode');
             const nameInput = document.getElementById('lightGroupNameInput');
+            const brightnessSlider = document.getElementById('lightGroupBrightnessSlider');
+            const brightnessValue = document.getElementById('lightGroupBrightnessValue');
+            const colorPicker = document.getElementById('lightGroupColorPicker');
+            const colorHex = document.getElementById('lightGroupColorHex');
             const totalLEDCount = parseInt(document.getElementById('totalLEDCount').value) || 100;
             
             // Update modal title and total LED count display
@@ -4588,14 +4706,34 @@
                 titleSpan.textContent = 'Edit';
                 nameInput.value = group.name;
                 group.indices.forEach(idx => currentSelectedLEDs.add(idx));
+                
+                // Set brightness (convert 0-255 to 0-100 percentage)
+                const brightnessPercent = group.brightness !== undefined ? 
+                    Math.round(group.brightness * 100 / 255) : 100;
+                currentBrightness = brightnessPercent;
+                brightnessSlider.value = brightnessPercent;
+                brightnessValue.textContent = brightnessPercent + '%';
+                
+                // Set color
+                const color = group.color || '#ff0000';
+                currentColor = color;
+                colorPicker.value = color;
+                colorHex.textContent = color.toUpperCase();
             } else {
                 // Add mode
                 titleSpan.textContent = 'Add';
                 nameInput.value = '';
+                currentBrightness = 100;
+                brightnessSlider.value = 100;
+                brightnessValue.textContent = '100%';
+                currentColor = '#ff0000';
+                colorPicker.value = '#ff0000';
+                colorHex.textContent = '#FF0000';
             }
             
             renderLedGrid(totalLEDCount);
             updateSelectionSummary();
+            renderColorPresets();
             
             const bsModal = new bootstrap.Modal(modal);
             bsModal.show();
@@ -4728,11 +4866,16 @@
             
             const indices = Array.from(currentSelectedLEDs).sort((a, b) => a - b);
             
+            // Convert brightness percentage (0-100) to 0-255 scale
+            const brightness255 = Math.round(currentBrightness * 255 / 100);
+            
             if (currentEditingGroupIndex !== null) {
                 // Update existing group
                 lightGroups[currentEditingGroupIndex] = {
                     name: name,
-                    indices: indices
+                    indices: indices,
+                    brightness: brightness255,
+                    color: currentColor
                 };
                 saveLightGroups();
                 window.toast.success(`Light group "${name}" updated!`);
@@ -4740,7 +4883,9 @@
                 // Create new group
                 lightGroups.push({
                     name: name,
-                    indices: indices
+                    indices: indices,
+                    brightness: brightness255,
+                    color: currentColor
                 });
                 saveLightGroups();
                 window.toast.success(`Light group "${name}" created with ${indices.length} LED(s)!`);
@@ -4752,6 +4897,16 @@
             
             currentEditingGroupIndex = null;
             currentSelectedLEDs.clear();
+            currentBrightness = 100;
+            currentColor = '#ff0000';
+        }
+
+        function setLightGroupColor(color) {
+            currentColor = color;
+            const colorPicker = document.getElementById('lightGroupColorPicker');
+            const colorHex = document.getElementById('lightGroupColorHex');
+            if (colorPicker) colorPicker.value = color;
+            if (colorHex) colorHex.textContent = color.toUpperCase();
         }
 
         function deleteLightGroup(index) {
@@ -4817,8 +4972,30 @@
                 });
             }
             
-            // Load light groups
+            // Brightness slider event listener
+            const brightnessSlider = document.getElementById('lightGroupBrightnessSlider');
+            const brightnessValue = document.getElementById('lightGroupBrightnessValue');
+            if (brightnessSlider && brightnessValue) {
+                brightnessSlider.addEventListener('input', function() {
+                    const percent = parseInt(this.value);
+                    currentBrightness = percent;
+                    brightnessValue.textContent = percent + '%';
+                });
+            }
+            
+            // Color picker event listener
+            const colorPicker = document.getElementById('lightGroupColorPicker');
+            const colorHex = document.getElementById('lightGroupColorHex');
+            if (colorPicker && colorHex) {
+                colorPicker.addEventListener('input', function() {
+                    currentColor = this.value;
+                    colorHex.textContent = this.value.toUpperCase();
+                });
+            }
+            
+            // Load light groups and color presets
             loadLightGroups();
+            loadColorPresets();
         });
 
         function updateConnectionStatus(connected) {
