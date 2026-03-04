@@ -427,52 +427,58 @@ private:
       request->send(200, "application/json", response);
     });
     
-    // Lights configuration API - UPDATE lights state
-    server.on("/api/lights", HTTP_POST, nullptr, nullptr,
-      [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-        if (index == 0) {
-          // First chunk - allocate buffer
-          Serial.printf("Received lights POST request, size: %d\n", total);
-        }
-        
-        // Create JSON document from received data
-        DynamicJsonDocument doc(1024);
-        DeserializationError error = deserializeJson(doc, (const char*)data, len);
-        
-        if (!error) {
-          Serial.println("Lights JSON parsed successfully");
-          
-          // Update each light group if provided
-          if (doc.containsKey("lightGroups")) {
-            JsonObject groups = doc["lightGroups"];
-            
-            if (groups.containsKey("headlights")) {
-              JsonObject hl = groups["headlights"];
-              Serial.println("Updating headlights...");
-              storageManager->updateLightsGroup("headlights", hl);
-            }
-            if (groups.containsKey("tailLights")) {
-              JsonObject tl = groups["tailLights"];
-              Serial.println("Updating tailLights...");
-              storageManager->updateLightsGroup("tailLights", tl);
-            }
-            if (groups.containsKey("emergencyLights")) {
-              JsonObject el = groups["emergencyLights"];
-              Serial.println("Updating emergencyLights...");
-              storageManager->updateLightsGroup("emergencyLights", el);
-            }
-          } else {
-            Serial.println("ERROR: No lightGroups in request!");
-            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing lightGroups\"}");
-            return;
-          }
-          
-          request->send(200, "application/json", "{\"status\":\"success\"}");
-        } else {
-          Serial.printf("Lights JSON parse error: %s\n", error.c_str());
-          request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
-        }
-      });
+    // Lights configuration API - UPDATE lights state  
+    server.on("/api/lights", HTTP_POST, [this](AsyncWebServerRequest *request) {
+      // Body has been buffered by the body handler
+      request->send(200, "application/json", "{\"status\":\"success\"}");
+    }, nullptr, [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+      // Only process when we have all the data
+      if (index + len != total) {
+        return; // Wait for more data
+      }
+      
+      Serial.printf("Lights POST complete: total=%d bytes\n", total);
+      
+      // Create JSON document from received data
+      DynamicJsonDocument doc(2048);
+      DeserializationError error = deserializeJson(doc, (const char*)data, len);
+      
+      if (error) {
+        Serial.printf("Lights JSON parse error: %s\n", error.c_str());
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        return;
+      }
+      
+      Serial.println("Lights JSON parsed successfully");
+      Serial.printf("JSON size: %d bytes, capacity: %d\n", doc.size(), doc.capacity());
+      
+      // Update each light group if provided
+      if (!doc.containsKey("lightGroups")) {
+        Serial.println("ERROR: No lightGroups in request!");
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing lightGroups\"}");
+        return;
+      }
+      
+      JsonObject groups = doc["lightGroups"];
+      
+      if (groups.containsKey("headlights")) {
+        JsonObject hl = groups["headlights"];
+        Serial.println("Updating headlights...");
+        storageManager->updateLightsGroup("headlights", hl);
+      }
+      if (groups.containsKey("tailLights")) {
+        JsonObject tl = groups["tailLights"];
+        Serial.println("Updating tailLights...");
+        storageManager->updateLightsGroup("tailLights", tl);
+      }
+      if (groups.containsKey("emergencyLights")) {
+        JsonObject el = groups["emergencyLights"];
+        Serial.println("Updating emergencyLights...");
+        storageManager->updateLightsGroup("emergencyLights", el);
+      }
+      
+      Serial.println("All lights groups updated successfully");
+    });
     
     // Serve static files from SPIFFS
     server.on("/test-gps.html", HTTP_GET, [](AsyncWebServerRequest *request) {
