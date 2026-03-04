@@ -4251,7 +4251,14 @@ window.onerror = function (msg, url, line) {
             const connectionMethodDisplay = document.getElementById('connectionMethodDisplay');
             if (!connectionMethodDisplay) return;
             
-            const currentIp = localStorage.getItem('esp32Ip') || '192.168.87.32';
+            // Smart default: if on dev server with no saved IP, assume standalone mode
+            let currentIp = localStorage.getItem('esp32Ip');
+            if (!currentIp && !window.location.hostname.startsWith('192.168.')) {
+                currentIp = '192.168.4.1'; // Default to AP mode for dev servers
+            } else if (!currentIp) {
+                currentIp = window.location.hostname; // Use actual hostname if on ESP32
+            }
+            
             const isStandaloneMode = currentIp === '192.168.4.1';
             
             if (isStandaloneMode) {
@@ -4440,7 +4447,16 @@ window.onerror = function (msg, url, line) {
         // Initialize network settings controls
         function initNetworkSettings() {
             // Load current IP into input field
-            const currentIp = localStorage.getItem('esp32Ip') || '192.168.87.32';
+            // Smart default: if on a non-ESP32 network, default to AP mode (192.168.4.1)
+            // Otherwise use whatever was saved
+            let currentIp = localStorage.getItem('esp32Ip');
+            if (!currentIp) {
+                // If not saved, check if we're on an ESP32 network
+                currentIp = window.location.hostname.startsWith('192.168.') 
+                    ? window.location.hostname 
+                    : '192.168.4.1'; // Default to AP mode for dev servers
+            }
+            
             const ipInput = document.getElementById('esp32IpAddress');
             if (ipInput) ipInput.value = currentIp;
             
