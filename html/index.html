@@ -1742,11 +1742,6 @@
         z-index: 2050 !important;
     }
 
-    /* Add bottom padding to modal body to prevent content from being hidden behind footer */
-    .modal-body {
-        /* padding-bottom: 100px; */
-    }
-
     </style>
 </head>
 <body>
@@ -2303,34 +2298,47 @@
                         </div>
                     </div>
 
-                    <!-- LED Status Color Card -->
+                    <!-- System Notification LEDs Card -->
                     <div class="col-12 col-md-6">
-                        <div class="card" id="ledColorCard">
+                        <div class="card" id="notificationLedsCard">
                             <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #000000; color: #ffffff;">
                                 <div>
                                     <span style="position: relative; display: inline-block; width: 1.5em; height: 1em; color: var(--danger);">
                                         <span class="material-symbols-outlined">lightbulb</span>
                                     </span>
-                                    LED Status Color
+                                    System Notification LEDs
                                 </div>
                             </div>
                             <div class="card-body">
                                 <div class="mb-3">
-                                    <label for="ledColorSelect" class="form-label">
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; color: var(--danger);">palette</span>
-                                        Status Indicator Color
+                                    <label for="notificationGroupSelect" class="form-label">
+                                        <span class="material-symbols-outlined" style="vertical-align: middle; color: var(--danger);">group_work</span>
+                                        Light Group for Notifications
                                     </label>
-                                    <select class="form-select" id="ledColorSelect" onchange="updateLEDColor()">
-                                        <option value="red" data-rgb="255,0,0">Red</option>
-                                        <option value="green" data-rgb="0,255,0">Green</option>
-                                        <option value="blue" data-rgb="0,0,255">Blue</option>
+                                    <select class="form-select" id="notificationGroupSelect" onchange="saveNotificationGroup()">
+                                        <option value="__none__">None - Disable LED Notifications</option>
+                                        <option value="__all__">All LEDs</option>
+                                        <!-- Light groups dynamically populated here -->
                                     </select>
                                     <div class="form-text">
-                                        <small>Choose the color for the addressable LED status indicator. The LED will flash this color during system notifications and status updates.</small>
+                                        <small>Select which LEDs flash during notifications. Success=Green, Error=Red, Warning=Amber, Info=Blue. Only the LEDs from the group will flash (not the group's pattern).</small>
                                     </div>
                                 </div>
-                                <div class="d-flex justify-content-center mt-3">
-                                    <div id="ledPreview" style="width: 40px; height: 40px; border-radius: 50%; background-color: rgb(255, 0, 0); border: 2px solid #fff; box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);"></div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('success')">
+                                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">check_circle</span> Test Success
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('error')">
+                                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">error</span> Test Error
+                                    </button>
+                                </div>
+                                <div class="d-flex gap-2 mt-2">
+                                    <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('warning')">
+                                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">warning</span> Test Warning
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('info')">
+                                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">info</span> Test Info
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -3324,18 +3332,22 @@
             
             success(message, options) {
                 this.show(message, 'success', options);
+                flashNotificationLEDs('success');
             },
             
             error(message, options) {
                 this.show(message, 'error', options);
+                flashNotificationLEDs('error');
             },
             
             warning(message, options) {
                 this.show(message, 'warning', options);
+                flashNotificationLEDs('warning');
             },
             
             info(message, options) {
                 this.show(message, 'info', options);
+                flashNotificationLEDs('info');
             }
         };
     
@@ -4742,6 +4754,140 @@
             }
         }
 
+        // ==================== System Notification LEDs ====================
+        const NOTIFICATION_GROUP_KEY = 'systemNotificationGroup';
+        
+        // Get the selected notification group name
+        function getNotificationGroup() {
+            return localStorage.getItem(NOTIFICATION_GROUP_KEY) || '__all__';
+        }
+        
+        // Save the selected notification group
+        function saveNotificationGroup() {
+            const select = document.getElementById('notificationGroupSelect');
+            if (!select) return;
+            
+            const value = select.value;
+            localStorage.setItem(NOTIFICATION_GROUP_KEY, value);
+            
+            if (value === '__none__') {
+                window.toast.success('LED notifications disabled');
+            } else if (value === '__all__') {
+                window.toast.success('All LEDs will flash for notifications');
+            } else {
+                window.toast.success(`"${value}" group will flash for notifications`);
+            }
+        }
+        
+        // Populate notification group dropdown with available light groups
+        function populateNotificationGroupSelect() {
+            const select = document.getElementById('notificationGroupSelect');
+            if (!select) return;
+            
+            const savedValue = getNotificationGroup();
+            
+            // Clear existing light group options (keep __none__ and __all__)
+            const staticOptions = Array.from(select.querySelectorAll('option[value^="__"]'));
+            select.innerHTML = '';
+            staticOptions.forEach(opt => select.appendChild(opt));
+            
+            // Add all light groups
+            lightGroups.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group.name;
+                option.textContent = group.name;
+                select.appendChild(option);
+            });
+            
+            // Restore saved value (with fallback validation)
+            if (savedValue === '__none__' || savedValue === '__all__') {
+                select.value = savedValue;
+            } else {
+                // Check if saved group still exists
+                const groupExists = lightGroups.some(g => g.name === savedValue);
+                if (groupExists) {
+                    select.value = savedValue;
+                } else {
+                    // Failover: Group was deleted, switch to "All LEDs"
+                    select.value = '__all__';
+                    localStorage.setItem(NOTIFICATION_GROUP_KEY, '__all__');
+                }
+            }
+        }
+        
+        // Flash LEDs for system notifications
+        function flashNotificationLEDs(type) {
+            const groupName = getNotificationGroup();
+            
+            // Check if notifications are disabled
+            if (groupName === '__none__') {
+                return;
+            }
+            
+            // Determine color based on notification type
+            let color;
+            switch (type) {
+                case 'success':
+                    color = '#00ff00'; // Green
+                    break;
+                case 'error':
+                    color = '#ff0000'; // Red
+                    break;
+                case 'warning':
+                    color = '#ffa500'; // Amber
+                    break;
+                case 'info':
+                    color = '#0000ff'; // Blue
+                    break;
+                default:
+                    color = '#ffffff'; // White fallback
+            }
+            
+            // Get LED indices to flash
+            let indices = [];
+            if (groupName === '__all__') {
+                // Flash all LEDs
+                const totalCount = parseInt(localStorage.getItem(TOTAL_LED_COUNT_KEY)) || 100;
+                indices = Array.from({ length: totalCount }, (_, i) => i);
+            } else {
+                // Find the group and use its LEDs
+                const group = lightGroups.find(g => g.name === groupName);
+                if (group && group.indices && group.indices.length > 0) {
+                    indices = group.indices;
+                } else {
+                    // Failover: Group not found or has no LEDs, use all LEDs
+                    const totalCount = parseInt(localStorage.getItem(TOTAL_LED_COUNT_KEY)) || 100;
+                    indices = Array.from({ length: totalCount }, (_, i) => i);
+                }
+            }
+            
+            // TODO: Send flash command to ESP32
+            // For now, log the flash request
+            console.log(`Flash notification: type=${type}, color=${color}, LEDs=${indices.join(',')}`);
+            
+            // API call would look something like:
+            // fetch(getApiUrl('/api/notification-flash'), {
+            //     method: 'POST',
+            //     headers: { 'Content-Type': 'application/json' },
+            //     body: JSON.stringify({ indices, color, duration: 300, flashes: 2 })
+            // });
+        }
+        
+        // Test notification flash
+        function testNotification(type) {
+            flashNotificationLEDs(type);
+            
+            // Show a toast as visual confirmation
+            const messages = {
+                success: 'Testing success notification flash (green)',
+                error: 'Testing error notification flash (red)',
+                warning: 'Testing warning notification flash (amber)',
+                info: 'Testing info notification flash (blue)'
+            };
+            
+            window.toast[type](messages[type] || 'Testing notification flash');
+        }
+
         // ==================== Light Groups Management ====================
         const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
         const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
@@ -4859,6 +5005,7 @@
         function saveLightGroups() {
             localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(lightGroups));
             renderLightGroupsList();
+            populateNotificationGroupSelect(); // Update notification group dropdown
         }
 
         function renderLightGroupsList() {
@@ -4891,8 +5038,8 @@
                     
                     // Show both colors if second color is not black/off
                     const colorDisplay = color2 !== '#000000' && color2 !== '#00000000'
-                        ? `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 3px; vertical-align: middle; margin-right: 4px;"></span><span style="display: inline-block; width: 16px; height: 16px; background-color: ${color2}; border: 2px solid #ddd; border-radius: 3px; vertical-align: middle; margin-right: 8px;"></span>`
-                        : `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 3px; vertical-align: middle; margin-right: 8px;"></span>`;
+                        ? `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 4px;"></span><span style="display: inline-block; width: 16px; height: 16px; background-color: ${color2}; border: 2px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 8px;"></span>`
+                        : `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 8px;"></span>`;
                     
                     const colorText = color2 !== '#000000' && color2 !== '#00000000'
                         ? `${color.toUpperCase()} / ${color2.toUpperCase()}`
@@ -5317,9 +5464,22 @@
                 }
             }
             
+            // Check if this group is used for system notifications
+            const notificationGroup = getNotificationGroup();
+            const wasNotificationGroup = notificationGroup === group.name;
+            
+            // Delete the group
             lightGroups.splice(index, 1);
             saveLightGroups();
-            window.toast.success('Light group deleted');
+            
+            // Failover: If deleted group was used for notifications, switch to "All LEDs"
+            if (wasNotificationGroup) {
+                localStorage.setItem(NOTIFICATION_GROUP_KEY, '__all__');
+                populateNotificationGroupSelect();
+                window.toast.warning(`Light group deleted. System notifications switched to "All LEDs".`);
+            } else {
+                window.toast.success('Light group deleted');
+            }
         }
 
         function parseLEDIndices(str) {
@@ -5428,6 +5588,7 @@
             // Load light groups and color presets
             loadLightGroups();
             loadColorPresets();
+            populateNotificationGroupSelect(); // Initialize system notification LED dropdown
             
             // Load version information
             loadVersionInfo();
@@ -6869,48 +7030,6 @@
         }
 
         // Update LED Color
-        async function updateLEDColor() {
-            const selectElement = document.getElementById('ledColorSelect');
-            const selectedOption = selectElement.options[selectElement.selectedIndex];
-            const colorName = selectedOption.value;
-            const rgbValues = selectedOption.getAttribute('data-rgb');
-            
-            // Update preview
-            const previewElement = document.getElementById('ledPreview');
-            previewElement.style.backgroundColor = `rgb(${rgbValues})`;
-            previewElement.style.boxShadow = `0 0 10px rgba(${rgbValues}, 0.5)`;
-            
-            // Build payload
-            const payload = {
-                ledColor: colorName
-            };
-            
-            const controller = registerAjaxController(new AbortController());
-            const timeout = setTimeout(() => controller.abort(), 8000);
-            
-            try {
-                const response = await fetch(`http://${ESP32_IP}/api/led-config`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    signal: controller.signal,
-                    body: JSON.stringify(payload)
-                });
-                
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                await response.json();
-                toast.success('LED color saved');
-            } catch (error) {
-                if (error.name === 'AbortError') return;
-                toast.error('Failed to save LED color');
-                console.error('LED color update failed:', error);
-            } finally {
-                clearTimeout(timeout);
-                unregisterAjaxController(controller);
-            }
-        }
-
         // Update gyro orientation
         function updateGyroOrientation(value) {
             const payload = {
