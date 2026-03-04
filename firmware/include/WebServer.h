@@ -101,8 +101,8 @@ private:
     
     unsigned long startAttemptTime = millis();
     
-    // Wait for connection with timeout - REDUCE TIMEOUT to 5 seconds to not starve watchdog
-    const unsigned long SHORT_TIMEOUT = 5000; // 5 seconds instead of 30
+    // Wait for connection with timeout - 10 second timeout to allow WiFi connection
+    const unsigned long SHORT_TIMEOUT = 10000; // 10 seconds instead of 5
     while (WiFi.status() != WL_CONNECTED && 
            millis() - startAttemptTime < SHORT_TIMEOUT) {
       delay(500);
@@ -119,7 +119,7 @@ private:
       Serial.println(WiFi.localIP());
     } else {
       // Connection failed, fall back to AP mode
-      Serial.println("Failed to connect to home WiFi (timeout after 5s)");
+      Serial.println("Failed to connect to home WiFi (timeout after 10s)");
       Serial.println("Starting Access Point mode...");
       
       WiFi.mode(WIFI_AP);
