@@ -97,18 +97,38 @@ private:
     
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(false); // CRITICAL: Disable auto-reconnect to prevent blocking
+    
+    // Scan for available networks first
+    Serial.println("\n=== WiFi Network Scan ===");
+    int networksFound = WiFi.scanNetworks();
+    Serial.printf("Found %d networks:\n", networksFound);
+    for (int i = 0; i < networksFound && i < 20; i++) {
+      Serial.printf("  [%d] SSID: %-25s | RSSI: %3d dBm | Ch: %d | Enc: %d\n", 
+        i, WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.channel(i), WiFi.encryptionType(i));
+    }
+    WiFi.scanDelete(); // Clear scan results
+    Serial.println("=== End Scan ===\n");
+    
+    Serial.println();
+    Serial.printf("Attempting to connect to WiFi SSID: %s\n", HOME_WIFI_SSID);
     WiFi.begin(HOME_WIFI_SSID, HOME_WIFI_PASSWORD);
     
     unsigned long startAttemptTime = millis();
+    int dotCount = 0;
     
-    // Wait for connection with timeout - 10 second timeout to allow WiFi connection
-    const unsigned long SHORT_TIMEOUT = 10000; // 10 seconds instead of 5
+    // Wait for connection with timeout - 30 second timeout to allow WiFi connection
+    const unsigned long SHORT_TIMEOUT = 30000; // 30 seconds
     while (WiFi.status() != WL_CONNECTED && 
            millis() - startAttemptTime < SHORT_TIMEOUT) {
       delay(500);
       Serial.print(".");
+      dotCount++;
+      if (dotCount % 20 == 0) {
+        Serial.printf("[%lus] WiFi status: %d\n", (millis() - startAttemptTime) / 1000, WiFi.status());
+      }
     }
     Serial.println();
+    Serial.printf("WiFi connection attempt ended after %lums\n", millis() - startAttemptTime);
     
     // Check if connected to home WiFi
     if (WiFi.status() == WL_CONNECTED) {
@@ -119,7 +139,7 @@ private:
       Serial.println(WiFi.localIP());
     } else {
       // Connection failed, fall back to AP mode
-      Serial.println("Failed to connect to home WiFi (timeout after 10s)");
+      Serial.println("Failed to connect to home WiFi (timeout after 30s)");
       Serial.println("Starting Access Point mode...");
       
       WiFi.mode(WIFI_AP);
@@ -408,32 +428,48 @@ private:
     });
     
     // Lights configuration API - UPDATE lights state
-    server.on("/api/lights", HTTP_POST, [this](AsyncWebServerRequest *request) {}, nullptr, 
+    server.on("/api/lights", HTTP_POST, nullptr, nullptr,
       [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        if (index == 0) {
+          // First chunk - allocate buffer
+          Serial.printf("Received lights POST request, size: %d\n", total);
+        }
+        
+        // Create JSON document from received data
         DynamicJsonDocument doc(1024);
-        DeserializationError error = deserializeJson(doc, data);
+        DeserializationError error = deserializeJson(doc, (const char*)data, len);
         
         if (!error) {
+          Serial.println("Lights JSON parsed successfully");
+          
           // Update each light group if provided
           if (doc.containsKey("lightGroups")) {
             JsonObject groups = doc["lightGroups"];
             
             if (groups.containsKey("headlights")) {
               JsonObject hl = groups["headlights"];
+              Serial.println("Updating headlights...");
               storageManager->updateLightsGroup("headlights", hl);
             }
             if (groups.containsKey("tailLights")) {
               JsonObject tl = groups["tailLights"];
+              Serial.println("Updating tailLights...");
               storageManager->updateLightsGroup("tailLights", tl);
             }
             if (groups.containsKey("emergencyLights")) {
               JsonObject el = groups["emergencyLights"];
+              Serial.println("Updating emergencyLights...");
               storageManager->updateLightsGroup("emergencyLights", el);
             }
+          } else {
+            Serial.println("ERROR: No lightGroups in request!");
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing lightGroups\"}");
+            return;
           }
           
           request->send(200, "application/json", "{\"status\":\"success\"}");
         } else {
+          Serial.printf("Lights JSON parse error: %s\n", error.c_str());
           request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
         }
       });
