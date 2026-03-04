@@ -1,13 +1,21 @@
 // Service Worker for R/C Dynamic Chassis Control PWA
-const CACHE_NAME = 'rcdcc-v1';
+const CACHE_NAME = 'rcdcc-v2'; // Bumped version for asset restructuring
 const urlsToCache = [
   '/index.html',
-  '/css/',
-  '/js/',
+  '/css/app.css',
+  '/css/bootstrap.min.css',
+  '/css/fonts.css',
+  '/css/all.min.css',
+  '/css/css2.css',
+  '/js/app.js',
+  '/js/console.js',
+  '/js/bootstrap.bundle.min.js',
+  '/site.webmanifest',
+  '/sw.js',
   '/toasty/dist/toasty.min.css',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap',
+  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&displayswap',
   'https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css'
 ];
 
