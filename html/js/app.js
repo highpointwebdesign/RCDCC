@@ -428,39 +428,27 @@ window.onerror = function (msg, url, line) {
                     const modeSelect = document.getElementById('emergencyLightMode');
                     const patternSelect = document.getElementById('emergencyLightPattern');
                     
+                    // Extract emergency lights state from new lightGroups structure
+                    const emergencyLights = data.lightGroups?.emergencyLights || { enabled: false, mode: 0 };
+                    
                     if (toggle) {
-                        toggle.checked = data.enabled;
+                        toggle.checked = emergencyLights.enabled;
                     }
                     
-                    // Try to figure out which mode the current pattern belongs to
+                    // Map the mode number (0-3) to a pattern selection
                     let detectedMode = 'police';
                     let detectedPatternIndex = 0;
                     
-                    if (data.pattern && data.pattern.steps) {
-                        // Compare the returned pattern with our known patterns
-                        for (const [mode, patterns] of Object.entries(PATTERNS)) {
-                            for (let i = 0; i < patterns.length; i++) {
-                                const knownPattern = patterns[i];
-                                // Compare step counts and sequences
-                                if (knownPattern.sequence.length === data.pattern.steps.length) {
-                                    let matches = true;
-                                    for (let j = 0; j < knownPattern.sequence.length; j++) {
-                                        const knownStep = knownPattern.sequence[j];
-                                        const apiStep = data.pattern.steps[j];
-                                        if (knownStep.led0 !== apiStep.led0 || 
-                                            knownStep.led1 !== apiStep.led1 || 
-                                            knownStep.duration !== apiStep.duration) {
-                                            matches = false;
-                                            break;
-                                        }
-                                    }
-                                    if (matches) {
-                                        detectedMode = mode;
-                                        detectedPatternIndex = i;
-                                        break;
-                                    }
-                                }
-                            }
+                    // Get first pattern from the mode that matches the firmware's mode setting
+                    // Mode 0 = off, mode 1 = solid, mode 2 = blink, mode 3 = pulse
+                    // For now, default to first pattern of detected mode
+                    if (emergencyLights.mode > 0) {
+                        // Find a mode in PATTERNS that corresponds to this
+                        // Default: use first available mode
+                        const modes = Object.keys(PATTERNS);
+                        if (modes.length > 0) {
+                            detectedMode = modes[0];
+                            detectedPatternIndex = Math.min(emergencyLights.mode - 1, PATTERNS[detectedMode].length - 1);
                         }
                     }
                     
@@ -1503,8 +1491,11 @@ window.onerror = function (msg, url, line) {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                enabled: true,
-                                pattern: pattern
+                                lightGroups: {
+                                    headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                    tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                    emergencyLights: { enabled: true, brightness: 100, mode: patternIndex + 1, blinkRate: 500 }
+                                }
                             })
                         })
                         .then(response => response.json())
@@ -1520,7 +1511,13 @@ window.onerror = function (msg, url, line) {
                         fetch(getApiUrl('/api/lights'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ enabled: false })
+                            body: JSON.stringify({
+                                lightGroups: {
+                                    headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                    tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                    emergencyLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 }
+                                }
+                            })
                         })
                         .catch(err => console.error('Failed to disable lights:', err));
                     }
@@ -1555,8 +1552,11 @@ window.onerror = function (msg, url, line) {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            enabled: isCurrentlyEnabled,
-                            pattern: pattern
+                            lightGroups: {
+                                headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                emergencyLights: { enabled: isCurrentlyEnabled, brightness: 100, mode: isCurrentlyEnabled ? patternIndex + 1 : 0, blinkRate: 500 }
+                            }
                         })
                     })
                     .then(response => response.json())
