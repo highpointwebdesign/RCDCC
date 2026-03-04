@@ -2310,11 +2310,28 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <!-- LED Notifications Section -->
-                                <div class="mb-4 pb-4" style="border-bottom: 1px solid #ddd;">
+                                 <!-- Audio Notifications Section -->
+                                <div  class="mb-4 pb-4" style="border-bottom: 1px solid var(--high-impact-color;">
                                     <h6 class="mb-3" style="font-weight: 600; color: var(--text-primary);">
-                                        <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle; margin-right: 0.5rem; color: var(--danger);">lightbulb</span>
-                                        LED Flashing
+                                        <!-- <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle; margin-right: 0.5rem; color: var(--danger);">volume_up</span> -->
+                                        Audio Alerts
+                                    </h6>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enableNotificationSounds" checked>
+                                        <label class="form-check-label" for="enableNotificationSounds">
+                                            <span>Enable Sounds</span>
+                                        </label>
+                                    </div>
+                                    <p style="color: #666; font-size: 0.875rem; margin-top: 0.75rem;">
+                                        When enabled, notification toasts will include audio alerts for success, warning, error, and info messages.
+                                    </p>
+                                </div>
+
+                                <!-- LED Notifications Section -->
+                                <div>
+                                    <h6 class="mb-3" style="font-weight: 600; color: var(--text-primary);">
+                                        <!-- <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle; margin-right: 0.5rem; color: var(--danger);">lightbulb</span> -->
+                                        LED Notifications
                                     </h6>
                                     <div class="mb-3">
                                         <label for="notificationGroupSelect" class="form-label">
@@ -2347,22 +2364,7 @@
                                     </div>
                                 </div>
 
-                                <!-- Audio Notifications Section -->
-                                <div>
-                                    <h6 class="mb-3" style="font-weight: 600; color: var(--text-primary);">
-                                        <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle; margin-right: 0.5rem; color: var(--danger);">volume_up</span>
-                                        Audio Alerts
-                                    </h6>
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" id="enableNotificationSounds" checked>
-                                        <label class="form-check-label" for="enableNotificationSounds">
-                                            <span>Enable Sounds</span>
-                                        </label>
-                                    </div>
-                                    <p style="color: #666; font-size: 0.875rem; margin-top: 0.75rem;">
-                                        When enabled, notification toasts will include audio alerts for success, warning, error, and info messages.
-                                    </p>
-                                </div>
+                               
                             </div>
                         </div>
                     </div>
