@@ -1214,6 +1214,24 @@ window.onerror = function (msg, url, line) {
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Disable pull-to-refresh by preventing overscroll-behavior
+            document.documentElement.style.overscrollBehavior = 'none';
+            document.body.style.overscrollBehavior = 'none';
+            
+            // Prevent touchmove pull-to-refresh on document level
+            let lastY = 0;
+            document.addEventListener('touchstart', function(e) {
+                lastY = e.touches[0].clientY;
+            }, { passive: true });
+            
+            document.addEventListener('touchmove', function(e) {
+                const currentY = e.touches[0].clientY;
+                // Prevent pull-to-refresh (scroll down from top)
+                if (currentY > lastY && window.scrollY === 0) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+            
             // Register Service Worker for PWA functionality
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/sw.js')
