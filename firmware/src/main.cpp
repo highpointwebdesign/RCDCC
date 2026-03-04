@@ -298,7 +298,7 @@ void setup() {
   webServer.setLedUpdateCallback(updateStatusLEDColor);
   
   // Set up emergency light callbacks
-  webServer.setEmergencyLightSetCallback([](String patternJson) {
+  webServer.setEmergencyLightSetCallback([&](String patternJson) {
     // Parse JSON pattern and load it
     // Format: {enabled: bool, pattern: {steps: [{led0, led1, duration}, ...], isLooping: bool}}
     JsonDocument doc;
@@ -346,7 +346,7 @@ void setup() {
     Serial.printf("Emergency lights: Pattern loaded with %d steps\n", currentPattern.stepCount);
   });
   
-  webServer.setEmergencyLightGetCallback([](String& patternJson) {
+  webServer.setEmergencyLightGetCallback([&](String& patternJson) {
     // Return current pattern state as JSON
     JsonDocument doc;
     doc["enabled"] = emergencyLightsEnabled;

@@ -501,4 +501,6 @@ public:
       saveLights();
       Serial.printf("Updated lights group: %s\n", groupName.c_str());
     }
-  }
+  }};
+
+#endif
