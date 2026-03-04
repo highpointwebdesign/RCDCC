@@ -1599,7 +1599,240 @@ window.onerror = function (msg, url, line) {
 
             // Load initial lights state
             loadEmergencyLightsState();
-
+            // ==================== Master Light Switch & Light Groups ====================
+            const masterLightSwitch = document.getElementById('masterLightSwitch');
+            let masterLightEnabled = true;
+            let lightsBeforeTest = null; // Store lights state before test
+            
+            // Helper function to send lights config to ESP32
+            function sendLightsConfig(config) {
+                return fetch(getApiUrl('/api/lights'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                });
+            }
+            
+            // Helper to get current light group config from UI
+            function getLightGroupConfig(groupName) {
+                const enabled = document.getElementById(`${groupName}Toggle`).checked;
+                const brightness = parseInt(document.getElementById(`${groupName}Brightness`).value);
+                const mode = parseInt(document.getElementById(`${groupName}Mode`).value);
+                const blinkRate = parseInt(document.getElementById(`${groupName}BlinkRate`).value);
+                return { enabled, brightness, mode, blinkRate };
+            }
+            
+            // Helper to get full lights config from all groups
+            function getFullLightsConfig() {
+                return {
+                    lightGroups: {
+                        headlights: getLightGroupConfig('headlights'),
+                        tailLights: getLightGroupConfig('tailLights'),
+                        emergencyLights: getLightGroupConfig('emergencyLights')
+                    }
+                };
+            }
+            
+            // Master Switch Handler
+            if (masterLightSwitch) {
+                masterLightSwitch.addEventListener('change', function() {
+                    masterLightEnabled = this.checked;
+                    
+                    if (!masterLightEnabled) {
+                        // Turn off all lights
+                        sendLightsConfig({
+                            lightGroups: {
+                                headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                emergencyLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 }
+                            }
+                        })
+                        .then(() => window.toast.success('All lights disabled'))
+                        .catch(err => {
+                            console.error('Failed to disable lights:', err);
+                            window.toast.error('Failed to disable lights');
+                            masterLightSwitch.checked = true;
+                            masterLightEnabled = true;
+                        });
+                    } else {
+                        // Re-enable the groups that were on
+                        const config = getFullLightsConfig();
+                        sendLightsConfig(config)
+                        .then(() => window.toast.success('Lights enabled'))
+                        .catch(err => {
+                            console.error('Failed to enable lights:', err);
+                            window.toast.error('Failed to enable lights');
+                            masterLightSwitch.checked = false;
+                            masterLightEnabled = false;
+                        });
+                    }
+                });
+            }
+            
+            // Setup brightness sliders and blink rate visibility for each group
+            const lightGroups = ['headlights', 'tailLights', 'emergencyLights'];
+            lightGroups.forEach(groupName => {
+                // Brightness slider value display
+                const brightnessInput = document.getElementById(`${groupName}Brightness`);
+                const brightnessValue = document.getElementById(`${groupName}BrightnessValue`);
+                if (brightnessInput) {
+                    brightnessInput.addEventListener('input', function() {
+                        if (brightnessValue) brightnessValue.textContent = this.value;
+                    });
+                }
+                
+                // Mode change - show/hide blink rate field
+                const modeSelect = document.getElementById(`${groupName}Mode`);
+                const blinkRateContainer = document.getElementById(`${groupName}BlinkRateContainer`);
+                if (modeSelect && blinkRateContainer) {
+                    modeSelect.addEventListener('change', function() {
+                        const mode = this.value;
+                        // Show blink rate only for Blink (2) and Pulse (3) modes
+                        blinkRateContainer.style.display = (mode === '2' || mode === '3') ? 'block' : 'none';
+                    });
+                    // Initial state
+                    const initialMode = modeSelect.value;
+                    blinkRateContainer.style.display = (initialMode === '2' || initialMode === '3') ? 'block' : 'none';
+                }
+                
+                // Test button - temporarily light only this group
+                const testBtn = document.getElementById(`${groupName}TestBtn`);
+                if (testBtn) {
+                    testBtn.addEventListener('click', function() {
+                        // Save current state before test
+                        lightsBeforeTest = getFullLightsConfig();
+                        
+                        // Create test config - only this group enabled, others off
+                        const testConfig = {
+                            lightGroups: {
+                                headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                emergencyLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 }
+                            }
+                        };
+                        
+                        // Set only this group to current settings
+                        testConfig.lightGroups[groupName] = getLightGroupConfig(groupName);
+                        
+                        // Send test config
+                        testBtn.disabled = true;
+                        testBtn.innerHTML = '<span class="material-symbols-outlined">schedule</span> Testing...';
+                        
+                        sendLightsConfig(testConfig)
+                        .then(() => {
+                            window.toast.success(`Testing ${groupName}...`);
+                            
+                            // After 2 seconds, restore previous state or all lights off if master is off
+                            setTimeout(() => {
+                                if (masterLightEnabled && lightsBeforeTest) {
+                                    sendLightsConfig(lightsBeforeTest)
+                                    .then(() => {
+                                        testBtn.disabled = false;
+                                        testBtn.innerHTML = '<span class="material-symbols-outlined">play_circle</span> Test';
+                                        lightsBeforeTest = null;
+                                    })
+                                    .catch(err => {
+                                        console.error('Failed to restore lights:', err);
+                                        testBtn.disabled = false;
+                                        testBtn.innerHTML = '<span class="material-symbols-outlined">play_circle</span> Test';
+                                    });
+                                } else {
+                                    // Master is off, so turn all lights off
+                                    sendLightsConfig({
+                                        lightGroups: {
+                                            headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                            tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
+                                            emergencyLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 }
+                                        }
+                                    })
+                                    .then(() => {
+                                        testBtn.disabled = false;
+                                        testBtn.innerHTML = '<span class="material-symbols-outlined">play_circle</span> Test';
+                                        lightsBeforeTest = null;
+                                    })
+                                    .catch(err => {
+                                        console.error('Failed to turn off lights:', err);
+                                        testBtn.disabled = false;
+                                        testBtn.innerHTML = '<span class="material-symbols-outlined">play_circle</span> Test';
+                                    });
+                                }
+                            }, 2000);
+                        })
+                        .catch(err => {
+                            console.error('Test failed:', err);
+                            window.toast.error(`Failed to test ${groupName}`);
+                            testBtn.disabled = false;
+                            testBtn.innerHTML = '<span class="material-symbols-outlined">play_circle</span> Test';
+                        });
+                    });
+                }
+                
+                // Save button - apply settings and respect master switch
+                const saveBtn = document.getElementById(`${groupName}SaveBtn`);
+                if (saveBtn) {
+                    saveBtn.addEventListener('click', function() {
+                        if (!masterLightEnabled) {
+                            window.toast.warning('Master light switch is OFF - lights will not activate until enabled');
+                        }
+                        
+                        const config = getFullLightsConfig();
+                        saveBtn.disabled = true;
+                        saveBtn.innerHTML = '<span class="material-symbols-outlined">schedule</span> Saving...';
+                        
+                        sendLightsConfig(config)
+                        .then(() => {
+                            window.toast.success(`${groupName} settings saved`);
+                            saveBtn.disabled = false;
+                            saveBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Save';
+                        })
+                        .catch(err => {
+                            console.error(`Failed to save ${groupName}:`, err);
+                            window.toast.error(`Failed to save ${groupName}`);
+                            saveBtn.disabled = false;
+                            saveBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Save';
+                        });
+                    });
+                }
+            });
+            
+            // Load initial lights state from ESP32
+            function loadLightsState() {
+                fetch(getApiUrl('/api/lights'))
+                .then(response => response.json())
+                .then(data => {
+                    if (data.lightGroups) {
+                        lightGroups.forEach(groupName => {
+                            const group = data.lightGroups[groupName];
+                            if (group) {
+                                const toggle = document.getElementById(`${groupName}Toggle`);
+                                const brightness = document.getElementById(`${groupName}Brightness`);
+                                const mode = document.getElementById(`${groupName}Mode`);
+                                const blinkRate = document.getElementById(`${groupName}BlinkRate`);
+                                const brightnessValue = document.getElementById(`${groupName}BrightnessValue`);
+                                
+                                if (toggle) toggle.checked = group.enabled;
+                                if (brightness) {
+                                    brightness.value = group.brightness;
+                                    if (brightnessValue) brightnessValue.textContent = group.brightness;
+                                }
+                                if (mode) {
+                                    mode.value = group.mode;
+                                    // Trigger change event to show/hide blink rate
+                                    mode.dispatchEvent(new Event('change'));
+                                }
+                                if (blinkRate) blinkRate.value = group.blinkRate;
+                            }
+                        });
+                    }
+                })
+                .catch(err => console.error('Failed to load lights state:', err));
+            }
+            
+            loadLightsState();
             
             // Suspension Settings gear click - navigate to Tuning
             const suspGear = document.getElementById('suspensionSettingsGear');
