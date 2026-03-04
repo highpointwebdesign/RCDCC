@@ -2,7 +2,9 @@ window.onerror = function (msg, url, line) {
     console.log("JS ERROR:", msg, "Line:", line);
 };
         // ==================== Configuration ====================
-        const ESP32_IP = localStorage.getItem('esp32Ip') || window.location.hostname || '192.168.4.1';
+        // Determine ESP32 IP: prefer localStorage, then use actual IP if on ESP32 (192.168.x.x), else default to AP IP
+        const ESP32_IP = localStorage.getItem('esp32Ip') || 
+                         (window.location.hostname.startsWith('192.168.') ? window.location.hostname : '192.168.4.1');
         
         // ==================== Version Configuration ====================
         // Update this version number when releasing new app versions
@@ -15,16 +17,8 @@ window.onerror = function (msg, url, line) {
         
         // Helper function to get the correct API URL
         function getApiUrl(endpoint) {
-            // If we're on the ESP32 directly (192.168.x.x), use absolute path with http
-            const isLocalESP32 = window.location.hostname.startsWith('192.168.') || window.location.hostname === '192.168.4.1';
-            const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            
-            if (isLocalESP32 || isDevelopment && window.location.port === '8081') {
-                // Use the actual server IP/hostname with http
-                return `http://${ESP32_IP}${endpoint}`;
-            }
-            // When on GitHub Pages or other HTTPS sites, use relative path (won't work without proxy)
-            // For now, still try http to the stored IP
+            // Always use http://${ESP32_IP} for local API calls
+            // This works whether we're on the ESP32 directly, GitHub Pages, or local dev server
             return `http://${ESP32_IP}${endpoint}`;
         }
         
