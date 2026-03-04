@@ -1929,6 +1929,13 @@
                     </span>
                     <span class="tab-label-full">Network Settings</span>
                     <span class="tab-label-short">Network</span>
+                </button>  
+                <button class="settings-tab" data-tab="lights">
+                    <span class="material-symbols-outlined">
+                    lightbulb
+                    </span>
+                    <span class="tab-label-full">Light Settings</span>
+                    <span class="tab-label-short">Lights</span>
                 </button>
                 <button class="settings-tab" data-tab="system">
                     <span class="material-symbols-outlined">
@@ -1936,13 +1943,6 @@
                     </span>
                     <span class="tab-label-full">System</span>
                     <span class="tab-label-short">System</span>
-                </button>
-                <button class="settings-tab" data-tab="lights">
-                    <span class="material-symbols-outlined">
-                    lightbulb
-                    </span>
-                    <span class="tab-label-full">Light Settings</span>
-                    <span class="tab-label-short">Lights</span>
                 </button>
                 <button class="settings-tab" data-tab="debugging">
                     <span class="material-symbols-outlined">
@@ -2298,71 +2298,71 @@
                         </div>
                     </div>
 
-                    <!-- System Notification LEDs Card -->
+                    <!-- Notifications Card -->
                     <div class="col-12 col-md-6">
-                        <div class="card" id="notificationLedsCard">
+                        <div class="card" id="notificationsCard">
                             <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #000000; color: #ffffff;">
                                 <div>
-                                    <span style="position: relative; display: inline-block; width: 1.5em; height: 1em; color: var(--danger);">
-                                        <span class="material-symbols-outlined">lightbulb</span>
+                                    <span class="material-symbols-outlined" style="color: var(--danger); vertical-align: middle; margin-right: 0.5rem;">
+                                        notifications_active
                                     </span>
-                                    System Notification LEDs
+                                    Notifications
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div class="mb-3">
-                                    <label for="notificationGroupSelect" class="form-label">
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; color: var(--danger);">group_work</span>
-                                        Light Group for Notifications
-                                    </label>
-                                    <select class="form-select" id="notificationGroupSelect" onchange="saveNotificationGroup()">
-                                        <option value="__none__">None - Disable LED Notifications</option>
-                                        <option value="__all__">All LEDs</option>
-                                        <!-- Light groups dynamically populated here -->
-                                    </select>
-                                    <div class="form-text">
-                                        <small>Select which LEDs flash during notifications. Success=Green, Error=Red, Warning=Amber, Info=Blue. Only the LEDs from the group will flash (not the group's pattern).</small>
+                                <!-- LED Notifications Section -->
+                                <div class="mb-4 pb-4" style="border-bottom: 1px solid #ddd;">
+                                    <h6 class="mb-3" style="font-weight: 600; color: var(--text-primary);">
+                                        <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle; margin-right: 0.5rem; color: var(--danger);">lightbulb</span>
+                                        LED Flashing
+                                    </h6>
+                                    <div class="mb-3">
+                                        <label for="notificationGroupSelect" class="form-label">
+                                            Light Group for LED Notifications
+                                        </label>
+                                        <select class="form-select" id="notificationGroupSelect" onchange="saveNotificationGroup()">
+                                            <option value="__none__">None - Disable LED Notifications</option>
+                                            <option value="__all__">All LEDs</option>
+                                            <!-- Light groups dynamically populated here -->
+                                        </select>
+                                        <div class="form-text">
+                                            <small>Select which LEDs flash during notifications. Success=Green, Error=Red, Warning=Amber, Info=Blue. Only the LEDs from the group will flash (not the group's pattern).</small>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('success')">
+                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">check_circle</span> Test Success
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('error')">
+                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">error</span> Test Error
+                                        </button>
+                                    </div>
+                                    <div class="d-flex gap-2 mt-2">
+                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('warning')">
+                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">warning</span> Test Warning
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('info')">
+                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">info</span> Test Info
+                                        </button>
                                     </div>
                                 </div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('success')">
-                                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">check_circle</span> Test Success
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('error')">
-                                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">error</span> Test Error
-                                    </button>
-                                </div>
-                                <div class="d-flex gap-2 mt-2">
-                                    <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('warning')">
-                                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">warning</span> Test Warning
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('info')">
-                                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">info</span> Test Info
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Notification Sounds Card -->
-                    <div class="col-12 col-md-6">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">
-                                notifications_active
-                                </span>
-                                Notification Sounds
-                            </div>
-                            <div class="card-body">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="enableNotificationSounds" checked>
-                                    <label class="form-check-label" for="enableNotificationSounds">
-                                        <span>Enable Sounds</span>
-                                    </label>
+                                <!-- Audio Notifications Section -->
+                                <div>
+                                    <h6 class="mb-3" style="font-weight: 600; color: var(--text-primary);">
+                                        <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle; margin-right: 0.5rem; color: var(--danger);">volume_up</span>
+                                        Audio Alerts
+                                    </h6>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enableNotificationSounds" checked>
+                                        <label class="form-check-label" for="enableNotificationSounds">
+                                            <span>Enable Sounds</span>
+                                        </label>
+                                    </div>
+                                    <p style="color: #666; font-size: 0.875rem; margin-top: 0.75rem;">
+                                        When enabled, notification toasts will include audio alerts for success, warning, error, and info messages.
+                                    </p>
                                 </div>
-                                <p style="color: #666; font-size: 0.875rem; margin-top: 1rem;">
-                                    When enabled, notification toasts will include audio alerts for success, warning, error, and info messages.
-                                </p>
                             </div>
                         </div>
                     </div>
@@ -3061,7 +3061,7 @@
         // - Reads from package.json
         // - Uses git tags: $(git describe --tags --always)
         // - Generates from CI/CD pipeline build number
-        const APP_VERSION = '1.0.0';
+        const APP_VERSION = '6f3e740';
         const BUILD_DATE = '2026-03-04'; // Can be auto-generated: new Date().toISOString().split('T')[0]
         
         // Helper function to get the correct API URL
