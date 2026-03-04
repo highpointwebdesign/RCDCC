@@ -679,6 +679,71 @@
             /* background-color: rgba(55, 65, 81, 0.06); */
         }
 
+        /* Light Groups Styling */
+        .light-group-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            margin-bottom: 0.75rem;
+            background-color: #f9fafb;
+            transition: all 0.2s ease;
+        }
+
+        .light-group-item:hover {
+            background-color: #f3f4f6;
+            border-color: var(--primary);
+        }
+
+        .light-group-info {
+            flex: 1;
+        }
+
+        .light-group-name {
+            font-weight: 600;
+            color: #000;
+            margin-bottom: 0.25rem;
+        }
+
+        .light-group-range {
+            font-size: 0.875rem;
+            color: #666;
+        }
+
+        .light-group-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: 1rem;
+        }
+
+        .light-group-actions button {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.875rem;
+            border-radius: 0.25rem;
+            border: 1px solid #d1d5db;
+            background-color: #fff;
+            color: #000;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .light-group-actions button:hover {
+            background-color: #f3f4f6;
+            border-color: #999;
+        }
+
+        .light-group-actions .btn-delete:hover {
+            background-color: #fee2e2;
+            border-color: #ef4444;
+            color: #dc2626;
+        }
+
+        #tab-lights.active {
+            /* background-color: rgba(251, 191, 36, 0.06); */
+        }
+
         @media (max-width: 767.98px) {
             .settings-tabs {
                 margin-left: -1rem;
@@ -1817,6 +1882,13 @@
                     <span class="tab-label-full">Logs</span>
                     <span class="tab-label-short">Logs</span>
                 </button>
+                <button class="settings-tab" data-tab="lights">
+                    <span class="material-symbols-outlined">
+                    lightbulb
+                    </span>
+                    <span class="tab-label-full">Light Groups</span>
+                    <span class="tab-label-short">Lights</span>
+                </button>
             </div>
 
             <!-- Tab Content: Servo Configuration -->
@@ -2260,6 +2332,58 @@
                                 <div class="data-display" id="configData">{
   "loading": "Fetching configuration..."
 }</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Light Groups -->
+            <div class="tab-pane" id="tab-lights">
+                <div class="row g-3">
+                    <!-- Lighting Configuration Card -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">settings_input_composite</span>
+                                Lighting Configuration
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="totalLEDCount" class="form-label"><strong>Total LEDs in your strip:</strong></label>
+                                    <input type="number" class="form-control" id="totalLEDCount" min="1" max="300" value="100" placeholder="100">
+                                    <div class="form-text">
+                                        <small>If you add more addressable LEDs to your strip, update this number. Minimum: 1, Maximum: 300</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Your Light Groups Card -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb_group</span>
+                                Your Light Groups
+                            </div>
+                            <div class="card-body">
+                                <!-- Light Groups List -->
+                                <div id="lightGroupsList" style="margin-bottom: 1.5rem;">
+                                    <!-- Groups will be populated here by JavaScript -->
+                                </div>
+
+                                <!-- Empty State Message -->
+                                <div id="lightGroupsEmptyState" style="text-align: center; color: #999; padding: 2rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 3rem; display: block; margin-bottom: 0.5rem;">lightbulb_off</span>
+                                    <p>No light groups yet. Create your first one to get started!</p>
+                                </div>
+
+                                <!-- Add Light Group Button -->
+                                <button type="button" class="btn w-100 btn-gold" id="addLightGroupBtn">
+                                    <span class="material-symbols-outlined">add_circle</span>
+                                    Add Light Group
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -4306,6 +4430,167 @@
                 setTimeout(refreshServoSliderRender, 50);
             }
         }
+
+        // ==================== Light Groups Management ====================
+        const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
+        const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
+        let lightGroups = [];
+
+        function loadLightGroups() {
+            const stored = localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY);
+            lightGroups = stored ? JSON.parse(stored) : [];
+            renderLightGroupsList();
+        }
+
+        function saveLightGroups() {
+            localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(lightGroups));
+            renderLightGroupsList();
+        }
+
+        function renderLightGroupsList() {
+            const listContainer = document.getElementById('lightGroupsList');
+            const emptyState = document.getElementById('lightGroupsEmptyState');
+            
+            if (!listContainer) return;
+            
+            listContainer.innerHTML = '';
+            
+            if (lightGroups.length === 0) {
+                emptyState.style.display = 'block';
+            } else {
+                emptyState.style.display = 'none';
+                lightGroups.forEach((group, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'light-group-item';
+                    item.innerHTML = `
+                        <div class="light-group-info">
+                            <div class="light-group-name">${group.name}</div>
+                            <div class="light-group-range">LEDs: ${group.indices.join(', ')}</div>
+                        </div>
+                        <div class="light-group-actions">
+                            <button onclick="editLightGroup(${index})" title="Edit this group">Edit</button>
+                            <button onclick="deleteLightGroup(${index})" class="btn-delete" title="Delete this group">Delete</button>
+                        </div>
+                    `;
+                    listContainer.appendChild(item);
+                });
+            }
+        }
+
+        function addLightGroup() {
+            const name = prompt('Enter light group name (e.g., "Headlights", "Underglow", "KC Lights"):');
+            if (!name) return;
+            
+            const indicesStr = prompt('Enter LED indices (e.g., "0,1" or "10-15" or "0,1,10-15"):');
+            if (!indicesStr) return;
+            
+            const indices = parseLEDIndices(indicesStr);
+            if (indices.length === 0) {
+                alert('Invalid LED indices. Please use numbers separated by commas or ranges like 10-15');
+                return;
+            }
+            
+            lightGroups.push({
+                name: name,
+                indices: indices
+            });
+            
+            saveLightGroups();
+            alert(`Light group "${name}" created with ${indices.length} LED(s)`);
+        }
+
+        function editLightGroup(index) {
+            const group = lightGroups[index];
+            if (!group) return;
+            
+            const newName = prompt('Edit light group name:', group.name);
+            if (newName === null) return;
+            
+            const newIndicesStr = prompt('Edit LED indices:', group.indices.join(','));
+            if (newIndicesStr === null) return;
+            
+            const newIndices = parseLEDIndices(newIndicesStr);
+            if (newIndices.length === 0) {
+                alert('Invalid LED indices. Please use numbers separated by commas or ranges like 10-15');
+                return;
+            }
+            
+            lightGroups[index] = {
+                name: newName,
+                indices: newIndices
+            };
+            
+            saveLightGroups();
+            alert(`Light group updated!`);
+        }
+
+        function deleteLightGroup(index) {
+            const group = lightGroups[index];
+            if (!group) return;
+            
+            if (confirm(`Delete light group "${group.name}"? This cannot be undone.`)) {
+                lightGroups.splice(index, 1);
+                saveLightGroups();
+                alert('Light group deleted');
+            }
+        }
+
+        function parseLEDIndices(str) {
+            const indices = new Set();
+            const parts = str.split(',');
+            
+            parts.forEach(part => {
+                part = part.trim();
+                if (part.includes('-')) {
+                    const [start, end] = part.split('-').map(x => parseInt(x.trim()));
+                    if (!isNaN(start) && !isNaN(end)) {
+                        const min = Math.min(start, end);
+                        const max = Math.max(start, end);
+                        for (let i = min; i <= max; i++) {
+                            indices.add(i);
+                        }
+                    }
+                } else {
+                    const num = parseInt(part);
+                    if (!isNaN(num)) {
+                        indices.add(num);
+                    }
+                }
+            });
+            
+            return Array.from(indices).sort((a, b) => a - b);
+        }
+
+        // Wire up Light Groups UI events
+        window.addEventListener('DOMContentLoaded', function() {
+            const addBtn = document.getElementById('addLightGroupBtn');
+            if (addBtn) {
+                addBtn.addEventListener('click', addLightGroup);
+            }
+            
+            const totalLEDInput = document.getElementById('totalLEDCount');
+            if (totalLEDInput) {
+                // Load saved value
+                const saved = localStorage.getItem(TOTAL_LED_COUNT_KEY);
+                if (saved) totalLEDInput.value = saved;
+                
+                // Save on change
+                totalLEDInput.addEventListener('change', function() {
+                    const value = parseInt(this.value);
+                    if (value >= 1 && value <= 300) {
+                        localStorage.setItem(TOTAL_LED_COUNT_KEY, value);
+                        window.toast.success(`Total LED count set to ${value}`);
+                    } else {
+                        alert('Please enter a value between 1 and 300');
+                        this.value = localStorage.getItem(TOTAL_LED_COUNT_KEY) || 100;
+                    }
+                });
+            }
+            
+            // Load light groups
+            loadLightGroups();
+        });
+
         function updateConnectionStatus(connected) {
             const icon = document.getElementById('wifiIcon');
             if (connected) {
