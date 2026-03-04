@@ -26,6 +26,10 @@ private:
   float latestYaw = 0.0f;
   float latestVerticalAccel = 0.0f;
   
+  // Buffer for POST request bodies (prevents data corruption from freed memory)
+  String lightsPostBuffer;
+  size_t lightsPostTotalSize = 0;
+  
 public:
   void init(StorageManager& storage) {
     storageManager = &storage;
@@ -429,33 +433,32 @@ private:
     
     // Lights configuration API - UPDATE lights state  
     server.on("/api/lights", HTTP_POST, [this](AsyncWebServerRequest *request) {
-      // Body has been buffered by the body handler
-      request->send(200, "application/json", "{\"status\":\"success\"}");
-    }, nullptr, [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-      // Only process when we have all the data
-      if (index + len != total) {
-        return; // Wait for more data
+      // Body has been buffered by the body handler - now process it
+      Serial.printf("Lights POST onRequest handler: buffer size = %d bytes\n", lightsPostBuffer.length());
+      
+      if (lightsPostBuffer.length() == 0) {
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"No body received\"}");
+        return;
       }
       
-      Serial.printf("Lights POST complete: total=%d bytes\n", total);
-      
-      // Create JSON document from received data
+      // Create JSON document from buffered data
       DynamicJsonDocument doc(2048);
-      DeserializationError error = deserializeJson(doc, (const char*)data, len);
+      DeserializationError error = deserializeJson(doc, lightsPostBuffer);
       
       if (error) {
         Serial.printf("Lights JSON parse error: %s\n", error.c_str());
         request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        lightsPostBuffer.clear();
         return;
       }
       
       Serial.println("Lights JSON parsed successfully");
-      Serial.printf("JSON size: %d bytes, capacity: %d\n", doc.size(), doc.capacity());
       
       // Update each light group if provided
       if (!doc.containsKey("lightGroups")) {
         Serial.println("ERROR: No lightGroups in request!");
         request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing lightGroups\"}");
+        lightsPostBuffer.clear();
         return;
       }
       
@@ -478,6 +481,29 @@ private:
       }
       
       Serial.println("All lights groups updated successfully");
+      request->send(200, "application/json", "{\"status\":\"success\"}");
+      lightsPostBuffer.clear();
+      lightsPostTotalSize = 0;
+    }, nullptr, [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+      // Body handler - accumulate data into buffer
+      if (index == 0) {
+        // First chunk - reset buffer
+        lightsPostBuffer.clear();
+        lightsPostTotalSize = total;
+        Serial.printf("Lights POST body handler: starting, total size = %d bytes\n", total);
+      }
+      
+      // Append this chunk to buffer
+      if (data && len > 0) {
+        lightsPostBuffer.concat((const char*)data, len);
+        Serial.printf("Lights POST body handler: got %d bytes (index=%d, total=%d)\n", len, index, total);
+      }
+      
+      // Check if we have all the data
+      if (index + len == total) {
+        Serial.printf("Lights POST body handler: all data received (%d bytes)\n", lightsPostBuffer.length());
+        // Data is complete, onRequest handler will process it now
+      }
     });
     
     // Serve static files from SPIFFS
