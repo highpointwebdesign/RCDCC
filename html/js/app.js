@@ -20,11 +20,24 @@ window.onerror = function (msg, url, line) {
             const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             
             if (isLocalESP32 || isDevelopment && window.location.port === '8081') {
-                // Use the actual server IP/hostname
+                // Use the actual server IP/hostname with http
                 return `http://${ESP32_IP}${endpoint}`;
             }
-            // Fallback: use relative path
-            return endpoint;
+            // When on GitHub Pages or other HTTPS sites, use relative path (won't work without proxy)
+            // For now, still try http to the stored IP
+            return `http://${ESP32_IP}${endpoint}`;
+        }
+        
+        // Helper to make fetch calls with proper error handling and protocol
+        async function fetchWithProperProtocol(endpoint, options = {}) {
+            const url = getApiUrl(endpoint);
+            try {
+                const response = await fetch(url, { ...options, cache: 'no-store' });
+                return response;
+            } catch (err) {
+                console.error(`Fetch failed for ${url}:`, err);
+                throw err;
+            }
         }
         
         // ==================== LED Pattern Definitions ====================
@@ -636,7 +649,7 @@ window.onerror = function (msg, url, line) {
             let shouldDelay = false;
 
             try {
-                const response = await fetch(`http://${ESP32_IP}/api/calibrate`, {
+                const response = await fetch(getApiUrl('/api/calibrate'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -753,7 +766,7 @@ window.onerror = function (msg, url, line) {
 
         
         async function getSensorData() {
-            const response = await fetch(`http://${ESP32_IP}/api/sensors`, { cache: 'no-store' });
+            const response = await fetch(getApiUrl('/api/sensors'), { cache: 'no-store' });
             if (!response.ok) {
                 throw new Error(`Sensor fetch failed: ${response.status}`);
             }
@@ -1018,7 +1031,7 @@ window.onerror = function (msg, url, line) {
                     setBubbleLevelStatus('Neutral position set. Confirming data saved correctly...');
                     
                     // Fetch latest config from RCDCCC module to confirm all values were saved
-                    const response = await fetch(`http://${ESP32_IP}/api/config`, { cache: 'no-store' });
+                    const response = await fetch(getApiUrl('/api/config'), { cache: 'no-store' });
                     if (response.ok) {
                         const updatedConfig = await response.json();
                         if (updatedConfig && updatedConfig.servos) {
@@ -2704,7 +2717,7 @@ window.onerror = function (msg, url, line) {
             heartbeatInFlight = controller;
             const timeout = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS);
 
-            fetch(`http://${ESP32_IP}/api/health-check`, {
+            fetch(getApiUrl('/api/health-check'), {
                 method: 'GET',
                 cache: 'no-store',
                 signal: controller.signal
@@ -3966,7 +3979,7 @@ window.onerror = function (msg, url, line) {
             const timeout = setTimeout(() => controller.abort(), 8000);
 
             try {
-                const response = await fetch(`http://${ESP32_IP}/api/servo-config`, {
+                const response = await fetch(getApiUrl('/api/servo-config'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -4396,7 +4409,8 @@ window.onerror = function (msg, url, line) {
                     deviceName: newDeviceName
                 };
                 
-                fetch(`http://${newIp}/api/config`, {
+                // For IP change, use the new IP directly
+            fetch(getApiUrl('/api/config').replace(ESP32_IP, newIp), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
