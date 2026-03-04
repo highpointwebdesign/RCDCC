@@ -583,15 +583,11 @@
             background-color: #000;
         }
         
-        .settings-tab[data-tab="gyro"].active {
-            background-color: #000;
-        }
-        
         .settings-tab[data-tab="network"].active {
             background-color: #000;
         }
         
-        .settings-tab[data-tab="sounds"].active {
+        .settings-tab[data-tab="system"].active {
             background-color: #000;
         }
         
@@ -673,10 +669,6 @@
         
         #tab-servo.active {
             /* background-color: rgba(37, 99, 235, 0.06); */
-        }
-        
-        #tab-gyro.active {
-            /* background-color: rgba(14, 165, 233, 0.06); */
         }
         
         #tab-network.active {
@@ -1728,10 +1720,6 @@
                 </div>
             </div>
         
-            <!-- Battery Status Card - DISABLED -->
-            <!-- Battery monitoring disabled to improve stability -->
-            <!-- Will be re-enabled in a future release -->
-
             <!-- Connection Card -->
             <div class="col-12 col-md-6 col-lg-4">
                 <div class="card" id="connectionCard">
@@ -1770,6 +1758,29 @@
                 </div>
             </div>
 
+            <!-- Lights Control Card (Master Kill Switch) -->
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card" id="lightsCard">
+                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                        <div>
+                            <span class="material-symbols-outlined icon-danger">lightbulb</span>
+                            Emergency Lights
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="emergencyLightsToggle">
+                            <label class="form-check-label" for="emergencyLightsToggle">
+                                <span>Master Switch</span>
+                            </label>
+                        </div>
+                        <div class="form-text mt-2">
+                            <small>Turn emergency lights on/off. Configure patterns in Lights section.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
         </section>
 
@@ -1785,13 +1796,6 @@
                     <span class="tab-label-full">Servo Configuration</span>
                     <span class="tab-label-short">Servo</span>
                 </button>
-                <button class="settings-tab" data-tab="gyro">
-                    <span class="material-symbols-outlined">
-                    explore
-                    </span>
-                    <span class="tab-label-full">Gyro Configuration</span>
-                    <span class="tab-label-short">Gyro</span>
-                </button>
                 <button class="settings-tab" data-tab="network">
                     <span class="material-symbols-outlined">
                     wifi
@@ -1799,19 +1803,19 @@
                     <span class="tab-label-full">Network Settings</span>
                     <span class="tab-label-short">Network</span>
                 </button>
-                <button class="settings-tab" data-tab="sounds">
+                <button class="settings-tab" data-tab="system">
                     <span class="material-symbols-outlined">
-                    volume_up
+                    settings
                     </span>
-                    <span class="tab-label-full">Sounds</span>
-                    <span class="tab-label-short">Sound</span>
+                    <span class="tab-label-full">System</span>
+                    <span class="tab-label-short">System</span>
                 </button>
                 <button class="settings-tab" data-tab="debugging">
                     <span class="material-symbols-outlined">
-                    pest_control
+                    history
                     </span>
-                    <span class="tab-label-full">Debugging</span>
-                    <span class="tab-label-short">Debug</span>
+                    <span class="tab-label-full">Logs</span>
+                    <span class="tab-label-short">Logs</span>
                 </button>
             </div>
 
@@ -2034,39 +2038,6 @@
                         </div>
                     </div>
 
-                    <!-- LED Status Color Card -->
-                    <div class="col-12 col-md-6 col-lg-4">
-                        <div class="card" id="ledColorCard">
-                            <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #000000; color: #ffffff;">
-                                <div>
-                                    <span style="position: relative; display: inline-block; width: 1.5em; height: 1em; color: var(--danger);">
-                                        <span class="material-symbols-outlined">lightbulb</span>
-                                    </span>
-                                    LED Status Color
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <label for="ledColorSelect" class="form-label">
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; color: var(--danger);">palette</span>
-                                        Status Indicator Color
-                                    </label>
-                                    <select class="form-select" id="ledColorSelect" onchange="updateLEDColor()">
-                                        <option value="red" data-rgb="255,0,0">Red</option>
-                                        <option value="green" data-rgb="0,255,0">Green</option>
-                                        <option value="blue" data-rgb="0,0,255">Blue</option>
-                                    </select>
-                                    <div class="form-text">
-                                        <small>Choose the color for the addressable LED status indicator. The LED will flash this color during system notifications and status updates.</small>
-                                    </div>
-                                </div>
-                                <div class="d-flex justify-content-center mt-3">
-                                    <div id="ledPreview" style="width: 40px; height: 40px; border-radius: 50%; background-color: rgb(255, 0, 0); border: 2px solid #fff; box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <div class="col-12">
                         <div class="alert alert-info" style="font-size: 0.875rem;">
                             <strong>Servo Tips:</strong><br>
@@ -2075,40 +2046,6 @@
                             • Changes are automatically saved<br>
                             • If your chassis doesn't respond as expected, double-check servo connections and orientations<br>
                             • <a href="test-gps.html">test GPS</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tab Content: Gyro Configuration -->
-            <div class="tab-pane" id="tab-gyro">
-                <div class="row g-3">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">
-                                arrows_input
-                                </span>
-                                RCDCC Mounting
-                            </div>
-                            <div class="card-body">
-                                <label for="mpuOrientation" class="form-label"><strong>Select Orientation</strong></label>
-                                <select class="form-select" id="mpuOrientation">
-                                    <option value="0">Arrow Forward, Chip Up (Default)</option>
-                                    <option value="1">Arrow Up, Chip Forward</option>
-                                    <option value="2">Arrow Backward, Chip Up</option>
-                                    <option value="3">Arrow Down, Chip Forward</option>
-                                    <option value="4">Arrow Right, Chip Up</option>
-                                    <option value="5">Arrow Left, Chip Up</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-12">
-                        <div class="alert alert-info" style="font-size: 0.875rem;">
-                            <strong>Calibration Tips:</strong><br>
-                            • Select how your DCC is physically mounted. The arrow is printed on the box. Correct orientation is critical for accurate roll/pitch readings. This is a one-time setup based on your installation.
                         </div>
                     </div>
                 </div>
@@ -2176,6 +2113,13 @@
                                     </div>
                                 </div>
 
+                                <div style="color: #000; margin-bottom: 2rem;">
+                                    <h6 class="mb-3"><strong>Device Name</strong></h6>
+                                    <div class="form-check">
+                                        <input type="text" class="form-control" id="deviceNameInput" placeholder="esp32-a49g4" maxlength="63">
+                                    </div>
+                                </div>
+                                
                                
                     
                                 <button type="button" class="btn w-100 mt-2 btn-gold" id="testConnectionBtn">
@@ -2190,9 +2134,68 @@
                 </div>
             </div>
 
-            <!-- Tab Content: Sounds -->
-            <div class="tab-pane" id="tab-sounds">
+            <!-- Tab Content: System -->
+            <div class="tab-pane" id="tab-system">
                 <div class="row g-3">
+                    <!-- RCDCC Mounting Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                arrows_input
+                                </span>
+                                RCDCC Mounting
+                            </div>
+                            <div class="card-body">
+                                <label for="mpuOrientation" class="form-label"><strong>Select Orientation</strong></label>
+                                <select class="form-select" id="mpuOrientation">
+                                    <option value="0">Arrow Forward, Chip Up (Default)</option>
+                                    <option value="1">Arrow Up, Chip Forward</option>
+                                    <option value="2">Arrow Backward, Chip Up</option>
+                                    <option value="3">Arrow Down, Chip Forward</option>
+                                    <option value="4">Arrow Right, Chip Up</option>
+                                    <option value="5">Arrow Left, Chip Up</option>
+                                </select>
+                                <div class="form-text">
+                                    <small>Select how your DCC is physically mounted. The arrow is printed on the box. Correct orientation is critical for accurate roll/pitch readings.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LED Status Color Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card" id="ledColorCard">
+                            <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #000000; color: #ffffff;">
+                                <div>
+                                    <span style="position: relative; display: inline-block; width: 1.5em; height: 1em; color: var(--danger);">
+                                        <span class="material-symbols-outlined">lightbulb</span>
+                                    </span>
+                                    LED Status Color
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="ledColorSelect" class="form-label">
+                                        <span class="material-symbols-outlined" style="vertical-align: middle; color: var(--danger);">palette</span>
+                                        Status Indicator Color
+                                    </label>
+                                    <select class="form-select" id="ledColorSelect" onchange="updateLEDColor()">
+                                        <option value="red" data-rgb="255,0,0">Red</option>
+                                        <option value="green" data-rgb="0,255,0">Green</option>
+                                        <option value="blue" data-rgb="0,0,255">Blue</option>
+                                    </select>
+                                    <div class="form-text">
+                                        <small>Choose the color for the addressable LED status indicator. The LED will flash this color during system notifications and status updates.</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-center mt-3">
+                                    <div id="ledPreview" style="width: 40px; height: 40px; border-radius: 50%; background-color: rgb(255, 0, 0); border: 2px solid #fff; box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Notification Sounds Card -->
                     <div class="col-12 col-md-6">
                         <div class="card">
@@ -2475,12 +2478,62 @@
         <section id="lights" class="page-section">
             <h2 class="section-title">Light Control</h2>
             <div class="row g-3">
+                <!-- Emergency Lights Configuration Card -->
+                <div class="col-12 col-lg-6">
+                    <div class="card">
+                        <div class="card-header" style="background-color: black; color: white;">
+                            <span class="material-symbols-outlined" style="color: var(--danger);">flash_on</span>
+                            Emergency Lights Configuration
+                        </div>
+                        <div class="card-body">
+                            <!-- LED Preview Section -->
+                            <div class="mb-4">
+                                <div class="form-text mb-2"><strong>Live Preview:</strong></div>
+                                <div style="display: flex; gap: 15px; justify-content: center; align-items: center; padding: 15px; background-color: #222; border-radius: 8px;">
+                                    <div style="display: flex; flex-direction: column; align-items: center;">
+                                        <div id="ledPreview0" style="width: 50px; height: 50px; border-radius: 50%; background-color: #333; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); margin-bottom: 8px; transition: all 0.1s ease;"></div>
+                                        <small style="color: #aaa;">LED 0</small>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; align-items: center;">
+                                        <div id="ledPreview1" style="width: 50px; height: 50px; border-radius: 50%; background-color: #333; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); margin-bottom: 8px; transition: all 0.1s ease;"></div>
+                                        <small style="color: #aaa;">LED 1</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="emergencyLightMode" class="form-label"><strong>Mode</strong></label>
+                                <select class="form-select" id="emergencyLightMode">
+                                    <option value="police">Police (Red/Blue)</option>
+                                    <option value="construction">Construction (Amber)</option>
+                                    <option value="warning">Warning (Amber)</option>
+                                </select>
+                                <div class="form-text">
+                                    <small>Select the emergency light mode. Use Master Switch on Dashboard to enable/disable.</small>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="emergencyLightPattern" class="form-label"><strong>Pattern</strong></label>
+                                <select class="form-select" id="emergencyLightPattern">
+                                    <!-- Options populated by JavaScript -->
+                                </select>
+                                <div class="form-text">
+                                    <small>Choose the light animation pattern for the selected mode.</small>
+                                </div>
+                            </div>
+                            <button type="button" class="btn w-100 btn-gold" id="applyLightsBtn">
+                                <span class="material-symbols-outlined">check_circle</span> Apply Pattern
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Features Card -->
-                <div class="col-12">
+                <div class="col-12 col-lg-6">
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
                             <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
-                            Features
+                            Upcoming Lights
                         </div>
                         <div class="card-body">
                             <ul style="margin: 0; padding-left: 1.5rem;">
@@ -2670,9 +2723,109 @@
         // ==================== Configuration ====================
         const ESP32_IP = localStorage.getItem('esp32Ip') || '192.168.87.32';
         
-        let batteryConfig = null;
+        // Helper function to get the correct API URL
+        function getApiUrl(endpoint) {
+            // Check if we're running on live-server (localhost:8081 or 127.0.0.1:8081)
+            const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            if (isDevelopment && window.location.port === '8081') {
+                // During development, route to the ESP32 IP
+                return `http://${ESP32_IP}${endpoint}`;
+            }
+            // When running on ESP32 itself, use relative path
+            return endpoint;
+        }
+        
+        // ==================== LED Pattern Definitions ====================
+        // Hex colors in RGB format (will be converted to GRB for ESP32)
+        const RED = "FF0000";
+        const BLUE = "0000FF";
+        const AMBER = "FFA500";
+        const OFF = "000000";
+        
+        const PATTERNS = {
+            police: [
+                {
+                    name: "Whip Sweep",
+                    isLooping: true,
+                    sequence: [
+                        { led0: RED, led1: OFF, duration: 250 },
+                        { led0: OFF, led1: BLUE, duration: 250 }
+                    ]
+                },
+                {
+                    name: "Dual Beacon",
+                    isLooping: true,
+                    sequence: [
+                        { led0: RED, led1: RED, duration: 250 },
+                        { led0: BLUE, led1: BLUE, duration: 250 }
+                    ]
+                },
+                {
+                    name: "Chase",
+                    isLooping: true,
+                    sequence: [
+                        { led0: RED, led1: OFF, duration: 250 },
+                        { led0: OFF, led1: RED, duration: 250 },
+                        { led0: BLUE, led1: OFF, duration: 250 },
+                        { led0: OFF, led1: BLUE, duration: 250 }
+                    ]
+                },
+                {
+                    name: "Dual Color Pulse",
+                    isLooping: true,
+                    sequence: [
+                        { led0: RED, led1: OFF, duration: 250 },
+                        { led0: RED, led1: BLUE, duration: 250 },
+                        { led0: OFF, led1: BLUE, duration: 250 }
+                    ]
+                },
+                {
+                    name: "Wig Wag",
+                    isLooping: true,
+                    sequence: [
+                        { led0: RED, led1: BLUE, duration: 250 },
+                        { led0: BLUE, led1: RED, duration: 250 }
+                    ]
+                }
+            ],
+            construction: [
+                {
+                    name: "Steady Amber",
+                    isLooping: false,
+                    sequence: [
+                        { led0: AMBER, led1: AMBER, duration: 60000 }  // Long duration for steady
+                    ]
+                },
+                {
+                    name: "Double Pulse",
+                    isLooping: true,
+                    sequence: [
+                        { led0: AMBER, led1: AMBER, duration: 250 },
+                        { led0: OFF, led1: OFF, duration: 250 }
+                    ]
+                }
+            ],
+            warning: [
+                {
+                    name: "Slow Beacon",
+                    isLooping: true,
+                    sequence: [
+                        { led0: AMBER, led1: AMBER, duration: 500 },
+                        { led0: OFF, led1: OFF, duration: 500 }
+                    ]
+                },
+                {
+                    name: "Fast Flash",
+                    isLooping: true,
+                    sequence: [
+                        { led0: AMBER, led1: AMBER, duration: 250 },
+                        { led0: OFF, led1: OFF, duration: 250 }
+                    ]
+                }
+            ]
+        };
+        
         let fullConfig = null;
-        let lastVoltages = [0, 0, 0];
         const rSliders = {};
         const rSliderSilentTimers = {};
         const rSliderInitState = new Set();
@@ -2764,6 +2917,170 @@
 
         function delay(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // ==================== Emergency Lights Helper Functions ====================
+        // Convert hex color (RGB) to object
+        function hexToRgb(hex) {
+            const result = /^([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : { r: 0, g: 0, b: 0 };
+        }
+        
+        // Convert RGB object to hex CSS color
+        function rgbToHex(r, g, b) {
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        
+        // Animate LED preview based on pattern
+        let ledPreviewAnimation = null;
+        function animateLedPreview(mode, patternIndex) {
+            // Stop previous animation
+            if (ledPreviewAnimation) {
+                clearInterval(ledPreviewAnimation);
+            }
+            
+            const patterns = PATTERNS[mode];
+            if (!patterns || !patterns[patternIndex]) {
+                // Clear LEDs
+                document.getElementById('ledPreview0').style.backgroundColor = '#333';
+                document.getElementById('ledPreview1').style.backgroundColor = '#333';
+                return;
+            }
+            
+            const pattern = patterns[patternIndex];
+            let stepIndex = 0;
+            
+            function updateLedDisplay() {
+                const step = pattern.sequence[stepIndex];
+                const color0 = hexToRgb(step.led0);
+                const color1 = hexToRgb(step.led1);
+                
+                const led0El = document.getElementById('ledPreview0');
+                const led1El = document.getElementById('ledPreview1');
+                
+                // Set color and glow effect
+                led0El.style.backgroundColor = rgbToHex(color0.r, color0.g, color0.b);
+                led1El.style.backgroundColor = rgbToHex(color1.r, color1.g, color1.b);
+                
+                // Apply glow to lit LEDs
+                if (step.led0 !== OFF) {
+                    led0El.style.boxShadow = `inset 0 2px 5px rgba(0,0,0,0.5), 0 0 10px ${rgbToHex(color0.r, color0.g, color0.b)}`;
+                } else {
+                    led0El.style.boxShadow = 'inset 0 2px 5px rgba(0,0,0,0.5)';
+                }
+                
+                if (step.led1 !== OFF) {
+                    led1El.style.boxShadow = `inset 0 2px 5px rgba(0,0,0,0.5), 0 0 10px ${rgbToHex(color1.r, color1.g, color1.b)}`;
+                } else {
+                    led1El.style.boxShadow = 'inset 0 2px 5px rgba(0,0,0,0.5)';
+                }
+                
+                // Next step
+                stepIndex = (stepIndex + 1) % pattern.sequence.length;
+            }
+            
+            updateLedDisplay();  // Show first step immediately
+            
+            // Loop through pattern steps
+            if (pattern.sequence.length > 1) {
+                let currentDuration = pattern.sequence[0].duration;
+                
+                ledPreviewAnimation = setInterval(() => {
+                    let nextStepIndex = (stepIndex + 1) % pattern.sequence.length;
+                    currentDuration = pattern.sequence[stepIndex].duration;
+                    
+                    // Schedule the update
+                    setTimeout(() => {
+                        updateLedDisplay();
+                    }, pattern.sequence[stepIndex].duration);
+                    
+                }, pattern.sequence[stepIndex].duration);
+            }
+        }
+        
+        function updateEmergencyLightPatterns(mode) {
+            const patternSelect = document.getElementById('emergencyLightPattern');
+            if (!patternSelect) return;
+            
+            // Clear current options
+            patternSelect.innerHTML = '';
+            
+            // Get patterns from PATTERNS object
+            const modePatterns = PATTERNS[mode] || [];
+            modePatterns.forEach((pattern, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = pattern.name;
+                patternSelect.appendChild(option);
+            });
+            
+            // Animate preview with first pattern
+            if (modePatterns.length > 0) {
+                animateLedPreview(mode, 0);
+            }
+        }
+        
+        function loadEmergencyLightsState() {
+            fetch(getApiUrl('/api/lights'))
+                .then(response => response.json())
+                .then(data => {
+                    const toggle = document.getElementById('emergencyLightsToggle');
+                    const modeSelect = document.getElementById('emergencyLightMode');
+                    const patternSelect = document.getElementById('emergencyLightPattern');
+                    
+                    if (toggle) {
+                        toggle.checked = data.enabled;
+                    }
+                    
+                    // Try to figure out which mode the current pattern belongs to
+                    let detectedMode = 'police';
+                    let detectedPatternIndex = 0;
+                    
+                    if (data.pattern && data.pattern.steps) {
+                        // Compare the returned pattern with our known patterns
+                        for (const [mode, patterns] of Object.entries(PATTERNS)) {
+                            for (let i = 0; i < patterns.length; i++) {
+                                const knownPattern = patterns[i];
+                                // Compare step counts and sequences
+                                if (knownPattern.sequence.length === data.pattern.steps.length) {
+                                    let matches = true;
+                                    for (let j = 0; j < knownPattern.sequence.length; j++) {
+                                        const knownStep = knownPattern.sequence[j];
+                                        const apiStep = data.pattern.steps[j];
+                                        if (knownStep.led0 !== apiStep.led0 || 
+                                            knownStep.led1 !== apiStep.led1 || 
+                                            knownStep.duration !== apiStep.duration) {
+                                            matches = false;
+                                            break;
+                                        }
+                                    }
+                                    if (matches) {
+                                        detectedMode = mode;
+                                        detectedPatternIndex = i;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (modeSelect) {
+                        modeSelect.value = detectedMode;
+                        // Update patterns to match the mode
+                        updateEmergencyLightPatterns(detectedMode);
+                    }
+                    
+                    if (patternSelect) {
+                        patternSelect.value = detectedPatternIndex;
+                        // Animate the preview
+                        animateLedPreview(detectedMode, detectedPatternIndex);
+                    }
+                })
+                .catch(err => console.error('Failed to load lights state:', err));
         }
 
         function buildValueArray(min, max, step, decimals) {
@@ -3763,6 +4080,103 @@
                     fetchRollPitchSnapshot();
                 });
             }
+
+            // ==================== Emergency Lights Controls ====================
+            const emergencyLightsToggle = document.getElementById('emergencyLightsToggle');
+            const emergencyLightMode = document.getElementById('emergencyLightMode');
+            const emergencyLightPattern = document.getElementById('emergencyLightPattern');
+            const applyLightsBtn = document.getElementById('applyLightsBtn');
+
+            // Initialize pattern dropdown with default mode (police) on page load
+            if (emergencyLightMode) {
+                updateEmergencyLightPatterns(emergencyLightMode.value || 'police');
+            }
+
+            // Dashboard toggle: Master kill switch - turn lights on/off
+            if (emergencyLightsToggle) {
+                emergencyLightsToggle.addEventListener('change', function() {
+                    const isEnabled = this.checked;
+                    
+                    if (isEnabled) {
+                        // Turn on with current mode and pattern
+                        const mode = emergencyLightMode.value;
+                        const patternIndex = parseInt(emergencyLightPattern.value);
+                        const pattern = PATTERNS[mode][patternIndex];
+                        
+                        fetch(getApiUrl('/api/lights'), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                enabled: true,
+                                pattern: pattern
+                            })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            window.toast.success('Emergency lights enabled');
+                        })
+                        .catch(err => {
+                            console.error('Failed to enable lights:', err);
+                            emergencyLightsToggle.checked = false;
+                        });
+                    } else {
+                        // Turn off
+                        fetch(getApiUrl('/api/lights'), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ enabled: false })
+                        })
+                        .catch(err => console.error('Failed to disable lights:', err));
+                    }
+                });
+            }
+
+            // Lights page: Mode selector updates available patterns and preview
+            if (emergencyLightMode) {
+                emergencyLightMode.addEventListener('change', function() {
+                    updateEmergencyLightPatterns(this.value);
+                });
+            }
+
+            // Lights page: Pattern selector updates LED preview
+            if (emergencyLightPattern) {
+                emergencyLightPattern.addEventListener('change', function() {
+                    const mode = emergencyLightMode.value;
+                    const patternIndex = parseInt(this.value);
+                    animateLedPreview(mode, patternIndex);
+                });
+            }
+
+            // Lights page: Apply button updates mode and pattern
+            if (applyLightsBtn) {
+                applyLightsBtn.addEventListener('click', function() {
+                    const mode = emergencyLightMode.value;
+                    const patternIndex = parseInt(emergencyLightPattern.value);
+                    const pattern = PATTERNS[mode][patternIndex];
+                    const isCurrentlyEnabled = emergencyLightsToggle.checked;
+                    
+                    fetch(getApiUrl('/api/lights'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            enabled: isCurrentlyEnabled,
+                            pattern: pattern
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        window.toast.success('Emergency lights pattern updated');
+                    })
+                    .catch(err => {
+                        console.error('Failed to update lights:', err);
+                        window.toast.error('Failed to update lights');
+                    });
+                });
+            }
+
+            // Load initial lights state
+            loadEmergencyLightsState();
+
             
             // Suspension Settings gear click - navigate to Tuning
             const suspGear = document.getElementById('suspensionSettingsGear');
@@ -3892,12 +4306,6 @@
                 setTimeout(refreshServoSliderRender, 50);
             }
         }
-        
-        
-        function updateBatteryDisplay(voltages) {
-            // Battery monitoring has been disabled
-        }
-
         function updateConnectionStatus(connected) {
             const icon = document.getElementById('wifiIcon');
             if (connected) {
@@ -5205,22 +5613,10 @@
                 }
             }
             
-            // Load battery configuration
-            if (config.batteries && Array.isArray(config.batteries)) {
-                config.batteries.forEach((battery, index) => {
-                    const num = index + 1;
-                    if (num <= 3) {
-                        const nameInput = document.getElementById(`battery${num}Name`);
-                        const cellSelect = document.getElementById(`battery${num}CellCount`);
-                        const plugSelect = document.getElementById(`battery${num}Plug`);
-                        const showCheckbox = document.getElementById(`battery${num}Show`);
-                        
-                        if (nameInput) nameInput.value = battery.name || '';
-                        if (cellSelect) cellSelect.value = battery.cellCount || 3;
-                        if (plugSelect) plugSelect.value = battery.plugAssignment || 0;
-                        if (showCheckbox) showCheckbox.checked = battery.showOnDashboard || false;
-                    }
-                });
+            // Load device name
+            const deviceNameInput = document.getElementById('deviceNameInput');
+            if (deviceNameInput && config.deviceName) {
+                deviceNameInput.value = config.deviceName;
             }
         }
 
@@ -5422,13 +5818,6 @@
             });
         }
         
-
-
-        // Update battery configuration
-        function updateBatteryConfig(batteryNum, param, value) {
-            // Battery monitoring has been disabled
-        }
-
         // Initialize servo controls with rSlider
         function initServoControls() {
             const servoKeys = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'];
@@ -5698,11 +6087,13 @@
         // Save and apply connection settings
         function saveAndApplyConnection() {
             const ipInput = document.getElementById('esp32IpAddress');
+            const deviceNameInput = document.getElementById('deviceNameInput');
             const saveBtn = document.getElementById('saveNetworkBtn');
             
             if (!ipInput) return;
             
             const newIp = ipInput.value.trim();
+            const newDeviceName = deviceNameInput ? deviceNameInput.value.trim() : '';
             
             if (!newIp) {
                 toast.error('Please enter an IP address');
@@ -5716,13 +6107,46 @@
                 return;
             }
             
+            // Validate device name if provided
+            if (newDeviceName) {
+                const namePattern = /^[a-zA-Z0-9\-]+$/; // Allow alphanumeric and hyphens, no spaces
+                if (!namePattern.test(newDeviceName) || newDeviceName.length > 63) {
+                    toast.error('Device name must be alphanumeric (hyphens allowed, no spaces, max 63 chars)');
+                    return;
+                }
+            }
+            
             // Disable button and show saving state
             if (saveBtn) {
                 saveBtn.disabled = true;
                 saveBtn.innerHTML = 'Saving...';
             }
             
-            // Save to localStorage
+            // If device name was changed, save it to the ESP32 first
+            if (newDeviceName && fullConfig && fullConfig.deviceName !== newDeviceName) {
+                const updatePayload = {
+                    deviceName: newDeviceName
+                };
+                
+                fetch(`http://${newIp}/api/config`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updatePayload)
+                }).then(response => {
+                    if (response.ok) {
+                        console.log('Device name updated successfully');
+                        fullConfig.deviceName = newDeviceName;
+                    } else {
+                        console.warn('Failed to update device name');
+                    }
+                }).catch(error => {
+                    console.warn('Error updating device name:', error);
+                });
+            }
+            
+            // Save IP to localStorage
             localStorage.setItem('esp32Ip', newIp);
             
             // Update connection method display

@@ -17,15 +17,14 @@ private:
   std::function<void(uint8_t)> orientationCallback = nullptr;
   std::function<void()> ledBlinkCallback = nullptr;
   std::function<void()> ledUpdateCallback = nullptr;
+  std::function<void(String)> emergencyLightSetCallback = nullptr;
+  std::function<void(String&)> emergencyLightGetCallback = nullptr;
   
   // Latest sensor data for HTTP polling
   float latestRoll = 0.0f;
   float latestPitch = 0.0f;
   float latestYaw = 0.0f;
   float latestVerticalAccel = 0.0f;
-  float latestBattery1 = 0.0f;
-  float latestBattery2 = 0.0f;
-  float latestBattery3 = 0.0f;
   
 public:
   void init(StorageManager& storage) {
@@ -66,6 +65,14 @@ public:
     ledUpdateCallback = callback;
   }
   
+  void setEmergencyLightSetCallback(std::function<void(String)> callback) {
+    emergencyLightSetCallback = callback;
+  }
+  
+  void setEmergencyLightGetCallback(std::function<void(String&)> callback) {
+    emergencyLightGetCallback = callback;
+  }
+  
   // Store latest sensor data for HTTP polling
   void setSensorData(float roll, float pitch, float yaw, float verticalAccel) {
     latestRoll = roll;
@@ -74,19 +81,19 @@ public:
     latestVerticalAccel = verticalAccel;
   }
   
-  // Store latest battery data for HTTP polling
-  void setBatteryData(float battery1, float battery2, float battery3) {
-    latestBattery1 = battery1;
-    latestBattery2 = battery2;
-    latestBattery3 = battery3;
-  }
-  
 private:
   void startWiFiAP() {
     // First, try to connect to home WiFi
     Serial.println("Attempting to connect to home WiFi...");
     Serial.print("SSID: ");
     Serial.println(HOME_WIFI_SSID);
+    
+    // Set hostname from device name config
+    if (storageManager) {
+      const char* deviceName = storageManager->getDeviceName();
+      WiFi.setHostname(deviceName);
+      Serial.printf("WiFi hostname set to: %s\n", deviceName);
+    }
     
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(false); // CRITICAL: Disable auto-reconnect to prevent blocking
@@ -150,9 +157,7 @@ private:
       String json = "{\"roll\":" + String(latestRoll, 1) + 
                     ",\"pitch\":" + String(latestPitch, 1) + 
                     ",\"yaw\":" + String(latestYaw, 1) + 
-                    ",\"verticalAccel\":" + String(latestVerticalAccel, 2) + 
-                    ",\"batteries\":[" + String(latestBattery1, 2) + "," + 
-                    String(latestBattery2, 2) + "," + String(latestBattery3, 2) + "]}";
+                    ",\"verticalAccel\":" + String(latestVerticalAccel, 2) + "}";
       request->send(200, "application/json", json);
     });
     
@@ -263,6 +268,14 @@ private:
             bool autoMode = doc["fpvAutoMode"];
             Serial.printf("Updating fpvAutoMode to: %s\n", autoMode ? "true" : "false");
             storageManager->updateParameter("fpvAutoMode", autoMode ? 1.0f : 0.0f);
+          }
+          
+          if (doc.containsKey("deviceName")) {
+            String newName = doc["deviceName"];
+            Serial.printf("Updating deviceName to: %s\n", newName.c_str());
+            storageManager->updateDeviceName(newName);
+            // Update WiFi hostname
+            WiFi.setHostname(newName.c_str());
           }
           
           // Handle servo configuration updates
@@ -386,6 +399,32 @@ private:
           request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
         }
       });
+    
+    // Emergency lights control API
+    server.on("/api/lights", HTTP_POST, [this](AsyncWebServerRequest *request) {}, nullptr, 
+      [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        // Call the callback with the entire JSON payload
+        if (emergencyLightSetCallback) {
+          String jsonPayload;
+          for (size_t i = 0; i < len; i++) {
+            jsonPayload += (char)data[i];
+          }
+          emergencyLightSetCallback(jsonPayload);
+        }
+        
+        request->send(200, "application/json", "{\"status\":\"success\"}");
+      });
+    
+    server.on("/api/lights", HTTP_GET, [this](AsyncWebServerRequest *request) {
+      String response = "";
+      
+      // Call the callback to get emergency lights state as JSON
+      if (emergencyLightGetCallback) {
+        emergencyLightGetCallback(response);
+      }
+      
+      request->send(200, "application/json", response);
+    });
     
     // Serve static files from SPIFFS
     server.on("/test-gps.html", HTTP_GET, [](AsyncWebServerRequest *request) {

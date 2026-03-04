@@ -18,8 +18,8 @@
 #define PWM_RR_PIN 15  // Rear Right
 
 // Addressable LED configuration
-#define STATUS_LED_PIN 12  // GPIO pin for addressable LED (WS2812B/NeoPixel)
-#define STATUS_LED_COUNT 1 // Number of LEDs in the strip
+#define STATUS_LED_PIN 27  // GPIO pin for addressable LED (WS2812B/NeoPixel)
+#define STATUS_LED_COUNT 3 // Number of LEDs in the strip (0-1: emergency lights, 2: alerts)
 
 // Default suspension parameters
 #define DEFAULT_REACTION_SPEED 1.0f
@@ -29,26 +29,13 @@
 #define DEFAULT_FRONT_REAR_BALANCE 0.5f
 #define DEFAULT_STIFFNESS 1.0f
 #define DEFAULT_FPV_AUTO_MODE false // FPV auto mode default
+#define DEFAULT_DEVICE_NAME "ESP32-RCDCC" // Device hostname on network
 
 // Default servo calibration parameters
 #define DEFAULT_SERVO_TRIM 0         // No trim offset (degrees)
 #define DEFAULT_SERVO_MIN 15         // Minimum angle (degrees)
 #define DEFAULT_SERVO_MAX 165        // Maximum angle (degrees)
 #define DEFAULT_SERVO_REVERSED false // Standard rotation direction
-
-// Battery monitoring configuration
-#define BATTERY_ADC_PIN_A 34  // GPIO 34 (ADC1_CH6)
-#define BATTERY_ADC_PIN_B 35  // GPIO 35 (ADC1_CH7)
-#define BATTERY_ADC_PIN_C 32  // GPIO 32 (ADC1_CH4)
-#define BATTERY_VOLTAGE_DIVIDER_RATIO 8.0f  // 8:1 voltage divider (70kΩ + 10kΩ)
-#define BATTERY_ADC_RESOLUTION 4095.0f       // 12-bit ADC
-#define BATTERY_VREF 3.3f                    // ESP32 reference voltage
-
-// Default battery configuration
-#define DEFAULT_BATTERY_NAME ""
-#define DEFAULT_BATTERY_CELL_COUNT 3  // 3S (11.1V nominal)
-#define DEFAULT_BATTERY_PLUG 0        // 0 = None, 1 = A, 2 = B, 3 = C
-#define DEFAULT_BATTERY_SHOW_DASHBOARD false
 
 // WiFi configuration - Home network (STA mode)
 #define HOME_WIFI_SSID "CAMELOT"  // Change this to your WiFi name
@@ -89,6 +76,7 @@ struct SuspensionConfig {
   uint8_t telemetryRate;   // WebSocket broadcast rate in Hz (1-10)
   uint8_t mpuOrientation;  // MPU6050 mounting orientation
   bool fpvAutoMode;        // FPV auto mode persistent setting
+  char deviceName[64];     // Device hostname for network (e.g., "esp32-frontleft")
 };
 
 // Per-servo calibration settings
@@ -104,21 +92,6 @@ struct ServoConfig {
   ServoCalibration frontRight;
   ServoCalibration rearLeft;
   ServoCalibration rearRight;
-};
-
-// Battery configuration structure
-struct BatteryConfig {
-  char name[32];         // User-defined name (e.g., "Main Battery", "FPV Battery")
-  uint8_t cellCount;     // Number of cells (2S-6S = 2-6)
-  uint8_t plugAssignment; // 0=None, 1=Plug A (GPIO 34), 2=Plug B (GPIO 35), 3=Plug C (GPIO 32)
-  bool showOnDashboard;  // Show this battery on dashboard
-};
-
-// Container for all battery configs
-struct BatteriesConfig {
-  BatteryConfig battery1;
-  BatteryConfig battery2;
-  BatteryConfig battery3;
 };
 
 // LED color enumeration

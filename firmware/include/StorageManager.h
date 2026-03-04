@@ -30,6 +30,8 @@ public:
     config.telemetryRate = DEFAULT_TELEMETRY_RATE_HZ;
     config.mpuOrientation = DEFAULT_MPU6050_ORIENTATION;
     config.fpvAutoMode = DEFAULT_FPV_AUTO_MODE;
+    strncpy(config.deviceName, DEFAULT_DEVICE_NAME, sizeof(config.deviceName) - 1);
+    config.deviceName[sizeof(config.deviceName) - 1] = '\0';
   }
   
   void loadServoDefaults() {
@@ -75,6 +77,11 @@ public:
     config.telemetryRate = doc["telemetryRate"] | DEFAULT_TELEMETRY_RATE_HZ;
     config.mpuOrientation = doc["mpuOrientation"] | DEFAULT_MPU6050_ORIENTATION;
     config.fpvAutoMode = doc["fpvAutoMode"] | DEFAULT_FPV_AUTO_MODE;
+    
+    // Load device name from JSON
+    const char* deviceNameStr = doc["deviceName"] | DEFAULT_DEVICE_NAME;
+    strncpy(config.deviceName, deviceNameStr, sizeof(config.deviceName) - 1);
+    config.deviceName[sizeof(config.deviceName) - 1] = '\0';
     
     bool trimWasReset = false;
     auto sanitizeTrim = [&](const char* servoName, int value) {
@@ -149,6 +156,8 @@ public:
     doc["telemetryRate"] = config.telemetryRate;
     doc["mpuOrientation"] = config.mpuOrientation;
     doc["fpvAutoMode"] = config.fpvAutoMode;
+    doc["deviceName"] = config.deviceName;
+    doc["fpvAutoMode"] = config.fpvAutoMode;
     
     // Save servo calibration
     JsonObject servos = doc.createNestedObject("servos");
@@ -199,6 +208,10 @@ public:
     return config;
   }
   
+  const char* getDeviceName() const {
+    return config.deviceName;
+  }
+  
   void setConfig(const SuspensionConfig& newConfig) {
     config = newConfig;
     saveConfig();
@@ -216,6 +229,17 @@ public:
     else if (key == "mpuOrientation") config.mpuOrientation = constrain((uint8_t)value, 0, 5);
     else if (key == "fpvAutoMode") config.fpvAutoMode = (value != 0.0f);
     saveConfig();
+  }
+  
+  void updateDeviceName(const String& newName) {
+    if (newName.length() > 0 && newName.length() < sizeof(config.deviceName)) {
+      strncpy(config.deviceName, newName.c_str(), sizeof(config.deviceName) - 1);
+      config.deviceName[sizeof(config.deviceName) - 1] = '\0';
+      saveConfig();
+      Serial.printf("Device name updated to: %s\n", config.deviceName);
+    } else {
+      Serial.printf("Invalid device name (length: %d)\n", newName.length());
+    }
   }
   
   void resetToDefaults() {
@@ -236,6 +260,7 @@ public:
     doc["sampleRate"] = config.sampleRate;
     doc["telemetryRate"] = config.telemetryRate;
     doc["mpuOrientation"] = config.mpuOrientation;
+    doc["deviceName"] = config.deviceName;
     
     // Add LED color
     const char* colorStr = "red";

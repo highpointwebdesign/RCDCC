@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
@@ -30,6 +32,28 @@ unsigned long ledBlinkEndTime = 0;
 Adafruit_NeoPixel statusLED(STATUS_LED_COUNT, STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
 uint32_t currentLEDColor = 0;
 
+// Emergency light state variables
+struct PatternStep {
+  uint32_t led0Color;
+  uint32_t led1Color;
+  uint16_t duration;  // milliseconds
+};
+
+const uint8_t MAX_PATTERN_STEPS = 20;
+struct EmergencyLightPattern {
+  PatternStep steps[MAX_PATTERN_STEPS];
+  uint8_t stepCount;
+  bool isLooping;
+};
+
+bool emergencyLightsEnabled = false;
+EmergencyLightPattern currentPattern = {};
+uint8_t currentPatternStep = 0;
+unsigned long patternStepStartTime = 0;
+unsigned long emergencyLightLastUpdate = 0;
+
+const char* DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1478218472709292145/9hSRUvb3wEMC-cTIs7OOILUkbqyO1MyEAOlS4zKmR5ztsuUaIxf_d7MNFmorPcISyGNp";
+
 // Function to get RGB values from LED color enum
 void getLEDColorRGB(LEDColor color, uint8_t& r, uint8_t& g, uint8_t& b) {
   switch(color) {
@@ -55,10 +79,80 @@ void updateStatusLEDColor() {
   currentLEDColor = statusLED.Color(r, g, b);
 }
 
-// Function to flash the addressable LED
+// Function to flash the alert LED (LED index 2)
 void flashStatusLED() {
-  statusLED.setPixelColor(0, currentLEDColor);
+  statusLED.setPixelColor(2, currentLEDColor);
   statusLED.show();
+}
+
+// Function to update emergency lights with generic pattern sequencer
+void updateEmergencyLights() {
+  if (!emergencyLightsEnabled || currentPattern.stepCount == 0) {
+    // Turn off emergency lights
+    statusLED.setPixelColor(0, 0);
+    statusLED.setPixelColor(1, 0);
+    statusLED.show();
+    return;
+  }
+
+  unsigned long now = millis();
+  if (now - emergencyLightLastUpdate < 50) {
+    return;  // Update at ~20Hz minimum
+  }
+  emergencyLightLastUpdate = now;
+
+  // Check if current step has timed out
+  if (now - patternStepStartTime >= currentPattern.steps[currentPatternStep].duration) {
+    currentPatternStep++;
+    
+    // Loop or stop
+    if (currentPatternStep >= currentPattern.stepCount) {
+      if (currentPattern.isLooping) {
+        currentPatternStep = 0;
+      } else {
+        currentPatternStep = currentPattern.stepCount - 1;  // Stay on last frame
+      }
+    }
+    patternStepStartTime = now;
+  }
+
+  // Set current step colors
+  statusLED.setPixelColor(0, currentPattern.steps[currentPatternStep].led0Color);
+  statusLED.setPixelColor(1, currentPattern.steps[currentPatternStep].led1Color);
+  statusLED.show();
+}
+
+void notifyDiscordOnHomeWiFiJoin(const char* deviceName) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  String connectedSSID = WiFi.SSID();
+  if (connectedSSID != String(HOME_WIFI_SSID)) {
+    Serial.printf("Discord webhook skipped: connected to '%s' (not home SSID)\n", connectedSSID.c_str());
+    return;
+  }
+
+  WiFiClientSecure secureClient;
+  secureClient.setInsecure();
+
+  HTTPClient http;
+  if (!http.begin(secureClient, DISCORD_WEBHOOK_URL)) {
+    Serial.println("Discord webhook init failed");
+    return;
+  }
+
+  http.addHeader("Content-Type", "application/json");
+
+  String payload = "{\"content\":\"" +
+                   String(deviceName) +
+                   " joined " + connectedSSID +
+                   " with IP " + WiFi.localIP().toString() +
+                   "\"}";
+
+  int responseCode = http.POST(payload);
+  Serial.printf("Discord webhook POST response: %d\n", responseCode);
+  http.end();
 }
 
 // Timing variables
@@ -71,35 +165,11 @@ bool mpuConnected = false;
 // Diagnostic flag to isolate WebSocket broadcast blocking
 const bool disableWebSocketTelemetry = true;
 
-// Battery monitoring variables
-float batteryVoltages[3] = {0.0f, 0.0f, 0.0f}; // Voltages for 3 batteries
-unsigned long lastBatteryReadTime = 0;
-const unsigned long BATTERY_READ_INTERVAL = 500; // Read batteries every 500ms
-
 // Sensor data for HTTP polling
 float currentRoll = 0.0f;
 float currentPitch = 0.0f;
 float currentYaw = 0.0f;
 float currentVerticalAccel = 0.0f;
-
-// Function to read battery voltage from ADC pin
-float readBatteryVoltage(uint8_t plugAssignment) {
-  if (plugAssignment == 0) return 0.0f; // No plug assigned
-  
-  int adcPin;
-  if (plugAssignment == 1) adcPin = BATTERY_ADC_PIN_A; // GPIO 34
-  else if (plugAssignment == 2) adcPin = BATTERY_ADC_PIN_B; // GPIO 35
-  else if (plugAssignment == 3) adcPin = BATTERY_ADC_PIN_C; // GPIO 32
-  else return 0.0f;
-  
-  // Read ADC value (12-bit: 0-4095)
-  int adcValue = analogRead(adcPin);
-  
-  // Calculate voltage: (ADC / 4095) * 3.3V * voltage_divider_ratio
-  float voltage = (adcValue / BATTERY_ADC_RESOLUTION) * BATTERY_VREF * BATTERY_VOLTAGE_DIVIDER_RATIO;
-  
-  return voltage;
-}
 
 // Function to start LED blink (250ms)
 void startLedBlink() {
@@ -180,6 +250,8 @@ void setup() {
   if (mpuConnected) {
     webServer.init(storageManager);
   }
+
+  notifyDiscordOnHomeWiFiJoin(storageManager.getDeviceName());
   
   // Initialize LED pin for feedback
   pinMode(LED_PIN, OUTPUT);
@@ -224,6 +296,81 @@ void setup() {
   // Set up LED update callback for color changes
   webServer.setLedUpdateCallback(updateStatusLEDColor);
   
+  // Set up emergency light callbacks
+  webServer.setEmergencyLightSetCallback([](String patternJson) {
+    // Parse JSON pattern and load it
+    // Format: {enabled: bool, pattern: {steps: [{led0, led1, duration}, ...], isLooping: bool}}
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, patternJson);
+    
+    if (error) {
+      Serial.printf("Failed to parse pattern JSON: %s\n", error.c_str());
+      return;
+    }
+    
+    bool enabled = doc["enabled"] | false;
+    emergencyLightsEnabled = enabled;
+    
+    if (!enabled) {
+      Serial.println("Emergency lights: OFF");
+      return;
+    }
+    
+    // Parse pattern structure
+    JsonObject patternObj = doc["pattern"];
+    if (!patternObj) {
+      Serial.println("No pattern data in request");
+      return;
+    }
+    
+    JsonArray stepsArray = patternObj["steps"];
+    currentPattern.stepCount = stepsArray.size();
+    currentPattern.isLooping = patternObj["isLooping"] | true;
+    
+    if (currentPattern.stepCount > MAX_PATTERN_STEPS) {
+      currentPattern.stepCount = MAX_PATTERN_STEPS;
+    }
+    
+    // Load steps
+    for (uint8_t i = 0; i < currentPattern.stepCount; i++) {
+      JsonObject step = stepsArray[i];
+      currentPattern.steps[i].led0Color = strtol(step["led0"] | "000000", nullptr, 16);
+      currentPattern.steps[i].led1Color = strtol(step["led1"] | "000000", nullptr, 16);
+      currentPattern.steps[i].duration = step["duration"] | 250;
+    }
+    
+    currentPatternStep = 0;
+    patternStepStartTime = millis();
+    
+    Serial.printf("Emergency lights: Pattern loaded with %d steps\n", currentPattern.stepCount);
+  });
+  
+  webServer.setEmergencyLightGetCallback([](String& patternJson) {
+    // Return current pattern state as JSON
+    JsonDocument doc;
+    doc["enabled"] = emergencyLightsEnabled;
+    
+    if (emergencyLightsEnabled && currentPattern.stepCount > 0) {
+      JsonObject pattern = doc["pattern"].to<JsonObject>();
+      pattern["stepCount"] = currentPattern.stepCount;
+      pattern["currentStep"] = currentPatternStep;
+      pattern["isLooping"] = currentPattern.isLooping;
+      
+      JsonArray steps = pattern["steps"].to<JsonArray>();
+      for (uint8_t i = 0; i < currentPattern.stepCount; i++) {
+        JsonObject step = steps.add<JsonObject>();
+        char led0Hex[7], led1Hex[7];
+        snprintf(led0Hex, sizeof(led0Hex), "%06lX", currentPattern.steps[i].led0Color);
+        snprintf(led1Hex, sizeof(led1Hex), "%06lX", currentPattern.steps[i].led1Color);
+        step["led0"] = led0Hex;
+        step["led1"] = led1Hex;
+        step["duration"] = currentPattern.steps[i].duration;
+      }
+    }
+    
+    serializeJson(doc, patternJson);
+  });
+  
   // Calibrate to current position as level
   if (mpuConnected) {
     sensorFusion.calibrate(mpu, [](const String& msg) {
@@ -236,14 +383,6 @@ void setup() {
   
   // Initialize PWM outputs
   pwmOutputs.init();
-  
-  // Configure ADC pins for battery monitoring
-  analogReadResolution(12); // 12-bit resolution (0-4095)
-  analogSetAttenuation(ADC_11db); // Full range: 0-3.3V
-  pinMode(BATTERY_ADC_PIN_A, INPUT); // GPIO 34
-  pinMode(BATTERY_ADC_PIN_B, INPUT); // GPIO 35
-  pinMode(BATTERY_ADC_PIN_C, INPUT); // GPIO 32
-  Serial.println("Battery monitoring ADC pins configured");
   
   Serial.println("Setup complete!");
 }
@@ -284,6 +423,9 @@ void loop() {
     statusLED.show();
     ledBlinkEndTime = 0;
   }
+  
+  // Update emergency light patterns (non-blocking)
+  updateEmergencyLights();
   
   // Read MPU6050 sensor data at specified rate
   if (currentTime - lastMPUReadTime >= (1000 / SUSPENSION_SAMPLE_RATE_HZ)) {
@@ -438,52 +580,6 @@ void loop() {
     
     lastSimulationTime = currentTime;
   }
-  
-  // Read battery voltages periodically
-  // TODO: Battery monitoring disabled to improve stability - will re-enable in later release
-  /*
-  if (currentTime - lastBatteryReadTime >= BATTERY_READ_INTERVAL) {
-    unsigned long beforeBatteryBlock = millis();
-    
-    BatteriesConfig batteryConfig = storageManager.getBatteryConfig();
-    
-    // Read voltage for each configured battery
-    unsigned long beforeBatt1 = millis();
-    batteryVoltages[0] = readBatteryVoltage(batteryConfig.battery1.plugAssignment);
-    unsigned long batt1Time = millis() - beforeBatt1;
-    if (batt1Time > 20) Serial.printf("⚠️  SLOW BATT1 READ: %lums\n", batt1Time);
-    
-    yield(); // Feed watchdog between ADC reads
-    
-    unsigned long beforeBatt2 = millis();
-    batteryVoltages[1] = readBatteryVoltage(batteryConfig.battery2.plugAssignment);
-    unsigned long batt2Time = millis() - beforeBatt2;
-    if (batt2Time > 20) Serial.printf("⚠️  SLOW BATT2 READ: %lums\n", batt2Time);
-    
-    yield(); // Feed watchdog between ADC reads
-    
-    unsigned long beforeBatt3 = millis();
-    batteryVoltages[2] = readBatteryVoltage(batteryConfig.battery3.plugAssignment);
-    unsigned long batt3Time = millis() - beforeBatt3;
-    if (batt3Time > 20) Serial.printf("⚠️  SLOW BATT3 READ: %lums\n", batt3Time);
-    
-    yield(); // Feed watchdog after all reads
-    
-    // Broadcast battery voltages to web clients
-    unsigned long beforeBattBcast = millis();
-    webServer.sendBatteryData(batteryVoltages[0], batteryVoltages[1], batteryVoltages[2]);
-    webServer.setBatteryData(batteryVoltages[0], batteryVoltages[1], batteryVoltages[2]); // Store for HTTP polling
-    unsigned long battBcastTime = millis() - beforeBattBcast;
-    if (battBcastTime > 50) Serial.printf("⚠️  SLOW BATT BROADCAST: %lums\n", battBcastTime);
-    
-    unsigned long totalBatteryTime = millis() - beforeBatteryBlock;
-    if (totalBatteryTime > 100) {
-      Serial.printf("⚠️  SLOW TOTAL BATTERY BLOCK: %lums\n", totalBatteryTime);
-    }
-    
-    lastBatteryReadTime = currentTime;
-  }
-  */
   
   // FINAL LOOP SUMMARY: Calculate total loop time and identify anomalies
   unsigned long loopEndTime = millis();
