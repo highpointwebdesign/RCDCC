@@ -740,6 +740,39 @@
             color: #dc2626;
         }
 
+        /* LED Grid Selector */
+        .led-grid-button {
+            width: 100%;
+            padding: 0.75rem 0;
+            border: 2px solid #d1d5db;
+            border-radius: 0.375rem;
+            background-color: #ffffff;
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+        }
+
+        .led-grid-button:hover {
+            border-color: var(--primary);
+            background-color: #f3f4f6;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+
+        .led-grid-button.selected {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 0 8px rgba(37, 99, 235, 0.5);
+        }
+
+        .led-grid-button.selected:hover {
+            background-color: #1d4ed8;
+            border-color: #1d4ed8;
+            box-shadow: 0 0 12px rgba(37, 99, 235, 0.7);
+        }
+
         #tab-lights.active {
             /* background-color: rgba(251, 191, 36, 0.06); */
         }
@@ -2791,6 +2824,58 @@
         </div>
     </div>
 
+    <!-- Light Group Editor Modal -->
+    <div class="modal fade" id="lightGroupEditorModal" tabindex="-1" aria-labelledby="lightGroupEditorTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background-color: black; color: white;">
+                    <h5 class="modal-title" id="lightGroupEditorTitle">
+                        <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb_group</span>
+                        <span id="lightGroupEditMode">Add</span> Light Group
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="color: #000;">
+                    <!-- Group Name Input -->
+                    <div class="mb-4">
+                        <label for="lightGroupNameInput" class="form-label"><strong>Group Name</strong></label>
+                        <input type="text" class="form-control" id="lightGroupNameInput" placeholder="e.g., Headlights, Underglow, KC Lights">
+                        <div class="form-text">Give this group a descriptive name so you remember what it controls.</div>
+                    </div>
+
+                    <!-- LED Selection Section -->
+                    <div class="mb-4">
+                        <label class="form-label"><strong>Select LED Positions</strong></label>
+                        <div class="form-text mb-3">Click any LED number to toggle it on or off. Your total LED count is set to <strong id="modalTotalLeds">100</strong>.</div>
+                        
+                        <!-- LED Grid -->
+                        <div id="ledGridContainer" style="background-color: #f9fafb; padding: 1.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb; max-height: 400px; overflow-y: auto;">
+                            <div id="ledGrid" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 0.5rem;"></div>
+                        </div>
+
+                        <!-- Selection Summary -->
+                        <div style="margin-top: 1rem; padding: 0.75rem; background-color: #f0f9ff; border: 1px solid #bfdbfe; border-radius: 0.375rem;">
+                            <div style="font-size: 0.875rem; color: #0369a1;"><strong>Selected:</strong> <span id="lightGroupSelectedCount">0</span> LED(s)</div>
+                            <div style="font-size: 0.875rem; color: #0369a1; margin-top: 0.25rem;" id="lightGroupSelectedSummary">None selected yet</div>
+                        </div>
+
+                        <!-- Clear Selection Button -->
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="clearLedSelection()">
+                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">clear_all</span>
+                            Clear Selection
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-gold" id="lightGroupSaveBtn" onclick="saveLightGroupFromModal()">
+                        <span class="material-symbols-outlined">check_circle</span>
+                        Save Group
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
 <!-- <button type="button" class="btn btn-primary" onclick="offlineMode()">Go Offline</button>
 
@@ -4462,10 +4547,11 @@
                 lightGroups.forEach((group, index) => {
                     const item = document.createElement('div');
                     item.className = 'light-group-item';
+                    const ledDisplay = formatLedRanges(group.indices);
                     item.innerHTML = `
                         <div class="light-group-info">
                             <div class="light-group-name">${group.name}</div>
-                            <div class="light-group-range">LEDs: ${group.indices.join(', ')}</div>
+                            <div class="light-group-range">LEDs: ${ledDisplay}</div>
                         </div>
                         <div class="light-group-actions">
                             <button onclick="editLightGroup(${index})" title="Edit this group">Edit</button>
@@ -4477,51 +4563,195 @@
             }
         }
 
-        function addLightGroup() {
-            const name = prompt('Enter light group name (e.g., "Headlights", "Underglow", "KC Lights"):');
-            if (!name) return;
+        // Store current editing context
+        let currentEditingGroupIndex = null;
+        let currentSelectedLEDs = new Set();
+
+        function openLightGroupModal(index = null) {
+            currentEditingGroupIndex = index;
+            currentSelectedLEDs = new Set();
             
-            const indicesStr = prompt('Enter LED indices (e.g., "0,1" or "10-15" or "0,1,10-15"):');
-            if (!indicesStr) return;
+            const modal = document.getElementById('lightGroupEditorModal');
+            const titleSpan = document.getElementById('lightGroupEditMode');
+            const nameInput = document.getElementById('lightGroupNameInput');
+            const totalLEDCount = parseInt(document.getElementById('totalLEDCount').value) || 100;
             
-            const indices = parseLEDIndices(indicesStr);
-            if (indices.length === 0) {
-                alert('Invalid LED indices. Please use numbers separated by commas or ranges like 10-15');
-                return;
+            // Update modal title and total LED count display
+            const modalTotalLedsSpan = document.getElementById('modalTotalLeds');
+            if (modalTotalLedsSpan) {
+                modalTotalLedsSpan.textContent = totalLEDCount;
             }
             
-            lightGroups.push({
-                name: name,
-                indices: indices
-            });
+            if (index !== null) {
+                // Edit mode
+                const group = lightGroups[index];
+                titleSpan.textContent = 'Edit';
+                nameInput.value = group.name;
+                group.indices.forEach(idx => currentSelectedLEDs.add(idx));
+            } else {
+                // Add mode
+                titleSpan.textContent = 'Add';
+                nameInput.value = '';
+            }
             
-            saveLightGroups();
-            alert(`Light group "${name}" created with ${indices.length} LED(s)`);
+            renderLedGrid(totalLEDCount);
+            updateSelectionSummary();
+            
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+        }
+
+        function addLightGroup() {
+            openLightGroupModal(null);
         }
 
         function editLightGroup(index) {
-            const group = lightGroups[index];
-            if (!group) return;
+            openLightGroupModal(index);
+        }
+
+        function renderLedGrid(totalCount = 100) {
+            const gridContainer = document.getElementById('ledGrid');
+            gridContainer.innerHTML = '';
+            gridContainer.style.display = 'grid';
+            gridContainer.style.gridTemplateColumns = 'repeat(10, 1fr)';
+            gridContainer.style.gap = '0.5rem';
             
-            const newName = prompt('Edit light group name:', group.name);
-            if (newName === null) return;
+            // Clamp total to max 100 (10x10 grid)
+            const maxLEDs = Math.min(totalCount, 100);
             
-            const newIndicesStr = prompt('Edit LED indices:', group.indices.join(','));
-            if (newIndicesStr === null) return;
+            for (let i = 0; i < maxLEDs; i++) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'led-grid-button';
+                button.textContent = (i + 1); // Display 1-100 for user
+                
+                // Check if this LED is already selected
+                if (currentSelectedLEDs.has(i)) {
+                    button.classList.add('selected');
+                }
+                
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    toggleLedSelection(i);
+                });
+                
+                gridContainer.appendChild(button);
+            }
+        }
+
+        function toggleLedSelection(ledIndex) {
+            if (currentSelectedLEDs.has(ledIndex)) {
+                currentSelectedLEDs.delete(ledIndex);
+            } else {
+                currentSelectedLEDs.add(ledIndex);
+            }
             
-            const newIndices = parseLEDIndices(newIndicesStr);
-            if (newIndices.length === 0) {
-                alert('Invalid LED indices. Please use numbers separated by commas or ranges like 10-15');
+            // Update visual state for this button
+            const buttons = document.querySelectorAll('.led-grid-button');
+            if (buttons[ledIndex]) {
+                buttons[ledIndex].classList.toggle('selected');
+            }
+            
+            updateSelectionSummary();
+        }
+
+        function updateSelectionSummary() {
+            const summaryDiv = document.getElementById('lightGroupSelectedSummary');
+            const countDiv = document.querySelector('[id="lightGroupSelectedCount"]');
+            const indices = Array.from(currentSelectedLEDs).sort((a, b) => a - b);
+            const count = indices.length;
+            
+            if (countDiv) {
+                countDiv.textContent = count;
+            }
+            
+            let summaryText = '';
+            if (count === 0) {
+                summaryText = 'No LEDs selected';
+            } else {
+                const ranges = formatLedRanges(indices);
+                summaryText = ranges;
+            }
+            
+            if (summaryDiv) {
+                summaryDiv.textContent = summaryText;
+            }
+        }
+
+        function formatLedRanges(indices) {
+            if (indices.length === 0) return '';
+            
+            const ranges = [];
+            let rangeStart = indices[0];
+            let rangeEnd = indices[0];
+            
+            for (let i = 1; i < indices.length; i++) {
+                if (indices[i] === rangeEnd + 1) {
+                    rangeEnd = indices[i];
+                } else {
+                    ranges.push(rangeStart === rangeEnd ? 
+                        String(rangeStart + 1) : 
+                        `${rangeStart + 1}-${rangeEnd + 1}`);
+                    rangeStart = indices[i];
+                    rangeEnd = indices[i];
+                }
+            }
+            ranges.push(rangeStart === rangeEnd ? 
+                String(rangeStart + 1) : 
+                `${rangeStart + 1}-${rangeEnd + 1}`);
+            
+            return ranges.join(', ');
+        }
+
+        function clearLedSelection() {
+            currentSelectedLEDs.clear();
+            document.querySelectorAll('.led-grid-button.selected').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            updateSelectionSummary();
+        }
+
+        function saveLightGroupFromModal() {
+            const nameInput = document.getElementById('lightGroupNameInput');
+            const name = nameInput.value.trim();
+            
+            if (!name) {
+                alert('Please enter a light group name');
+                nameInput.focus();
                 return;
             }
             
-            lightGroups[index] = {
-                name: newName,
-                indices: newIndices
-            };
+            if (currentSelectedLEDs.size === 0) {
+                alert('Please select at least one LED');
+                return;
+            }
             
-            saveLightGroups();
-            alert(`Light group updated!`);
+            const indices = Array.from(currentSelectedLEDs).sort((a, b) => a - b);
+            
+            if (currentEditingGroupIndex !== null) {
+                // Update existing group
+                lightGroups[currentEditingGroupIndex] = {
+                    name: name,
+                    indices: indices
+                };
+                saveLightGroups();
+                window.toast.success(`Light group "${name}" updated!`);
+            } else {
+                // Create new group
+                lightGroups.push({
+                    name: name,
+                    indices: indices
+                });
+                saveLightGroups();
+                window.toast.success(`Light group "${name}" created with ${indices.length} LED(s)!`);
+            }
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('lightGroupEditorModal'));
+            if (modal) modal.hide();
+            
+            currentEditingGroupIndex = null;
+            currentSelectedLEDs.clear();
         }
 
         function deleteLightGroup(index) {
