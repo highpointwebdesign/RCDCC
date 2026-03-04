@@ -409,14 +409,6 @@ void loop() {
     firstLoop = false;
   }
   
-  // CHECKPOINT: WiFi status check
-  unsigned long beforeWiFiCheck = millis();
-  int wifiStatus = WiFi.status();
-  unsigned long wifiCheckTime = millis() - beforeWiFiCheck;
-  if (wifiCheckTime > 50) {
-    Serial.printf("⚠️  SLOW WIFI STATUS CHECK: %lums\n", wifiCheckTime);
-  }
-  
   // Handle LED blink timeout
   if (ledBlinkEndTime > 0 && currentTime >= ledBlinkEndTime) {
     digitalWrite(LED_PIN, LOW);
@@ -594,7 +586,6 @@ void loop() {
   
   if (totalLoopTime > 1000) {
     Serial.printf("\n⛔ CRITICAL: Loop took %lums (max so far: %lums)\n", totalLoopTime, maxLoopTime);
-    Serial.printf("   [WiFi check: recently checked at %lu ms]\n", beforeWiFiCheck);
     Serial.printf("   → If crash follows shortly, potential blocking operation identified\n\n");
     crashDetectionWindow = loopEndTime;
   }
