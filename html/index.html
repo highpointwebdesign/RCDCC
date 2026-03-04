@@ -740,6 +740,22 @@
             color: #dc2626;
         }
 
+        /* Light Group Status Indicators */
+        .light-group-status-icon {
+            display: inline-block;
+            margin-left: 8px;
+            font-size: 1.1rem;
+            vertical-align: middle;
+        }
+
+        .light-group-status-icon.configured {
+            color: #10b981;
+        }
+
+        .light-group-status-icon.not-configured {
+            color: #f59e0b;
+        }
+
         /* LED Grid Selector */
         .led-grid-button {
             width: 100%;
@@ -768,8 +784,8 @@
         }
 
         .led-grid-button.selected:hover {
-            background-color: #1d4ed8;
-            border-color: #1d4ed8;
+            background-color: #000;
+            border-color: #000;
             box-shadow: 0 0 12px rgba(37, 99, 235, 0.7);
         }
 
@@ -1492,7 +1508,8 @@
         #sliderFrontLeftTrim .range-slider__thumb[data-lower],
         #sliderFrontRightTrim .range-slider__thumb[data-lower],
         #sliderRearLeftTrim .range-slider__thumb[data-lower],
-        #sliderRearRightTrim .range-slider__thumb[data-lower] {
+        #sliderRearRightTrim .range-slider__thumb[data-lower],
+        #lightGroupBrightnessSlider .range-slider__thumb[data-lower] {
             width: 0;
             height: 0;
             display: none;
@@ -1507,7 +1524,8 @@
         #sliderFrontLeftTrim .range-slider__range,
         #sliderFrontRightTrim .range-slider__range,
         #sliderRearLeftTrim .range-slider__range,
-        #sliderRearRightTrim .range-slider__range {
+        #sliderRearRightTrim .range-slider__range,
+        #lightGroupBrightnessSlider .range-slider__range {
             background: transparent;
         }
 
@@ -1554,7 +1572,8 @@
         #sliderFrontLeftTrim .range-slider__thumb,
         #sliderFrontRightTrim .range-slider__thumb,
         #sliderRearLeftTrim .range-slider__thumb,
-        #sliderRearRightTrim .range-slider__thumb {
+        #sliderRearRightTrim .range-slider__thumb,
+        #lightGroupBrightnessSlider .range-slider__thumb {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1585,7 +1604,8 @@
         #sliderFrontLeftTrim .range-slider__thumb[data-upper],
         #sliderFrontRightTrim .range-slider__thumb[data-upper],
         #sliderRearLeftTrim .range-slider__thumb[data-upper],
-        #sliderRearRightTrim .range-slider__thumb[data-upper] {
+        #sliderRearRightTrim .range-slider__thumb[data-upper],
+        #lightGroupBrightnessSlider .range-slider__thumb[data-upper] {
             width: 32px;
             height: 32px;
         }
@@ -1711,6 +1731,20 @@
     #offline-toast, #online-toast {
         color: #FFF;
         font-weight: 500;
+    }
+
+    /* Fix modal z-index to appear above footer nav */
+    .modal {
+        z-index: 2100 !important;
+    }
+
+    .modal-backdrop {
+        z-index: 2050 !important;
+    }
+
+    /* Add bottom padding to modal body to prevent content from being hidden behind footer */
+    .modal-body {
+        /* padding-bottom: 100px; */
     }
 
     </style>
@@ -1862,18 +1896,18 @@
                     <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                         <div>
                             <span class="material-symbols-outlined icon-danger">lightbulb</span>
-                            Emergency Lights
+                            Lights
                         </div>
                     </div>
                     <div class="card-body">
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="emergencyLightsToggle">
-                            <label class="form-check-label" for="emergencyLightsToggle">
+                            <input class="form-check-input" type="checkbox" id="lightsToggle">
+                            <label class="form-check-label" for="lightsToggle">
                                 <span>Master Switch</span>
                             </label>
                         </div>
                         <div class="form-text mt-2">
-                            <small>Turn emergency lights on/off. Configure patterns in Lights section.</small>
+                            <small>Turn lights on/off. Configure patterns in Lights section.</small>
                         </div>
                     </div>
                 </div>
@@ -1908,6 +1942,13 @@
                     <span class="tab-label-full">System</span>
                     <span class="tab-label-short">System</span>
                 </button>
+                <button class="settings-tab" data-tab="lights">
+                    <span class="material-symbols-outlined">
+                    lightbulb
+                    </span>
+                    <span class="tab-label-full">Light Settings</span>
+                    <span class="tab-label-short">Lights</span>
+                </button>
                 <button class="settings-tab" data-tab="debugging">
                     <span class="material-symbols-outlined">
                     history
@@ -1915,13 +1956,7 @@
                     <span class="tab-label-full">Logs</span>
                     <span class="tab-label-short">Logs</span>
                 </button>
-                <button class="settings-tab" data-tab="lights">
-                    <span class="material-symbols-outlined">
-                    lightbulb
-                    </span>
-                    <span class="tab-label-full">Light Groups</span>
-                    <span class="tab-label-short">Lights</span>
-                </button>
+                
             </div>
 
             <!-- Tab Content: Servo Configuration -->
@@ -2323,6 +2358,32 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- About Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                info
+                                </span>
+                                About
+                            </div>
+                            <div class="card-body">
+                                <div style="margin-bottom: 1rem;">
+                                    <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">App Version</div>
+                                    <div style="color: #666; font-size: 0.875rem;" id="appVersion">Loading...</div>
+                                </div>
+                                <div style="margin-bottom: 1rem;">
+                                    <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">Firmware Version</div>
+                                    <div style="color: #666; font-size: 0.875rem;" id="firmwareVersion">Loading...</div>
+                                </div>
+                                <div>
+                                    <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">Build Date</div>
+                                    <div style="color: #666; font-size: 0.875rem;" id="buildDate">Loading...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2397,7 +2458,7 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb_group</span>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">wb_twilight</span>
                                 Your Light Groups
                             </div>
                             <div class="card-body">
@@ -2846,27 +2907,52 @@
                     <!-- Brightness Slider -->
                     <div class="mb-4">
                         <label for="lightGroupBrightnessSlider" class="form-label"><strong>Brightness</strong></label>
-                        <div class="d-flex align-items-center gap-3">
-                            <input type="range" class="form-range flex-grow-1" id="lightGroupBrightnessSlider" 
-                                   min="0" max="100" step="10" value="100">
+                        <div class="d-flex align-items-center gap-3 mb-2">
+                            <div id="lightGroupBrightnessSlider" class="servo-trim-slider" style="flex: 1;"></div>
                             <span id="lightGroupBrightnessValue" style="min-width: 50px; font-weight: 600; font-size: 1.1rem;">100%</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                            <span>0%</span>
+                            <span>50%</span>
+                            <span>100%</span>
                         </div>
                         <div class="form-text">Set the brightness level for this light group (0% - 100%).</div>
                     </div>
 
+                    <!-- Pattern Selection -->
+                    <div class="mb-4">
+                        <label for="lightGroupPatternSelect" class="form-label"><strong>Pattern</strong></label>
+                        <select class="form-select" id="lightGroupPatternSelect">
+                            <!-- Options populated by JavaScript -->
+                        </select>
+                        <div class="form-text">
+                            Select a light pattern. Patterns are organized into <strong>General</strong> (simple effects), <strong>Emergency</strong> (police/ambulance), and <strong>Warning</strong> (construction/caution). Some patterns use both colors. <strong>Cycle</strong> rotates through all patterns every 30s.
+                        </div>
+                    </div>
+
                     <!-- Color Picker -->
                     <div class="mb-4">
-                        <label for="lightGroupColorPicker" class="form-label"><strong>Color</strong></label>
+                        <label for="lightGroupColorPicker" class="form-label"><strong>Primary Color</strong></label>
                         <div class="d-flex align-items-center gap-3 mb-2">
-                            <input type="color" class="form-control form-control-color" id="lightGroupColorPicker" value="#ff0000" title="Choose a color">
+                            <input type="color" class="form-control form-control-color" id="lightGroupColorPicker" value="#ff0000" title="Choose primary color">
                             <span id="lightGroupColorHex" style="font-family: monospace; font-weight: 600;">#FF0000</span>
                         </div>
-                        <div class="form-text mb-2">Select a color for this light group.</div>
+                        <div class="form-text">Select the primary color for this light group.</div>
+                    </div>
+
+                    <!-- Second Color Picker -->
+                    <div class="mb-4">
+                        <label for="lightGroupColorPicker2" class="form-label"><strong>Secondary Color</strong></label>
+                        <div class="d-flex align-items-center gap-3 mb-2">
+                            <input type="color" class="form-control form-control-color" id="lightGroupColorPicker2" value="#000000" title="Choose secondary color">
+                            <span id="lightGroupColorHex2" style="font-family: monospace; font-weight: 600;">#000000</span>
+                        </div>
+                        <div class="form-text">Select a secondary color (use black #000000 for patterns that don't need it).</div>
                         
-                        <!-- Favorite Color Presets -->
+                        <!-- Favorite Color Preset Buttons Below Second Picker -->
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <small class="text-muted"><strong>Favorite Colors:</strong></small>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;" onclick="resetColorPresets()">Reset to Defaults</button>
+                            <button type="button" class="btn btn-sm btn-gold" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;" onclick="resetColorPresets()">Reset to Defaults</button>
                         </div>
                         <div id="colorPresetsContainer" class="d-flex gap-2 flex-wrap">
                             <!-- Presets will be rendered here by JavaScript -->
@@ -2890,14 +2976,13 @@
                         </div>
 
                         <!-- Clear Selection Button -->
-                        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="clearLedSelection()">
-                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">clear_all</span>
+                        <button type="button" class="btn btn-sm btn-gold mt-2" onclick="clearLedSelection()">
                             Clear Selection
                         </button>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-gold" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-gold" id="lightGroupSaveBtn" onclick="saveLightGroupFromModal()">
                         <span class="material-symbols-outlined">check_circle</span>
                         Save Group
@@ -2962,6 +3047,15 @@
         // ==================== Configuration ====================
         const ESP32_IP = localStorage.getItem('esp32Ip') || '192.168.87.32';
         
+        // ==================== Version Configuration ====================
+        // Update this version number when releasing new app versions
+        // For automated versioning, this could be replaced by a build script that:
+        // - Reads from package.json
+        // - Uses git tags: $(git describe --tags --always)
+        // - Generates from CI/CD pipeline build number
+        const APP_VERSION = '1.0.0';
+        const BUILD_DATE = '2026-03-04'; // Can be auto-generated: new Date().toISOString().split('T')[0]
+        
         // Helper function to get the correct API URL
         function getApiUrl(endpoint) {
             // Check if we're running on live-server (localhost:8081 or 127.0.0.1:8081)
@@ -2989,6 +3083,18 @@
                     sequence: [
                         { led0: RED, led1: OFF, duration: 250 },
                         { led0: OFF, led1: BLUE, duration: 250 }
+                    ]
+                },
+                {
+                    name: "Flicker",
+                    isLooping: true,
+                    sequence: [
+                        { led0: RED, led1: BLUE, duration: 80 },
+                        { led0: "800000", led1: "000080", duration: 60 },
+                        { led0: RED, led1: BLUE, duration: 90 },
+                        { led0: OFF, led1: OFF, duration: 50 },
+                        { led0: RED, led1: BLUE, duration: 70 },
+                        { led0: "400000", led1: "000040", duration: 40 }
                     ]
                 },
                 {
@@ -3025,6 +3131,28 @@
                         { led0: RED, led1: BLUE, duration: 250 },
                         { led0: BLUE, led1: RED, duration: 250 }
                     ]
+                },
+                {
+                    name: "Strobe",
+                    isLooping: true,
+                    sequence: [
+                        { led0: RED, led1: OFF, duration: 75 },
+                        { led0: OFF, led1: BLUE, duration: 75 }
+                    ]
+                },
+                {
+                    name: "Breathe",
+                    isLooping: true,
+                    sequence: [
+                        { led0: RED, led1: BLUE, duration: 200 },
+                        { led0: "BF0000", led1: "0000BF", duration: 200 },
+                        { led0: "800000", led1: "000080", duration: 200 },
+                        { led0: "400000", led1: "000040", duration: 200 },
+                        { led0: "200000", led1: "000020", duration: 200 },
+                        { led0: "400000", led1: "000040", duration: 200 },
+                        { led0: "800000", led1: "000080", duration: 200 },
+                        { led0: "BF0000", led1: "0000BF", duration: 200 }
+                    ]
                 }
             ],
             construction: [
@@ -3041,6 +3169,40 @@
                     sequence: [
                         { led0: AMBER, led1: AMBER, duration: 250 },
                         { led0: OFF, led1: OFF, duration: 250 }
+                    ]
+                },
+                {
+                    name: "Strobe",
+                    isLooping: true,
+                    sequence: [
+                        { led0: AMBER, led1: OFF, duration: 75 },
+                        { led0: OFF, led1: AMBER, duration: 75 }
+                    ]
+                },
+                {
+                    name: "Breathe",
+                    isLooping: true,
+                    sequence: [
+                        { led0: AMBER, led1: AMBER, duration: 200 },
+                        { led0: "BF7C00", led1: "BF7C00", duration: 200 },
+                        { led0: "805300", led1: "805300", duration: 200 },
+                        { led0: "402900", led1: "402900", duration: 200 },
+                        { led0: "201500", led1: "201500", duration: 200 },
+                        { led0: "402900", led1: "402900", duration: 200 },
+                        { led0: "805300", led1: "805300", duration: 200 },
+                        { led0: "BF7C00", led1: "BF7C00", duration: 200 }
+                    ]
+                },
+                {
+                    name: "Flicker",
+                    isLooping: true,
+                    sequence: [
+                        { led0: AMBER, led1: AMBER, duration: 80 },
+                        { led0: "805300", led1: "805300", duration: 60 },
+                        { led0: AMBER, led1: AMBER, duration: 90 },
+                        { led0: OFF, led1: OFF, duration: 50 },
+                        { led0: AMBER, led1: AMBER, duration: 70 },
+                        { led0: "402900", led1: "402900", duration: 40 }
                     ]
                 }
             ],
@@ -3059,6 +3221,40 @@
                     sequence: [
                         { led0: AMBER, led1: AMBER, duration: 250 },
                         { led0: OFF, led1: OFF, duration: 250 }
+                    ]
+                },
+                {
+                    name: "Strobe",
+                    isLooping: true,
+                    sequence: [
+                        { led0: AMBER, led1: OFF, duration: 75 },
+                        { led0: OFF, led1: AMBER, duration: 75 }
+                    ]
+                },
+                {
+                    name: "Breathe",
+                    isLooping: true,
+                    sequence: [
+                        { led0: AMBER, led1: AMBER, duration: 200 },
+                        { led0: "BF7C00", led1: "BF7C00", duration: 200 },
+                        { led0: "805300", led1: "805300", duration: 200 },
+                        { led0: "402900", led1: "402900", duration: 200 },
+                        { led0: "201500", led1: "201500", duration: 200 },
+                        { led0: "402900", led1: "402900", duration: 200 },
+                        { led0: "805300", led1: "805300", duration: 200 },
+                        { led0: "BF7C00", led1: "BF7C00", duration: 200 }
+                    ]
+                },
+                {
+                    name: "Flicker",
+                    isLooping: true,
+                    sequence: [
+                        { led0: AMBER, led1: AMBER, duration: 80 },
+                        { led0: "805300", led1: "805300", duration: 60 },
+                        { led0: AMBER, led1: AMBER, duration: 90 },
+                        { led0: OFF, led1: OFF, duration: 50 },
+                        { led0: AMBER, led1: AMBER, duration: 70 },
+                        { led0: "402900", led1: "402900", duration: 40 }
                     ]
                 }
             ]
@@ -3267,7 +3463,7 @@
             fetch(getApiUrl('/api/lights'))
                 .then(response => response.json())
                 .then(data => {
-                    const toggle = document.getElementById('emergencyLightsToggle');
+                    const toggle = document.getElementById('lightsToggle');
                     const modeSelect = document.getElementById('emergencyLightMode');
                     const patternSelect = document.getElementById('emergencyLightPattern');
                     
@@ -4321,7 +4517,7 @@
             }
 
             // ==================== Emergency Lights Controls ====================
-            const emergencyLightsToggle = document.getElementById('emergencyLightsToggle');
+            const lightsToggle = document.getElementById('lightsToggle');
             const emergencyLightMode = document.getElementById('emergencyLightMode');
             const emergencyLightPattern = document.getElementById('emergencyLightPattern');
             const applyLightsBtn = document.getElementById('applyLightsBtn');
@@ -4332,8 +4528,8 @@
             }
 
             // Dashboard toggle: Master kill switch - turn lights on/off
-            if (emergencyLightsToggle) {
-                emergencyLightsToggle.addEventListener('change', function() {
+            if (lightsToggle) {
+                lightsToggle.addEventListener('change', function() {
                     const isEnabled = this.checked;
                     
                     if (isEnabled) {
@@ -4356,7 +4552,7 @@
                         })
                         .catch(err => {
                             console.error('Failed to enable lights:', err);
-                            emergencyLightsToggle.checked = false;
+                            lightsToggle.checked = false;
                         });
                     } else {
                         // Turn off
@@ -4392,7 +4588,7 @@
                     const mode = emergencyLightMode.value;
                     const patternIndex = parseInt(emergencyLightPattern.value);
                     const pattern = PATTERNS[mode][patternIndex];
-                    const isCurrentlyEnabled = emergencyLightsToggle.checked;
+                    const isCurrentlyEnabled = lightsToggle.checked;
                     
                     fetch(getApiUrl('/api/lights'), {
                         method: 'POST',
@@ -4550,6 +4746,22 @@
         const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
         const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
         const COLOR_PRESETS_KEY = 'lightGroupColorPresets';
+        const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
+        const LIGHT_GROUP_DEFAULT_PATTERN = 'Steady';
+        const LIGHT_GROUP_CYCLE_INTERVAL_SECONDS = 30;
+        const LIGHT_GROUP_EXTRA_PATTERNS = ['Steady', 'Double Flash', 'Strobe', 'Breathe', 'Flicker', 'Cycle'];
+        
+        // Predefined light groups (initialized on first load)
+        const PREDEFINED_LIGHT_GROUPS = [
+            { name: 'Brake Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#000000', pattern: 'Steady', isPredefined: true },
+            { name: 'Emergency/Police Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#0000ff', pattern: 'Whip Sweep', isPredefined: true },
+            { name: 'Hazard Lights', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', isPredefined: true },
+            { name: 'Headlights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Steady', isPredefined: true },
+            { name: 'Reverse Lights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Steady', isPredefined: true },
+            { name: 'Taillights', indices: [], brightness: 128, color: '#ff0000', color2: '#000000', pattern: 'Steady', isPredefined: true },
+            { name: 'Turn Signals Left', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', isPredefined: true },
+            { name: 'Turn Signals Right', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', isPredefined: true }
+        ];
         const DEFAULT_COLOR_PRESETS = [
             '#ff0000', // Red
             '#00ff00', // Green
@@ -4563,6 +4775,7 @@
         ];
         let lightGroups = [];
         let colorPresets = [];
+        let currentColor2 = '#000000'; // Second color for dual-color patterns
 
         // Load color presets from localStorage or use defaults
         function loadColorPresets() {
@@ -4628,8 +4841,18 @@
         }
 
         function loadLightGroups() {
+            const initialized = localStorage.getItem(LIGHT_GROUPS_INITIALIZED_KEY);
             const stored = localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY);
-            lightGroups = stored ? JSON.parse(stored) : [];
+            
+            if (!initialized) {
+                // First time - initialize with predefined groups
+                lightGroups = JSON.parse(JSON.stringify(PREDEFINED_LIGHT_GROUPS));
+                localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
+                saveLightGroups();
+            } else {
+                lightGroups = stored ? JSON.parse(stored) : [];
+            }
+            
             renderLightGroupsList();
         }
 
@@ -4650,20 +4873,45 @@
                 emptyState.style.display = 'block';
             } else {
                 emptyState.style.display = 'none';
-                lightGroups.forEach((group, index) => {
+                // Sort alphabetically before rendering
+                const sortedGroups = [...lightGroups].sort((a, b) => a.name.localeCompare(b.name));
+                sortedGroups.forEach((group) => {
+                    const index = lightGroups.findIndex(g => g === group);
                     const item = document.createElement('div');
                     item.className = 'light-group-item';
                     const ledDisplay = formatLedRanges(group.indices);
                     const brightnessPercent = group.brightness !== undefined ? 
                         Math.round(group.brightness * 100 / 255) : 100;
                     const color = group.color || '#ff0000';
+                    const color2 = group.color2 || '#000000';
+                    const pattern = group.pattern || LIGHT_GROUP_DEFAULT_PATTERN;
+                    const patternDisplay = pattern === 'Cycle'
+                        ? `${pattern} (${LIGHT_GROUP_CYCLE_INTERVAL_SECONDS}s)`
+                        : pattern;
+                    
+                    // Show both colors if second color is not black/off
+                    const colorDisplay = color2 !== '#000000' && color2 !== '#00000000'
+                        ? `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 3px; vertical-align: middle; margin-right: 4px;"></span><span style="display: inline-block; width: 16px; height: 16px; background-color: ${color2}; border: 2px solid #ddd; border-radius: 3px; vertical-align: middle; margin-right: 8px;"></span>`
+                        : `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 3px; vertical-align: middle; margin-right: 8px;"></span>`;
+                    
+                    const colorText = color2 !== '#000000' && color2 !== '#00000000'
+                        ? `${color.toUpperCase()} / ${color2.toUpperCase()}`
+                        : color.toUpperCase();
+                    
+                    // Determine configuration status
+                    const isConfigured = group.indices && group.indices.length > 0;
+                    const statusIcon = isConfigured
+                        ? '<span class="material-symbols-outlined light-group-status-icon configured" title="Configured - LEDs assigned">check_circle</span>'
+                        : '<span class="material-symbols-outlined light-group-status-icon not-configured" title="Setup Required - No LEDs assigned">warning</span>';
+                    
                     item.innerHTML = `
                         <div class="light-group-info">
                             <div class="light-group-name">
-                                <span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 3px; vertical-align: middle; margin-right: 8px;"></span>
+                                ${colorDisplay}
                                 ${group.name}
+                                ${statusIcon}
                             </div>
-                            <div class="light-group-range">LEDs: ${ledDisplay} • Brightness: ${brightnessPercent}% • Color: ${color.toUpperCase()}</div>
+                            <div class="light-group-range">LEDs: ${ledDisplay} • Brightness: ${brightnessPercent}% • Color: ${colorText} • Pattern: ${patternDisplay}</div>
                         </div>
                         <div class="light-group-actions">
                             <button onclick="editLightGroup(${index})" title="Edit this group">Edit</button>
@@ -4680,6 +4928,108 @@
         let currentSelectedLEDs = new Set();
         let currentBrightness = 100; // Default 100% (255 in 0-255 scale)
         let currentColor = '#ff0000'; // Default red
+        let currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
+        let lightGroupBrightnessSliderInstance = null;
+
+        function updateLightGroupBrightnessThumbLabel(value) {
+            const sliderElement = document.querySelector('#lightGroupBrightnessSlider');
+            if (!sliderElement) return;
+            const thumb = sliderElement.querySelector('.range-slider__thumb[data-upper]');
+            if (thumb) {
+                thumb.textContent = String(Math.round(value));
+            }
+        }
+
+        function getLightGroupPatternNames() {
+            return {
+                general: LIGHT_GROUP_EXTRA_PATTERNS.filter(p => p !== 'Cycle').sort(),
+                emergency: [...new Set(PATTERNS.police.map(p => p.name))].sort(),
+                warning: [...new Set([...PATTERNS.construction.map(p => p.name), ...PATTERNS.warning.map(p => p.name)])].filter(p => !PATTERNS.police.find(pp => pp.name === p)).sort()
+            };
+        }
+
+        function populateLightGroupPatternOptions(selectedPattern = LIGHT_GROUP_DEFAULT_PATTERN) {
+            const patternSelect = document.getElementById('lightGroupPatternSelect');
+            if (!patternSelect) return;
+
+            const patterns = getLightGroupPatternNames();
+            patternSelect.innerHTML = '';
+
+            // General patterns
+            const generalGroup = document.createElement('optgroup');
+            generalGroup.label = 'General';
+            [...patterns.general, 'Cycle'].forEach(patternName => {
+                const option = document.createElement('option');
+                option.value = patternName;
+                option.textContent = patternName;
+                generalGroup.appendChild(option);
+            });
+            patternSelect.appendChild(generalGroup);
+
+            // Emergency patterns
+            const emergencyGroup = document.createElement('optgroup');
+            emergencyGroup.label = 'Emergency';
+            patterns.emergency.forEach(patternName => {
+                const option = document.createElement('option');
+                option.value = patternName;
+                option.textContent = patternName;
+                emergencyGroup.appendChild(option);
+            });
+            patternSelect.appendChild(emergencyGroup);
+
+            // Warning patterns
+            const warningGroup = document.createElement('optgroup');
+            warningGroup.label = 'Warning';
+            patterns.warning.forEach(patternName => {
+                const option = document.createElement('option');
+                option.value = patternName;
+                option.textContent = patternName;
+                warningGroup.appendChild(option);
+            });
+            patternSelect.appendChild(warningGroup);
+
+            patternSelect.value = selectedPattern;
+            currentPattern = selectedPattern;
+            
+            // Update color defaults based on pattern
+            updateColorDefaultsForPattern(selectedPattern);
+        }
+        
+        function updateColorDefaultsForPattern(pattern) {
+            // Smart defaults for dual-color patterns
+            const emergencyPatterns = ['Whip Sweep', 'Dual Beacon', 'Wig Wag', 'Dual Color Pulse', 'Chase'];
+            const warningPatterns = ['Slow Beacon', 'Fast Flash', 'Double Pulse'];
+            
+            if (emergencyPatterns.includes(pattern)) {
+                // Red + Blue for emergency
+                if (currentColor === '#ff0000' || currentColor === '#ffffff') {
+                    currentColor = '#ff0000';
+                    currentColor2 = '#0000ff';
+                }
+            } else if (warningPatterns.includes(pattern) || pattern === 'Steady Amber') {
+                // Amber + White for warning
+                if (currentColor === '#ff0000' || currentColor === '#ffffff') {
+                    currentColor = '#ffa500';
+                    currentColor2 = '#ffffff';
+                }
+            } else {
+                // Single color patterns - second color is off
+                if (currentColor2 !== '#000000' && !emergencyPatterns.includes(currentPattern)) {
+                    currentColor2 = '#000000';
+                }
+            }
+            
+            // Update UI
+            const colorPicker = document.getElementById('lightGroupColorPicker');
+            const colorHex = document.getElementById('lightGroupColorHex');
+            const colorPicker2 = document.getElementById('lightGroupColorPicker2');
+            const colorHex2 = document.getElementById('lightGroupColorHex2');
+            
+            if (colorPicker) colorPicker.value = currentColor;
+            if (colorHex) colorHex.textContent = currentColor.toUpperCase();
+            if (colorPicker2) colorPicker2.value = currentColor2;
+            if (colorHex2) colorHex2.textContent = currentColor2.toUpperCase();
+        }
 
         function openLightGroupModal(index = null) {
             currentEditingGroupIndex = index;
@@ -4690,6 +5040,7 @@
             const nameInput = document.getElementById('lightGroupNameInput');
             const brightnessSlider = document.getElementById('lightGroupBrightnessSlider');
             const brightnessValue = document.getElementById('lightGroupBrightnessValue');
+            const patternSelect = document.getElementById('lightGroupPatternSelect');
             const colorPicker = document.getElementById('lightGroupColorPicker');
             const colorHex = document.getElementById('lightGroupColorHex');
             const totalLEDCount = parseInt(document.getElementById('totalLEDCount').value) || 100;
@@ -4711,24 +5062,55 @@
                 const brightnessPercent = group.brightness !== undefined ? 
                     Math.round(group.brightness * 100 / 255) : 100;
                 currentBrightness = brightnessPercent;
-                brightnessSlider.value = brightnessPercent;
+                if (lightGroupBrightnessSliderInstance) {
+                    lightGroupBrightnessSliderInstance.value([0, brightnessPercent]);
+                }
+                updateLightGroupBrightnessThumbLabel(brightnessPercent);
                 brightnessValue.textContent = brightnessPercent + '%';
+
+                // Set pattern
+                currentPattern = group.pattern || LIGHT_GROUP_DEFAULT_PATTERN;
+                populateLightGroupPatternOptions(currentPattern);
+                if (patternSelect) {
+                    patternSelect.value = currentPattern;
+                }
                 
-                // Set color
+                // Set colors
                 const color = group.color || '#ff0000';
+                const color2 = group.color2 || '#000000';
                 currentColor = color;
+                currentColor2 = color2;
                 colorPicker.value = color;
                 colorHex.textContent = color.toUpperCase();
+                
+                const colorPicker2 = document.getElementById('lightGroupColorPicker2');
+                const colorHex2 = document.getElementById('lightGroupColorHex2');
+                if (colorPicker2) colorPicker2.value = color2;
+                if (colorHex2) colorHex2.textContent = color2.toUpperCase();
             } else {
                 // Add mode
                 titleSpan.textContent = 'Add';
                 nameInput.value = '';
                 currentBrightness = 100;
-                brightnessSlider.value = 100;
+                if (lightGroupBrightnessSliderInstance) {
+                    lightGroupBrightnessSliderInstance.value([0, 100]);
+                }
+                updateLightGroupBrightnessThumbLabel(100);
                 brightnessValue.textContent = '100%';
+                currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
+                populateLightGroupPatternOptions(LIGHT_GROUP_DEFAULT_PATTERN);
+                if (patternSelect) {
+                    patternSelect.value = LIGHT_GROUP_DEFAULT_PATTERN;
+                }
                 currentColor = '#ff0000';
+                currentColor2 = '#000000';
                 colorPicker.value = '#ff0000';
                 colorHex.textContent = '#FF0000';
+                
+                const colorPicker2 = document.getElementById('lightGroupColorPicker2');
+                const colorHex2 = document.getElementById('lightGroupColorHex2');
+                if (colorPicker2) colorPicker2.value = '#000000';
+                if (colorHex2) colorHex2.textContent = '#000000';
             }
             
             renderLedGrid(totalLEDCount);
@@ -4865,9 +5247,12 @@
             }
             
             const indices = Array.from(currentSelectedLEDs).sort((a, b) => a - b);
+            const patternSelect = document.getElementById('lightGroupPatternSelect');
+            const selectedPattern = (patternSelect && patternSelect.value) ? patternSelect.value : LIGHT_GROUP_DEFAULT_PATTERN;
             
             // Convert brightness percentage (0-100) to 0-255 scale
             const brightness255 = Math.round(currentBrightness * 255 / 100);
+            const cycleIntervalSeconds = selectedPattern === 'Cycle' ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined;
             
             if (currentEditingGroupIndex !== null) {
                 // Update existing group
@@ -4875,7 +5260,10 @@
                     name: name,
                     indices: indices,
                     brightness: brightness255,
-                    color: currentColor
+                    color: currentColor,
+                    color2: currentColor2,
+                    pattern: selectedPattern,
+                    cycleIntervalSeconds
                 };
                 saveLightGroups();
                 window.toast.success(`Light group "${name}" updated!`);
@@ -4885,7 +5273,10 @@
                     name: name,
                     indices: indices,
                     brightness: brightness255,
-                    color: currentColor
+                    color: currentColor,
+                    color2: currentColor2,
+                    pattern: selectedPattern,
+                    cycleIntervalSeconds
                 });
                 saveLightGroups();
                 window.toast.success(`Light group "${name}" created with ${indices.length} LED(s)!`);
@@ -4899,6 +5290,8 @@
             currentSelectedLEDs.clear();
             currentBrightness = 100;
             currentColor = '#ff0000';
+            currentColor2 = '#000000';
+            currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
         }
 
         function setLightGroupColor(color) {
@@ -4913,11 +5306,20 @@
             const group = lightGroups[index];
             if (!group) return;
             
-            if (confirm(`Delete light group "${group.name}"? This cannot be undone.`)) {
-                lightGroups.splice(index, 1);
-                saveLightGroups();
-                alert('Light group deleted');
+            // Warn if deleting the last group
+            if (lightGroups.length === 1) {
+                if (!confirm(`Delete light group "${group.name}"?\n\nThis is your last light group. You can create new ones anytime.`)) {
+                    return;
+                }
+            } else {
+                if (!confirm(`Delete light group "${group.name}"? This cannot be undone.`)) {
+                    return;
+                }
             }
+            
+            lightGroups.splice(index, 1);
+            saveLightGroups();
+            window.toast.success('Light group deleted');
         }
 
         function parseLEDIndices(str) {
@@ -4972,18 +5374,38 @@
                 });
             }
             
-            // Brightness slider event listener
-            const brightnessSlider = document.getElementById('lightGroupBrightnessSlider');
             const brightnessValue = document.getElementById('lightGroupBrightnessValue');
-            if (brightnessSlider && brightnessValue) {
-                brightnessSlider.addEventListener('input', function() {
-                    const percent = parseInt(this.value);
-                    currentBrightness = percent;
-                    brightnessValue.textContent = percent + '%';
+            const brightnessSliderElement = document.querySelector('#lightGroupBrightnessSlider');
+            if (brightnessSliderElement && brightnessValue) {
+                lightGroupBrightnessSliderInstance = rangeSlider(brightnessSliderElement, {
+                    value: [0, 100],
+                    min: 0,
+                    max: 100,
+                    step: 10,
+                    thumbsDisabled: [true, false],
+                    rangeSlideDisabled: true,
+                    onInput: function(value) {
+                        const percent = Array.isArray(value) ? parseInt(value[1], 10) : parseInt(value, 10);
+                        if (Number.isNaN(percent)) return;
+                        currentBrightness = percent;
+                        brightnessValue.textContent = percent + '%';
+                        updateLightGroupBrightnessThumbLabel(percent);
+                    }
+                });
+                updateLightGroupBrightnessThumbLabel(100);
+            }
+
+            const lightGroupPatternSelect = document.getElementById('lightGroupPatternSelect');
+            populateLightGroupPatternOptions(LIGHT_GROUP_DEFAULT_PATTERN);
+            if (lightGroupPatternSelect) {
+                lightGroupPatternSelect.value = LIGHT_GROUP_DEFAULT_PATTERN;
+                lightGroupPatternSelect.addEventListener('change', function() {
+                    currentPattern = this.value || LIGHT_GROUP_DEFAULT_PATTERN;
+                    updateColorDefaultsForPattern(currentPattern);
                 });
             }
             
-            // Color picker event listener
+            // Color picker event listeners
             const colorPicker = document.getElementById('lightGroupColorPicker');
             const colorHex = document.getElementById('lightGroupColorHex');
             if (colorPicker && colorHex) {
@@ -4993,10 +5415,76 @@
                 });
             }
             
+            // Second color picker event listeners
+            const colorPicker2 = document.getElementById('lightGroupColorPicker2');
+            const colorHex2 = document.getElementById('lightGroupColorHex2');
+            if (colorPicker2 && colorHex2) {
+                colorPicker2.addEventListener('input', function() {
+                    currentColor2 = this.value;
+                    colorHex2.textContent = this.value.toUpperCase();
+                });
+            }
+            
             // Load light groups and color presets
             loadLightGroups();
             loadColorPresets();
+            
+            // Load version information
+            loadVersionInfo();
         });
+        
+        function loadVersionInfo() {
+            // Display app version and build date
+            const appVersionEl = document.getElementById('appVersion');
+            const buildDateEl = document.getElementById('buildDate');
+            
+            if (appVersionEl) {
+                appVersionEl.textContent = APP_VERSION;
+            }
+            if (buildDateEl) {
+                buildDateEl.textContent = BUILD_DATE;
+            }
+            
+            // Fetch firmware version from ESP32
+            fetchFirmwareVersion();
+        }
+        
+        function fetchFirmwareVersion() {
+            const firmwareVersionEl = document.getElementById('firmwareVersion');
+            if (!firmwareVersionEl) return;
+            
+            // Try to get version from health-check endpoint
+            fetch(getApiUrl('/api/health-check'), { cache: 'no-store' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.version) {
+                        firmwareVersionEl.textContent = data.version;
+                    } else if (data.firmwareVersion) {
+                        firmwareVersionEl.textContent = data.firmwareVersion;
+                    } else {
+                        // Fallback: try to get from config endpoint
+                        return fetch(getApiUrl('/api/config'), { cache: 'no-store' });
+                    }
+                })
+                .then(response => {
+                    if (response) return response.json();
+                })
+                .then(data => {
+                    if (data && (data.version || data.firmwareVersion)) {
+                        firmwareVersionEl.textContent = data.version || data.firmwareVersion;
+                    } else if (firmwareVersionEl.textContent === 'Loading...') {
+                        // No version available from firmware
+                        firmwareVersionEl.textContent = 'Not available';
+                        firmwareVersionEl.title = 'Firmware does not report version info. Update firmware to enable.';
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to fetch firmware version:', error);
+                    if (firmwareVersionEl.textContent === 'Loading...') {
+                        firmwareVersionEl.textContent = 'Connection error';
+                    }
+                });
+        }
 
         function updateConnectionStatus(connected) {
             const icon = document.getElementById('wifiIcon');

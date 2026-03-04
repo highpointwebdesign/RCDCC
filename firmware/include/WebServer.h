@@ -193,7 +193,8 @@ private:
     
     // API endpoint for heartbeat/health check
     server.on("/api/health-check", HTTP_GET, [this](AsyncWebServerRequest *request) {
-      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      String json = "{\"status\":\"ok\",\"version\":\"" + String(FIRMWARE_VERSION) + "\"}";
+      request->send(200, "application/json", json);
     });
     
     // API endpoint to flash LED (for notifications)

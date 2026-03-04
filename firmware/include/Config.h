@@ -1,6 +1,15 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// ==================== Version Configuration ====================
+// Update this version when releasing new firmware builds
+// For automated versioning from git, add to platformio.ini build_flags:
+//   -DFIRMWARE_VERSION=\"$(git describe --tags --always)\"
+// Or use a pre-build script to generate this from version.txt or package.json
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "1.0.0"
+#endif
+
 // Sensor configuration
 #define SUSPENSION_SAMPLE_RATE_HZ 25  // 25 Hz update rate (reduced from 50 Hz for I2C stability)
 #define DEFAULT_TELEMETRY_RATE_HZ 5   // 5 Hz WebSocket broadcast rate (configurable 1-10 Hz)
