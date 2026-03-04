@@ -233,13 +233,6 @@
                     <span class="tab-label-full">System</span>
                     <span class="tab-label-short">System</span>
                 </button>
-                <button class="settings-tab" data-tab="debugging">
-                    <span class="material-symbols-outlined">
-                    history
-                    </span>
-                    <span class="tab-label-full">Logs</span>
-                    <span class="tab-label-short">Logs</span>
-                </button>
                 
             </div>
 
@@ -599,11 +592,11 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                 <!-- Audio Notifications Section -->
-                                <div  class="mb-4 pb-4" style="border-bottom: 1px solid var(--high-impact-color;">
+                                 <!-- Sound Notifications Section -->
+                                <div  class="mb-4 pb-2" style="border-bottom: 1px solid var(--bs-border-color-translucent);">
                                     <h6 class="mb-3" style="font-weight: 600; color: var(--text-primary);">
                                         <!-- <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle; margin-right: 0.5rem; color: var(--danger);">volume_up</span> -->
-                                        Audio Alerts
+                                        Sound Alerts
                                     </h6>
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" id="enableNotificationSounds" checked>
@@ -612,7 +605,7 @@
                                         </label>
                                     </div>
                                     <p style="color: #666; font-size: 0.875rem; margin-top: 0.75rem;">
-                                        When enabled, notification toasts will include audio alerts for success, warning, error, and info messages.
+                                        When enabled, notification toasts will include sound alerts for success, warning, error, and info messages.
                                     </p>
                                 </div>
 
@@ -658,6 +651,46 @@
                         </div>
                     </div>
 
+                    <!-- Console Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                terminal
+                                </span>
+                                Console
+                                <div class="float-end" style="display: flex; gap: 10px; align-items: center;">
+                                    <span class="material-symbols-outlined icon-action" id="consoleCopyBtn" title="Copy console to clipboard">content_copy</span>
+                                    <span class="material-symbols-outlined icon-action" id="consoleClearBtn" title="Clear console">delete</span>
+                                </div>
+                            </div>
+                            <div class="console-output" id="consoleOutput">
+                                <!-- Console logs will appear here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Configuration Data Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span class="material-symbols-outlined" style="color: var(--danger);">
+                                settings
+                                </span>
+                                    Configuration Data
+                                </div>
+                                <span class="material-symbols-outlined icon-action" id="configCopyBtn" title="Copy configuration to clipboard">content_copy</span>
+                                
+                            </div>
+                            <div class="card-body">
+                                <div class="data-display" id="configData">{
+  "loading": "Fetching configuration..."
+}</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- About Card -->
                     <div class="col-12 col-md-6">
                         <div class="card">
@@ -689,45 +722,6 @@
             <!-- Tab Content: Debugging -->
             <div class="tab-pane" id="tab-debugging">
                 <div class="row g-3">
-                    <!-- Console Card -->
-                    <div class="col-12 col-md-6">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">
-                                terminal
-                                </span>
-                                Console
-                                <div class="float-end" style="display: flex; gap: 10px; align-items: center;">
-                                    <span class="material-symbols-outlined icon-action" id="consoleCopyBtn" title="Copy console to clipboard">content_copy</span>
-                                    <span class="material-symbols-outlined icon-action" id="consoleClearBtn" title="Clear console">delete</span>
-                                </div>
-                            </div>
-    <div class="console-output" id="consoleOutput">
-                                <!-- Console logs will appear here -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Configuration Data Card -->
-                    <div class="col-12 col-md-6">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span class="material-symbols-outlined" style="color: var(--danger);">
-                                settings
-                                </span>
-                                    Configuration Data
-                                </div>
-                                <span class="material-symbols-outlined icon-action" id="configCopyBtn" title="Copy configuration to clipboard">content_copy</span>
-                                
-                            </div>
-                            <div class="card-body">
-                                <div class="data-display" id="configData">{
-  "loading": "Fetching configuration..."
-}</div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
