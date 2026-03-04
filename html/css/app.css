@@ -1449,7 +1449,7 @@
 
         /* Data Display */
         .data-display {
-            background: #1e293b;
+            background: #1E1E1E; 
             color: #e2e8f0;
             font-family: 'Courier New', monospace;
             font-size: 0.75rem;
