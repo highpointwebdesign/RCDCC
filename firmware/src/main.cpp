@@ -197,6 +197,7 @@ void setup() {
   // Load configuration from storage
   storageManager.init();
   storageManager.loadConfig();
+  storageManager.loadLights();
   SuspensionConfig config = storageManager.getConfig();
   ServoConfig servoConfig = storageManager.getServoConfig();
   

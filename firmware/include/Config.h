@@ -60,6 +60,7 @@
 
 // Storage configuration
 #define CONFIG_SPIFFS_PATH "/config.json"
+#define LIGHTS_SPIFFS_PATH "/lights.json"
 
 // MPU6050 Orientation Options
 enum MPU6050Orientation {
@@ -117,4 +118,42 @@ struct LEDConfig {
 
 #define DEFAULT_LED_COLOR LED_COLOR_RED
 
-#endif
+// Light modes enumeration
+enum LightMode {
+  LIGHT_MODE_OFF = 0,
+  LIGHT_MODE_SOLID = 1,
+  LIGHT_MODE_BLINK = 2,
+  LIGHT_MODE_PULSE = 3
+};
+
+// Individual light group configuration
+struct LightGroup {
+  bool enabled;           // Whether this light group is active
+  uint8_t brightness;     // Brightness 0-255
+  uint8_t mode;          // LightMode enum value
+  uint16_t blinkRate;    // Blink rate in milliseconds (for blink/pulse modes)
+};
+
+// Lights configuration structure
+struct LightsConfig {
+  LightGroup headlights;
+  LightGroup tailLights;
+  LightGroup emergencyLights;
+};
+
+// Default lights configuration
+#define DEFAULT_HEADLIGHTS_ENABLED false
+#define DEFAULT_HEADLIGHTS_BRIGHTNESS 100
+#define DEFAULT_HEADLIGHTS_MODE LIGHT_MODE_OFF
+#define DEFAULT_HEADLIGHTS_BLINK_RATE 500
+
+#define DEFAULT_TAILLIGHTS_ENABLED false
+#define DEFAULT_TAILLIGHTS_BRIGHTNESS 100
+#define DEFAULT_TAILLIGHTS_MODE LIGHT_MODE_OFF
+#define DEFAULT_TAILLIGHTS_BLINK_RATE 500
+
+#define DEFAULT_EMERGENCY_LIGHTS_ENABLED false
+#define DEFAULT_EMERGENCY_LIGHTS_BRIGHTNESS 100
+#define DEFAULT_EMERGENCY_LIGHTS_MODE LIGHT_MODE_OFF
+#define DEFAULT_EMERGENCY_LIGHTS_BLINK_RATE 500
+

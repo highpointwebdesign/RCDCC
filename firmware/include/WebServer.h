@@ -401,31 +401,42 @@ private:
         }
       });
     
-    // Emergency lights control API
-    server.on("/api/lights", HTTP_POST, [this](AsyncWebServerRequest *request) {}, nullptr, 
-      [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-        // Call the callback with the entire JSON payload
-        if (emergencyLightSetCallback) {
-          String jsonPayload;
-          for (size_t i = 0; i < len; i++) {
-            jsonPayload += (char)data[i];
-          }
-          emergencyLightSetCallback(jsonPayload);
-        }
-        
-        request->send(200, "application/json", "{\"status\":\"success\"}");
-      });
-    
+    // Lights configuration API - GET current state
     server.on("/api/lights", HTTP_GET, [this](AsyncWebServerRequest *request) {
-      String response = "";
-      
-      // Call the callback to get emergency lights state as JSON
-      if (emergencyLightGetCallback) {
-        emergencyLightGetCallback(response);
-      }
-      
+      String response = storageManager->getLightsConfigJSON();
       request->send(200, "application/json", response);
     });
+    
+    // Lights configuration API - UPDATE lights state
+    server.on("/api/lights", HTTP_POST, [this](AsyncWebServerRequest *request) {}, nullptr, 
+      [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        DynamicJsonDocument doc(1024);
+        DeserializationError error = deserializeJson(doc, data);
+        
+        if (!error) {
+          // Update each light group if provided
+          if (doc.containsKey("lightGroups")) {
+            JsonObject groups = doc["lightGroups"];
+            
+            if (groups.containsKey("headlights")) {
+              JsonObject hl = groups["headlights"];
+              storageManager->updateLightsGroup("headlights", hl);
+            }
+            if (groups.containsKey("tailLights")) {
+              JsonObject tl = groups["tailLights"];
+              storageManager->updateLightsGroup("tailLights", tl);
+            }
+            if (groups.containsKey("emergencyLights")) {
+              JsonObject el = groups["emergencyLights"];
+              storageManager->updateLightsGroup("emergencyLights", el);
+            }
+          }
+          
+          request->send(200, "application/json", "{\"status\":\"success\"}");
+        } else {
+          request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        }
+      });
     
     // Serve static files from SPIFFS
     server.on("/test-gps.html", HTTP_GET, [](AsyncWebServerRequest *request) {

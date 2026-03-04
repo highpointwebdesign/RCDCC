@@ -10,6 +10,7 @@ private:
   SuspensionConfig config;
   ServoConfig servoConfig;
   LEDConfig ledConfig;
+  LightsConfig lightsConfig;
   bool servoTrimResetWarning = false;
   
 public:
@@ -17,6 +18,7 @@ public:
     loadDefaults();
     loadServoDefaults();
     loadLEDDefaults();
+    initLightsDefaults();
   }
   
   void loadDefaults() {
@@ -43,6 +45,12 @@ public:
   
   void loadLEDDefaults() {
     ledConfig.color = DEFAULT_LED_COLOR;
+  }
+  
+  void initLightsDefaults() {
+    lightsConfig.headlights = {DEFAULT_HEADLIGHTS_ENABLED, DEFAULT_HEADLIGHTS_BRIGHTNESS, DEFAULT_HEADLIGHTS_MODE, DEFAULT_HEADLIGHTS_BLINK_RATE};
+    lightsConfig.tailLights = {DEFAULT_TAILLIGHTS_ENABLED, DEFAULT_TAILLIGHTS_BRIGHTNESS, DEFAULT_TAILLIGHTS_MODE, DEFAULT_TAILLIGHTS_BLINK_RATE};
+    lightsConfig.emergencyLights = {DEFAULT_EMERGENCY_LIGHTS_ENABLED, DEFAULT_EMERGENCY_LIGHTS_BRIGHTNESS, DEFAULT_EMERGENCY_LIGHTS_MODE, DEFAULT_EMERGENCY_LIGHTS_BLINK_RATE};
   }
   
   void loadConfig() {
@@ -141,6 +149,99 @@ public:
     }
     
     Serial.println("Config loaded from SPIFFS");
+  }
+  
+  void loadLights() {
+    if (!SPIFFS.exists(LIGHTS_SPIFFS_PATH)) {
+      Serial.println("Lights config file not found, using defaults");
+      return;
+    }
+    
+    File file = SPIFFS.open(LIGHTS_SPIFFS_PATH, "r");
+    if (!file) {
+      Serial.println("Failed to open lights config file");
+      return;
+    }
+    
+    DynamicJsonDocument doc(1024);
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+    
+    if (error) {
+      Serial.print("Lights JSON parsing failed: ");
+      Serial.println(error.c_str());
+      return;
+    }
+    
+    // Load light groups
+    if (doc.containsKey("lightGroups")) {
+      JsonObject groups = doc["lightGroups"];
+      
+      if (groups.containsKey("headlights")) {
+        JsonObject hl = groups["headlights"];
+        lightsConfig.headlights.enabled = hl["enabled"] | DEFAULT_HEADLIGHTS_ENABLED;
+        lightsConfig.headlights.brightness = hl["brightness"] | DEFAULT_HEADLIGHTS_BRIGHTNESS;
+        lightsConfig.headlights.mode = hl["mode"] | DEFAULT_HEADLIGHTS_MODE;
+        lightsConfig.headlights.blinkRate = hl["blinkRate"] | DEFAULT_HEADLIGHTS_BLINK_RATE;
+      }
+      
+      if (groups.containsKey("tailLights")) {
+        JsonObject tl = groups["tailLights"];
+        lightsConfig.tailLights.enabled = tl["enabled"] | DEFAULT_TAILLIGHTS_ENABLED;
+        lightsConfig.tailLights.brightness = tl["brightness"] | DEFAULT_TAILLIGHTS_BRIGHTNESS;
+        lightsConfig.tailLights.mode = tl["mode"] | DEFAULT_TAILLIGHTS_MODE;
+        lightsConfig.tailLights.blinkRate = tl["blinkRate"] | DEFAULT_TAILLIGHTS_BLINK_RATE;
+      }
+      
+      if (groups.containsKey("emergencyLights")) {
+        JsonObject el = groups["emergencyLights"];
+        lightsConfig.emergencyLights.enabled = el["enabled"] | DEFAULT_EMERGENCY_LIGHTS_ENABLED;
+        lightsConfig.emergencyLights.brightness = el["brightness"] | DEFAULT_EMERGENCY_LIGHTS_BRIGHTNESS;
+        lightsConfig.emergencyLights.mode = el["mode"] | DEFAULT_EMERGENCY_LIGHTS_MODE;
+        lightsConfig.emergencyLights.blinkRate = el["blinkRate"] | DEFAULT_EMERGENCY_LIGHTS_BLINK_RATE;
+      }
+    }
+    
+    Serial.println("Lights config loaded from SPIFFS");
+  }
+  
+  void saveLights() {
+    DynamicJsonDocument doc(1024);
+    
+    JsonObject groups = doc.createNestedObject("lightGroups");
+    
+    JsonObject hl = groups.createNestedObject("headlights");
+    hl["enabled"] = lightsConfig.headlights.enabled;
+    hl["brightness"] = lightsConfig.headlights.brightness;
+    hl["mode"] = lightsConfig.headlights.mode;
+    hl["blinkRate"] = lightsConfig.headlights.blinkRate;
+    
+    JsonObject tl = groups.createNestedObject("tailLights");
+    tl["enabled"] = lightsConfig.tailLights.enabled;
+    tl["brightness"] = lightsConfig.tailLights.brightness;
+    tl["mode"] = lightsConfig.tailLights.mode;
+    tl["blinkRate"] = lightsConfig.tailLights.blinkRate;
+    
+    JsonObject el = groups.createNestedObject("emergencyLights");
+    el["enabled"] = lightsConfig.emergencyLights.enabled;
+    el["brightness"] = lightsConfig.emergencyLights.brightness;
+    el["mode"] = lightsConfig.emergencyLights.mode;
+    el["blinkRate"] = lightsConfig.emergencyLights.blinkRate;
+    
+    JsonObject defaults = doc.createNestedObject("defaults");
+    defaults["brightness"] = 100;
+    defaults["blinkRate"] = 500;
+    
+    File file = SPIFFS.open(LIGHTS_SPIFFS_PATH, "w");
+    if (!file) {
+      Serial.println("Failed to create lights config file");
+      return;
+    }
+    
+    serializeJson(doc, file);
+    file.close();
+    
+    Serial.println("Lights config saved to SPIFFS");
   }
   
   void saveConfig() {
@@ -351,6 +452,53 @@ public:
     else if (colorName == "blue") ledConfig.color = LED_COLOR_BLUE;
     saveConfig();
   }
-};
-
-#endif
+  
+  LightsConfig getLightsConfig() const {
+    return lightsConfig;
+  }
+  
+  String getLightsConfigJSON() {
+    DynamicJsonDocument doc(1024);
+    
+    JsonObject groups = doc.createNestedObject("lightGroups");
+    
+    JsonObject hl = groups.createNestedObject("headlights");
+    hl["enabled"] = lightsConfig.headlights.enabled;
+    hl["brightness"] = lightsConfig.headlights.brightness;
+    hl["mode"] = lightsConfig.headlights.mode;
+    hl["blinkRate"] = lightsConfig.headlights.blinkRate;
+    
+    JsonObject tl = groups.createNestedObject("tailLights");
+    tl["enabled"] = lightsConfig.tailLights.enabled;
+    tl["brightness"] = lightsConfig.tailLights.brightness;
+    tl["mode"] = lightsConfig.tailLights.mode;
+    tl["blinkRate"] = lightsConfig.tailLights.blinkRate;
+    
+    JsonObject el = groups.createNestedObject("emergencyLights");
+    el["enabled"] = lightsConfig.emergencyLights.enabled;
+    el["brightness"] = lightsConfig.emergencyLights.brightness;
+    el["mode"] = lightsConfig.emergencyLights.mode;
+    el["blinkRate"] = lightsConfig.emergencyLights.blinkRate;
+    
+    String output;
+    serializeJson(doc, output);
+    return output;
+  }
+  
+  void updateLightsGroup(const String& groupName, JsonObject& updates) {
+    LightGroup* target = nullptr;
+    
+    if (groupName == "headlights") target = &lightsConfig.headlights;
+    else if (groupName == "tailLights") target = &lightsConfig.tailLights;
+    else if (groupName == "emergencyLights") target = &lightsConfig.emergencyLights;
+    
+    if (target && updates.size() > 0) {
+      if (updates.containsKey("enabled")) target->enabled = updates["enabled"];
+      if (updates.containsKey("brightness")) target->brightness = constrain((uint8_t)updates["brightness"], 0, 255);
+      if (updates.containsKey("mode")) target->mode = updates["mode"];
+      if (updates.containsKey("blinkRate")) target->blinkRate = updates["blinkRate"];
+      
+      saveLights();
+      Serial.printf("Updated lights group: %s\n", groupName.c_str());
+    }
+  }
