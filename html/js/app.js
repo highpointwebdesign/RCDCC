@@ -1980,8 +1980,7 @@ window.onerror = function (msg, url, line) {
             if (!value) return 1;
             if (value.includes('dual color pulse')) return 7;
             if (value.includes('breathe') || value.includes('pulse')) return 3;
-            if (value.includes('whip sweep') || value.includes('cycle')) return 4;
-            if (value.includes('chase') || value.includes('wig wag')) return 5;
+            if (value.includes('chase')) return 5;
             if (value.includes('flicker')) return 6;
             if (value.includes('flash') || value.includes('strobe') || value.includes('beacon') || value.includes('double')) return 2;
             return 1;
@@ -1989,8 +1988,8 @@ window.onerror = function (msg, url, line) {
 
         function getPatternBlinkRate(patternName) {
             const value = (patternName || '').toLowerCase();
-            if (value.includes('wig wag') || value.includes('chase')) return 120;
-            if (value.includes('whip sweep') || value.includes('cycle')) return 210;
+            if (value.includes('chase')) return 120;
+            if (value.includes('favorites')) return 500; // Cycle/Strobe Favorites interval
             if (value.includes('flicker')) return 90;
             if (value.includes('dual color pulse') || value.includes('breathe')) return 650;
             if (value.includes('strobe')) return 120;
