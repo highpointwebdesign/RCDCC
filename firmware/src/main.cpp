@@ -432,11 +432,12 @@ void loop() {
   }
   
   // Read MPU6050 sensor data at specified rate
-  if (currentTime - lastMPUReadTime >= (1000 / SUSPENSION_SAMPLE_RATE_HZ)) {
+  // Skip I2C read if sensor not connected to avoid 5s timeout blocking
+  if (mpuConnected && currentTime - lastMPUReadTime >= (1000 / SUSPENSION_SAMPLE_RATE_HZ)) {
     unsigned long sensorBlockStart = millis();
     float accelX, accelY, accelZ, gyroX, gyroY, gyroZ;
     
-    // Always try to read sensor data (to detect reconnection)
+    // Read sensor data from connected device
     int16_t ax, ay, az, gx, gy, gz;
     
     // CHECKPOINT: I2C Read Start
