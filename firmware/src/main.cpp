@@ -258,8 +258,6 @@ void setup() {
     webServer.init(storageManager, lightsEngine);
   }
 
-  notifyDiscordOnHomeWiFiJoin(storageManager.getDeviceName());
-  
   // Initialize LED pin for feedback
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
@@ -400,6 +398,18 @@ void loop() {
   unsigned long currentTime = loopStartTime;
   static unsigned long lastLoopTime = 0;
   static bool firstLoop = true;
+  static bool discordJoinNotified = false;
+
+  // Non-blocking WiFi manager update (WLED-style STA/AP state handling)
+  webServer.updateConnectivity();
+
+  // Notify Discord only when home STA is actually connected
+  if (WiFi.status() == WL_CONNECTED && !discordJoinNotified) {
+    notifyDiscordOnHomeWiFiJoin(storageManager.getDeviceName());
+    discordJoinNotified = true;
+  } else if (WiFi.status() != WL_CONNECTED) {
+    discordJoinNotified = false;
+  }
   
   // Log loop execution time every 5 seconds for diagnostics
   if (!firstLoop && (currentTime - lastLoopTime) > 5000) {

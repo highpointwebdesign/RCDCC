@@ -8,18 +8,106 @@ class LightsEngine {
 private:
     Adafruit_NeoPixel *strip;
     uint16_t ledCount;
-    unsigned long lastPatternUpdate;
     NewLightsConfig lightsConfig;
     
     // Pattern animation state
     struct PatternState {
         uint8_t intensity;
         uint8_t direction; // 0 = increasing, 1 = decreasing
+        uint16_t position;
         unsigned long lastUpdate;
     } patternState[10]; // One state per group
 
+    uint8_t pseudoRandom8(uint8_t groupIdx, uint16_t ledLocalIndex, unsigned long now) {
+        uint32_t seed = (uint32_t)(groupIdx + 1) * 1103515245UL;
+        seed ^= (uint32_t)(ledLocalIndex + 37) * 12345UL;
+        seed ^= (now / 120UL) * 2654435761UL;
+        return (uint8_t)(seed & 0xFF);
+    }
+
+    uint32_t colorLerp(uint32_t from, uint32_t to, uint8_t amount) {
+        uint8_t fr = (from >> 16) & 0xFF;
+        uint8_t fg = (from >> 8) & 0xFF;
+        uint8_t fb = from & 0xFF;
+        uint8_t tr = (to >> 16) & 0xFF;
+        uint8_t tg = (to >> 8) & 0xFF;
+        uint8_t tb = to & 0xFF;
+
+        uint8_t r = fr + ((int16_t)(tr - fr) * amount) / 255;
+        uint8_t g = fg + ((int16_t)(tg - fg) * amount) / 255;
+        uint8_t b = fb + ((int16_t)(tb - fb) * amount) / 255;
+        return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+    }
+
+    uint32_t wipePattern(uint8_t groupIdx, const ExtendedLightGroup& group, uint8_t ledLocalIndex, unsigned long now) {
+        PatternState& state = patternState[groupIdx];
+        uint16_t speed = group.blinkRate > 0 ? group.blinkRate : 250;
+        uint16_t period = group.ledCount > 0 ? group.ledCount : 1;
+
+        if (now - state.lastUpdate >= speed / 3) {
+            state.position = (state.position + 1) % period;
+            state.lastUpdate = now;
+        }
+
+        if (ledLocalIndex <= state.position) {
+            return group.color;
+        }
+        return group.color2;
+    }
+
+    uint32_t chasePattern(uint8_t groupIdx, const ExtendedLightGroup& group, uint8_t ledLocalIndex, unsigned long now) {
+        PatternState& state = patternState[groupIdx];
+        uint16_t speed = group.blinkRate > 0 ? group.blinkRate : 180;
+
+        if (now - state.lastUpdate >= speed / 2) {
+            state.position = (state.position + 1) % 6;
+            state.lastUpdate = now;
+        }
+
+        uint8_t phase = (uint8_t)((ledLocalIndex + state.position) % 6);
+        if (phase < 2) {
+            return group.color;
+        }
+        return group.color2;
+    }
+
+    uint32_t twinklePattern(uint8_t groupIdx, const ExtendedLightGroup& group, uint8_t ledLocalIndex, unsigned long now) {
+        uint8_t noise = pseudoRandom8(groupIdx, ledLocalIndex, now);
+        if (noise > 230) {
+            return 0xFFFFFF;
+        }
+        if (noise > 170) {
+            return group.color;
+        }
+        return group.color2;
+    }
+
+    uint32_t dualBreathePattern(uint8_t groupIdx, const ExtendedLightGroup& group, unsigned long now) {
+        PatternState& state = patternState[groupIdx];
+        uint16_t computedStep = group.blinkRate > 0 ? (uint16_t)(group.blinkRate / 24) : 35;
+        uint16_t stepDuration = computedStep < 20 ? 20 : computedStep;
+
+        if (now - state.lastUpdate >= stepDuration) {
+            if (state.direction == 0) {
+                uint16_t boosted = (uint16_t)state.intensity + 8;
+                state.intensity = boosted > 255 ? 255 : (uint8_t)boosted;
+                if (state.intensity >= 255) {
+                    state.direction = 1;
+                }
+            } else {
+                state.intensity = (state.intensity > 8) ? (state.intensity - 8) : 0;
+                if (state.intensity <= 12) {
+                    state.direction = 0;
+                }
+            }
+            state.lastUpdate = now;
+        }
+
+        return colorLerp(group.color2, group.color, state.intensity);
+    }
+
 public:
-    LightsEngine(uint16_t pin, uint16_t count) : ledCount(count), lastPatternUpdate(0) {
+    LightsEngine(uint16_t pin, uint16_t count) : ledCount(count) {
         strip = new Adafruit_NeoPixel(count, pin, NEO_GRB + NEO_KHZ800);
         strip->begin();
         strip->show();
@@ -28,6 +116,7 @@ public:
         for (int i = 0; i < 10; i++) {
             patternState[i].intensity = 255;
             patternState[i].direction = 1;
+            patternState[i].position = 0;
             patternState[i].lastUpdate = 0;
         }
     }
@@ -72,7 +161,7 @@ public:
                     continue; // Safety check
                 }
 
-                uint32_t color = applyPattern(groupIdx, group, now);
+                uint32_t color = applyPattern(groupIdx, group, ledIdx, now);
                 uint32_t finalColor = applyBrightness(color, group.brightness);
                 
                 strip->setPixelColor(pixelIndex, finalColor);
@@ -80,13 +169,12 @@ public:
         }
 
         strip->show();
-        lastPatternUpdate = now;
     }
 
     /**
      * Apply pattern effects (blink, pulse, etc.)
      */
-    uint32_t applyPattern(uint8_t groupIdx, const ExtendedLightGroup& group, unsigned long now) {
+    uint32_t applyPattern(uint8_t groupIdx, const ExtendedLightGroup& group, uint8_t ledLocalIndex, unsigned long now) {
         uint32_t baseColor = group.color;
         
         switch (group.mode) {
@@ -101,6 +189,18 @@ public:
             case LIGHT_MODE_PULSE:
                 // Pulse/breathe effect
                 return pulsePattern(groupIdx, group, now);
+
+            case LIGHT_MODE_WIPE:
+                return wipePattern(groupIdx, group, ledLocalIndex, now);
+
+            case LIGHT_MODE_CHASE:
+                return chasePattern(groupIdx, group, ledLocalIndex, now);
+
+            case LIGHT_MODE_TWINKLE:
+                return twinklePattern(groupIdx, group, ledLocalIndex, now);
+
+            case LIGHT_MODE_DUAL_BREATHE:
+                return dualBreathePattern(groupIdx, group, now);
 
             default:
                 return 0; // Off
