@@ -1771,7 +1771,7 @@ window.onerror = function (msg, url, line) {
         const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
         const LIGHT_GROUP_DEFAULT_PATTERN = 'Steady';
         const LIGHT_GROUP_CYCLE_INTERVAL_SECONDS = 30;
-        const LIGHT_GROUP_EXTRA_PATTERNS = ['Steady', 'Double Flash', 'Strobe', 'Breathe', 'Flicker', 'Cycle'];
+        const LIGHT_GROUP_EXTRA_PATTERNS = ['Steady', 'Double Flash', 'Strobe', 'Breathe', 'Flicker', 'Cycle', 'Cycle Favorites'];
         
         // Predefined light groups (initialized on first load)
         const PREDEFINED_LIGHT_GROUPS = [
@@ -1793,11 +1793,13 @@ window.onerror = function (msg, url, line) {
             '#00ffff', // Cyan
             '#ff8800', // Orange
             '#8800ff', // Purple
-            '#ffffff'  // White
+            '#ffffff', // White
+            '#ffc107'  // Amber
         ];
         let lightGroups = [];
         let colorPresets = [];
         let currentColor2 = '#000000'; // Second color for dual-color patterns
+        let activeFavoriteColorTarget = 'primary';
         let lightGroupsStateBeforeModal = null;
         let masterStateBeforeModal = false;
         let lightGroupModalSaved = false;
@@ -1806,6 +1808,16 @@ window.onerror = function (msg, url, line) {
         function loadColorPresets() {
             const stored = localStorage.getItem(COLOR_PRESETS_KEY);
             colorPresets = stored ? JSON.parse(stored) : [...DEFAULT_COLOR_PRESETS];
+            // Keep compatibility with older saved arrays that had fewer slots.
+            if (!Array.isArray(colorPresets)) {
+                colorPresets = [...DEFAULT_COLOR_PRESETS];
+            }
+            while (colorPresets.length < DEFAULT_COLOR_PRESETS.length) {
+                colorPresets.push(DEFAULT_COLOR_PRESETS[colorPresets.length]);
+            }
+            if (colorPresets.length > DEFAULT_COLOR_PRESETS.length) {
+                colorPresets = colorPresets.slice(0, DEFAULT_COLOR_PRESETS.length);
+            }
             renderColorPresets();
         }
 
@@ -1830,8 +1842,8 @@ window.onerror = function (msg, url, line) {
                 colorBtn.type = 'button';
                 colorBtn.className = 'btn btn-sm';
                 colorBtn.style.cssText = `background-color: ${color}; width: 40px; height: 40px; border: 2px solid #ddd; position: relative;`;
-                colorBtn.title = `Use ${color}`;
-                colorBtn.onclick = () => setLightGroupColor(color);
+                colorBtn.title = `Use ${color} (${activeFavoriteColorTarget})`;
+                colorBtn.onclick = () => setLightGroupColor(color, activeFavoriteColorTarget);
                 
                 const editIcon = document.createElement('span');
                 editIcon.className = 'material-symbols-outlined';
@@ -1849,11 +1861,16 @@ window.onerror = function (msg, url, line) {
             });
         }
 
-        // Update a specific preset slot with the current color
+        function getActiveFavoriteColor() {
+            return activeFavoriteColorTarget === 'secondary' ? currentColor2 : currentColor;
+        }
+
+        // Update a specific preset slot with the currently selected target color
         function updateColorPreset(index) {
-            colorPresets[index] = currentColor;
+            const selectedColor = getActiveFavoriteColor();
+            colorPresets[index] = selectedColor;
             saveColorPresets();
-            window.toast.success(`Preset ${index + 1} updated to ${currentColor.toUpperCase()}`);
+            window.toast.success(`Preset ${index + 1} updated to ${selectedColor.toUpperCase()}`);
         }
 
         // Reset presets to defaults
@@ -1865,24 +1882,98 @@ window.onerror = function (msg, url, line) {
             }
         }
 
-        function loadLightGroups() {
-            const initialized = localStorage.getItem(LIGHT_GROUPS_INITIALIZED_KEY);
-            const stored = localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY);
-            
-            if (!initialized) {
-                // First time - initialize with predefined groups
-                lightGroups = JSON.parse(JSON.stringify(PREDEFINED_LIGHT_GROUPS));
-                localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
-            } else {
-                lightGroups = stored ? JSON.parse(stored) : [];
+        function firmwareColorToHex(value, fallback = '#000000') {
+            if (typeof value === 'string') {
+                const normalized = value.replace('#', '').trim();
+                if (/^[0-9a-fA-F]{6}$/.test(normalized)) {
+                    return `#${normalized.toLowerCase()}`;
+                }
             }
 
-            // Backward compatibility for old data without "enabled"
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                return `#${(value & 0xFFFFFF).toString(16).padStart(6, '0')}`;
+            }
+
+            return fallback;
+        }
+
+        function patternFromMode(mode, blinkRate = 0) {
+            switch (Number(mode)) {
+                case 1: return 'Steady';
+                case 2: return 'Strobe';
+                case 3: return 'Breathe';
+                case 4: return 'Whip Sweep';
+                case 5: return 'Chase';
+                case 6: return 'Flicker';
+                case 7: return 'Dual Color Pulse';
+                default:
+                    return blinkRate > 0 ? 'Strobe' : LIGHT_GROUP_DEFAULT_PATTERN;
+            }
+        }
+
+        async function loadLightGroups() {
+            let loadedFromTruck = false;
+
+            try {
+                const response = await fetch(getApiUrl('/api/lights'), { cache: 'no-store' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (Array.isArray(data.lightGroupsArray) && data.lightGroupsArray.length >= 0) {
+                        // Firmware stores processing order; reverse for UI order (top = highest priority).
+                        const uiOrderedGroups = [...data.lightGroupsArray].reverse().map((group, index) => {
+                            const brightnessRaw = Number(group?.brightness);
+                            const brightness = Number.isFinite(brightnessRaw)
+                                ? Math.max(0, Math.min(255, brightnessRaw))
+                                : 255;
+
+                            const indices = Array.isArray(group?.indices)
+                                ? group.indices.map(n => Number(n)).filter(n => Number.isInteger(n) && n >= 0)
+                                : [];
+
+                            const mode = Number(group?.mode);
+                            const blinkRate = Number(group?.blinkRate) || 0;
+                            const pattern = (group?.pattern && String(group.pattern).trim())
+                                ? String(group.pattern)
+                                : patternFromMode(mode, blinkRate);
+
+                            return {
+                                name: (group?.name && String(group.name).trim()) ? String(group.name) : `Group ${index + 1}`,
+                                indices,
+                                brightness,
+                                color: firmwareColorToHex(group?.color, '#ff0000'),
+                                color2: firmwareColorToHex(group?.color2, '#000000'),
+                                pattern,
+                                enabled: !!group?.enabled
+                            };
+                        });
+
+                        lightGroups = uiOrderedGroups;
+                        loadedFromTruck = true;
+                        localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
+                        localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(lightGroups));
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to load light groups from truck, falling back to local cache:', error);
+            }
+
+            if (!loadedFromTruck) {
+                const initialized = localStorage.getItem(LIGHT_GROUPS_INITIALIZED_KEY);
+                const stored = localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY);
+
+                if (!initialized) {
+                    lightGroups = JSON.parse(JSON.stringify(PREDEFINED_LIGHT_GROUPS));
+                    localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
+                } else {
+                    lightGroups = stored ? JSON.parse(stored) : [];
+                }
+            }
+
             lightGroups = lightGroups.map(group => ({
                 ...group,
                 enabled: !!group.enabled
             }));
-            
+
             saveLightGroups(false);
             renderLightGroupsList();
             renderLightsHierarchyControls();
@@ -1966,9 +2057,14 @@ window.onerror = function (msg, url, line) {
                 return { enabled: false, brightness: 100, mode: 0, blinkRate: 500 };
             }
 
+            const rawBrightness = Number(group.brightness);
+            const brightness = Number.isFinite(rawBrightness)
+                ? Math.max(0, Math.min(255, rawBrightness))
+                : 255;
+
             return {
                 enabled: true,
-                brightness: Math.max(0, Math.min(255, Number(group.brightness) || 255)),
+                brightness,
                 mode: getPatternMode(group.pattern),
                 blinkRate: getPatternBlinkRate(group.pattern)
             };
@@ -1982,6 +2078,10 @@ window.onerror = function (msg, url, line) {
                 // Parse pattern to get mode and blink rate
                 const mode = getPatternMode(group.pattern);
                 const blinkRate = getPatternBlinkRate(group.pattern);
+                const rawBrightness = Number(group.brightness);
+                const brightness = Number.isFinite(rawBrightness)
+                    ? Math.max(0, Math.min(255, rawBrightness))
+                    : 255;
                 
                 // Convert hex colors to firmware format (remove #)
                 const colorStr = (group.color || '#ff0000').replace('#', '');
@@ -1990,7 +2090,7 @@ window.onerror = function (msg, url, line) {
                 return {
                     name: group.name,
                     enabled: !!group.enabled,
-                    brightness: Math.max(0, Math.min(255, Number(group.brightness) || 255)),
+                    brightness,
                     color: colorStr,
                     color2: color2Str,
                     indices: group.indices || [],
@@ -2000,8 +2100,9 @@ window.onerror = function (msg, url, line) {
                 };
             });
 
+            // Reverse order so top priority (index 0) processes last and wins LED conflicts
             return {
-                lightGroupsArray: lightGroupsArray
+                lightGroupsArray: lightGroupsArray.reverse()
             };
         }
 
@@ -2121,19 +2222,20 @@ window.onerror = function (msg, url, line) {
                 emptyState.style.display = 'block';
             } else {
                 emptyState.style.display = 'none';
-                // Sort alphabetically before rendering
-                const sortedGroups = [...lightGroups].sort((a, b) => a.name.localeCompare(b.name));
-                sortedGroups.forEach((group) => {
-                    const index = lightGroups.findIndex(g => g === group);
+                // Render in current order (top = priority 1)
+                lightGroups.forEach((group, index) => {
                     const item = document.createElement('div');
                     item.className = 'light-group-item';
+                    item.setAttribute('draggable', 'true');
+                    item.setAttribute('data-index', index);
+                    
                     const ledDisplay = formatLedRanges(group.indices);
                     const brightnessPercent = group.brightness !== undefined ? 
                         Math.round(group.brightness * 100 / 255) : 100;
                     const color = group.color || '#ff0000';
                     const color2 = group.color2 || '#000000';
                     const pattern = group.pattern || LIGHT_GROUP_DEFAULT_PATTERN;
-                    const patternDisplay = pattern === 'Cycle'
+                    const patternDisplay = (pattern === 'Cycle' || pattern === 'Cycle Favorites')
                         ? `${pattern} (${LIGHT_GROUP_CYCLE_INTERVAL_SECONDS}s)`
                         : pattern;
                     
@@ -2153,6 +2255,10 @@ window.onerror = function (msg, url, line) {
                         : '<span class="material-symbols-outlined light-group-status-icon not-configured" title="Setup Required - No LEDs assigned">warning</span>';
                     
                     item.innerHTML = `
+                        <div class="light-group-drag-handle" title="Drag to reorder">
+                            <span class="material-symbols-outlined">drag_indicator</span>
+                        </div>
+                        <div class="light-group-priority" title="Priority (top = higher)">${index + 1}</div>
                         <div class="light-group-info">
                             <div class="light-group-name">
                                 ${colorDisplay}
@@ -2166,15 +2272,70 @@ window.onerror = function (msg, url, line) {
                             <button onclick="deleteLightGroup(${index})" class="btn-delete" title="Delete this group">Delete</button>
                         </div>
                     `;
+                    
+                    // Add drag event listeners
+                    item.addEventListener('dragstart', handleDragStart);
+                    item.addEventListener('dragover', handleDragOver);
+                    item.addEventListener('drop', handleDrop);
+                    item.addEventListener('dragend', handleDragEnd);
+                    
                     listContainer.appendChild(item);
                 });
             }
+        }
+        
+        // Drag and drop state
+        let draggedItemIndex = null;
+        
+        function handleDragStart(e) {
+            draggedItemIndex = parseInt(e.currentTarget.getAttribute('data-index'));
+            e.currentTarget.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const dragOverItem = e.currentTarget;
+            if (dragOverItem.classList.contains('light-group-item') && !dragOverItem.classList.contains('dragging')) {
+                dragOverItem.classList.add('drag-over');
+            }
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            const dropIndex = parseInt(e.currentTarget.getAttribute('data-index'));
+            
+            if (draggedItemIndex !== null && draggedItemIndex !== dropIndex) {
+                // Reorder the array
+                const draggedItem = lightGroups[draggedItemIndex];
+                lightGroups.splice(draggedItemIndex, 1);
+                lightGroups.splice(dropIndex, 0, draggedItem);
+                
+                // Save and re-render
+                saveLightGroups(false); // Don't push to hardware yet
+                renderLightGroupsList();
+                renderLightsHierarchyControls();
+                
+                // Now push to hardware with updated order
+                applyLightsHierarchyToHardware();
+            }
+            
+            e.currentTarget.classList.remove('drag-over');
+        }
+        
+        function handleDragEnd(e) {
+            e.currentTarget.classList.remove('dragging');
+            document.querySelectorAll('.light-group-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+            draggedItemIndex = null;
         }
 
         // Store current editing context
         let currentEditingGroupIndex = null;
         let currentSelectedLEDs = new Set();
-        let currentBrightness = 100; // Default 100% (255 in 0-255 scale)
+        let currentBrightness = 80; // Default 80% (preserve LED longevity)
         let currentColor = '#ff0000'; // Default red
         let currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
         let lightGroupBrightnessSliderInstance = null;
@@ -2191,23 +2352,23 @@ window.onerror = function (msg, url, line) {
         // Pattern metadata: which patterns need dual colors
         const PATTERN_METADATA = {
             // Single-color patterns
-            'Steady': { needsDualColor: false, category: 'General' },
-            'Double Flash': { needsDualColor: false, category: 'General' },
-            'Strobe': { needsDualColor: false, category: 'General' },
-            'Breathe': { needsDualColor: false, category: 'General' },
-            'Flicker': { needsDualColor: false, category: 'General' },
-            'Cycle': { needsDualColor: false, category: 'General' },
-            // Dual-color patterns (Emergency/Police)
-            'Whip Sweep': { needsDualColor: true, category: 'Emergency' },
-            'Dual Beacon': { needsDualColor: true, category: 'Emergency' },
-            'Chase': { needsDualColor: true, category: 'Emergency' },
-            'Dual Color Pulse': { needsDualColor: true, category: 'Emergency' },
-            'Wig Wag': { needsDualColor: true, category: 'Emergency' },
-            // Dual-color patterns (Warning/Construction)
-            'Steady Amber': { needsDualColor: false, category: 'Warning' },
-            'Double Pulse': { needsDualColor: false, category: 'Warning' },
-            'Slow Beacon': { needsDualColor: false, category: 'Warning' },
-            'Fast Flash': { needsDualColor: false, category: 'Warning' }
+            'Steady': { needsDualColor: false },
+            'Double Flash': { needsDualColor: false },
+            'Strobe': { needsDualColor: false },
+            'Breathe': { needsDualColor: false },
+            'Flicker': { needsDualColor: false },
+            'Cycle': { needsDualColor: false },
+            'Cycle Favorites': { needsDualColor: false },
+            // Dual-color patterns
+            'Whip Sweep': { needsDualColor: true },
+            'Dual Beacon': { needsDualColor: true },
+            'Chase': { needsDualColor: true },
+            'Dual Color Pulse': { needsDualColor: true },
+            'Wig Wag': { needsDualColor: true },
+            'Steady Amber': { needsDualColor: false },
+            'Double Pulse': { needsDualColor: false },
+            'Slow Beacon': { needsDualColor: false },
+            'Fast Flash': { needsDualColor: false }
         };
 
         function getLightGroupPatternNames() {
@@ -2225,18 +2386,23 @@ window.onerror = function (msg, url, line) {
             const patterns = getLightGroupPatternNames();
             patternSelect.innerHTML = '';
 
-            // Consolidate all patterns into single flat list
-            const allPatterns = [
-                ...patterns.general.map(p => ({ name: p, category: 'General' })),
-                { name: 'Cycle', category: 'General' },
-                ...patterns.emergency.map(p => ({ name: p, category: 'Emergency' })),
-                ...patterns.warning.map(p => ({ name: p, category: 'Warning' }))
-            ].sort((a, b) => a.name.localeCompare(b.name));
+            // Consolidate all patterns into single flat list and deduplicate
+            const allPatternsMap = new Map();
+            [...patterns.general, 'Cycle', 'Cycle Favorites', ...patterns.emergency, ...patterns.warning].forEach(p => {
+                if (!allPatternsMap.has(p)) {
+                    allPatternsMap.set(p, p);
+                }
+            });
+            
+            const uniquePatterns = Array.from(allPatternsMap.keys()).sort();
 
-            allPatterns.forEach(patternObj => {
+            uniquePatterns.forEach(patternName => {
                 const option = document.createElement('option');
-                option.value = patternObj.name;
-                option.textContent = `${patternObj.name} (${patternObj.category})`;
+                option.value = patternName;
+                // Add asterisk for dual-color patterns
+                const metadata = PATTERN_METADATA[patternName];
+                const displayName = metadata?.needsDualColor ? `${patternName} *` : patternName;
+                option.textContent = displayName;
                 patternSelect.appendChild(option);
             });
 
@@ -2249,7 +2415,10 @@ window.onerror = function (msg, url, line) {
         }
         
         function toggleSecondaryColorVisibility(pattern) {
-            const secondaryColorContainer = document.getElementById('lightGroupColorPicker2')?.closest('.mb-4');
+            const secondaryColorContainer = document.getElementById('secondaryColorPickerContainer');
+            const secondaryTargetBtn = document.getElementById('favoriteColorTargetSecondary')?.closest('label');
+            const secondaryTargetInput = document.getElementById('favoriteColorTargetSecondary');
+            
             if (!secondaryColorContainer) return;
 
             const metadata = PATTERN_METADATA[pattern];
@@ -2257,8 +2426,18 @@ window.onerror = function (msg, url, line) {
 
             if (needsDualColor) {
                 secondaryColorContainer.style.display = 'block';
+                if (secondaryTargetBtn) secondaryTargetBtn.style.display = '';
             } else {
                 secondaryColorContainer.style.display = 'none';
+                if (secondaryTargetBtn) secondaryTargetBtn.style.display = 'none';
+                // Switch to primary target if secondary was selected
+                if (secondaryTargetInput && secondaryTargetInput.checked) {
+                    const primaryInput = document.getElementById('favoriteColorTargetPrimary');
+                    if (primaryInput) {
+                        primaryInput.checked = true;
+                        activeFavoriteColorTarget = 'primary';
+                    }
+                }
             }
         }
 
@@ -2331,7 +2510,7 @@ window.onerror = function (msg, url, line) {
                 
                 // Set brightness (convert 0-255 to 0-100 percentage)
                 const brightnessPercent = group.brightness !== undefined ? 
-                    Math.round(group.brightness * 100 / 255) : 100;
+                    Math.round(group.brightness * 100 / 255) : 80;
                 currentBrightness = brightnessPercent;
                 if (lightGroupBrightnessSliderInstance) {
                     lightGroupBrightnessSliderInstance.value([0, brightnessPercent]);
@@ -2362,12 +2541,12 @@ window.onerror = function (msg, url, line) {
                 // Add mode
                 titleSpan.textContent = 'Add';
                 nameInput.value = '';
-                currentBrightness = 100;
+                currentBrightness = 80;
                 if (lightGroupBrightnessSliderInstance) {
-                    lightGroupBrightnessSliderInstance.value([0, 100]);
+                    lightGroupBrightnessSliderInstance.value([0, 80]);
                 }
-                updateLightGroupBrightnessThumbLabel(100);
-                brightnessValue.textContent = '100%';
+                updateLightGroupBrightnessThumbLabel(80);
+                brightnessValue.textContent = '80%';
                 currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
                 populateLightGroupPatternOptions(LIGHT_GROUP_DEFAULT_PATTERN);
                 if (patternSelect) {
@@ -2451,6 +2630,7 @@ window.onerror = function (msg, url, line) {
             }
             
             updateSelectionSummary();
+            attemptAutoPreviewFromModal();
         }
 
         function updateSelectionSummary() {
@@ -2522,28 +2702,34 @@ window.onerror = function (msg, url, line) {
                 color: currentColor,
                 color2: currentColor2,
                 pattern: selectedPattern,
-                cycleIntervalSeconds: selectedPattern === 'Cycle' ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined,
+                cycleIntervalSeconds: (selectedPattern === 'Cycle' || selectedPattern === 'Cycle Favorites') ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined,
                 enabled: true
             };
         }
 
-        function testLightGroupFromModal() {
+        function canAutoPreviewGroup(draftGroup) {
+            return !!draftGroup.name && draftGroup.indices.length > 0;
+        }
+
+        function testLightGroupFromModal(showValidationErrors = false) {
             const draftGroup = getLightGroupDraftFromModal();
 
-            if (!draftGroup.name) {
-                window.toast.error('Enter a group name before testing');
-                return;
+            if (!canAutoPreviewGroup(draftGroup)) {
+                if (showValidationErrors && !draftGroup.name) {
+                    window.toast.error('Enter a group name before testing');
+                }
+                if (showValidationErrors && draftGroup.indices.length === 0) {
+                    window.toast.error('Select at least one LED before testing');
+                }
+                return Promise.resolve();
             }
 
-            if (draftGroup.indices.length === 0) {
-                window.toast.error('Select at least one LED before testing');
-                return;
-            }
+            return isolateGroupForPreview(currentEditingGroupIndex, draftGroup);
+        }
 
-            isolateGroupForPreview(currentEditingGroupIndex, draftGroup)
-                .then(() => {
-                    window.toast.success('Test Group active (temporary)');
-                });
+        function attemptAutoPreviewFromModal() {
+            // Do not show toasts while editing; preview only after required fields exist.
+            testLightGroupFromModal(false);
         }
 
         function saveLightGroupFromModal() {
@@ -2556,18 +2742,13 @@ window.onerror = function (msg, url, line) {
                 return;
             }
             
-            if (currentSelectedLEDs.size === 0) {
-                alert('Please select at least one LED');
-                return;
-            }
-            
             const indices = Array.from(currentSelectedLEDs).sort((a, b) => a - b);
             const patternSelect = document.getElementById('lightGroupPatternSelect');
             const selectedPattern = (patternSelect && patternSelect.value) ? patternSelect.value : LIGHT_GROUP_DEFAULT_PATTERN;
             
             // Convert brightness percentage (0-100) to 0-255 scale
             const brightness255 = Math.round(currentBrightness * 255 / 100);
-            const cycleIntervalSeconds = selectedPattern === 'Cycle' ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined;
+            const cycleIntervalSeconds = (selectedPattern === 'Cycle' || selectedPattern === 'Cycle Favorites') ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined;
             
             if (currentEditingGroupIndex !== null) {
                 // Update existing group while preserving enabled state.
@@ -2608,18 +2789,28 @@ window.onerror = function (msg, url, line) {
             
             currentEditingGroupIndex = null;
             currentSelectedLEDs.clear();
-            currentBrightness = 100;
+            currentBrightness = 80;
             currentColor = '#ff0000';
             currentColor2 = '#000000';
             currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
         }
 
-        function setLightGroupColor(color) {
-            currentColor = color;
-            const colorPicker = document.getElementById('lightGroupColorPicker');
-            const colorHex = document.getElementById('lightGroupColorHex');
-            if (colorPicker) colorPicker.value = color;
-            if (colorHex) colorHex.textContent = color.toUpperCase();
+        function setLightGroupColor(color, target = 'primary') {
+            if (target === 'secondary') {
+                currentColor2 = color;
+                const colorPicker2 = document.getElementById('lightGroupColorPicker2');
+                const colorHex2 = document.getElementById('lightGroupColorHex2');
+                if (colorPicker2) colorPicker2.value = color;
+                if (colorHex2) colorHex2.textContent = color.toUpperCase();
+            } else {
+                currentColor = color;
+                const colorPicker = document.getElementById('lightGroupColorPicker');
+                const colorHex = document.getElementById('lightGroupColorHex');
+                if (colorPicker) colorPicker.value = color;
+                if (colorHex) colorHex.textContent = color.toUpperCase();
+            }
+
+            attemptAutoPreviewFromModal();
         }
 
         function deleteLightGroup(index) {
@@ -2682,7 +2873,7 @@ window.onerror = function (msg, url, line) {
         }
 
         // Wire up Light Groups UI events
-        window.addEventListener('DOMContentLoaded', function() {
+        window.addEventListener('DOMContentLoaded', async function() {
             const addBtn = document.getElementById('addLightGroupBtn');
             if (addBtn) {
                 addBtn.addEventListener('click', addLightGroup);
@@ -2711,7 +2902,7 @@ window.onerror = function (msg, url, line) {
             const brightnessSliderElement = document.querySelector('#lightGroupBrightnessSlider');
             if (brightnessSliderElement && brightnessValue) {
                 lightGroupBrightnessSliderInstance = rangeSlider(brightnessSliderElement, {
-                    value: [0, 100],
+                    value: [0, 80],
                     min: 0,
                     max: 100,
                     step: 10,
@@ -2723,9 +2914,10 @@ window.onerror = function (msg, url, line) {
                         currentBrightness = percent;
                         brightnessValue.textContent = percent + '%';
                         updateLightGroupBrightnessThumbLabel(percent);
+                        attemptAutoPreviewFromModal();
                     }
                 });
-                updateLightGroupBrightnessThumbLabel(100);
+                updateLightGroupBrightnessThumbLabel(80);
             }
 
             const lightGroupPatternSelect = document.getElementById('lightGroupPatternSelect');
@@ -2736,8 +2928,19 @@ window.onerror = function (msg, url, line) {
                     currentPattern = this.value || LIGHT_GROUP_DEFAULT_PATTERN;
                     updateColorDefaultsForPattern(currentPattern);
                     toggleSecondaryColorVisibility(currentPattern);
+                    attemptAutoPreviewFromModal();
                 });
             }
+
+            const favoriteTargetInputs = document.querySelectorAll('input[name="favoriteColorTarget"]');
+            favoriteTargetInputs.forEach(input => {
+                input.addEventListener('change', function() {
+                    if (this.checked) {
+                        activeFavoriteColorTarget = this.value === 'secondary' ? 'secondary' : 'primary';
+                        renderColorPresets();
+                    }
+                });
+            });
             
             // Color picker event listeners
             const colorPicker = document.getElementById('lightGroupColorPicker');
@@ -2746,6 +2949,7 @@ window.onerror = function (msg, url, line) {
                 colorPicker.addEventListener('input', function() {
                     currentColor = this.value;
                     colorHex.textContent = this.value.toUpperCase();
+                    attemptAutoPreviewFromModal();
                 });
             }
             
@@ -2756,7 +2960,13 @@ window.onerror = function (msg, url, line) {
                 colorPicker2.addEventListener('input', function() {
                     currentColor2 = this.value;
                     colorHex2.textContent = this.value.toUpperCase();
+                    attemptAutoPreviewFromModal();
                 });
+            }
+
+            const lightGroupNameInput = document.getElementById('lightGroupNameInput');
+            if (lightGroupNameInput) {
+                lightGroupNameInput.addEventListener('input', attemptAutoPreviewFromModal);
             }
 
             // Treat all modal close paths (Cancel/X/backdrop/Esc) the same.
@@ -2770,7 +2980,7 @@ window.onerror = function (msg, url, line) {
             }
             
             // Load light groups and color presets
-            loadLightGroups();
+            await loadLightGroups();
             loadColorPresets();
             populateNotificationGroupSelect(); // Initialize system notification LED dropdown
             setMasterLightsEnabled(getMasterLightsEnabled(), false);

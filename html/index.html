@@ -184,14 +184,17 @@
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="lightsToggleDashboard">
-                            <label class="form-check-label" for="lightsToggleDashboard">
-                                <span>Master Switch</span>
-                            </label>
-                        </div>
-                        <div class="form-text mt-2">
-                            <small>Quick toggle. Full hierarchy controls are in the Lights section.</small>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <label class="form-check-label mb-0" for="lightsToggleDashboard">
+                                    <strong>Master Switch</strong>
+                                </label>
+                                <div class="form-check form-switch m-0">
+                                    <input class="form-check-input" type="checkbox" id="lightsToggleDashboard">
+                                </div>
+                            </div>
+                            <div class="form-text mb-3">
+                                <small>When Master is off, all lights are off. When Master is on, only enabled groups run.</small>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -762,7 +765,7 @@
 
                                 <!-- Empty State Message -->
                                 <div id="lightGroupsEmptyState" style="text-align: center; color: #999; padding: 2rem;">
-                                    <span class="material-symbols-outlined" style="font-size: 3rem; display: block; margin-bottom: 0.5rem;">lightbulb_off</span>
+                                    <span class="material-symbols-outlined" style="font-size: 3rem; display: block; margin-bottom: 0.5rem;">fluorescent</span>
                                     <p>No light groups yet. Create your first one to get started!</p>
                                 </div>
 
@@ -771,6 +774,24 @@
                                     <span class="material-symbols-outlined">add_circle</span>
                                     Add Light Group
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Editing Behavior Card -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">info</span>
+                                Editing Behavior
+                            </div>
+                            <div class="card-body">
+                                <ul style="margin: 0; padding-left: 1.25rem;">
+                                    <li>Editing a group isolates that group for preview.</li>
+                                    <li>Changes auto-preview when required fields are filled.</li>
+                                    <li>Cancel/close discards unsaved changes.</li>
+                                    <li>Save Group keeps edits and restores active groups.</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -996,11 +1017,13 @@
                             Lighting Hierarchy
                         </div>
                         <div class="card-body">
-                            <div class="form-check form-switch mb-3">
-                                <input class="form-check-input" type="checkbox" id="lightsToggle">
-                                <label class="form-check-label" for="lightsToggle">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <label class="form-check-label mb-0" for="lightsToggle">
                                     <strong>Master Switch</strong>
                                 </label>
+                                <div class="form-check form-switch m-0">
+                                    <input class="form-check-input" type="checkbox" id="lightsToggle">
+                                </div>
                             </div>
                             <div class="form-text mb-3">
                                 <small>When Master is off, all lights are off. When Master is on, only enabled groups run.</small>
@@ -1008,22 +1031,6 @@
                             <div id="lightsHierarchyGroups" class="d-flex flex-column gap-2">
                                 <!-- Group switches populated by JavaScript -->
                             </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-12 col-lg-4">
-                    <div class="card">
-                        <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">info</span>
-                            Editing Behavior
-                        </div>
-                        <div class="card-body">
-                            <ul style="margin: 0; padding-left: 1.25rem;">
-                                <li>Editing a group isolates that group for preview.</li>
-                                <li>Test Group applies temporary settings only.</li>
-                                <li>Cancel/close discards unsaved changes.</li>
-                                <li>Save Group keeps edits and restores active groups.</li>
-                            </ul>
                         </div>
                     </div>
                 </div>
@@ -1153,7 +1160,7 @@
             <div class="modal-content">
                 <div class="modal-header" style="background-color: black; color: white;">
                     <h5 class="modal-title" id="lightGroupEditorTitle">
-                        <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb_group</span>
+                        <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
                         <span id="lightGroupEditMode">Add</span> Light Group
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -1163,7 +1170,6 @@
                     <div class="mb-4">
                         <label for="lightGroupNameInput" class="form-label"><strong>Group Name</strong></label>
                         <input type="text" class="form-control" id="lightGroupNameInput" placeholder="e.g., Headlights, Underglow, KC Lights">
-                        <div class="form-text">Give this group a descriptive name so you remember what it controls.</div>
                     </div>
 
                     <!-- Brightness Slider -->
@@ -1171,14 +1177,13 @@
                         <label for="lightGroupBrightnessSlider" class="form-label"><strong>Brightness</strong></label>
                         <div class="d-flex align-items-center gap-3 mb-2">
                             <div id="lightGroupBrightnessSlider" class="servo-trim-slider" style="flex: 1;"></div>
-                            <span id="lightGroupBrightnessValue" style="min-width: 50px; font-weight: 600; font-size: 1.1rem;">100%</span>
+                            <span id="lightGroupBrightnessValue" style="min-width: 50px; font-weight: 600; font-size: 1.1rem;">80%</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                             <span>0%</span>
                             <span>50%</span>
                             <span>100%</span>
                         </div>
-                        <div class="form-text">Set the brightness level for this light group (0% - 100%).</div>
                     </div>
 
                     <!-- Pattern Selection -->
@@ -1188,7 +1193,7 @@
                             <!-- Options populated by JavaScript -->
                         </select>
                         <div class="form-text">
-                            Select a light pattern. Patterns are organized into <strong>General</strong> (simple effects), <strong>Emergency</strong> (police/ambulance), and <strong>Warning</strong> (construction/caution). Some patterns use both colors. <strong>Cycle</strong> rotates through all patterns every 30s.
+                            Patterns marked with an asterisk (*) use both primary and secondary colors.
                         </div>
                     </div>
 
@@ -1199,22 +1204,29 @@
                             <input type="color" class="form-control form-control-color" id="lightGroupColorPicker" value="#ff0000" title="Choose primary color">
                             <span id="lightGroupColorHex" style="font-family: monospace; font-weight: 600;">#FF0000</span>
                         </div>
-                        <div class="form-text">Select the primary color for this light group.</div>
                     </div>
 
                     <!-- Second Color Picker -->
-                    <div class="mb-4">
+                    <div class="mb-4" id="secondaryColorPickerContainer">
                         <label for="lightGroupColorPicker2" class="form-label"><strong>Secondary Color</strong></label>
                         <div class="d-flex align-items-center gap-3 mb-2">
                             <input type="color" class="form-control form-control-color" id="lightGroupColorPicker2" value="#000000" title="Choose secondary color">
                             <span id="lightGroupColorHex2" style="font-family: monospace; font-weight: 600;">#000000</span>
                         </div>
-                        <div class="form-text">Select a secondary color (use black #000000 for patterns that don't need it).</div>
-                        
-                        <!-- Favorite Color Preset Buttons Below Second Picker -->
+                    </div>
+                    
+                    <!-- Favorite Color Presets (Always Visible) -->
+                    <div class="mb-4">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <small class="text-muted"><strong>Favorite Colors:</strong></small>
                             <button type="button" class="btn btn-sm btn-gold" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;" onclick="resetColorPresets()">Reset to Defaults</button>
+                        </div>
+                        <div class="btn-group btn-group-sm mb-2 favorite-target-toggle" role="group" aria-label="Favorite color target">
+                            <input type="radio" class="btn-check" name="favoriteColorTarget" id="favoriteColorTargetPrimary" value="primary" autocomplete="off" checked>
+                            <label class="btn favorite-target-btn" for="favoriteColorTargetPrimary">Apply to Primary</label>
+
+                            <input type="radio" class="btn-check" name="favoriteColorTarget" id="favoriteColorTargetSecondary" value="secondary" autocomplete="off">
+                            <label class="btn favorite-target-btn" for="favoriteColorTargetSecondary">Apply to Secondary</label>
                         </div>
                         <div id="colorPresetsContainer" class="d-flex gap-2 flex-wrap">
                             <!-- Presets will be rendered here by JavaScript -->
@@ -1245,10 +1257,6 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-gold" id="lightGroupCancelBtn" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-gold" id="lightGroupTestBtn" onclick="testLightGroupFromModal()">
-                        <span class="material-symbols-outlined">play_arrow</span>
-                        Test Group
-                    </button>
                     <button type="button" class="btn btn-gold" id="lightGroupSaveBtn" onclick="saveLightGroupFromModal()">
                         <span class="material-symbols-outlined">check_circle</span>
                         Save Group

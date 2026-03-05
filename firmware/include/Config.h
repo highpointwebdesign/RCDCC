@@ -142,6 +142,7 @@ struct LightGroup {
 // Extended light group with arbitrary indices and RGB colors
 struct ExtendedLightGroup {
   char name[64];          // Group name
+  char pattern[64];       // UI pattern label (for round-trip persistence)
   bool enabled;           // Whether enabled
   uint8_t brightness;     // 0-255
   uint8_t mode;          // LightMode enum

@@ -204,6 +204,13 @@ void setup() {
   storageManager.init();
   storageManager.loadConfig();
   storageManager.loadLights();
+  if (lightsEngine) {
+    NewLightsConfig* persistedLights = storageManager.getNewLightsConfig();
+    if (persistedLights) {
+      lightsEngine->updateFromPayload(*persistedLights);
+      Serial.printf("Applied persisted lights config on boot (%d groups)\n", persistedLights->groupCount);
+    }
+  }
   SuspensionConfig config = storageManager.getConfig();
   ServoConfig servoConfig = storageManager.getServoConfig();
   

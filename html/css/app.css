@@ -383,6 +383,30 @@
             background-color: var(--high-impact-color);
             color:#000
         }
+
+        /* Favorite color target toggle: active matches Save Group, inactive is inverted */
+        .favorite-target-toggle .favorite-target-btn {
+            background-color: #000;
+            border: 1px solid var(--high-impact-color);
+            color: var(--high-impact-color);
+            font-weight: 600;
+        }
+
+        .favorite-target-toggle .favorite-target-btn:hover {
+            background-color: #111;
+            border-color: var(--high-impact-color);
+            color: var(--high-impact-color);
+        }
+
+        .favorite-target-toggle .btn-check:checked + .favorite-target-btn {
+            background-color: var(--high-impact-color);
+            border-color: var(--high-impact-color);
+            color: #000;
+        }
+
+        .favorite-target-toggle .btn-check:focus + .favorite-target-btn {
+            box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.35);
+        }
         
         /* Console output */
         .console-output {
@@ -720,6 +744,51 @@
 
         .light-group-status-icon.not-configured {
             color: #f59e0b;
+        }
+        
+        /* Drag and Drop Styles */
+        .light-group-drag-handle {
+            cursor: grab;
+            color: #9ca3af;
+            display: flex;
+            align-items: center;
+            margin-right: 0.75rem;
+            transition: color 0.2s ease;
+        }
+        
+        .light-group-drag-handle:hover {
+            color: #4b5563;
+        }
+        
+        .light-group-drag-handle:active {
+            cursor: grabbing;
+        }
+        
+        .light-group-priority {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 32px;
+            height: 32px;
+            padding: 0.25rem 0.5rem;
+            margin-right: 0.75rem;
+            background-color: var(--high-impact-color);
+            color: #000;
+            font-weight: 700;
+            font-size: 0.875rem;
+            border-radius: 50%;
+            border: 2px solid #d1d5db;
+        }
+        
+        .light-group-item.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+        
+        .light-group-item.drag-over {
+            border-color: var(--high-impact-color);
+            border-width: 2px;
+            background-color: #fffbeb;
         }
 
         /* LED Grid Selector */

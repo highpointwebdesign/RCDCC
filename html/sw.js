@@ -1,5 +1,5 @@
 // Service Worker for R/C Dynamic Chassis Control PWA
-const CACHE_NAME = 'rcdcc-v2'; // Bumped version for asset restructuring
+const CACHE_NAME = 'rcdcc-v5'; // Bumped for truck-authoritative light group loading/persistence
 const urlsToCache = [
   '/index.html',
   '/css/app.css',
@@ -65,6 +65,31 @@ self.addEventListener('fetch', event => {
 
   // Skip ESP32 API requests (always fetch fresh)
   if (event.request.url.includes('/api/')) {
+    return;
+  }
+
+  const destination = event.request.destination;
+
+  // Use network-first for app shell assets to avoid stale UI/JS after updates.
+  if (destination === 'document' || destination === 'script' || destination === 'style') {
+    event.respondWith(
+      fetch(event.request)
+        .then(fetchResponse => {
+          if (fetchResponse && fetchResponse.status === 200) {
+            const responseToCache = fetchResponse.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
+          }
+          return fetchResponse;
+        })
+        .catch(() => caches.match(event.request))
+        .then(response => {
+          if (response) return response;
+          if (destination === 'document') {
+            return caches.match('/index.html');
+          }
+          return undefined;
+        })
+    );
     return;
   }
 

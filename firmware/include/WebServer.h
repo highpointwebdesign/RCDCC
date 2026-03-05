@@ -532,6 +532,9 @@ private:
           if (groupObj.containsKey("name")) {
             strncpy(group.name, groupObj["name"], sizeof(group.name) - 1);
           }
+          const char* pattern = groupObj["pattern"] | "Steady";
+          strncpy(group.pattern, pattern, sizeof(group.pattern) - 1);
+          group.pattern[sizeof(group.pattern) - 1] = '\0';
           
           group.enabled = groupObj["enabled"] | false;
           group.brightness = groupObj["brightness"] | 255;
