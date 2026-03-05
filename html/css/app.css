@@ -824,10 +824,6 @@
             box-shadow: 0 0 12px rgba(37, 99, 235, 0.7);
         }
 
-        #tab-lights.active {
-            /* background-color: rgba(251, 191, 36, 0.06); */
-        }
-
         @media (max-width: 767.98px) {
             .settings-tabs {
                 margin-left: -1rem;

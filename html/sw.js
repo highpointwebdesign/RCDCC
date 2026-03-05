@@ -1,5 +1,5 @@
 // Service Worker for R/C Dynamic Chassis Control PWA
-const CACHE_NAME = 'rcdcc-v5'; // Bumped for truck-authoritative light group loading/persistence
+const CACHE_NAME = 'rcdcc-v6'; // Bumped for consolidated Lights page (removed Settings tab, all mgmt on main page)
 const urlsToCache = [
   '/index.html',
   '/css/app.css',

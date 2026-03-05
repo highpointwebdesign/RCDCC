@@ -179,7 +179,7 @@
                 <div class="card" id="lightsCard">
                     <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                         <div>
-                            <span class="material-symbols-outlined icon-danger">lightbulb</span>
+                            <span class="material-symbols-outlined icon-danger">power_settings_new</span>
                             Lights
                         </div>
                     </div>
@@ -222,13 +222,6 @@
                     <span class="tab-label-full">Network Settings</span>
                     <span class="tab-label-short">Network</span>
                 </button>  
-                <button class="settings-tab" data-tab="lights">
-                    <span class="material-symbols-outlined">
-                    lightbulb
-                    </span>
-                    <span class="tab-label-full">Light Settings</span>
-                    <span class="tab-label-short">Lights</span>
-                </button>
                 <button class="settings-tab" data-tab="system">
                     <span class="material-symbols-outlined">
                     settings
@@ -728,75 +721,7 @@
                 </div>
             </div>
 
-            <!-- Tab Content: Light Groups -->
-            <div class="tab-pane" id="tab-lights">
-                <div class="row g-3">
-                    <!-- Lighting Configuration Card -->
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">settings_input_composite</span>
-                                Lighting Configuration
-                            </div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <label for="totalLEDCount" class="form-label"><strong>Total LEDs in your strip:</strong></label>
-                                    <input type="number" class="form-control" id="totalLEDCount" min="1" max="300" value="100" placeholder="100">
-                                    <div class="form-text">
-                                        <small>If you add more addressable LEDs to your strip, update this number. Minimum: 1, Maximum: 300</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Your Light Groups Card -->
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">wb_twilight</span>
-                                Your Light Groups
-                            </div>
-                            <div class="card-body">
-                                <!-- Light Groups List -->
-                                <div id="lightGroupsList" style="margin-bottom: 1.5rem;">
-                                    <!-- Groups will be populated here by JavaScript -->
-                                </div>
-
-                                <!-- Empty State Message -->
-                                <div id="lightGroupsEmptyState" style="text-align: center; color: #999; padding: 2rem;">
-                                    <span class="material-symbols-outlined" style="font-size: 3rem; display: block; margin-bottom: 0.5rem;">fluorescent</span>
-                                    <p>No light groups yet. Create your first one to get started!</p>
-                                </div>
-
-                                <!-- Add Light Group Button -->
-                                <button type="button" class="btn w-100 btn-gold" id="addLightGroupBtn">
-                                    <span class="material-symbols-outlined">add_circle</span>
-                                    Add Light Group
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Editing Behavior Card -->
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">info</span>
-                                Editing Behavior
-                            </div>
-                            <div class="card-body">
-                                <ul style="margin: 0; padding-left: 1.25rem;">
-                                    <li>Editing a group isolates that group for preview.</li>
-                                    <li>Changes auto-preview when required fields are filled.</li>
-                                    <li>Cancel/close discards unsaved changes.</li>
-                                    <li>Save Group keeps edits and restores active groups.</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </section>
 
         <!-- Tuning Section -->
@@ -1010,14 +935,15 @@
         <section id="lights" class="page-section">
             <h2 class="section-title">Light Control</h2>
             <div class="row g-3">
-                <div class="col-12 col-lg-8">
+                <!-- Master Light Switch Card -->
+                <div class="col-12">
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">settings_input_composite</span>
-                            Lighting Hierarchy
+                            <span class="material-symbols-outlined" style="color: var(--danger);">power_settings_new</span>
+                            Lighting Control
                         </div>
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-3 border rounded px-2 py-2">
                                 <label class="form-check-label mb-0" for="lightsToggle">
                                     <strong>Master Switch</strong>
                                 </label>
@@ -1031,6 +957,82 @@
                             <div id="lightsHierarchyGroups" class="d-flex flex-column gap-2">
                                 <!-- Group switches populated by JavaScript -->
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Light Groups Management Card -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header" style="background-color: black; color: white;">
+                            <span class="material-symbols-outlined" style="color: var(--danger);">wb_twilight</span>
+                            Manage Light Groups
+                        </div>
+                        <div class="card-body">
+                            <!-- Total LED Count Configuration -->
+                            <div class="mb-4 pb-3" style="border-bottom: 1px solid #e5e7eb;">
+                                <label for="totalLEDCount" class="form-label"><strong>Total LEDs in your strip:</strong></label>
+                                <input type="number" class="form-control" id="totalLEDCount" min="1" max="300" value="100" placeholder="100">
+                                <div class="form-text">
+                                    <small>If you add more addressable LEDs to your strip, update this number. Minimum: 1, Maximum: 300</small>
+                                </div>
+                            </div>
+
+                            <!-- Light Groups List -->
+                            <div class="mb-3">
+                                <label class="form-label"><strong>Your Light Groups</strong></label>
+                                <div id="lightGroupsList" style="margin-bottom: 1rem;">
+                                    <!-- Groups will be populated here by JavaScript -->
+                                </div>
+
+                                <!-- Empty State Message -->
+                                <div id="lightGroupsEmptyState" style="text-align: center; color: #999; padding: 2rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 3rem; display: block; margin-bottom: 0.5rem;">fluorescent</span>
+                                    <p>No light groups yet. Create your first one to get started!</p>
+                                </div>
+
+                                <!-- Add Light Group Button -->
+                                <button type="button" class="btn w-100 btn-gold" id="addLightGroupBtn">
+                                    <span class="material-symbols-outlined">add_circle</span>
+                                    Add Light Group
+                                </button>
+                            </div>
+
+                            <!-- Editing Behavior Info -->
+                            <div class="alert" style="background-color: #f0f9ff; border: 1px solid #bfdbfe; color: #0369a1; padding: 0.75rem; border-radius: 0.375rem; margin-top: 1rem;">
+                                <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle; margin-right: 0.25rem;">info</span>
+                                    Editing Tips
+                                </div>
+                                <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem;">
+                                    <li>Editing a group isolates that group for preview.</li>
+                                    <li>Changes auto-preview when required fields are filled.</li>
+                                    <li>Cancel/close discards unsaved changes.</li>
+                                    <li>Save Group keeps edits and restores active groups.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- How to Configure Light Strip Card -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header" style="background-color: black; color: white;">
+                            <span class="material-symbols-outlined" style="color: var(--danger);">info</span>
+                            How to Configure Your Light Strip
+                        </div>
+                        <div class="card-body">
+                            <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.8;">
+                                <li><strong>Set Total LED Count:</strong> Update the "Total LEDs in your strip" field to match the number of addressable LEDs wired to your RCDCC.</li>
+                                <li><strong>Create Light Groups:</strong> Click "Add Light Group" to define a group with a name, pattern, and color(s).</li>
+                                <li><strong>Assign LEDs to Groups:</strong> In the group editor, select which LED positions belong to this group (e.g., LEDs 1-20 for front lights, 21-40 for underglow).</li>
+                                <li><strong>Set Brightness:</strong> Adjust the brightness slider for each group independently. Setting at 80% will help ensure LED longevity.</li>
+                                <li><strong>Configure Patterns:</strong> Choose a pattern (solid, blink, pulse, etc.). Patterns marked with * use both primary and secondary colors.</li>
+                                <li><strong>Organize Priority:</strong> Drag groups up/down to set priority order (top = highest priority = will override LED conflicts).</li>
+                                <li><strong>Toggle Master Switch:</strong> On the "Lighting Control" card above, toggle the Master Switch to enable/disable all lights.</li>
+                                <li><strong>Enable Individual Groups:</strong> Use the group toggles in "Lighting Control" to enable/disable specific groups while driving.</li>
+                            </ol>
                         </div>
                     </div>
                 </div>
