@@ -1,5 +1,5 @@
 // Service Worker for R/C Dynamic Chassis Control PWA
-const CACHE_NAME = 'rcdcc-v6'; // Bumped for consolidated Lights page (removed Settings tab, all mgmt on main page)
+const CACHE_NAME = 'rcdcc-v7'; // Bumped for pattern list cleanup and latest Lights JS
 const urlsToCache = [
   '/index.html',
   '/css/app.css',

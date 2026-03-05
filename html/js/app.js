@@ -2191,7 +2191,7 @@ window.onerror = function (msg, url, line) {
                     const color = group.color || '#ff0000';
                     const color2 = group.color2 || '#000000';
                     const pattern = group.pattern || LIGHT_GROUP_DEFAULT_PATTERN;
-                    const patternDisplay = (pattern === 'Cycle' || pattern === 'Cycle Favorites')
+                    const patternDisplay = (pattern === 'Cycle Favorites' || pattern === 'Strobe Favorites')
                         ? `${pattern} (${LIGHT_GROUP_CYCLE_INTERVAL_SECONDS}s)`
                         : pattern;
                     
@@ -2340,13 +2340,13 @@ window.onerror = function (msg, url, line) {
 
             // Consolidate all patterns into single flat list and deduplicate
             const allPatternsMap = new Map();
-            [...patterns.general, 'Cycle', 'Cycle Favorites', ...patterns.emergency, ...patterns.warning].forEach(p => {
+            [...patterns.general, ...patterns.emergency, ...patterns.warning].forEach(p => {
                 if (!allPatternsMap.has(p)) {
                     allPatternsMap.set(p, p);
                 }
             });
-            
-            const uniquePatterns = Array.from(allPatternsMap.keys()).sort().filter(p => p !== 'Cycle');
+
+            const uniquePatterns = Array.from(allPatternsMap.keys()).sort();
 
             uniquePatterns.forEach(patternName => {
                 const option = document.createElement('option');
@@ -2654,7 +2654,7 @@ window.onerror = function (msg, url, line) {
                 color: currentColor,
                 color2: currentColor2,
                 pattern: selectedPattern,
-                cycleIntervalSeconds: (selectedPattern === 'Cycle' || selectedPattern === 'Cycle Favorites') ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined,
+                cycleIntervalSeconds: (selectedPattern === 'Cycle Favorites' || selectedPattern === 'Strobe Favorites') ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined,
                 enabled: true
             };
         }
@@ -2700,7 +2700,7 @@ window.onerror = function (msg, url, line) {
             
             // Convert brightness percentage (0-100) to 0-255 scale
             const brightness255 = Math.round(currentBrightness * 255 / 100);
-            const cycleIntervalSeconds = (selectedPattern === 'Cycle' || selectedPattern === 'Cycle Favorites') ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined;
+            const cycleIntervalSeconds = (selectedPattern === 'Cycle Favorites' || selectedPattern === 'Strobe Favorites') ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined;
             
             if (currentEditingGroupIndex !== null) {
                 // Update existing group while preserving enabled state.
