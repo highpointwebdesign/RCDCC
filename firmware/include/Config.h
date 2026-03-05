@@ -27,8 +27,9 @@
 #define PWM_RR_PIN 15  // Rear Right
 
 // Addressable LED configuration
-#define STATUS_LED_PIN 27  // GPIO pin for addressable LED (WS2812B/NeoPixel)
-#define STATUS_LED_COUNT 3 // Number of LEDs in the strip (0-1: emergency lights, 2: alerts)
+#define STATUS_LED_PIN 27         // GPIO pin for addressable LED strip (WS2812B/NeoPixel)
+#define STATUS_LED_COUNT 100      // Total number of LEDs in the strip (adjust to your hardware)
+#define LED_BRIGHTNESS_MAX 255    // Maximum brightness value
 
 // Default suspension parameters
 #define DEFAULT_REACTION_SPEED 1.0f
@@ -118,15 +119,15 @@ struct LEDConfig {
 
 #define DEFAULT_LED_COLOR LED_COLOR_RED
 
-// Light modes enumeration
+// Light modes/patterns enumeration
 enum LightMode {
   LIGHT_MODE_OFF = 0,
-  LIGHT_MODE_SOLID = 1,
-  LIGHT_MODE_BLINK = 2,
-  LIGHT_MODE_PULSE = 3
+  LIGHT_MODE_SOLID = 1,      // mode: 1 (solid color)
+  LIGHT_MODE_BLINK = 2,      // mode: 2 (flash/blink patterns)
+  LIGHT_MODE_PULSE = 3       // mode: 3 (pulse/breathe patterns)
 };
 
-// Individual light group configuration
+// Individual light group configuration (for fixed 3-group mode)
 struct LightGroup {
   bool enabled;           // Whether this light group is active
   uint8_t brightness;     // Brightness 0-255
@@ -134,11 +135,32 @@ struct LightGroup {
   uint16_t blinkRate;    // Blink rate in milliseconds (for blink/pulse modes)
 };
 
-// Lights configuration structure
+// Extended light group with arbitrary indices and RGB colors
+struct ExtendedLightGroup {
+  char name[64];          // Group name
+  bool enabled;           // Whether enabled
+  uint8_t brightness;     // 0-255
+  uint8_t mode;          // LightMode enum
+  uint16_t blinkRate;    // Blink rate in ms
+  uint32_t color;        // Primary color (RGB)
+  uint32_t color2;       // Secondary color (RGB)
+  uint16_t ledIndices[100]; // Which LED indices belong to this group (max 100 per group)
+  uint8_t ledCount;      // How many LEDs in this group
+};
+
+// Lights configuration structure (legacy: 3 fixed groups)
 struct LightsConfig {
   LightGroup headlights;
   LightGroup tailLights;
   LightGroup emergencyLights;
+};
+
+// New lights configuration: support both legacy and arbitrary groups
+struct NewLightsConfig {
+  bool useLegacyMode;    // If true, use the 3 fixed groups; if false, use dynamic groups
+  LightsConfig legacy;   // Legacy 3-group config for backward compatibility
+  ExtendedLightGroup groups[10]; // Support up to 10 dynamic custom groups
+  uint8_t groupCount;    // Number of dynamic groups currently configured
 };
 
 // Default lights configuration

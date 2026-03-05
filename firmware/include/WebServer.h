@@ -7,11 +7,13 @@
 #include <ArduinoJson.h>
 #include <functional>
 #include "StorageManager.h"
+#include "LightsEngine.h"
 
 class WebServerManager {
 private:
   AsyncWebServer server{80};
   StorageManager* storageManager = nullptr;
+  LightsEngine* lightsEngine = nullptr;  // Reference to lights engine
   std::function<void()> calibrationCallback = nullptr;
   std::function<bool()> mpuStatusCallback = nullptr;
   std::function<void(uint8_t)> orientationCallback = nullptr;
@@ -31,8 +33,9 @@ private:
   size_t lightsPostTotalSize = 0;
   
 public:
-  void init(StorageManager& storage) {
+  void init(StorageManager& storage, LightsEngine* lights) {
     storageManager = &storage;
+    lightsEngine = lights;
     
     // Start WiFi in AP mode
     startWiFiAP();
@@ -86,6 +89,25 @@ public:
   }
   
 private:
+  /**
+   * Parse hex color string (e.g., "ff0000" or "#ff0000") to uint32_t RGB
+   */
+  uint32_t parseHexColor(const String& hex) {
+    String cleanHex = hex;
+    if (cleanHex.startsWith("#")) {
+      cleanHex = cleanHex.substring(1);
+    }
+    
+    if (cleanHex.length() < 6) {
+      return 0; // Black/off
+    }
+    
+    // Convert hex string to uint32_t
+    char* endptr;
+    uint32_t color = strtol(cleanHex.c_str(), &endptr, 16);
+    return color & 0xFFFFFF; // Ensure only 24 bits (RGB)
+  }
+
   void startWiFiAP() {
     // First, try to connect to home WiFi
     Serial.println("Attempting to connect to home WiFi...");
@@ -442,7 +464,7 @@ private:
       }
       
       // Create JSON document from buffered data
-      DynamicJsonDocument doc(2048);
+      DynamicJsonDocument doc(4096); // Increased for more groups
       DeserializationError error = deserializeJson(doc, lightsPostBuffer);
       
       if (error) {
@@ -454,34 +476,108 @@ private:
       
       Serial.println("Lights JSON parsed successfully");
       
-      // Update each light group if provided
-      if (!doc.containsKey("lightGroups")) {
-        Serial.println("ERROR: No lightGroups in request!");
-        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing lightGroups\"}");
-        lightsPostBuffer.clear();
-        return;
+      // NEW format: lightGroups array with full group definitions
+      if (doc.containsKey("lightGroupsArray")) {
+        Serial.println("Processing new light format (array)...");
+        JsonArray groupsArray = doc["lightGroupsArray"];
+        
+        NewLightsConfig config;
+        config.useLegacyMode = false;
+        config.groupCount = 0;
+        
+        // Parse each light group from the array
+        for (JsonObject groupObj : groupsArray) {
+          if (config.groupCount >= 10) break; // Max 10 groups
+          
+          ExtendedLightGroup& group = config.groups[config.groupCount];
+          memset(&group, 0, sizeof(ExtendedLightGroup));
+          
+          // Parse group properties
+          if (groupObj.containsKey("name")) {
+            strncpy(group.name, groupObj["name"], sizeof(group.name) - 1);
+          }
+          
+          group.enabled = groupObj["enabled"] | false;
+          group.brightness = groupObj["brightness"] | 255;
+          group.mode = groupObj["mode"] | LIGHT_MODE_SOLID;
+          group.blinkRate = groupObj["blinkRate"] | 500;
+          
+          // Parse colors (hex strings like "ff0000")
+          if (groupObj.containsKey("color")) {
+            String colorStr = groupObj["color"];
+            group.color = parseHexColor(colorStr);
+          }
+          if (groupObj.containsKey("color2")) {
+            String colorStr2 = groupObj["color2"];
+            group.color2 = parseHexColor(colorStr2);
+          }
+          
+          // Parse LED indices
+          if (groupObj.containsKey("indices")) {
+            JsonArray indicesArray = groupObj["indices"];
+            group.ledCount = 0;
+            for (uint16_t idx : indicesArray) {
+              if (group.ledCount < 100) { // Max 100 LEDs per group
+                group.ledIndices[group.ledCount++] = idx;
+              }
+            }
+            Serial.printf("  Group '%s': %d LEDs, enabled=%d, color=%06lx, mode=%d\n",
+                          group.name, group.ledCount, group.enabled, group.color, group.mode);
+          }
+          
+          config.groupCount++;
+        }
+        
+        // Pass to storage and lights engine
+        storageManager->setNewLightsConfig(config);
+        if (lightsEngine) {
+          lightsEngine->updateFromPayload(config);
+        }
+        Serial.printf("Updated %d light groups\n", config.groupCount);
+        request->send(200, "application/json", "{\"status\":\"success\",\"type\":\"new_format\"}");
+      }
+      // OLD format: legacy 3-group alias-based format (for backward compatibility)
+      else if (doc.containsKey("lightGroups")) {
+        Serial.println("Processing legacy light format (3-group)...");
+        JsonObject groups = doc["lightGroups"];
+        
+        NewLightsConfig config;
+        config.useLegacyMode = true;
+        config.groupCount = 0;
+        
+        // Parse legacy groups
+        if (groups.containsKey("headlights")) {
+          JsonObject hl = groups["headlights"];
+          config.legacy.headlights.enabled = hl["enabled"] | false;
+          config.legacy.headlights.brightness = hl["brightness"] | 255;
+          config.legacy.headlights.mode = hl["mode"] | LIGHT_MODE_SOLID;
+          config.legacy.headlights.blinkRate = hl["blinkRate"] | 500;
+        }
+        if (groups.containsKey("tailLights")) {
+          JsonObject tl = groups["tailLights"];
+          config.legacy.tailLights.enabled = tl["enabled"] | false;
+          config.legacy.tailLights.brightness = tl["brightness"] | 255;
+          config.legacy.tailLights.mode = tl["mode"] | LIGHT_MODE_SOLID;
+          config.legacy.tailLights.blinkRate = tl["blinkRate"] | 500;
+        }
+        if (groups.containsKey("emergencyLights")) {
+          JsonObject el = groups["emergencyLights"];
+          config.legacy.emergencyLights.enabled = el["enabled"] | false;
+          config.legacy.emergencyLights.brightness = el["brightness"] | 255;
+          config.legacy.emergencyLights.mode = el["mode"] | LIGHT_MODE_SOLID;
+          config.legacy.emergencyLights.blinkRate = el["blinkRate"] | 500;
+        }
+        
+        storageManager->setNewLightsConfig(config);
+        if (lightsEngine) {
+          lightsEngine->updateFromPayload(config);
+        }
+        request->send(200, "application/json", "{\"status\":\"success\",\"type\":\"legacy_format\"}");
+      }
+      else {
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing light data\"}");
       }
       
-      JsonObject groups = doc["lightGroups"];
-      
-      if (groups.containsKey("headlights")) {
-        JsonObject hl = groups["headlights"];
-        Serial.println("Updating headlights...");
-        storageManager->updateLightsGroup("headlights", hl);
-      }
-      if (groups.containsKey("tailLights")) {
-        JsonObject tl = groups["tailLights"];
-        Serial.println("Updating tailLights...");
-        storageManager->updateLightsGroup("tailLights", tl);
-      }
-      if (groups.containsKey("emergencyLights")) {
-        JsonObject el = groups["emergencyLights"];
-        Serial.println("Updating emergencyLights...");
-        storageManager->updateLightsGroup("emergencyLights", el);
-      }
-      
-      Serial.println("All lights groups updated successfully");
-      request->send(200, "application/json", "{\"status\":\"success\"}");
       lightsPostBuffer.clear();
       lightsPostTotalSize = 0;
     }, nullptr, [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {

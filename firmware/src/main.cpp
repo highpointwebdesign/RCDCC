@@ -15,6 +15,7 @@
 #include "WebServer.h"
 #include "StorageManager.h"
 #include "PWMOutputs.h"
+#include "LightsEngine.h"
 
 // Global instances
 MPU6050 mpu;
@@ -23,12 +24,13 @@ SuspensionSimulator suspensionSimulator;
 WebServerManager webServer;
 StorageManager storageManager;
 PWMOutputs pwmOutputs;
+LightsEngine* lightsEngine = nullptr;  // Initialize as pointer in setup()
 
 // LED feedback pin
 #define LED_PIN 2
 unsigned long ledBlinkEndTime = 0;
 
-// Addressable LED (NeoPixel)
+// Addressable LED (NeoPixel) - kept for backward compatibility
 Adafruit_NeoPixel statusLED(STATUS_LED_COUNT, STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
 uint32_t currentLEDColor = 0;
 
@@ -194,6 +196,10 @@ void setup() {
   }
   Serial.println("SPIFFS initialized");
   
+  // Initialize LightsEngine (after SPIFFS, before other systems)
+  lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
+  Serial.printf("LightsEngine initialized: %d LED capacity\n", STATUS_LED_COUNT);
+  
   // Load configuration from storage
   storageManager.init();
   storageManager.loadConfig();
@@ -235,7 +241,7 @@ void setup() {
     Serial.println("MPU6050 connection failed - using simulated sensor data for testing");
     Serial.println("Check wiring: SDA=GPIO21, SCL=GPIO22, VCC=3.3V, GND=GND");
     Serial.println("MPU6050 should be at I2C address 0x68");
-    webServer.init(storageManager);
+    webServer.init(storageManager, lightsEngine);
   } else {
     Serial.println("MPU6050 initialized successfully");
     Serial.println("MPU6050 found at I2C address 0x68");
@@ -249,7 +255,7 @@ void setup() {
   
   // Initialize and start WiFi + Web Server (if not already started)
   if (mpuConnected) {
-    webServer.init(storageManager);
+    webServer.init(storageManager, lightsEngine);
   }
 
   notifyDiscordOnHomeWiFiJoin(storageManager.getDeviceName());
@@ -419,6 +425,11 @@ void loop() {
   
   // Update emergency light patterns (non-blocking)
   updateEmergencyLights();
+  
+  // Update dynamic light groups (patterns, animations, etc.)
+  if (lightsEngine) {
+    lightsEngine->update();
+  }
   
   // Read MPU6050 sensor data at specified rate
   if (currentTime - lastMPUReadTime >= (1000 / SUSPENSION_SAMPLE_RATE_HZ)) {

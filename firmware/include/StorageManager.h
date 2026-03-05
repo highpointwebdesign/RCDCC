@@ -11,6 +11,7 @@ private:
   ServoConfig servoConfig;
   LEDConfig ledConfig;
   LightsConfig lightsConfig;
+  NewLightsConfig newLightsConfig = {};  // Extended lights config for dynamic groups
   bool servoTrimResetWarning = false;
   
 public:
@@ -501,6 +502,21 @@ public:
       saveLights();
       Serial.printf("Updated lights group: %s\n", groupName.c_str());
     }
-  }};
+  }
+
+  // Store new lights configuration in memory (for dynamic groups)
+  void setNewLightsConfig(const NewLightsConfig& config) {
+    newLightsConfig = config;
+    Serial.printf("[StorageManager] Updated new lights config: %d groups, legacy mode: %d\n", 
+                  config.groupCount, config.useLegacyMode);
+    // TODO: Optionally save to SPIFFS for persistence when needed
+  }
+
+  // Get reference to current new lights config
+  NewLightsConfig* getNewLightsConfig() {
+    return &newLightsConfig;
+  }
+
+};
 
 #endif

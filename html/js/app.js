@@ -1492,347 +1492,13 @@ window.onerror = function (msg, url, line) {
                 });
             }
 
-            // ==================== Emergency Lights Controls ====================
+            // ==================== Light Hierarchy Controls ====================
             const lightsToggle = document.getElementById('lightsToggle');
-            const emergencyLightMode = document.getElementById('emergencyLightMode');
-            const emergencyLightPattern = document.getElementById('emergencyLightPattern');
-            const applyLightsBtn = document.getElementById('applyLightsBtn');
+            const lightsToggleDashboard = document.getElementById('lightsToggleDashboard');
 
-            // Initialize pattern dropdown with default mode (police) on page load
-            if (emergencyLightMode) {
-                updateEmergencyLightPatterns(emergencyLightMode.value || 'police');
-            }
-
-            // Dashboard toggle: Master kill switch - turn lights on/off
-            if (lightsToggle) {
-                lightsToggle.addEventListener('change', function() {
-                    const isEnabled = this.checked;
-                    
-                    if (isEnabled) {
-                        // Turn on with current mode and pattern
-                        const mode = emergencyLightMode.value;
-                        const patternIndex = parseInt(emergencyLightPattern.value);
-                        const pattern = PATTERNS[mode][patternIndex];
-                        
-                        fetch(getApiUrl('/api/lights'), {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                lightGroups: {
-                                    headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                    tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                    emergencyLights: { enabled: true, brightness: 100, mode: patternIndex + 1, blinkRate: 500 }
-                                }
-                            })
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            window.toast.success('Emergency lights enabled');
-                        })
-                        .catch(err => {
-                            console.error('Failed to enable lights:', err);
-                            lightsToggle.checked = false;
-                        });
-                    } else {
-                        // Turn off
-                        fetch(getApiUrl('/api/lights'), {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                lightGroups: {
-                                    headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                    tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                    emergencyLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 }
-                                }
-                            })
-                        })
-                        .catch(err => console.error('Failed to disable lights:', err));
-                    }
-                });
-            }
-
-            // Lights page: Mode selector updates available patterns and preview
-            if (emergencyLightMode) {
-                emergencyLightMode.addEventListener('change', function() {
-                    updateEmergencyLightPatterns(this.value);
-                });
-            }
-
-            // Lights page: Pattern selector updates LED preview
-            if (emergencyLightPattern) {
-                emergencyLightPattern.addEventListener('change', function() {
-                    const mode = emergencyLightMode.value;
-                    const patternIndex = parseInt(this.value);
-                    animateLedPreview(mode, patternIndex);
-                });
-            }
-
-            // Lights page: Apply button updates mode and pattern
-            if (applyLightsBtn) {
-                applyLightsBtn.addEventListener('click', function() {
-                    const mode = emergencyLightMode.value;
-                    const patternIndex = parseInt(emergencyLightPattern.value);
-                    const pattern = PATTERNS[mode][patternIndex];
-                    const isCurrentlyEnabled = lightsToggle.checked;
-                    
-                    fetch(getApiUrl('/api/lights'), {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            lightGroups: {
-                                headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                emergencyLights: { enabled: isCurrentlyEnabled, brightness: 100, mode: isCurrentlyEnabled ? patternIndex + 1 : 0, blinkRate: 500 }
-                            }
-                        })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        window.toast.success('Emergency lights pattern updated');
-                    })
-                    .catch(err => {
-                        console.error('Failed to update lights:', err);
-                        window.toast.error('Failed to update lights');
-                    });
-                });
-            }
-
-            // Load initial lights state
-            loadEmergencyLightsState();
-            // ==================== Master Light Switch & Light Groups ====================
-            const masterLightSwitch = document.getElementById('masterLightSwitch');
-            let masterLightEnabled = true;
-            let lightsBeforeTest = null; // Store lights state before test
-            
-            // Helper function to send lights config to ESP32
-            function sendLightsConfig(config) {
-                return fetch(getApiUrl('/api/lights'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                })
-                .then(response => {
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    return response.json();
-                });
-            }
-            
-            // Helper to get current light group config from UI
-            function getLightGroupConfig(groupName) {
-                const enabled = document.getElementById(`${groupName}Toggle`).checked;
-                const brightness = parseInt(document.getElementById(`${groupName}Brightness`).value);
-                const mode = parseInt(document.getElementById(`${groupName}Mode`).value);
-                const blinkRate = parseInt(document.getElementById(`${groupName}BlinkRate`).value);
-                return { enabled, brightness, mode, blinkRate };
-            }
-            
-            // Helper to get full lights config from all groups
-            function getFullLightsConfig() {
-                return {
-                    lightGroups: {
-                        headlights: getLightGroupConfig('headlights'),
-                        tailLights: getLightGroupConfig('tailLights'),
-                        emergencyLights: getLightGroupConfig('emergencyLights')
-                    }
-                };
-            }
-            
-            // Master Switch Handler
-            if (masterLightSwitch) {
-                masterLightSwitch.addEventListener('change', function() {
-                    masterLightEnabled = this.checked;
-                    
-                    if (!masterLightEnabled) {
-                        // Turn off all lights
-                        sendLightsConfig({
-                            lightGroups: {
-                                headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                emergencyLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 }
-                            }
-                        })
-                        .then(() => window.toast.success('All lights disabled'))
-                        .catch(err => {
-                            console.error('Failed to disable lights:', err);
-                            window.toast.error('Failed to disable lights');
-                            masterLightSwitch.checked = true;
-                            masterLightEnabled = true;
-                        });
-                    } else {
-                        // Re-enable the groups that were on
-                        const config = getFullLightsConfig();
-                        sendLightsConfig(config)
-                        .then(() => window.toast.success('Lights enabled'))
-                        .catch(err => {
-                            console.error('Failed to enable lights:', err);
-                            window.toast.error('Failed to enable lights');
-                            masterLightSwitch.checked = false;
-                            masterLightEnabled = false;
-                        });
-                    }
-                });
-            }
-            
-            // Setup brightness sliders and blink rate visibility for each group
-            const lightGroups = ['headlights', 'tailLights', 'emergencyLights'];
-            lightGroups.forEach(groupName => {
-                // Brightness slider value display
-                const brightnessInput = document.getElementById(`${groupName}Brightness`);
-                const brightnessValue = document.getElementById(`${groupName}BrightnessValue`);
-                if (brightnessInput) {
-                    brightnessInput.addEventListener('input', function() {
-                        if (brightnessValue) brightnessValue.textContent = this.value;
-                    });
-                }
-                
-                // Mode change - show/hide blink rate field
-                const modeSelect = document.getElementById(`${groupName}Mode`);
-                const blinkRateContainer = document.getElementById(`${groupName}BlinkRateContainer`);
-                if (modeSelect && blinkRateContainer) {
-                    modeSelect.addEventListener('change', function() {
-                        const mode = this.value;
-                        // Show blink rate only for Blink (2) and Pulse (3) modes
-                        blinkRateContainer.style.display = (mode === '2' || mode === '3') ? 'block' : 'none';
-                    });
-                    // Initial state
-                    const initialMode = modeSelect.value;
-                    blinkRateContainer.style.display = (initialMode === '2' || initialMode === '3') ? 'block' : 'none';
-                }
-                
-                // Test button - temporarily light only this group
-                const testBtn = document.getElementById(`${groupName}TestBtn`);
-                if (testBtn) {
-                    testBtn.addEventListener('click', function() {
-                        // Save current state before test
-                        lightsBeforeTest = getFullLightsConfig();
-                        
-                        // Create test config - only this group enabled, others off
-                        const testConfig = {
-                            lightGroups: {
-                                headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                emergencyLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 }
-                            }
-                        };
-                        
-                        // Set only this group to current settings
-                        testConfig.lightGroups[groupName] = getLightGroupConfig(groupName);
-                        
-                        // Send test config
-                        testBtn.disabled = true;
-                        testBtn.innerHTML = '<span class="material-symbols-outlined">schedule</span> Testing...';
-                        
-                        sendLightsConfig(testConfig)
-                        .then(() => {
-                            window.toast.success(`Testing ${groupName}...`);
-                            
-                            // After 2 seconds, restore previous state or all lights off if master is off
-                            setTimeout(() => {
-                                if (masterLightEnabled && lightsBeforeTest) {
-                                    sendLightsConfig(lightsBeforeTest)
-                                    .then(() => {
-                                        testBtn.disabled = false;
-                                        testBtn.innerHTML = '<span class="material-symbols-outlined">play_circle</span> Test';
-                                        lightsBeforeTest = null;
-                                    })
-                                    .catch(err => {
-                                        console.error('Failed to restore lights:', err);
-                                        testBtn.disabled = false;
-                                        testBtn.innerHTML = '<span class="material-symbols-outlined">play_circle</span> Test';
-                                    });
-                                } else {
-                                    // Master is off, so turn all lights off
-                                    sendLightsConfig({
-                                        lightGroups: {
-                                            headlights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                            tailLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 },
-                                            emergencyLights: { enabled: false, brightness: 100, mode: 0, blinkRate: 500 }
-                                        }
-                                    })
-                                    .then(() => {
-                                        testBtn.disabled = false;
-                                        testBtn.innerHTML = '<span class="material-symbols-outlined">play_circle</span> Test';
-                                        lightsBeforeTest = null;
-                                    })
-                                    .catch(err => {
-                                        console.error('Failed to turn off lights:', err);
-                                        testBtn.disabled = false;
-                                        testBtn.innerHTML = '<span class="material-symbols-outlined">play_circle</span> Test';
-                                    });
-                                }
-                            }, 2000);
-                        })
-                        .catch(err => {
-                            console.error('Test failed:', err);
-                            window.toast.error(`Failed to test ${groupName}`);
-                            testBtn.disabled = false;
-                            testBtn.innerHTML = '<span class="material-symbols-outlined">play_circle</span> Test';
-                        });
-                    });
-                }
-                
-                // Save button - apply settings and respect master switch
-                const saveBtn = document.getElementById(`${groupName}SaveBtn`);
-                if (saveBtn) {
-                    saveBtn.addEventListener('click', function() {
-                        if (!masterLightEnabled) {
-                            window.toast.warning('Master light switch is OFF - lights will not activate until enabled');
-                        }
-                        
-                        const config = getFullLightsConfig();
-                        saveBtn.disabled = true;
-                        saveBtn.innerHTML = '<span class="material-symbols-outlined">schedule</span> Saving...';
-                        
-                        sendLightsConfig(config)
-                        .then(() => {
-                            window.toast.success(`${groupName} settings saved`);
-                            saveBtn.disabled = false;
-                            saveBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Save';
-                        })
-                        .catch(err => {
-                            console.error(`Failed to save ${groupName}:`, err);
-                            window.toast.error(`Failed to save ${groupName}`);
-                            saveBtn.disabled = false;
-                            saveBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Save';
-                        });
-                    });
-                }
-            });
-            
-            // Load initial lights state from ESP32
-            function loadLightsState() {
-                fetch(getApiUrl('/api/lights'))
-                .then(response => response.json())
-                .then(data => {
-                    if (data.lightGroups) {
-                        lightGroups.forEach(groupName => {
-                            const group = data.lightGroups[groupName];
-                            if (group) {
-                                const toggle = document.getElementById(`${groupName}Toggle`);
-                                const brightness = document.getElementById(`${groupName}Brightness`);
-                                const mode = document.getElementById(`${groupName}Mode`);
-                                const blinkRate = document.getElementById(`${groupName}BlinkRate`);
-                                const brightnessValue = document.getElementById(`${groupName}BrightnessValue`);
-                                
-                                if (toggle) toggle.checked = group.enabled;
-                                if (brightness) {
-                                    brightness.value = group.brightness;
-                                    if (brightnessValue) brightnessValue.textContent = group.brightness;
-                                }
-                                if (mode) {
-                                    mode.value = group.mode;
-                                    // Trigger change event to show/hide blink rate
-                                    mode.dispatchEvent(new Event('change'));
-                                }
-                                if (blinkRate) blinkRate.value = group.blinkRate;
-                            }
-                        });
-                    }
-                })
-                .catch(err => console.error('Failed to load lights state:', err));
-            }
-            
-            loadLightsState();
+            bindMasterLightSwitch(lightsToggle);
+            bindMasterLightSwitch(lightsToggleDashboard);
+            syncMasterLightSwitches(getMasterLightsEnabled());
             
             // Suspension Settings gear click - navigate to Tuning
             const suspGear = document.getElementById('suspensionSettingsGear');
@@ -2099,6 +1765,7 @@ window.onerror = function (msg, url, line) {
 
         // ==================== Light Groups Management ====================
         const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
+        const LIGHT_MASTER_STORAGE_KEY = 'lightsMasterEnabled';
         const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
         const COLOR_PRESETS_KEY = 'lightGroupColorPresets';
         const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
@@ -2108,14 +1775,14 @@ window.onerror = function (msg, url, line) {
         
         // Predefined light groups (initialized on first load)
         const PREDEFINED_LIGHT_GROUPS = [
-            { name: 'Brake Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#000000', pattern: 'Steady', isPredefined: true },
-            { name: 'Emergency/Police Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#0000ff', pattern: 'Whip Sweep', isPredefined: true },
-            { name: 'Hazard Lights', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', isPredefined: true },
-            { name: 'Headlights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Steady', isPredefined: true },
-            { name: 'Reverse Lights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Steady', isPredefined: true },
-            { name: 'Taillights', indices: [], brightness: 128, color: '#ff0000', color2: '#000000', pattern: 'Steady', isPredefined: true },
-            { name: 'Turn Signals Left', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', isPredefined: true },
-            { name: 'Turn Signals Right', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', isPredefined: true }
+            { name: 'Brake Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
+            { name: 'Emergency/Police Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#0000ff', pattern: 'Whip Sweep', enabled: false, isPredefined: true },
+            { name: 'Hazard Lights', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', enabled: false, isPredefined: true },
+            { name: 'Headlights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
+            { name: 'Reverse Lights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
+            { name: 'Taillights', indices: [], brightness: 128, color: '#ff0000', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
+            { name: 'Turn Signals Left', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', enabled: false, isPredefined: true },
+            { name: 'Turn Signals Right', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', enabled: false, isPredefined: true }
         ];
         const DEFAULT_COLOR_PRESETS = [
             '#ff0000', // Red
@@ -2131,6 +1798,9 @@ window.onerror = function (msg, url, line) {
         let lightGroups = [];
         let colorPresets = [];
         let currentColor2 = '#000000'; // Second color for dual-color patterns
+        let lightGroupsStateBeforeModal = null;
+        let masterStateBeforeModal = false;
+        let lightGroupModalSaved = false;
 
         // Load color presets from localStorage or use defaults
         function loadColorPresets() {
@@ -2203,18 +1873,232 @@ window.onerror = function (msg, url, line) {
                 // First time - initialize with predefined groups
                 lightGroups = JSON.parse(JSON.stringify(PREDEFINED_LIGHT_GROUPS));
                 localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
-                saveLightGroups();
             } else {
                 lightGroups = stored ? JSON.parse(stored) : [];
             }
+
+            // Backward compatibility for old data without "enabled"
+            lightGroups = lightGroups.map(group => ({
+                ...group,
+                enabled: !!group.enabled
+            }));
             
+            saveLightGroups(false);
             renderLightGroupsList();
+            renderLightsHierarchyControls();
         }
 
-        function saveLightGroups() {
+        function saveLightGroups(pushToHardware = true) {
             localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(lightGroups));
             renderLightGroupsList();
+            renderLightsHierarchyControls();
             populateNotificationGroupSelect(); // Update notification group dropdown
+
+            if (pushToHardware) {
+                applyLightsHierarchyToHardware();
+            }
+        }
+
+        function getMasterLightsEnabled() {
+            return localStorage.getItem(LIGHT_MASTER_STORAGE_KEY) === 'true';
+        }
+
+        function setMasterLightsEnabled(isEnabled, applyNow = true) {
+            localStorage.setItem(LIGHT_MASTER_STORAGE_KEY, isEnabled ? 'true' : 'false');
+            syncMasterLightSwitches(isEnabled);
+            if (applyNow) {
+                applyLightsHierarchyToHardware();
+            }
+        }
+
+        function syncMasterLightSwitches(isEnabled) {
+            const masterToggle = document.getElementById('lightsToggle');
+            const dashboardToggle = document.getElementById('lightsToggleDashboard');
+            if (masterToggle) masterToggle.checked = isEnabled;
+            if (dashboardToggle) dashboardToggle.checked = isEnabled;
+        }
+
+        function bindMasterLightSwitch(toggleElement) {
+            if (!toggleElement || toggleElement.dataset.bound === 'true') return;
+
+            toggleElement.dataset.bound = 'true';
+            toggleElement.checked = getMasterLightsEnabled();
+            toggleElement.addEventListener('change', function() {
+                setMasterLightsEnabled(this.checked, true);
+            });
+        }
+
+        function getPatternMode(patternName) {
+            const value = (patternName || '').toLowerCase();
+            if (!value) return 1;
+            if (value.includes('breathe') || value.includes('pulse')) return 3;
+            if (value.includes('flash') || value.includes('strobe') || value.includes('beacon') || value.includes('flicker') || value.includes('wig') || value.includes('chase') || value.includes('cycle')) return 2;
+            return 1;
+        }
+
+        function getPatternBlinkRate(patternName) {
+            const value = (patternName || '').toLowerCase();
+            if (value.includes('strobe')) return 120;
+            if (value.includes('fast')) return 180;
+            if (value.includes('double')) return 220;
+            if (value.includes('slow')) return 650;
+            return 450;
+        }
+
+        function findFirstGroupByAliases(groups, aliases) {
+            return groups.find(group => {
+                const name = (group.name || '').toLowerCase();
+                return aliases.some(alias => name.includes(alias));
+            }) || null;
+        }
+
+        function buildFirmwareGroupState(group, forceEnabled = null) {
+            const isEnabled = forceEnabled !== null ? forceEnabled : !!group?.enabled;
+            if (!group || !isEnabled) {
+                return { enabled: false, brightness: 100, mode: 0, blinkRate: 500 };
+            }
+
+            return {
+                enabled: true,
+                brightness: Math.max(0, Math.min(255, Number(group.brightness) || 255)),
+                mode: getPatternMode(group.pattern),
+                blinkRate: getPatternBlinkRate(group.pattern)
+            };
+        }
+
+        function getFirmwareLightsPayload(groups, masterEnabled) {
+            const active = masterEnabled ? groups : [];
+            
+            // Build new format with full light groups array
+            const lightGroupsArray = active.map(group => {
+                // Parse pattern to get mode and blink rate
+                const mode = getPatternMode(group.pattern);
+                const blinkRate = getPatternBlinkRate(group.pattern);
+                
+                // Convert hex colors to firmware format (remove #)
+                const colorStr = (group.color || '#ff0000').replace('#', '');
+                const color2Str = (group.color2 || '#000000').replace('#', '');
+                
+                return {
+                    name: group.name,
+                    enabled: !!group.enabled,
+                    brightness: Math.max(0, Math.min(255, Number(group.brightness) || 255)),
+                    color: colorStr,
+                    color2: color2Str,
+                    indices: group.indices || [],
+                    mode: mode,
+                    blinkRate: blinkRate,
+                    pattern: group.pattern
+                };
+            });
+
+            return {
+                lightGroupsArray: lightGroupsArray
+            };
+        }
+
+        function renderLightsHierarchyControls() {
+            const container = document.getElementById('lightsHierarchyGroups');
+            if (!container) return;
+
+            container.innerHTML = '';
+
+            if (!lightGroups.length) {
+                container.innerHTML = '<div class="form-text"><small>No light groups available yet. Add groups in Settings > Light Settings.</small></div>';
+                return;
+            }
+
+            const sortedGroups = [...lightGroups].sort((a, b) => a.name.localeCompare(b.name));
+            sortedGroups.forEach(group => {
+                const index = lightGroups.indexOf(group);
+                const row = document.createElement('div');
+                row.className = 'd-flex justify-content-between align-items-center border rounded px-2 py-2';
+
+                const label = document.createElement('div');
+                label.innerHTML = `<strong>${group.name}</strong><div class="form-text"><small>${group.indices?.length || 0} LED(s)</small></div>`;
+
+                const switchWrap = document.createElement('div');
+                switchWrap.className = 'form-check form-switch m-0';
+                switchWrap.innerHTML = `<input class="form-check-input" type="checkbox" id="groupSwitch${index}" ${group.enabled ? 'checked' : ''}>`;
+
+                const input = switchWrap.querySelector('input');
+                input.addEventListener('change', () => {
+                    lightGroups[index].enabled = input.checked;
+                    saveLightGroups(true);
+                });
+
+                row.appendChild(label);
+                row.appendChild(switchWrap);
+                container.appendChild(row);
+            });
+        }
+
+        function applyLightsHierarchyToHardware(override = null) {
+            const masterEnabled = override?.masterEnabled ?? getMasterLightsEnabled();
+            const sourceGroups = override?.groups || lightGroups;
+            const payload = getFirmwareLightsPayload(sourceGroups, masterEnabled || !!override?.forceMasterOn);
+
+            console.log('[Lights] Sending to ESP32:', JSON.stringify(payload, null, 2));
+            console.log('[Lights] Source groups:', sourceGroups.map(g => ({ name: g.name, enabled: g.enabled, indices: g.indices?.length })));
+
+            return fetch(getApiUrl('/api/lights'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text().catch(() => '');
+                    throw new Error(text || `HTTP ${response.status}`);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to apply hierarchy lights payload:', error);
+            });
+        }
+
+        function isolateGroupForPreview(index, draftGroup = null) {
+            const previewGroups = lightGroups.map((group, i) => ({
+                ...group,
+                enabled: i === index
+            }));
+
+            if (index !== null && draftGroup) {
+                previewGroups[index] = {
+                    ...previewGroups[index],
+                    ...draftGroup,
+                    enabled: true
+                };
+            }
+
+            if (index === null && draftGroup) {
+                previewGroups.push({ ...draftGroup, enabled: true });
+            }
+
+            return applyLightsHierarchyToHardware({
+                forceMasterOn: true,
+                groups: previewGroups,
+                masterEnabled: true
+            });
+        }
+
+        function restoreLightsAfterModal() {
+            if (!lightGroupsStateBeforeModal) {
+                applyLightsHierarchyToHardware();
+                return;
+            }
+
+            // Restore enabled state exactly as it was before edit/test
+            lightGroups = lightGroups.map((group, idx) => ({
+                ...group,
+                enabled: !!lightGroupsStateBeforeModal[idx]?.enabled
+            }));
+
+            saveLightGroups(false);
+            setMasterLightsEnabled(masterStateBeforeModal, false);
+            applyLightsHierarchyToHardware();
+
+            lightGroupsStateBeforeModal = null;
         }
 
         function renderLightGroupsList() {
@@ -2296,6 +2180,28 @@ window.onerror = function (msg, url, line) {
             }
         }
 
+        // Pattern metadata: which patterns need dual colors
+        const PATTERN_METADATA = {
+            // Single-color patterns
+            'Steady': { needsDualColor: false, category: 'General' },
+            'Double Flash': { needsDualColor: false, category: 'General' },
+            'Strobe': { needsDualColor: false, category: 'General' },
+            'Breathe': { needsDualColor: false, category: 'General' },
+            'Flicker': { needsDualColor: false, category: 'General' },
+            'Cycle': { needsDualColor: false, category: 'General' },
+            // Dual-color patterns (Emergency/Police)
+            'Whip Sweep': { needsDualColor: true, category: 'Emergency' },
+            'Dual Beacon': { needsDualColor: true, category: 'Emergency' },
+            'Chase': { needsDualColor: true, category: 'Emergency' },
+            'Dual Color Pulse': { needsDualColor: true, category: 'Emergency' },
+            'Wig Wag': { needsDualColor: true, category: 'Emergency' },
+            // Dual-color patterns (Warning/Construction)
+            'Steady Amber': { needsDualColor: false, category: 'Warning' },
+            'Double Pulse': { needsDualColor: false, category: 'Warning' },
+            'Slow Beacon': { needsDualColor: false, category: 'Warning' },
+            'Fast Flash': { needsDualColor: false, category: 'Warning' }
+        };
+
         function getLightGroupPatternNames() {
             return {
                 general: LIGHT_GROUP_EXTRA_PATTERNS.filter(p => p !== 'Cycle').sort(),
@@ -2311,68 +2217,64 @@ window.onerror = function (msg, url, line) {
             const patterns = getLightGroupPatternNames();
             patternSelect.innerHTML = '';
 
-            // General patterns
-            const generalGroup = document.createElement('optgroup');
-            generalGroup.label = 'General';
-            [...patterns.general, 'Cycle'].forEach(patternName => {
-                const option = document.createElement('option');
-                option.value = patternName;
-                option.textContent = patternName;
-                generalGroup.appendChild(option);
-            });
-            patternSelect.appendChild(generalGroup);
+            // Consolidate all patterns into single flat list
+            const allPatterns = [
+                ...patterns.general.map(p => ({ name: p, category: 'General' })),
+                { name: 'Cycle', category: 'General' },
+                ...patterns.emergency.map(p => ({ name: p, category: 'Emergency' })),
+                ...patterns.warning.map(p => ({ name: p, category: 'Warning' }))
+            ].sort((a, b) => a.name.localeCompare(b.name));
 
-            // Emergency patterns
-            const emergencyGroup = document.createElement('optgroup');
-            emergencyGroup.label = 'Emergency';
-            patterns.emergency.forEach(patternName => {
+            allPatterns.forEach(patternObj => {
                 const option = document.createElement('option');
-                option.value = patternName;
-                option.textContent = patternName;
-                emergencyGroup.appendChild(option);
+                option.value = patternObj.name;
+                option.textContent = `${patternObj.name} (${patternObj.category})`;
+                patternSelect.appendChild(option);
             });
-            patternSelect.appendChild(emergencyGroup);
-
-            // Warning patterns
-            const warningGroup = document.createElement('optgroup');
-            warningGroup.label = 'Warning';
-            patterns.warning.forEach(patternName => {
-                const option = document.createElement('option');
-                option.value = patternName;
-                option.textContent = patternName;
-                warningGroup.appendChild(option);
-            });
-            patternSelect.appendChild(warningGroup);
 
             patternSelect.value = selectedPattern;
             currentPattern = selectedPattern;
             
-            // Update color defaults based on pattern
+            // Update color defaults and visibility based on pattern
             updateColorDefaultsForPattern(selectedPattern);
+            toggleSecondaryColorVisibility(selectedPattern);
         }
         
+        function toggleSecondaryColorVisibility(pattern) {
+            const secondaryColorContainer = document.getElementById('lightGroupColorPicker2')?.closest('.mb-4');
+            if (!secondaryColorContainer) return;
+
+            const metadata = PATTERN_METADATA[pattern];
+            const needsDualColor = metadata?.needsDualColor ?? false;
+
+            if (needsDualColor) {
+                secondaryColorContainer.style.display = 'block';
+            } else {
+                secondaryColorContainer.style.display = 'none';
+            }
+        }
+
         function updateColorDefaultsForPattern(pattern) {
-            // Smart defaults for dual-color patterns
-            const emergencyPatterns = ['Whip Sweep', 'Dual Beacon', 'Wig Wag', 'Dual Color Pulse', 'Chase'];
-            const warningPatterns = ['Slow Beacon', 'Fast Flash', 'Double Pulse'];
-            
-            if (emergencyPatterns.includes(pattern)) {
-                // Red + Blue for emergency
-                if (currentColor === '#ff0000' || currentColor === '#ffffff') {
-                    currentColor = '#ff0000';
-                    currentColor2 = '#0000ff';
-                }
-            } else if (warningPatterns.includes(pattern) || pattern === 'Steady Amber') {
-                // Amber + White for warning
-                if (currentColor === '#ff0000' || currentColor === '#ffffff') {
-                    currentColor = '#ffa500';
-                    currentColor2 = '#ffffff';
+            // Use metadata to determine color requirements
+            const metadata = PATTERN_METADATA[pattern];
+            if (!metadata) return;
+
+            if (metadata.needsDualColor) {
+                // Ensure we have two distinct colors for dual-color patterns
+                if (currentColor === currentColor2 || currentColor2 === '#000000') {
+                    if (pattern.includes('Police') || pattern.includes('Whip') || pattern.includes('Chase') || pattern.includes('Dual') || pattern.includes('Wig')) {
+                        // Emergency patterns: Red + Blue
+                        currentColor = '#ff0000';
+                        currentColor2 = '#0000ff';
+                    } else {
+                        // Warning patterns: Amber + White
+                        currentColor = '#ffa500';
+                        currentColor2 = '#ffffff';
+                    }
                 }
             } else {
-                // Single color patterns - second color is off
-                if (currentColor2 !== '#000000' && !emergencyPatterns.includes(currentPattern)) {
-                    currentColor2 = '#000000';
-                }
+                // Single-color patterns - reset secondary color to off
+                currentColor2 = '#000000';
             }
             
             // Update UI
@@ -2390,6 +2292,11 @@ window.onerror = function (msg, url, line) {
         function openLightGroupModal(index = null) {
             currentEditingGroupIndex = index;
             currentSelectedLEDs = new Set();
+            lightGroupModalSaved = false;
+
+            // Snapshot pre-edit runtime state so Cancel/Close can fully restore it.
+            lightGroupsStateBeforeModal = JSON.parse(JSON.stringify(lightGroups));
+            masterStateBeforeModal = getMasterLightsEnabled();
             
             const modal = document.getElementById('lightGroupEditorModal');
             const titleSpan = document.getElementById('lightGroupEditMode');
@@ -2472,6 +2379,13 @@ window.onerror = function (msg, url, line) {
             renderLedGrid(totalLEDCount);
             updateSelectionSummary();
             renderColorPresets();
+
+            // While editing, isolate only this group for visual feedback.
+            if (index !== null) {
+                isolateGroupForPreview(index, lightGroups[index]);
+            } else {
+                applyLightsHierarchyToHardware({ masterEnabled: true, groups: [] });
+            }
             
             const bsModal = new bootstrap.Modal(modal);
             bsModal.show();
@@ -2587,6 +2501,43 @@ window.onerror = function (msg, url, line) {
             updateSelectionSummary();
         }
 
+        function getLightGroupDraftFromModal() {
+            const nameInput = document.getElementById('lightGroupNameInput');
+            const patternSelect = document.getElementById('lightGroupPatternSelect');
+            const name = nameInput ? nameInput.value.trim() : 'Preview Group';
+            const selectedPattern = (patternSelect && patternSelect.value) ? patternSelect.value : LIGHT_GROUP_DEFAULT_PATTERN;
+
+            return {
+                name: name || 'Preview Group',
+                indices: Array.from(currentSelectedLEDs).sort((a, b) => a - b),
+                brightness: Math.round(currentBrightness * 255 / 100),
+                color: currentColor,
+                color2: currentColor2,
+                pattern: selectedPattern,
+                cycleIntervalSeconds: selectedPattern === 'Cycle' ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined,
+                enabled: true
+            };
+        }
+
+        function testLightGroupFromModal() {
+            const draftGroup = getLightGroupDraftFromModal();
+
+            if (!draftGroup.name) {
+                window.toast.error('Enter a group name before testing');
+                return;
+            }
+
+            if (draftGroup.indices.length === 0) {
+                window.toast.error('Select at least one LED before testing');
+                return;
+            }
+
+            isolateGroupForPreview(currentEditingGroupIndex, draftGroup)
+                .then(() => {
+                    window.toast.success('Test Group active (temporary)');
+                });
+        }
+
         function saveLightGroupFromModal() {
             const nameInput = document.getElementById('lightGroupNameInput');
             const name = nameInput.value.trim();
@@ -2611,7 +2562,8 @@ window.onerror = function (msg, url, line) {
             const cycleIntervalSeconds = selectedPattern === 'Cycle' ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined;
             
             if (currentEditingGroupIndex !== null) {
-                // Update existing group
+                // Update existing group while preserving enabled state.
+                const wasEnabled = !!lightGroups[currentEditingGroupIndex]?.enabled;
                 lightGroups[currentEditingGroupIndex] = {
                     name: name,
                     indices: indices,
@@ -2619,12 +2571,13 @@ window.onerror = function (msg, url, line) {
                     color: currentColor,
                     color2: currentColor2,
                     pattern: selectedPattern,
-                    cycleIntervalSeconds
+                    cycleIntervalSeconds,
+                    enabled: wasEnabled
                 };
-                saveLightGroups();
+                saveLightGroups(false);
                 window.toast.success(`Light group "${name}" updated!`);
             } else {
-                // Create new group
+                // Create new group disabled by default so save does not force it on.
                 lightGroups.push({
                     name: name,
                     indices: indices,
@@ -2632,11 +2585,14 @@ window.onerror = function (msg, url, line) {
                     color: currentColor,
                     color2: currentColor2,
                     pattern: selectedPattern,
-                    cycleIntervalSeconds
+                    cycleIntervalSeconds,
+                    enabled: false
                 });
-                saveLightGroups();
+                saveLightGroups(false);
                 window.toast.success(`Light group "${name}" created with ${indices.length} LED(s)!`);
             }
+
+            lightGroupModalSaved = true;
             
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('lightGroupEditorModal'));
@@ -2771,6 +2727,7 @@ window.onerror = function (msg, url, line) {
                 lightGroupPatternSelect.addEventListener('change', function() {
                     currentPattern = this.value || LIGHT_GROUP_DEFAULT_PATTERN;
                     updateColorDefaultsForPattern(currentPattern);
+                    toggleSecondaryColorVisibility(currentPattern);
                 });
             }
             
@@ -2793,11 +2750,23 @@ window.onerror = function (msg, url, line) {
                     colorHex2.textContent = this.value.toUpperCase();
                 });
             }
+
+            // Treat all modal close paths (Cancel/X/backdrop/Esc) the same.
+            const lightGroupModal = document.getElementById('lightGroupEditorModal');
+            if (lightGroupModal) {
+                lightGroupModal.addEventListener('hidden.bs.modal', () => {
+                    restoreLightsAfterModal();
+                    lightGroupModalSaved = false;
+                    currentEditingGroupIndex = null;
+                });
+            }
             
             // Load light groups and color presets
             loadLightGroups();
             loadColorPresets();
             populateNotificationGroupSelect(); // Initialize system notification LED dropdown
+            setMasterLightsEnabled(getMasterLightsEnabled(), false);
+            applyLightsHierarchyToHardware();
             
             // Load version information
             loadVersionInfo();
