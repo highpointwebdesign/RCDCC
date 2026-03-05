@@ -44,26 +44,6 @@ window.onerror = function (msg, url, line) {
         const PATTERNS = {
             police: [
                 {
-                    name: "Whip Sweep",
-                    isLooping: true,
-                    sequence: [
-                        { led0: RED, led1: OFF, duration: 250 },
-                        { led0: OFF, led1: BLUE, duration: 250 }
-                    ]
-                },
-                {
-                    name: "Flicker",
-                    isLooping: true,
-                    sequence: [
-                        { led0: RED, led1: BLUE, duration: 80 },
-                        { led0: "800000", led1: "000080", duration: 60 },
-                        { led0: RED, led1: BLUE, duration: 90 },
-                        { led0: OFF, led1: OFF, duration: 50 },
-                        { led0: RED, led1: BLUE, duration: 70 },
-                        { led0: "400000", led1: "000040", duration: 40 }
-                    ]
-                },
-                {
                     name: "Dual Beacon",
                     isLooping: true,
                     sequence: [
@@ -91,14 +71,6 @@ window.onerror = function (msg, url, line) {
                     ]
                 },
                 {
-                    name: "Wig Wag",
-                    isLooping: true,
-                    sequence: [
-                        { led0: RED, led1: BLUE, duration: 250 },
-                        { led0: BLUE, led1: RED, duration: 250 }
-                    ]
-                },
-                {
                     name: "Strobe",
                     isLooping: true,
                     sequence: [
@@ -122,21 +94,6 @@ window.onerror = function (msg, url, line) {
                 }
             ],
             construction: [
-                {
-                    name: "Steady Amber",
-                    isLooping: false,
-                    sequence: [
-                        { led0: AMBER, led1: AMBER, duration: 60000 }  // Long duration for steady
-                    ]
-                },
-                {
-                    name: "Double Pulse",
-                    isLooping: true,
-                    sequence: [
-                        { led0: AMBER, led1: AMBER, duration: 250 },
-                        { led0: OFF, led1: OFF, duration: 250 }
-                    ]
-                },
                 {
                     name: "Strobe",
                     isLooping: true,
@@ -1769,18 +1726,18 @@ window.onerror = function (msg, url, line) {
         const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
         const COLOR_PRESETS_KEY = 'lightGroupColorPresets';
         const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
-        const LIGHT_GROUP_DEFAULT_PATTERN = 'Steady';
+        const LIGHT_GROUP_DEFAULT_PATTERN = 'Solid';
         const LIGHT_GROUP_CYCLE_INTERVAL_SECONDS = 30;
-        const LIGHT_GROUP_EXTRA_PATTERNS = ['Steady', 'Double Flash', 'Strobe', 'Breathe', 'Flicker', 'Cycle', 'Cycle Favorites'];
+        const LIGHT_GROUP_EXTRA_PATTERNS = ['Solid', 'Double Flash', 'Strobe', 'Breathe', 'Flicker', 'Cycle Favorites', 'Strobe Favorites'];
         
         // Predefined light groups (initialized on first load)
         const PREDEFINED_LIGHT_GROUPS = [
-            { name: 'Brake Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
-            { name: 'Emergency/Police Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#0000ff', pattern: 'Whip Sweep', enabled: false, isPredefined: true },
+            { name: 'Brake Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#000000', pattern: 'Solid', enabled: false, isPredefined: true },
+            { name: 'Emergency/Police Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#0000ff', pattern: 'Dual Beacon', enabled: false, isPredefined: true },
             { name: 'Hazard Lights', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', enabled: false, isPredefined: true },
-            { name: 'Headlights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
-            { name: 'Reverse Lights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
-            { name: 'Taillights', indices: [], brightness: 128, color: '#ff0000', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
+            { name: 'Headlights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Solid', enabled: false, isPredefined: true },
+            { name: 'Reverse Lights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Solid', enabled: false, isPredefined: true },
+            { name: 'Taillights', indices: [], brightness: 128, color: '#ff0000', color2: '#000000', pattern: 'Solid', enabled: false, isPredefined: true },
             { name: 'Turn Signals Left', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', enabled: false, isPredefined: true },
             { name: 'Turn Signals Right', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', enabled: false, isPredefined: true }
         ];
@@ -1899,10 +1856,9 @@ window.onerror = function (msg, url, line) {
 
         function patternFromMode(mode, blinkRate = 0) {
             switch (Number(mode)) {
-                case 1: return 'Steady';
+                case 1: return 'Solid';
                 case 2: return 'Strobe';
                 case 3: return 'Breathe';
-                case 4: return 'Whip Sweep';
                 case 5: return 'Chase';
                 case 6: return 'Flicker';
                 case 7: return 'Dual Color Pulse';
@@ -2352,28 +2308,24 @@ window.onerror = function (msg, url, line) {
         // Pattern metadata: which patterns need dual colors
         const PATTERN_METADATA = {
             // Single-color patterns
-            'Steady': { needsDualColor: false },
+            'Solid': { needsDualColor: false },
             'Double Flash': { needsDualColor: false },
             'Strobe': { needsDualColor: false },
             'Breathe': { needsDualColor: false },
             'Flicker': { needsDualColor: false },
-            'Cycle': { needsDualColor: false },
             'Cycle Favorites': { needsDualColor: false },
+            'Strobe Favorites': { needsDualColor: false },
             // Dual-color patterns
-            'Whip Sweep': { needsDualColor: true },
             'Dual Beacon': { needsDualColor: true },
             'Chase': { needsDualColor: true },
             'Dual Color Pulse': { needsDualColor: true },
-            'Wig Wag': { needsDualColor: true },
-            'Steady Amber': { needsDualColor: false },
-            'Double Pulse': { needsDualColor: false },
             'Slow Beacon': { needsDualColor: false },
             'Fast Flash': { needsDualColor: false }
         };
 
         function getLightGroupPatternNames() {
             return {
-                general: LIGHT_GROUP_EXTRA_PATTERNS.filter(p => p !== 'Cycle').sort(),
+                general: LIGHT_GROUP_EXTRA_PATTERNS.sort(),
                 emergency: [...new Set(PATTERNS.police.map(p => p.name))].sort(),
                 warning: [...new Set([...PATTERNS.construction.map(p => p.name), ...PATTERNS.warning.map(p => p.name)])].filter(p => !PATTERNS.police.find(pp => pp.name === p)).sort()
             };
@@ -2394,7 +2346,7 @@ window.onerror = function (msg, url, line) {
                 }
             });
             
-            const uniquePatterns = Array.from(allPatternsMap.keys()).sort();
+            const uniquePatterns = Array.from(allPatternsMap.keys()).sort().filter(p => p !== 'Cycle');
 
             uniquePatterns.forEach(patternName => {
                 const option = document.createElement('option');
