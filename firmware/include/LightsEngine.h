@@ -67,6 +67,28 @@ private:
         return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
     }
 
+    /**
+     * Apply brightness scaling to a color (forward declaration needed by twinklePattern)
+     */
+    uint32_t applyBrightness(uint32_t color, uint8_t brightness) {
+        if (brightness == 0 || color == 0) {
+            return 0;
+        }
+
+        // Extract RGB components
+        uint8_t r = (color >> 16) & 0xFF;
+        uint8_t g = (color >> 8) & 0xFF;
+        uint8_t b = color & 0xFF;
+
+        // Scale by brightness (0-255)
+        r = (r * brightness) / 255;
+        g = (g * brightness) / 255;
+        b = (b * brightness) / 255;
+
+        // Recombine
+        return (r << 16) | (g << 8) | b;
+    }
+
     uint32_t wipePattern(uint8_t groupIdx, const ExtendedLightGroup& group, uint8_t ledLocalIndex, unsigned long now) {
         PatternState& state = patternState[groupIdx];
         uint16_t speed = group.blinkRate > 0 ? group.blinkRate : 250;
@@ -99,7 +121,9 @@ private:
         return group.color2;
     }
 
-    // WLED-inspired Candle Flicker pattern - realistic candlelight effect
+    /**
+     * WLED-inspired Candle Flicker pattern - realistic candlelight effect
+     */
     uint32_t twinklePattern(uint8_t groupIdx, const ExtendedLightGroup& group, uint8_t ledLocalIndex, unsigned long now) {
         PatternState& state = patternState[groupIdx];
         
@@ -240,7 +264,41 @@ public:
      * Apply pattern effects (blink, pulse, etc.)
      */
     uint32_t applyPattern(uint8_t groupIdx, const ExtendedLightGroup& group, uint8_t ledLocalIndex, unsigned long now) {
-       Supports multi-strobe (double flash) when blinkRate < 150ms
+        uint32_t baseColor = group.color;
+        
+        switch (group.mode) {
+            case LIGHT_MODE_SOLID:
+                // Solid color - no animation
+                return baseColor;
+
+            case LIGHT_MODE_BLINK:
+                // Blink between primary and secondary color
+                return blinkPattern(group, now);
+
+            case LIGHT_MODE_PULSE:
+                // Pulse/breathe effect
+                return pulsePattern(groupIdx, group, now);
+
+            case LIGHT_MODE_WIPE:
+                return wipePattern(groupIdx, group, ledLocalIndex, now);
+
+            case LIGHT_MODE_CHASE:
+                return chasePattern(groupIdx, group, ledLocalIndex, now);
+
+            case LIGHT_MODE_TWINKLE:
+                return twinklePattern(groupIdx, group, ledLocalIndex, now);
+
+            case LIGHT_MODE_DUAL_BREATHE:
+                return dualBreathePattern(groupIdx, group, now);
+
+            default:
+                return 0; // Off
+        }
+    }
+
+    /**
+     * Blink pattern - alternates between color and color2
+     * Supports multi-strobe (double flash) when blinkRate < 150ms
      */
     uint32_t blinkPattern(const ExtendedLightGroup& group, unsigned long now) {
         // Multi-strobe mode for "Double Flash" pattern (fast blink rate)
@@ -278,17 +336,11 @@ public:
             return group.color;
         } else {
             return group.color2;
+        }
+    }
 
-            case LIGHT_MODE_PULSE:
-                // Pulse/breathe effect
-                return pulsePattern(groupIdx, group, now);
-
-            case LIGHT_MODE_WIPE:
-                return wipePattern(groupIdx, group, ledLocalIndex, now);
-
-            case LIGHT_MODE_CHASE:
-                return chasePattern(groupIdx, group, ledLocalIndex, now);
-WLED-inspired smooth sine wave breathing
+    /**
+     * Pulse/breathe pattern - WLED-inspired smooth sine wave breathing
      */
     uint32_t pulsePattern(uint8_t groupIdx, const ExtendedLightGroup& group, unsigned long now) {
         // WLED breathe effect: smooth sine-based fade
@@ -314,57 +366,7 @@ WLED-inspired smooth sine wave breathing
         uint8_t lum = 30 + var; // Brightness oscillates between 30-253
         
         // Blend between secondary color (dim) and primary color (bright)
-        return colorLerp(group.color2, group.color, lum
-    /**
-     * Pulse/breathe pattern - fades in and out
-     */
-    uint32_t pulsePattern(uint8_t groupIdx, const ExtendedLightGroup& group, unsigned long now) {
-        PatternState& state = patternState[groupIdx];
-        unsigned long stepDuration = 50; // 50ms per step
-        
-        if (now - state.lastUpdate >= stepDuration) {
-            // Update intensity
-            if (state.direction == 0) {
-                // Increasing
-                state.intensity += 10;
-                if (state.intensity >= 255) {
-                    state.intensity = 255;
-                    state.direction = 1; // Switch to decreasing
-                }
-            } else {
-                // Decreasing
-                state.intensity -= 10;
-                if (state.intensity <= 50) {
-                    state.intensity = 50;
-                    state.direction = 0; // Switch to increasing
-                }
-            }
-            state.lastUpdate = now;
-        }
-
-        return applyBrightness(group.color, state.intensity);
-    }
-
-    /**
-     * Apply brightness scaling to a color
-     */
-    uint32_t applyBrightness(uint32_t color, uint8_t brightness) {
-        if (brightness == 0 || color == 0) {
-            return 0;
-        }
-
-        // Extract RGB components
-        uint8_t r = (color >> 16) & 0xFF;
-        uint8_t g = (color >> 8) & 0xFF;
-        uint8_t b = color & 0xFF;
-
-        // Scale by brightness (0-255)
-        r = (r * brightness) / 255;
-        g = (g * brightness) / 255;
-        b = (b * brightness) / 255;
-
-        // Recombine
-        return (r << 16) | (g << 8) | b;
+        return colorLerp(group.color2, group.color, lum);
     }
 
     /**
