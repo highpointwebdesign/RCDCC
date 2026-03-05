@@ -31,21 +31,79 @@ private:
   // Buffer for POST request bodies (prevents data corruption from freed memory)
   String lightsPostBuffer;
   size_t lightsPostTotalSize = 0;
+
+  enum WifiState {
+    WIFI_STATE_IDLE,
+    WIFI_STATE_STA_CONNECTING,
+    WIFI_STATE_STA_CONNECTED,
+    WIFI_STATE_AP_FALLBACK
+  };
+
+  WifiState wifiState = WIFI_STATE_IDLE;
+  bool apStarted = false;
+  bool wifiConnectedLogged = false;
+  unsigned long staConnectStart = 0;
+  unsigned long lastReconnectAttempt = 0;
+  const unsigned long reconnectIntervalMs = 15000;
   
 public:
   void init(StorageManager& storage, LightsEngine* lights) {
     storageManager = &storage;
     lightsEngine = lights;
-    
-    // Start WiFi in AP mode
-    startWiFiAP();
+
+    // Start WiFi state machine (WLED-inspired STA first, AP fallback)
+    startWiFiManager();
     
     // Setup web server routes
     setupRoutes();
     
     // Start server
     server.begin();
-    Serial.println("Web server started on http://192.168.4.1");
+    Serial.println("Web server started on port 80");
+  }
+
+  void updateConnectivity() {
+    wl_status_t status = WiFi.status();
+
+    if (status == WL_CONNECTED) {
+      if (!wifiConnectedLogged) {
+        Serial.printf("WiFi connected: SSID=%s, IP=%s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+        wifiConnectedLogged = true;
+      }
+
+      if (wifiState != WIFI_STATE_STA_CONNECTED) {
+        wifiState = WIFI_STATE_STA_CONNECTED;
+        if (apStarted) {
+          WiFi.softAPdisconnect(true);
+          apStarted = false;
+          Serial.println("AP disabled after STA connection restored");
+        }
+      }
+      return;
+    }
+
+    wifiConnectedLogged = false;
+
+    if (wifiState == WIFI_STATE_STA_CONNECTING) {
+      if (millis() - staConnectStart >= WIFI_CONNECT_TIMEOUT) {
+        Serial.println("STA connect timeout, enabling AP fallback");
+        startFallbackAP();
+      }
+      return;
+    }
+
+    if (wifiState == WIFI_STATE_AP_FALLBACK) {
+      if (millis() - lastReconnectAttempt >= reconnectIntervalMs) {
+        lastReconnectAttempt = millis();
+        Serial.println("AP fallback active; retrying STA connection in background...");
+        WiFi.mode(WIFI_AP_STA);
+        WiFi.begin(HOME_WIFI_SSID, HOME_WIFI_PASSWORD);
+      }
+      return;
+    }
+
+    // Recover if state is unknown
+    startWiFiManager();
   }
   
   // WebSocket telemetry and status functions have been removed
@@ -108,83 +166,44 @@ private:
     return color & 0xFFFFFF; // Ensure only 24 bits (RGB)
   }
 
-  void startWiFiAP() {
-    // First, try to connect to home WiFi
-    Serial.println("Attempting to connect to home WiFi...");
-    Serial.print("SSID: ");
-    Serial.println(HOME_WIFI_SSID);
-    
-    // Set hostname from device name config
+  void startWiFiManager() {
+    Serial.println("WiFi manager init: STA primary, AP fallback");
+    Serial.printf("Target STA SSID: %s\n", HOME_WIFI_SSID);
+
     if (storageManager) {
       const char* deviceName = storageManager->getDeviceName();
       WiFi.setHostname(deviceName);
       Serial.printf("WiFi hostname set to: %s\n", deviceName);
     }
-    
+
+    WiFi.persistent(false);
+    WiFi.setAutoReconnect(true);
     WiFi.mode(WIFI_STA);
-    WiFi.setAutoReconnect(false); // CRITICAL: Disable auto-reconnect to prevent blocking
-    
-    // Scan for available networks first
-    Serial.println("\n=== WiFi Network Scan ===");
-    int networksFound = WiFi.scanNetworks();
-    Serial.printf("Found %d networks:\n", networksFound);
-    for (int i = 0; i < networksFound && i < 20; i++) {
-      Serial.printf("  [%d] SSID: %-25s | RSSI: %3d dBm | Ch: %d | Enc: %d\n", 
-        i, WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.channel(i), WiFi.encryptionType(i));
-    }
-    WiFi.scanDelete(); // Clear scan results
-    Serial.println("=== End Scan ===\n");
-    
-    Serial.println();
-    Serial.printf("Attempting to connect to WiFi SSID: %s\n", HOME_WIFI_SSID);
     WiFi.begin(HOME_WIFI_SSID, HOME_WIFI_PASSWORD);
-    
-    unsigned long startAttemptTime = millis();
-    int dotCount = 0;
-    
-    // Wait for connection with timeout - 30 second timeout to allow WiFi connection
-    const unsigned long SHORT_TIMEOUT = 30000; // 30 seconds
-    while (WiFi.status() != WL_CONNECTED && 
-           millis() - startAttemptTime < SHORT_TIMEOUT) {
-      delay(500);
-      Serial.print(".");
-      dotCount++;
-      if (dotCount % 20 == 0) {
-        Serial.printf("[%lus] WiFi status: %d\n", (millis() - startAttemptTime) / 1000, WiFi.status());
-      }
-    }
-    Serial.println();
-    Serial.printf("WiFi connection attempt ended after %lums\n", millis() - startAttemptTime);
-    
-    // Check if connected to home WiFi
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("Connected to home WiFi");
-      Serial.print("IP address: ");
-      Serial.println(WiFi.localIP());
-      Serial.print("Access web interface at: http://");
-      Serial.println(WiFi.localIP());
-    } else {
-      // Connection failed, fall back to AP mode
-      Serial.println("Failed to connect to home WiFi (timeout after 30s)");
-      Serial.println("Starting Access Point mode...");
-      
-      WiFi.mode(WIFI_AP);
-      WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD);
-      
-      IPAddress ip(WIFI_AP_IP);
-      IPAddress gateway(WIFI_AP_GATEWAY);
-      IPAddress subnet(WIFI_AP_SUBNET);
-      
-      WiFi.softAPConfig(ip, gateway, subnet);
-      
-      Serial.print("WiFi AP started: ");
-      Serial.println(WIFI_AP_SSID);
-      Serial.print("IP address: ");
-      Serial.println(WiFi.softAPIP());
-      Serial.println("Access web interface at: http://192.168.4.1");
-    }
-    
-    Serial.println("⚠️  WiFi auto-reconnect disabled to prevent watchdog issues");
+
+    wifiState = WIFI_STATE_STA_CONNECTING;
+    staConnectStart = millis();
+    lastReconnectAttempt = millis();
+  }
+
+  void startFallbackAP() {
+    WiFi.mode(WIFI_AP_STA);
+
+    IPAddress ip(WIFI_AP_IP);
+    IPAddress gateway(WIFI_AP_GATEWAY);
+    IPAddress subnet(WIFI_AP_SUBNET);
+
+    WiFi.softAPConfig(ip, gateway, subnet);
+    WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD);
+
+    apStarted = true;
+    wifiState = WIFI_STATE_AP_FALLBACK;
+    lastReconnectAttempt = millis();
+
+    Serial.print("AP fallback active: ");
+    Serial.println(WIFI_AP_SSID);
+    Serial.print("AP IP address: ");
+    Serial.println(WiFi.softAPIP());
   }
   
   void setupRoutes() {
@@ -240,6 +259,23 @@ private:
     // API endpoint for heartbeat/health check
     server.on("/api/health-check", HTTP_GET, [this](AsyncWebServerRequest *request) {
       String json = "{\"status\":\"ok\",\"version\":\"" + String(FIRMWARE_VERSION) + "\"}";
+      request->send(200, "application/json", json);
+    });
+
+    // API endpoint for WiFi connectivity diagnostics
+    server.on("/api/network/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
+      String mode = "disconnected";
+      if (WiFi.status() == WL_CONNECTED) {
+        mode = "sta";
+      } else if (apStarted) {
+        mode = "ap_fallback";
+      }
+
+      String json = "{\"mode\":\"" + mode +
+                    "\",\"ssid\":\"" + WiFi.SSID() +
+                    "\",\"staIp\":\"" + WiFi.localIP().toString() +
+                    "\",\"apIp\":\"" + WiFi.softAPIP().toString() +
+                    "\"}";
       request->send(200, "application/json", json);
     });
     
@@ -496,6 +532,9 @@ private:
           if (groupObj.containsKey("name")) {
             strncpy(group.name, groupObj["name"], sizeof(group.name) - 1);
           }
+          const char* pattern = groupObj["pattern"] | "Steady";
+          strncpy(group.pattern, pattern, sizeof(group.pattern) - 1);
+          group.pattern[sizeof(group.pattern) - 1] = '\0';
           
           group.enabled = groupObj["enabled"] | false;
           group.brightness = groupObj["brightness"] | 255;

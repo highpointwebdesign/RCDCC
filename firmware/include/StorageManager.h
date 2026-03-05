@@ -52,6 +52,11 @@ public:
     lightsConfig.headlights = {DEFAULT_HEADLIGHTS_ENABLED, DEFAULT_HEADLIGHTS_BRIGHTNESS, DEFAULT_HEADLIGHTS_MODE, DEFAULT_HEADLIGHTS_BLINK_RATE};
     lightsConfig.tailLights = {DEFAULT_TAILLIGHTS_ENABLED, DEFAULT_TAILLIGHTS_BRIGHTNESS, DEFAULT_TAILLIGHTS_MODE, DEFAULT_TAILLIGHTS_BLINK_RATE};
     lightsConfig.emergencyLights = {DEFAULT_EMERGENCY_LIGHTS_ENABLED, DEFAULT_EMERGENCY_LIGHTS_BRIGHTNESS, DEFAULT_EMERGENCY_LIGHTS_MODE, DEFAULT_EMERGENCY_LIGHTS_BLINK_RATE};
+
+    memset(&newLightsConfig, 0, sizeof(NewLightsConfig));
+    newLightsConfig.useLegacyMode = false;
+    newLightsConfig.groupCount = 0;
+    newLightsConfig.legacy = lightsConfig;
   }
   
   void loadConfig() {
@@ -174,7 +179,7 @@ public:
       return;
     }
     
-    // Load light groups
+    // Load legacy light groups
     if (doc.containsKey("lightGroups")) {
       JsonObject groups = doc["lightGroups"];
       
@@ -202,12 +207,55 @@ public:
         lightsConfig.emergencyLights.blinkRate = el["blinkRate"] | DEFAULT_EMERGENCY_LIGHTS_BLINK_RATE;
       }
     }
+
+    // Keep legacy snapshot in dynamic config for compatibility
+    newLightsConfig.legacy = lightsConfig;
+
+    // Load dynamic light groups (source of truth for modern UI)
+    if (doc.containsKey("lightGroupsArray")) {
+      JsonArray groupsArray = doc["lightGroupsArray"];
+      newLightsConfig.useLegacyMode = false;
+      newLightsConfig.groupCount = 0;
+
+      for (JsonObject groupObj : groupsArray) {
+        if (newLightsConfig.groupCount >= 10) break;
+
+        ExtendedLightGroup& group = newLightsConfig.groups[newLightsConfig.groupCount];
+        memset(&group, 0, sizeof(ExtendedLightGroup));
+
+        const char* name = groupObj["name"] | "";
+        strncpy(group.name, name, sizeof(group.name) - 1);
+        group.name[sizeof(group.name) - 1] = '\0';
+
+        const char* pattern = groupObj["pattern"] | "Steady";
+        strncpy(group.pattern, pattern, sizeof(group.pattern) - 1);
+        group.pattern[sizeof(group.pattern) - 1] = '\0';
+
+        group.enabled = groupObj["enabled"] | false;
+        group.brightness = groupObj["brightness"] | 255;
+        group.mode = groupObj["mode"] | LIGHT_MODE_SOLID;
+        group.blinkRate = groupObj["blinkRate"] | 500;
+        group.color = groupObj["color"] | 0xFF0000;
+        group.color2 = groupObj["color2"] | 0x000000;
+
+        group.ledCount = 0;
+        if (groupObj.containsKey("indices")) {
+          JsonArray indicesArray = groupObj["indices"];
+          for (uint16_t idx : indicesArray) {
+            if (group.ledCount >= 100) break;
+            group.ledIndices[group.ledCount++] = idx;
+          }
+        }
+
+        newLightsConfig.groupCount++;
+      }
+    }
     
     Serial.println("Lights config loaded from SPIFFS");
   }
   
   void saveLights() {
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(8192);
     
     JsonObject groups = doc.createNestedObject("lightGroups");
     
@@ -232,6 +280,26 @@ public:
     JsonObject defaults = doc.createNestedObject("defaults");
     defaults["brightness"] = 100;
     defaults["blinkRate"] = 500;
+
+    // Persist dynamic groups and their order as the source of truth.
+    JsonArray dynamicGroups = doc.createNestedArray("lightGroupsArray");
+    for (uint8_t i = 0; i < newLightsConfig.groupCount && i < 10; i++) {
+      const ExtendedLightGroup& group = newLightsConfig.groups[i];
+      JsonObject g = dynamicGroups.createNestedObject();
+      g["name"] = group.name;
+      g["pattern"] = group.pattern;
+      g["enabled"] = group.enabled;
+      g["brightness"] = group.brightness;
+      g["mode"] = group.mode;
+      g["blinkRate"] = group.blinkRate;
+      g["color"] = group.color;
+      g["color2"] = group.color2;
+
+      JsonArray idx = g.createNestedArray("indices");
+      for (uint8_t led = 0; led < group.ledCount && led < 100; led++) {
+        idx.add(group.ledIndices[led]);
+      }
+    }
     
     File file = SPIFFS.open(LIGHTS_SPIFFS_PATH, "w");
     if (!file) {
@@ -459,7 +527,7 @@ public:
   }
   
   String getLightsConfigJSON() {
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(8192);
     
     JsonObject groups = doc.createNestedObject("lightGroups");
     
@@ -480,6 +548,28 @@ public:
     el["brightness"] = lightsConfig.emergencyLights.brightness;
     el["mode"] = lightsConfig.emergencyLights.mode;
     el["blinkRate"] = lightsConfig.emergencyLights.blinkRate;
+
+    JsonArray dynamicGroups = doc.createNestedArray("lightGroupsArray");
+    for (uint8_t i = 0; i < newLightsConfig.groupCount && i < 10; i++) {
+      const ExtendedLightGroup& group = newLightsConfig.groups[i];
+      JsonObject g = dynamicGroups.createNestedObject();
+      g["name"] = group.name;
+      g["pattern"] = group.pattern;
+      g["enabled"] = group.enabled;
+      g["brightness"] = group.brightness;
+      g["mode"] = group.mode;
+      g["blinkRate"] = group.blinkRate;
+      g["color"] = group.color;
+      g["color2"] = group.color2;
+
+      JsonArray idx = g.createNestedArray("indices");
+      for (uint8_t led = 0; led < group.ledCount && led < 100; led++) {
+        idx.add(group.ledIndices[led]);
+      }
+    }
+
+    doc["useLegacyMode"] = newLightsConfig.useLegacyMode;
+    doc["groupCount"] = newLightsConfig.groupCount;
     
     String output;
     serializeJson(doc, output);
@@ -507,9 +597,10 @@ public:
   // Store new lights configuration in memory (for dynamic groups)
   void setNewLightsConfig(const NewLightsConfig& config) {
     newLightsConfig = config;
+    newLightsConfig.legacy = lightsConfig;
     Serial.printf("[StorageManager] Updated new lights config: %d groups, legacy mode: %d\n", 
                   config.groupCount, config.useLegacyMode);
-    // TODO: Optionally save to SPIFFS for persistence when needed
+    saveLights();
   }
 
   // Get reference to current new lights config

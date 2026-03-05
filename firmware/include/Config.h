@@ -124,7 +124,11 @@ enum LightMode {
   LIGHT_MODE_OFF = 0,
   LIGHT_MODE_SOLID = 1,      // mode: 1 (solid color)
   LIGHT_MODE_BLINK = 2,      // mode: 2 (flash/blink patterns)
-  LIGHT_MODE_PULSE = 3       // mode: 3 (pulse/breathe patterns)
+  LIGHT_MODE_PULSE = 3,      // mode: 3 (pulse/breathe patterns)
+  LIGHT_MODE_WIPE = 4,       // mode: 4 (moving wipe)
+  LIGHT_MODE_CHASE = 5,      // mode: 5 (theater chase)
+  LIGHT_MODE_TWINKLE = 6,    // mode: 6 (random twinkle)
+  LIGHT_MODE_DUAL_BREATHE = 7 // mode: 7 (dual-color breathing)
 };
 
 // Individual light group configuration (for fixed 3-group mode)
@@ -138,6 +142,7 @@ struct LightGroup {
 // Extended light group with arbitrary indices and RGB colors
 struct ExtendedLightGroup {
   char name[64];          // Group name
+  char pattern[64];       // UI pattern label (for round-trip persistence)
   bool enabled;           // Whether enabled
   uint8_t brightness;     // 0-255
   uint8_t mode;          // LightMode enum
