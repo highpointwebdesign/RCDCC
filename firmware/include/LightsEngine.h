@@ -122,50 +122,39 @@ private:
     }
 
     /**
-     * WLED-inspired Candle Flicker pattern - realistic candlelight effect
+     * WLED-style twinkle pattern: sparse random sparkles with smooth fades.
      */
     uint32_t twinklePattern(uint8_t groupIdx, const ExtendedLightGroup& group, uint8_t ledLocalIndex, unsigned long now) {
-        PatternState& state = patternState[groupIdx];
-        
-        // Per-LED independent flicker (use led index as seed modifier)
-        uint8_t ledSeed = ledLocalIndex * 37;
-        uint32_t ledNow = now + (ledSeed * 100);
-        
-        // Update flicker state every 40ms
-        if (ledNow - state.lastUpdate >= 40) {
-            if (state.flickerStep == 0) {
-                // Initialize flicker target
-                state.intensity = 128;
-                state.flickerTarget = 130 + (random8() & 0x03);
-                state.flickerStep = 1;
-            }
-            
-            // Converge toward target brightness
-            if (state.intensity < state.flickerTarget) {
-                state.intensity++;
-            } else if (state.intensity > state.flickerTarget) {
-                state.intensity--;
-            }
-            
-            // Reached target? Set new target
-            if (state.intensity == state.flickerTarget) {
-                uint8_t rnd = random8();
-                if (rnd < 10) { // 4% chance to jump to new target
-                    uint8_t newTarget = 60 + (random8() % 195); // 60-254
-                    state.flickerTarget = newTarget;
-                    uint8_t diff = (state.flickerTarget > state.intensity) ? 
-                                   state.flickerTarget - state.intensity : 
-                                   state.intensity - state.flickerTarget;
-                    state.flickerStep = diff >> 2; // Damped movement speed
-                    if (state.flickerStep == 0) state.flickerStep = 1;
-                }
-            }
-            
-            state.lastUpdate = ledNow;
+        // Blink rate controls twinkle duration (slower -> longer twinkles).
+        uint16_t twinkleDurationMs = group.blinkRate > 0 ? (uint16_t)(group.blinkRate * 4U) : 360U;
+        if (twinkleDurationMs < 140U) twinkleDurationMs = 140U;
+        if (twinkleDurationMs > 900U) twinkleDurationMs = 900U;
+
+        // Offset each LED so twinkles are de-synchronized.
+        uint32_t localNow = now + ((uint32_t)ledLocalIndex * 47U);
+        uint32_t frame = localNow / twinkleDurationMs;
+        uint16_t phase = (uint16_t)(localNow % twinkleDurationMs);
+
+        // Deterministic per-frame random per LED: stable sparkle shape inside each frame.
+        uint8_t seed = pseudoRandom8(groupIdx, ledLocalIndex, frame);
+
+        // Roughly 25% of LEDs twinkle in a frame.
+        bool isTwinkle = (seed < 64U);
+        if (!isTwinkle) {
+            return group.color2;
         }
-        
-        // Apply brightness variation to base color
-        return applyBrightness(group.color, state.intensity);
+
+        // Smooth triangle envelope 0..255..0 across twinkle duration.
+        uint16_t half = twinkleDurationMs >> 1;
+        if (half == 0U) half = 1U;
+        uint16_t rise = (phase <= half) ? phase : (twinkleDurationMs - phase);
+        uint8_t envelope = (uint8_t)((rise * 255U) / half);
+
+        // Ease curve for less harsh attack/decay.
+        uint16_t eased = (uint16_t)envelope * (uint16_t)envelope;
+        uint8_t sparkle = (uint8_t)(eased / 255U);
+
+        return colorLerp(group.color2, group.color, sparkle);
     }
 
     uint32_t dualBreathePattern(uint8_t groupIdx, const ExtendedLightGroup& group, unsigned long now) {
