@@ -346,8 +346,11 @@ public:
         // WLED breathe effect: smooth sine-based fade
         // Speed controlled by blinkRate (higher = faster breathing)
         // For human-like breathing: ~2 seconds per complete cycle
-        // Scale blinkRate down to achieve proper timing (divide by 4)
-        uint16_t speed = group.blinkRate > 0 ? (group.blinkRate >> 2) : 32;
+        // Target: counter advances 8.19 per ms to complete 16384 in 2000ms
+        // Formula: (speed / 8) = 8.19, so speed ≈ 66
+        uint16_t speed = group.blinkRate > 0 ? ((group.blinkRate * 66) / 255) : 66;
+        if (speed < 20) speed = 20;  // Minimum reasonable speed
+        if (speed > 150) speed = 150; // Maximum reasonable speed
         
         // Calculate counter - advances at speed/8 per millisecond
         uint32_t counter = ((now * speed) >> 3) & 0x3FFF; // Divide by 8, keep in 0-16383 range
