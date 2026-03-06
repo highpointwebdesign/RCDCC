@@ -345,10 +345,11 @@ public:
     uint32_t pulsePattern(uint8_t groupIdx, const ExtendedLightGroup& group, unsigned long now) {
         // WLED breathe effect: smooth sine-based fade
         // Speed controlled by blinkRate (higher = faster breathing)
-        // For human-like breathing: ~2 seconds per complete cycle at default blinkRate
-        uint16_t speed = group.blinkRate > 0 ? group.blinkRate : 130;
+        // For human-like breathing: ~2 seconds per complete cycle
+        // Scale blinkRate down to achieve proper timing (divide by 4)
+        uint16_t speed = group.blinkRate > 0 ? (group.blinkRate >> 2) : 32;
         
-        // Calculate counter with much less division for faster breathing
+        // Calculate counter - advances at speed/8 per millisecond
         uint32_t counter = ((now * speed) >> 3) & 0x3FFF; // Divide by 8, keep in 0-16383 range
         
         // Calculate sine wave brightness (parabolic approximation)
