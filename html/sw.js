@@ -58,6 +58,12 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Only handle cacheable web schemes. This avoids cache.put failures for extension requests.
+  const requestUrl = event.request.url;
+  if (!(requestUrl.startsWith('http://') || requestUrl.startsWith('https://'))) {
+    return;
+  }
+
   // Skip WebSocket requests
   if (event.request.url.startsWith('ws://') || event.request.url.startsWith('wss://')) {
     return;

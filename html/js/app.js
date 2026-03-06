@@ -2201,6 +2201,12 @@ window.onerror = function (msg, url, line) {
         }
 
         function applyLightsHierarchyToHardware(override = null) {
+            if (!isBleConnected()) {
+                // Startup and offline states can update local light groups before BLE is connected.
+                console.debug('[Lights] Skipping hardware sync: BLE not connected');
+                return Promise.resolve();
+            }
+
             const masterEnabled = override?.masterEnabled ?? getMasterLightsEnabled();
             const sourceGroups = override?.groups || lightGroups;
             const payload = getFirmwareLightsPayload(sourceGroups, masterEnabled || !!override?.forceMasterOn);
