@@ -15,24 +15,138 @@ window.onerror = function (msg, url, line) {
         const APP_VERSION = '6f3e740';
         const BUILD_DATE = '2026-03-04'; // Can be auto-generated: new Date().toISOString().split('T')[0]
         
-        // Helper function to get the correct API URL
-        function getApiUrl(endpoint) {
-            // Always use http://${ESP32_IP} for local API calls
-            // This works whether we're on the ESP32 directly, GitHub Pages, or local dev server
-            return `http://${ESP32_IP}${endpoint}`;
+        // BLE manager is optional and only available when bluetooth.js is loaded.
+        const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
+        let communicationMode = 'ble';
+        const AUTO_RECONNECT_INTERVAL_MS = 5000;
+        let autoReconnectTimer = null;
+        let autoReconnectInFlight = false;
+        let manualBleDisconnect = false;
+
+        function isBleConnected() {
+            return !!(bleManager && bleManager.getConnectionStatus && bleManager.getConnectionStatus());
         }
-        
-        // Helper to make fetch calls with proper error handling and protocol
-        async function fetchWithProperProtocol(endpoint, options = {}) {
-            const url = getApiUrl(endpoint);
-            try {
-                const response = await fetch(url, { ...options, cache: 'no-store' });
-                return response;
-            } catch (err) {
-                console.error(`Fetch failed for ${url}:`, err);
-                throw err;
+
+        function ensureBleConnectedOrThrow() {
+            if (!isBleConnected()) {
+                communicationMode = 'ble';
+                throw new Error('Bluetooth LE not connected');
             }
         }
+
+        async function pushConfigPayload(payload, signal = null) {
+            ensureBleConnectedOrThrow();
+            communicationMode = 'ble';
+            await bleManager.writeConfig(payload);
+            return { status: 'ok' };
+        }
+
+        async function pushServoPayload(payload, signal = null) {
+            ensureBleConnectedOrThrow();
+            communicationMode = 'ble';
+            await bleManager.sendServoCommand(payload);
+            return { status: 'ok' };
+        }
+
+        async function pushLightsPayload(payload, signal = null) {
+            ensureBleConnectedOrThrow();
+            communicationMode = 'ble';
+            await bleManager.sendLightsCommand(payload);
+            return { status: 'ok' };
+        }
+
+        async function pushSystemCommand(command, params = {}, signal = null) {
+            ensureBleConnectedOrThrow();
+            communicationMode = 'ble';
+            await bleManager.sendSystemCommand(command, params);
+            return { status: 'ok' };
+        }
+
+        async function connectBLE() {
+            if (!bleManager) {
+                toast.error('Bluetooth manager unavailable in this build');
+                return false;
+            }
+
+            try {
+                manualBleDisconnect = false;
+                await bleManager.connect();
+                communicationMode = 'ble';
+                stopAutoReconnect();
+                stopHeartbeat();
+                updateConnectionStatus(true);
+                updateConnectionMethodDisplay();
+                toast.success('Connected via Bluetooth LE');
+                return true;
+            } catch (error) {
+                communicationMode = 'ble';
+                updateConnectionStatus(false);
+                toast.error(`BLE connect failed: ${error.message}`);
+                return false;
+            }
+        }
+
+        async function disconnectBLE() {
+            if (!bleManager) return;
+            manualBleDisconnect = true;
+            stopAutoReconnect();
+            await bleManager.disconnect();
+            communicationMode = 'ble';
+            startHeartbeat();
+            updateConnectionStatus(false);
+            updateConnectionMethodDisplay();
+        }
+
+        async function attemptAutoReconnect(source = 'timer') {
+            if (!bleManager || !bleManager.connectToKnownDevice) return false;
+            if (manualBleDisconnect || autoReconnectInFlight || isBleConnected() || document.hidden || !navigator.onLine) {
+                return false;
+            }
+
+            autoReconnectInFlight = true;
+            try {
+                const didReconnect = await bleManager.connectToKnownDevice();
+                if (didReconnect) {
+                    communicationMode = 'ble';
+                    stopHeartbeat();
+                    stopAutoReconnect();
+                    updateConnectionStatus(true);
+                    updateConnectionMethodDisplay();
+                    toast.success('Bluetooth reconnected', { duration: 2200 });
+                    console.log(`BLE auto reconnect succeeded (${source})`);
+                    return true;
+                }
+            } catch (error) {
+                console.debug(`BLE auto reconnect attempt failed (${source}):`, error);
+            } finally {
+                autoReconnectInFlight = false;
+            }
+
+            return false;
+        }
+
+        function startAutoReconnect(reason = 'disconnect') {
+            if (!bleManager || manualBleDisconnect) return;
+            if (autoReconnectTimer) return;
+
+            // Try immediately, then continue in the background.
+            attemptAutoReconnect(reason);
+
+            autoReconnectTimer = setInterval(() => {
+                attemptAutoReconnect('interval');
+            }, AUTO_RECONNECT_INTERVAL_MS);
+        }
+
+        function stopAutoReconnect() {
+            if (autoReconnectTimer) {
+                clearInterval(autoReconnectTimer);
+                autoReconnectTimer = null;
+            }
+        }
+
+        // Expose manual control for quick testing from browser console.
+        window.connectBLE = connectBLE;
+        window.disconnectBLE = disconnectBLE;
         
         // ==================== LED Pattern Definitions ====================
         // Hex colors in RGB format (will be converted to GRB for ESP32)
@@ -230,6 +344,13 @@ window.onerror = function (msg, url, line) {
         const rSliders = {};
         const rSliderSilentTimers = {};
         const rSliderInitState = new Set();
+
+        function ensureWritableFullConfig() {
+            if (!fullConfig || typeof fullConfig !== 'object') {
+                fullConfig = {};
+            }
+            return fullConfig;
+        }
 
         // Custom toast implementation using toast-box with toasty sounds
         let notificationSoundsEnabled = localStorage.getItem('notificationSoundsEnabled') !== 'false'; // Default to true
@@ -430,50 +551,17 @@ window.onerror = function (msg, url, line) {
         }
         
         function loadEmergencyLightsState() {
-            fetch(getApiUrl('/api/lights'))
-                .then(response => response.json())
-                .then(data => {
-                    const toggle = document.getElementById('lightsToggle');
-                    const modeSelect = document.getElementById('emergencyLightMode');
-                    const patternSelect = document.getElementById('emergencyLightPattern');
-                    
-                    // Extract emergency lights state from new lightGroups structure
-                    const emergencyLights = data.lightGroups?.emergencyLights || { enabled: false, mode: 0 };
-                    
-                    if (toggle) {
-                        toggle.checked = emergencyLights.enabled;
-                    }
-                    
-                    // Map the mode number (0-3) to a pattern selection
-                    let detectedMode = 'police';
-                    let detectedPatternIndex = 0;
-                    
-                    // Get first pattern from the mode that matches the firmware's mode setting
-                    // Mode 0 = off, mode 1 = solid, mode 2 = blink, mode 3 = pulse
-                    // For now, default to first pattern of detected mode
-                    if (emergencyLights.mode > 0) {
-                        // Find a mode in PATTERNS that corresponds to this
-                        // Default: use first available mode
-                        const modes = Object.keys(PATTERNS);
-                        if (modes.length > 0) {
-                            detectedMode = modes[0];
-                            detectedPatternIndex = Math.min(emergencyLights.mode - 1, PATTERNS[detectedMode].length - 1);
-                        }
-                    }
-                    
-                    if (modeSelect) {
-                        modeSelect.value = detectedMode;
-                        // Update patterns to match the mode
-                        updateEmergencyLightPatterns(detectedMode);
-                    }
-                    
-                    if (patternSelect) {
-                        patternSelect.value = detectedPatternIndex;
-                        // Animate the preview
-                        animateLedPreview(detectedMode, detectedPatternIndex);
-                    }
-                })
-                .catch(err => console.error('Failed to load lights state:', err));
+            const modeSelect = document.getElementById('emergencyLightMode');
+            const patternSelect = document.getElementById('emergencyLightPattern');
+
+            if (modeSelect) {
+                modeSelect.value = 'police';
+                updateEmergencyLightPatterns('police');
+            }
+            if (patternSelect) {
+                patternSelect.value = 0;
+                animateLedPreview('police', 0);
+            }
         }
 
         function buildValueArray(min, max, step, decimals) {
@@ -643,16 +731,7 @@ window.onerror = function (msg, url, line) {
             let shouldDelay = false;
 
             try {
-                const response = await fetch(getApiUrl('/api/calibrate'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: '{}'
-                });
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                await pushSystemCommand('calibrate', {});
                 shouldDelay = true;
             } catch (error) {
                 console.error('Calibration failed:', error);
@@ -671,6 +750,17 @@ window.onerror = function (msg, url, line) {
         // ==================== Auto Level ====================
         let currentTelemetry = { roll: 0, pitch: 0 };
         const telemetryListeners = new Set();
+
+        function applyTelemetrySample(sample) {
+            const roll = Number.isFinite(Number(sample?.roll)) ? Number(sample.roll) : 0;
+            const pitch = Number.isFinite(Number(sample?.pitch)) ? Number(sample.pitch) : 0;
+
+            currentTelemetry.roll = roll;
+            currentTelemetry.pitch = pitch;
+            notifyTelemetryListeners(roll, pitch);
+
+            return { roll, pitch };
+        }
 
         function subscribeTelemetry(listener) {
             telemetryListeners.add(listener);
@@ -760,20 +850,9 @@ window.onerror = function (msg, url, line) {
 
         
         async function getSensorData() {
-            const response = await fetch(getApiUrl('/api/sensors'), { cache: 'no-store' });
-            if (!response.ok) {
-                throw new Error(`Sensor fetch failed: ${response.status}`);
-            }
-
-            const data = await response.json();
-            const roll = normalizeTelemetryValue(data.roll);
-            const pitch = normalizeTelemetryValue(data.pitch);
-
-            currentTelemetry.roll = roll;
-            currentTelemetry.pitch = pitch;
-            notifyTelemetryListeners(roll, pitch);
-
-            return { roll, pitch };
+            ensureBleConnectedOrThrow();
+            communicationMode = 'ble';
+            return applyTelemetrySample(currentTelemetry);
         }
 
         async function fetchRollPitchSnapshot() {
@@ -819,12 +898,7 @@ window.onerror = function (msg, url, line) {
             
             let response;
             try {
-                response = await fetch(`http://${ESP32_IP}/api/servo-config`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: controller.signal,
-                    body: JSON.stringify(payload)
-                });
+                response = await pushServoPayload(payload, controller.signal);
             } catch (error) {
                 if (error.name === 'AbortError') return;
                 throw error;
@@ -833,7 +907,7 @@ window.onerror = function (msg, url, line) {
                 unregisterAjaxController(controller);
             }
             
-            if (!response.ok) {
+            if (response.status === 'error') {
                 throw new Error(`Failed to update ${servo} trim`);
             }
             
@@ -885,12 +959,7 @@ window.onerror = function (msg, url, line) {
             
             let response;
             try {
-                response = await fetch(`http://${ESP32_IP}/api/servo-config`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: controller.signal,
-                    body: JSON.stringify(payload)
-                });
+                response = await pushServoPayload(payload, controller.signal);
             } catch (error) {
                 if (error.name === 'AbortError') return;
                 throw error;
@@ -899,7 +968,7 @@ window.onerror = function (msg, url, line) {
                 unregisterAjaxController(controller);
             }
             
-            if (!response.ok) {
+            if (response.status === 'error') {
                 throw new Error(`Failed to update ${servo} reversed`);
             }
             
@@ -1025,9 +1094,9 @@ window.onerror = function (msg, url, line) {
                     setBubbleLevelStatus('Neutral position set. Confirming data saved correctly...');
                     
                     // Fetch latest config from RCDCCC module to confirm all values were saved
-                    const response = await fetch(getApiUrl('/api/config'), { cache: 'no-store' });
-                    if (response.ok) {
-                        const updatedConfig = await response.json();
+                    ensureBleConnectedOrThrow();
+                    const updatedConfig = await bleManager.readConfig();
+                    if (updatedConfig) {
                         if (updatedConfig && updatedConfig.servos) {
                             fullConfig = updatedConfig;
                             servos.forEach(servo => {
@@ -1223,6 +1292,39 @@ window.onerror = function (msg, url, line) {
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            if (bleManager && bleManager.setDisconnectCallback) {
+                bleManager.setDisconnectCallback(() => {
+                    communicationMode = 'ble';
+                    startHeartbeat();
+                    updateConnectionStatus(false);
+                    updateConnectionMethodDisplay();
+                    if (!manualBleDisconnect) {
+                        startAutoReconnect('disconnect-callback');
+                    }
+                });
+            }
+            if (bleManager && bleManager.setTelemetryCallback) {
+                bleManager.setTelemetryCallback((telemetry) => {
+                    applyTelemetrySample(telemetry);
+                    communicationMode = 'ble';
+                    stopAutoReconnect();
+                    updateConnectionStatus(true);
+                    updateConnectionMethodDisplay();
+                });
+            }
+
+            window.addEventListener('focus', () => {
+                if (!isBleConnected()) startAutoReconnect('window-focus');
+            });
+            window.addEventListener('online', () => {
+                if (!isBleConnected()) startAutoReconnect('online');
+            });
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && !isBleConnected()) {
+                    startAutoReconnect('visibility');
+                }
+            });
+
             // Disable pull-to-refresh by preventing overscroll-behavior
             document.documentElement.style.overscrollBehavior = 'none';
             document.body.style.overscrollBehavior = 'none';
@@ -1257,10 +1359,13 @@ window.onerror = function (msg, url, line) {
             
             // Display ESP32 IP address on dashboard
             const ipDisplay = document.getElementById('deviceIpDisplay');
-            if (ipDisplay) ipDisplay.textContent = ESP32_IP;
+            if (ipDisplay) ipDisplay.textContent = 'BLE';
             
             // Display connection method on dashboard
             updateConnectionMethodDisplay();
+
+            // Best-effort reconnect on page load for already-authorized devices.
+            startAutoReconnect('startup');
             
             // Display protocol and secure context for debugging (PWA)
             const protocolDisplay = document.getElementById('protocolDisplay');
@@ -1912,61 +2017,14 @@ window.onerror = function (msg, url, line) {
         }
 
         async function loadLightGroups() {
-            let loadedFromTruck = false;
+            const initialized = localStorage.getItem(LIGHT_GROUPS_INITIALIZED_KEY);
+            const stored = localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY);
 
-            try {
-                const response = await fetch(getApiUrl('/api/lights'), { cache: 'no-store' });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (Array.isArray(data.lightGroupsArray) && data.lightGroupsArray.length >= 0) {
-                        // Firmware stores processing order; reverse for UI order (top = highest priority).
-                        const uiOrderedGroups = [...data.lightGroupsArray].reverse().map((group, index) => {
-                            const brightnessRaw = Number(group?.brightness);
-                            const brightness = Number.isFinite(brightnessRaw)
-                                ? Math.max(0, Math.min(255, brightnessRaw))
-                                : 255;
-
-                            const indices = Array.isArray(group?.indices)
-                                ? group.indices.map(n => Number(n)).filter(n => Number.isInteger(n) && n >= 0)
-                                : [];
-
-                            const mode = Number(group?.mode);
-                            const blinkRate = Number(group?.blinkRate) || 0;
-                            const pattern = (group?.pattern && String(group.pattern).trim())
-                                ? String(group.pattern)
-                                : patternFromMode(mode, blinkRate);
-
-                            return {
-                                name: (group?.name && String(group.name).trim()) ? String(group.name) : `Group ${index + 1}`,
-                                indices,
-                                brightness,
-                                color: firmwareColorToHex(group?.color, '#ff0000'),
-                                color2: firmwareColorToHex(group?.color2, '#000000'),
-                                pattern,
-                                enabled: !!group?.enabled
-                            };
-                        });
-
-                        lightGroups = uiOrderedGroups;
-                        loadedFromTruck = true;
-                        localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
-                        localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(lightGroups));
-                    }
-                }
-            } catch (error) {
-                console.warn('Failed to load light groups from truck, falling back to local cache:', error);
-            }
-
-            if (!loadedFromTruck) {
-                const initialized = localStorage.getItem(LIGHT_GROUPS_INITIALIZED_KEY);
-                const stored = localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY);
-
-                if (!initialized) {
-                    lightGroups = JSON.parse(JSON.stringify(PREDEFINED_LIGHT_GROUPS));
-                    localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
-                } else {
-                    lightGroups = stored ? JSON.parse(stored) : [];
-                }
+            if (!initialized) {
+                lightGroups = JSON.parse(JSON.stringify(PREDEFINED_LIGHT_GROUPS));
+                localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
+            } else {
+                lightGroups = stored ? JSON.parse(stored) : [];
             }
 
             lightGroups = lightGroups.map(group => ({
@@ -2150,17 +2208,7 @@ window.onerror = function (msg, url, line) {
             console.log('[Lights] Sending to ESP32:', JSON.stringify(payload, null, 2));
             console.log('[Lights] Source groups:', sourceGroups.map(g => ({ name: g.name, enabled: g.enabled, indices: g.indices?.length })));
 
-            return fetch(getApiUrl('/api/lights'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(async response => {
-                if (!response.ok) {
-                    const text = await response.text().catch(() => '');
-                    throw new Error(text || `HTTP ${response.status}`);
-                }
-            })
+            return pushLightsPayload(payload)
             .catch(error => {
                 console.error('Failed to apply hierarchy lights payload:', error);
             });
@@ -3009,50 +3057,52 @@ window.onerror = function (msg, url, line) {
         function fetchFirmwareVersion() {
             const firmwareVersionEl = document.getElementById('firmwareVersion');
             if (!firmwareVersionEl) return;
-            
-            // Try to get version from health-check endpoint
-            fetch(getApiUrl('/api/health-check'), { cache: 'no-store' })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.version) {
-                        firmwareVersionEl.textContent = data.version;
-                    } else if (data.firmwareVersion) {
-                        firmwareVersionEl.textContent = data.firmwareVersion;
-                    } else {
-                        // Fallback: try to get from config endpoint
-                        return fetch(getApiUrl('/api/config'), { cache: 'no-store' });
-                    }
-                })
-                .then(response => {
-                    if (response) return response.json();
-                })
-                .then(data => {
-                    if (data && (data.version || data.firmwareVersion)) {
-                        firmwareVersionEl.textContent = data.version || data.firmwareVersion;
-                    } else if (firmwareVersionEl.textContent === 'Loading...') {
-                        // No version available from firmware
-                        firmwareVersionEl.textContent = 'Not available';
-                        firmwareVersionEl.title = 'Firmware does not report version info. Update firmware to enable.';
-                    }
-                })
-                .catch(error => {
-                    console.error('Failed to fetch firmware version:', error);
-                    if (firmwareVersionEl.textContent === 'Loading...') {
+
+            if (isBleConnected()) {
+                bleManager.readConfig()
+                    .then(data => {
+                        if (data?.version || data?.firmwareVersion) {
+                            firmwareVersionEl.textContent = data.version || data.firmwareVersion;
+                        } else {
+                            firmwareVersionEl.textContent = 'Not available';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Failed to fetch firmware version via BLE:', error);
                         firmwareVersionEl.textContent = 'Connection error';
-                    }
-                });
+                    });
+                return;
+            }
+
+            firmwareVersionEl.textContent = 'Connect BLE to load';
         }
 
         function updateConnectionStatus(connected) {
             const icon = document.getElementById('wifiIcon');
+            if (!icon) return;
+
+            const bleConnected = !!(bleManager && bleManager.getConnectionStatus && bleManager.getConnectionStatus());
+
+            // BLE state has priority for this header icon.
+            if (bleConnected) {
+                icon.classList.remove('connecting', 'disconnected');
+                icon.textContent = 'bluetooth';
+                icon.style.color = 'var(--lime-green)';
+                const status = document.getElementById('telemetryStatus');
+                if (status) status.textContent = 'Live';
+                return;
+            }
+
             if (connected) {
                 icon.classList.remove('connecting', 'disconnected');
+                icon.textContent = 'bluetooth_disabled';
                 icon.style.color = 'var(--lime-green)';
                 const status = document.getElementById('telemetryStatus');
                 if (status) status.textContent = 'Live';
             } else {
                 icon.classList.remove('connecting');
                 icon.classList.add('disconnected');
+                icon.textContent = 'bluetooth_disabled';
                 icon.style.color = 'var(--text-muted)';
                 const status = document.getElementById('telemetryStatus');
                 if (status) status.textContent = 'Inactive';
@@ -3125,36 +3175,11 @@ window.onerror = function (msg, url, line) {
         }
 
         function runHeartbeatOnce() {
-            if (heartbeatInFlight) heartbeatInFlight.abort();
-
-            const controller = registerAjaxController(new AbortController());
-            heartbeatInFlight = controller;
-            const timeout = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS);
-
-            fetch(getApiUrl('/api/health-check'), {
-                method: 'GET',
-                cache: 'no-store',
-                signal: controller.signal
-            })
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return response.text();
-            })
-            .then(() => {
+            if (isBleConnected()) {
                 handleHeartbeatSuccess();
-            })
-            .catch(error => {
-                if (error.name === 'AbortError') {
-                    handleHeartbeatFailure();
-                    return;
-                }
-                handleHeartbeatFailure();
-            })
-            .finally(() => {
-                clearTimeout(timeout);
-                unregisterAjaxController(controller);
-                if (heartbeatInFlight === controller) heartbeatInFlight = null;
-            });
+                return;
+            }
+            handleHeartbeatFailure();
         }
 
         function startHeartbeat() {
@@ -3180,7 +3205,10 @@ window.onerror = function (msg, url, line) {
 
         function initHeartbeatMonitor() {
             const updateHeartbeatState = () => {
-                if (document.hidden || !navigator.onLine) {
+                if (isBleConnected()) {
+                    stopHeartbeat();
+                    handleHeartbeatSuccess();
+                } else if (document.hidden || !navigator.onLine) {
                     stopHeartbeat();
                 } else {
                     startHeartbeat();
@@ -3218,63 +3246,67 @@ window.onerror = function (msg, url, line) {
         // ==================== Config Fetching ====================
         let hasShownInitialConfigToast = false;
 
-        function fetchConfigFromESP32(showToast = true) {
-            const configUrl = `http://${ESP32_IP}/api/config`;
-            const controller = registerAjaxController(new AbortController());
-            const timeout = setTimeout(() => controller.abort(), 8000);
+        async function fetchConfigFromESP32(showToast = true) {
+            const applyLoadedConfig = (data) => {
+                fullConfig = data;
 
-            fetch(configUrl, { signal: controller.signal, cache: 'no-store' })
-                .then(response => {
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    return response.json();
-                })
-                .then(data => {
-                    fullConfig = data;
-                    
-                    // Update suspension settings display
-                    updateSuspensionSettings(data);
-                    
-                    // Load settings into Settings page
-                    loadSettingsFromConfig(data);
-                    
-                    // Update tuning sliders from config data
-                    updateTuningSliders(data);
-                    
-                    // Update servo sliders from config data
-                    updateServoSliders(data);
-                    
-                    if (data.warnings && data.warnings.servoTrimReset) {
-                        const warningMessage = data.warnings.message
-                            || 'Unexpected servo trim value was reset to 0. Check settings before driving.';
-                        toast.warning(warningMessage, { duration: 10000 });
-                    }
-                    
-                    // Display config data in the Config Data card (Settings page)
-                    const configData = document.getElementById('configData');
-                    if (configData) configData.textContent = JSON.stringify(data, null, 2);
-                    
-                    // Display tuning data in the Tuning Data card (Tuning page)
-                    const tuningData = document.getElementById('tuningData');
-                    if (tuningData) tuningData.textContent = JSON.stringify(data, null, 2);
-                    
-                    if (showToast && !hasShownInitialConfigToast) {
-                        toast.success('Configuration loaded from RCDCC module');
-                        hasShownInitialConfigToast = true;
-                    }
-                })
-                .catch(error => {
-                    if (error.name === 'AbortError') return;
-                    console.error('Failed to fetch config:', error);
-                    const configData = document.getElementById('configData');
-                    if (configData) configData.textContent = `Error: ${error.message}`;
-                    const tuningData = document.getElementById('tuningData');
-                    if (tuningData) tuningData.textContent = `Error: ${error.message}`;
+                // Update suspension settings display
+                updateSuspensionSettings(data);
+
+                // Load settings into Settings page
+                loadSettingsFromConfig(data);
+
+                // Update tuning sliders from config data
+                updateTuningSliders(data);
+
+                // Update servo sliders from config data
+                updateServoSliders(data);
+
+                if (data.warnings && data.warnings.servoTrimReset) {
+                    const warningMessage = data.warnings.message
+                        || 'Unexpected servo trim value was reset to 0. Check settings before driving.';
+                    toast.warning(warningMessage, { duration: 10000 });
+                }
+
+                // Display config data in the Config Data card (Settings page)
+                const configData = document.getElementById('configData');
+                if (configData) configData.textContent = JSON.stringify(data, null, 2);
+
+                // Display tuning data in the Tuning Data card (Tuning page)
+                const tuningData = document.getElementById('tuningData');
+                if (tuningData) tuningData.textContent = JSON.stringify(data, null, 2);
+
+                if (showToast && !hasShownInitialConfigToast) {
+                    toast.success('Configuration loaded from RCDCC module (Bluetooth LE)');
+                    hasShownInitialConfigToast = true;
+                }
+            };
+
+            if (!isBleConnected()) {
+                const configData = document.getElementById('configData');
+                if (configData) configData.textContent = 'Bluetooth LE not connected';
+                const tuningData = document.getElementById('tuningData');
+                if (tuningData) tuningData.textContent = 'Bluetooth LE not connected';
+                if (showToast) {
+                    toast.warning('Connect via Bluetooth LE to load configuration');
+                }
+                return;
+            }
+
+            try {
+                communicationMode = 'ble';
+                const bleData = await bleManager.readConfig();
+                applyLoadedConfig(bleData);
+            } catch (error) {
+                console.error('Failed to fetch config:', error);
+                const configData = document.getElementById('configData');
+                if (configData) configData.textContent = `Error: ${error.message}`;
+                const tuningData = document.getElementById('tuningData');
+                if (tuningData) tuningData.textContent = `Error: ${error.message}`;
+                if (showToast) {
                     toast.warning('Could not load configuration from RCDCC module');
-                })
-                .finally(() => {
-                    clearTimeout(timeout);
-                    unregisterAjaxController(controller);
-                });
+                }
+            }
         }
 
         function updateSuspensionSettings(config) {
@@ -3335,10 +3367,33 @@ window.onerror = function (msg, url, line) {
             sensorRate: null
         };
 
+        function getSaveErrorMessage(contextLabel, error) {
+            if (!error) {
+                return `${contextLabel} failed`;
+            }
+
+            if (error.name === 'AbortError') {
+                return `${contextLabel} timed out. Check BLE connection and retry.`;
+            }
+
+            if (typeof error.message === 'string' && error.message.trim().length > 0) {
+                return `${contextLabel} failed: ${error.message}`;
+            }
+
+            return `${contextLabel} failed`;
+        }
+
         function saveTuningSliderValue(sliderName, value) {
             // Check if slider is locked
             if (tuningSliderLocks[sliderName]) {
                 return; // Don't save if locked
+            }
+
+            if (!isBleConnected()) {
+                updateConnectionStatus(false);
+                updateConnectionMethodDisplay();
+                toast.warning(`Bluetooth disconnected. Reconnect before saving ${sliderName}.`, { duration: 3500 });
+                return;
             }
 
             // Build complete payload with ALL current tuning values
@@ -3356,18 +3411,7 @@ window.onerror = function (msg, url, line) {
             const controller = registerAjaxController(new AbortController());
             const timeout = setTimeout(() => controller.abort(), 8000);
 
-            fetch(`http://${ESP32_IP}/api/config`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                signal: controller.signal,
-                body: JSON.stringify(payload)
-            })
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return response.json();
-            })
+            pushConfigPayload(payload, controller.signal)
             .then(data => {
                 console.log('Tuning slider saved:', sliderName, value);
                 
@@ -3378,18 +3422,22 @@ window.onerror = function (msg, url, line) {
                     toast.error('Failed to save tuning');
                 }
                 
-                // Update fullConfig with new values
-                fullConfig.rideHeightOffset = payload.rideHeightOffset;
-                fullConfig.damping = payload.damping;
-                fullConfig.stiffness = payload.stiffness;
-                fullConfig.reactionSpeed = payload.reactionSpeed;
-                fullConfig.frontRearBalance = payload.frontRearBalance;
-                fullConfig.sampleRate = payload.sampleRate;
+                // Update local config snapshot even if initial config fetch has not completed yet.
+                const configRef = ensureWritableFullConfig();
+                configRef.rideHeightOffset = payload.rideHeightOffset;
+                configRef.damping = payload.damping;
+                configRef.stiffness = payload.stiffness;
+                configRef.reactionSpeed = payload.reactionSpeed;
+                configRef.frontRearBalance = payload.frontRearBalance;
+                configRef.sampleRate = payload.sampleRate;
             })
             .catch(error => {
-                if (error.name === 'AbortError') return;
+                if (error && error.message === 'Bluetooth LE not connected') {
+                    updateConnectionStatus(false);
+                    updateConnectionMethodDisplay();
+                }
                 console.error('Failed to save tuning slider:', error);
-                toast.error('Connection error');
+                toast.error(getSaveErrorMessage(`Saving ${sliderName}`, error), { duration: 5000 });
             })
             .finally(() => {
                 clearTimeout(timeout);
@@ -3398,6 +3446,13 @@ window.onerror = function (msg, url, line) {
         }
 
         function saveServoParameter(servoName, param, value) {
+            if (!isBleConnected()) {
+                updateConnectionStatus(false);
+                updateConnectionMethodDisplay();
+                toast.warning('Bluetooth disconnected. Reconnect before saving servo settings.', { duration: 3500 });
+                return;
+            }
+
             // Update the stored value
             servoSliderValues[servoName][param] = Math.round(value);
             
@@ -3416,18 +3471,7 @@ window.onerror = function (msg, url, line) {
             const controller = registerAjaxController(new AbortController());
             const timeout = setTimeout(() => controller.abort(), 8000);
 
-            fetch(`http://${ESP32_IP}/api/config`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                signal: controller.signal,
-                body: JSON.stringify(payload)
-            })
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return response.json();
-            })
+            pushConfigPayload(payload, controller.signal)
             .then(data => {
                 console.log('Servo config saved:', data);
                 
@@ -3435,24 +3479,28 @@ window.onerror = function (msg, url, line) {
                 if (data.status === 'success' || data.status === 'ok') {
                     toast.success('Servo configuration saved');
                     
-                    // Update fullConfig with new servo values
-                    if (!fullConfig.servos) fullConfig.servos = {};
-                    fullConfig.servos.frontLeft = servoSliderValues.frontLeft;
-                    fullConfig.servos.frontRight = servoSliderValues.frontRight;
-                    fullConfig.servos.rearLeft = servoSliderValues.rearLeft;
-                    fullConfig.servos.rearRight = servoSliderValues.rearRight;
+                    // Update local config snapshot even if initial config fetch has not completed yet.
+                    const configRef = ensureWritableFullConfig();
+                    if (!configRef.servos) configRef.servos = {};
+                    configRef.servos.frontLeft = servoSliderValues.frontLeft;
+                    configRef.servos.frontRight = servoSliderValues.frontRight;
+                    configRef.servos.rearLeft = servoSliderValues.rearLeft;
+                    configRef.servos.rearRight = servoSliderValues.rearRight;
                     
                     // Update the config data display card
                     const configData = document.getElementById('configData');
-                    if (configData) configData.textContent = JSON.stringify(fullConfig, null, 2);
+                    if (configData) configData.textContent = JSON.stringify(configRef, null, 2);
                 } else if (data.status === 'error') {
                     toast.error('Failed to save servo config');
                 }
             })
             .catch(error => {
-                if (error.name === 'AbortError') return;
+                if (error && error.message === 'Bluetooth LE not connected') {
+                    updateConnectionStatus(false);
+                    updateConnectionMethodDisplay();
+                }
                 console.error('Failed to save servo config:', error);
-                toast.error('Connection error');
+                toast.error(getSaveErrorMessage('Saving servo configuration', error), { duration: 5000 });
             })
             .finally(() => {
                 clearTimeout(timeout);
@@ -4393,16 +4441,7 @@ window.onerror = function (msg, url, line) {
             const timeout = setTimeout(() => controller.abort(), 8000);
 
             try {
-                const response = await fetch(getApiUrl('/api/servo-config'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    signal: controller.signal,
-                    body: JSON.stringify(payload)
-                });
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                await response.json();
+                await pushServoPayload(payload, controller.signal);
                 fullConfig.servos[servoKey][param] = value;
                 if (showToast) toast.success('Saved');
                 if (refreshConfig) {
@@ -4435,18 +4474,7 @@ window.onerror = function (msg, url, line) {
             const controller = registerAjaxController(new AbortController());
             const timeout = setTimeout(() => controller.abort(), 8000);
 
-            fetch(`http://${ESP32_IP}/api/config`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                signal: controller.signal,
-                body: JSON.stringify(payload)
-            })
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return response.json();
-            })
+            pushConfigPayload(payload, controller.signal)
             .then(data => {
                 fullConfig.mpuOrientation = parseInt(value);
                 toast.success('Saved');
@@ -4477,18 +4505,7 @@ window.onerror = function (msg, url, line) {
             const controller = registerAjaxController(new AbortController());
             const timeout = setTimeout(() => controller.abort(), 8000);
 
-            fetch(`http://${ESP32_IP}/api/config`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                signal: controller.signal,
-                body: JSON.stringify(payload)
-            })
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return response.json();
-            })
+            pushConfigPayload(payload, controller.signal)
             .then(data => {
                 fullConfig.sampleRate = parseInt(value);
                 toast.success('Saved');
@@ -4670,23 +4687,13 @@ window.onerror = function (msg, url, line) {
         function updateConnectionMethodDisplay() {
             const connectionMethodDisplay = document.getElementById('connectionMethodDisplay');
             if (!connectionMethodDisplay) return;
-            
-            // Smart default: if on dev server with no saved IP, assume standalone mode
-            let currentIp = localStorage.getItem('esp32Ip');
-            if (!currentIp && !window.location.hostname.startsWith('192.168.')) {
-                currentIp = '192.168.4.1'; // Default to AP mode for dev servers
-            } else if (!currentIp) {
-                currentIp = window.location.hostname; // Use actual hostname if on ESP32
-            }
-            
-            const isStandaloneMode = currentIp === '192.168.4.1';
-            
-            if (isStandaloneMode) {
-                connectionMethodDisplay.textContent = 'Stand Alone Mode';
-                connectionMethodDisplay.style.color = 'var(--high-impact-color)';
-            } else {
-                connectionMethodDisplay.textContent = 'Home WiFi';
+
+            if (isBleConnected()) {
+                connectionMethodDisplay.textContent = 'Bluetooth LE';
                 connectionMethodDisplay.style.color = 'var(--lime-green)';
+            } else {
+                connectionMethodDisplay.textContent = 'Bluetooth LE (Disconnected)';
+                connectionMethodDisplay.style.color = 'var(--warning)';
             }
         }
         
@@ -4717,24 +4724,7 @@ window.onerror = function (msg, url, line) {
 
         // Test ESP32 connection
         function testEsp32Connection() {
-            const ipInput = document.getElementById('esp32IpAddress');
             const testBtn = document.getElementById('testConnectionBtn');
-            
-            if (!ipInput) return;
-            
-            const newIp = ipInput.value.trim();
-            
-            if (!newIp) {
-                toast.error('Please enter an IP address');
-                return;
-            }
-            
-            // Validate IP format
-            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-            if (!ipPattern.test(newIp)) {
-                toast.error('Invalid IP address format');
-                return;
-            }
             
             // Disable button and show testing state
             if (testBtn) {
@@ -4742,42 +4732,17 @@ window.onerror = function (msg, url, line) {
                 const icon = testBtn.querySelector('.material-symbols-outlined');
                 if (icon) icon.classList.add('pulsating');
             }
-            
-            // Test HTTP connection to /api/config endpoint
-            const testUrl = `http://${newIp}/api/config`;
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 5000);
-            
-            fetch(testUrl, { 
-                method: 'GET',
-                signal: controller.signal
-            })
-            .then(response => {
-                clearTimeout(timeout);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return response.json();
-            })
-            .then(data => {
-                // Success - config endpoint responded
-                toast.success('Connection successful!');
-                if (testBtn) {
-                    testBtn.disabled = false;
-                    const icon = testBtn.querySelector('.material-symbols-outlined');
-                    if (icon) icon.classList.remove('pulsating');
+
+            connectBLE()
+            .then(success => {
+                if (success) {
+                    toast.success('Bluetooth connection successful!');
                 }
             })
             .catch(error => {
-                clearTimeout(timeout);
-                let errorMsg = 'Connection failed. ';
-                if (error.name === 'AbortError') {
-                    errorMsg += 'Request timed out.';
-                } else if (error.message.includes('Failed to fetch')) {
-                    errorMsg += 'Cannot reach ESP32. Check IP address and network.';
-                } else {
-                    errorMsg += error.message;
-                }
-                
-                toast.error(errorMsg, { duration: 5000 });
+                toast.error(`Bluetooth connection failed: ${error.message}`, { duration: 5000 });
+            })
+            .finally(() => {
                 if (testBtn) {
                     testBtn.disabled = false;
                     const icon = testBtn.querySelector('.material-symbols-outlined');
@@ -4788,26 +4753,9 @@ window.onerror = function (msg, url, line) {
 
         // Save and apply connection settings
         function saveAndApplyConnection() {
-            const ipInput = document.getElementById('esp32IpAddress');
             const deviceNameInput = document.getElementById('deviceNameInput');
             const saveBtn = document.getElementById('saveNetworkBtn');
-            
-            if (!ipInput) return;
-            
-            const newIp = ipInput.value.trim();
             const newDeviceName = deviceNameInput ? deviceNameInput.value.trim() : '';
-            
-            if (!newIp) {
-                toast.error('Please enter an IP address');
-                return;
-            }
-            
-            // Validate IP format
-            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-            if (!ipPattern.test(newIp)) {
-                toast.error('Invalid IP address format');
-                return;
-            }
             
             // Validate device name if provided
             if (newDeviceName) {
@@ -4823,45 +4771,31 @@ window.onerror = function (msg, url, line) {
                 saveBtn.disabled = true;
                 saveBtn.innerHTML = 'Saving...';
             }
-            
-            // If device name was changed, save it to the ESP32 first
-            if (newDeviceName && fullConfig && fullConfig.deviceName !== newDeviceName) {
-                const updatePayload = {
-                    deviceName: newDeviceName
-                };
-                
-                // For IP change, use the new IP directly
-            fetch(getApiUrl('/api/config').replace(ESP32_IP, newIp), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(updatePayload)
-                }).then(response => {
-                    if (response.ok) {
-                        console.log('Device name updated successfully');
-                        fullConfig.deviceName = newDeviceName;
-                    } else {
-                        console.warn('Failed to update device name');
-                    }
-                }).catch(error => {
-                    console.warn('Error updating device name:', error);
-                });
+
+            if (!newDeviceName || !fullConfig || fullConfig.deviceName === newDeviceName) {
+                toast.success('No changes to apply', { duration: 2000 });
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<span class="material-symbols-outlined" >cloud_upload</span> Save & Apply';
+                }
+                return;
             }
-            
-            // Save IP to localStorage
-            localStorage.setItem('esp32Ip', newIp);
-            
-            // Update connection method display
-            updateConnectionMethodDisplay();
-            
-            // Show success message
-            toast.success('Applying changes...', { duration: 2000 });
-            
-            // Reload page to apply new connection
-            setTimeout(() => {
-                location.reload();
-            }, 1500);
+
+            pushConfigPayload({ deviceName: newDeviceName })
+                .then(() => {
+                    fullConfig.deviceName = newDeviceName;
+                    toast.success('Device name saved over Bluetooth LE');
+                })
+                .catch(error => {
+                    toast.error(`Failed to save over Bluetooth LE: ${error.message}`);
+                })
+                .finally(() => {
+                    updateConnectionMethodDisplay();
+                    if (saveBtn) {
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<span class="material-symbols-outlined" >cloud_upload</span> Save & Apply';
+                    }
+                });
         }
 
         // Initialize network settings controls

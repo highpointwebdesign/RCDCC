@@ -1,6 +1,6 @@
 # RCDCC - R/C Dynamic Chassis Control
 
-Progressive Web App for real-time R/C suspension tuning, vehicle telemetry, and GPS tracking. Works with ESP32-based active suspension systems.
+Progressive Web App for real-time R/C suspension tuning, vehicle telemetry, and GPS tracking. Works with ESP32-based active suspension systems over Bluetooth Low Energy (BLE).
 
 ![RCDCC Dashboard](https://img.shields.io/badge/PWA-Ready-blue?style=flat-square) ![ESP32](https://img.shields.io/badge/ESP32-Compatible-green?style=flat-square)
 
@@ -10,13 +10,13 @@ Progressive Web App for real-time R/C suspension tuning, vehicle telemetry, and 
 - **Roll/Pitch Monitoring** - Real-time vehicle orientation display with direction indicators
 - **GPS Tracking** - Latitude, longitude, altitude, and accuracy in feet
 - **Suspension Settings** - Quick view of current tuning parameters
-- **Connection Status** - WiFi connectivity, telemetry stream status, and protocol info
+- **Connection Status** - Bluetooth connectivity and telemetry stream status
 
 ### ⚙️ Settings
 - **Servo Configuration** - Range calibration (min/max pulse width), trim adjustments, rotation direction
 - **Auto Level** - Automated leveling system with 3-phase servo direction verification
 - **Gyro Configuration** - MPU6050 mounting orientation selection
-- **Network Settings** - Switch between Home WiFi and Stand Alone Mode
+- **Connection Settings** - BLE connection test and device naming
 - **Sound Settings** - Enable/disable notification sounds
 - **Debugging** - Console output and configuration inspector
 
@@ -54,21 +54,15 @@ python -m http.server 8080
 ```
 
 ### Option 3: Local Files
-Open `html/index.html` directly in a browser (limited functionality due to CORS and secure context requirements)
+Open `html/index.html` directly in a browser (limited functionality due to secure context requirements)
 
 ## Quick Start
 
 ### 1. Connect to ESP32
-**Stand Alone Mode (Default):**
-- Connect to WiFi network: `RCDCC`
-- Password: `12345678`
-- Open app at: `http://192.168.4.1`
-
-**Home WiFi Mode:**
-- ESP32 connects to your home network
-- Check serial monitor for assigned IP address
-- Enter IP in Settings → Network → RCDCC IP Address
-- Click "Save & Apply"
+- Power on ESP32 with current firmware
+- Open the app in a secure context (`https://` or `http://localhost`)
+- Go to **Settings -> Network** and press **Test Connection**
+- Approve the BLE pairing prompt and select your device
 
 ### 2. Set Level Reference
 1. Place vehicle on flat surface
@@ -88,19 +82,11 @@ Open `html/index.html` directly in a browser (limited functionality due to CORS 
 - Adjust sliders for desired handling characteristics
 - Changes auto-save to ESP32 SPIFFS
 
-## Network Configuration
+## BLE Configuration
 
-### Stand Alone Mode
-- ESP32 creates its own WiFi access point
-- No internet connection required
-- Always uses IP: `192.168.4.1`
-- Ideal for field use
-
-### Home WiFi Mode
-- ESP32 connects to your home network
-- Allows internet access on device
-- IP assigned by router (check serial monitor)
-- Better for development and testing
+- BLE advertising name comes from firmware `deviceName` (default: `ESP32-RCDCC`)
+- PWA must run in a secure context for Web Bluetooth
+- Once connected, telemetry/config/control are BLE-native
 
 ## Technologies
 
@@ -111,7 +97,7 @@ Open `html/index.html` directly in a browser (limited functionality due to CORS 
 - **GPS:** Browser Geolocation API
 - **Storage:** localStorage for persistence
 - **Service Worker:** Offline support and caching
-- **WebSocket:** Real-time telemetry streaming
+- **Web Bluetooth:** Real-time telemetry and control
 - **Sliders:** rSlider library
 
 ## Project Structure
@@ -171,7 +157,7 @@ The auto-level feature uses a sophisticated 3-phase approach:
 ### Persistent Storage
 Settings saved in localStorage:
 - ESP32 IP address
-- Connection method (Home WiFi / Stand Alone)
+- Connection method and BLE status
 - Notification sound preference
 - Lock states (tuning, servo range, trim, rotation)
 - Last active page and settings tab
@@ -202,17 +188,16 @@ Settings saved in localStorage:
 - Permission must be granted by user
 - Works over HTTP during development
 
-### CORS
-- ESP32 enables CORS headers for cross-origin requests
-- Service worker caches only HTTP/HTTPS resources
-- Chrome extension URLs are excluded from caching
+### Web Bluetooth
+- Requires secure context (`https://` or `http://localhost`)
+- Requires user gesture to open device picker
 
 ## Development
 
 ### Prerequisites
 - Node.js (for live-server) or Python (for SimpleHTTPServer)
 - Modern code editor (VS Code recommended)
-- ESP32 with firmware installed (see `firmware/README.md`)
+- ESP32 with BLE firmware installed (see `firmware/README.md`)
 
 ### Local Testing
 ```bash

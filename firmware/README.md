@@ -1,14 +1,13 @@
 # ESP32 Active Suspension - Firmware
 
-ESP32 firmware for active suspension control system with API-only web server.
+ESP32 firmware for active suspension control over Bluetooth Low Energy (BLE).
 
 ## Hardware Requirements
 
 - ESP32-D0WD-V3 (or compatible)
 - MPU6050 IMU (I2C: SDA=GPIO21, SCL=GPIO22)
-- 4x Servo motors (PWM: GPIO12-15)
-- 3x Battery voltage monitoring (ADC: GPIO34-35, GPIO32)
-- Voltage dividers: 70kΩ + 10kΩ (8:1 ratio) for battery inputs
+- 4x Servo motors (PWM via PCA9685)
+- WS2812/NeoPixel LED strip
 
 ## Development
 
@@ -20,12 +19,12 @@ PlatformIO Core or PlatformIO IDE
 ### Build
 ```bash
 cd firmware
-pio run
+pio run -e esp32
 ```
 
 ### Upload
 ```bash
-pio run --target upload
+pio run -e esp32 --target upload --upload-port COM7
 ```
 
 ### Serial Monitor
@@ -37,95 +36,37 @@ pio device monitor --baud 115200
 
 ```
 firmware/
-├── platformio.ini           # Build configuration
+├── platformio.ini             # Build configuration
 ├── src/
-│   └── main.cpp            # Main application loop
+│   └── main.cpp               # Main loop + BLE payload handlers
 └── include/
-    ├── Config.h            # Constants and structures
-    ├── SensorFusion.h      # IMU complementary filter
-    ├── SuspensionSimulator.h  # Physics simulation
-    ├── StorageManager.h    # SPIFFS persistence
-    ├── PWMOutputs.h        # Servo PWM control
-    └── WebServer.h         # API-only web server
+    ├── BluetoothService.h     # BLE service, characteristics, callbacks
+    ├── Config.h               # Constants and structures
+    ├── SensorFusion.h         # IMU complementary filter
+    ├── SuspensionSimulator.h  # Suspension simulation
+    ├── StorageManager.h       # SPIFFS persistence
+    ├── PWMOutputs.h           # Servo PWM control
+    └── LightsEngine.h         # LED group/pattern engine
 ```
 
-## Network Configuration
+## BLE Service
 
-### Access Point Mode (Default)
-```
-SSID: RCDCC
-Password: 12345678
-IP: 192.168.4.1
-```
+The firmware exposes one BLE GATT service with characteristics for:
 
-### Local Network Mode (Fallback)
-Edit Config.h to set your WiFi credentials:
-```cpp
-#define WIFI_SSID "YourNetwork"
-#define WIFI_PASSWORD "YourPassword"
-```
+- Config read
+- Config write
+- Telemetry notify (roll, pitch, accelX, accelY, accelZ)
+- Servo command write
+- Lights command write
+- System command write
 
-## API Endpoints
-
-All endpoints return JSON.
-
-### Health Check
-```
-GET /api/health
-Response: {"status":"ok","mpu6050":true}
-```
-
-### Configuration
-```
-GET /api/config
-POST /api/config
-Body: {"param":"damping","value":0.8}
-```
-
-### Battery Configuration
-```
-GET /api/battery-config
-POST /api/battery-config
-Body: {"battery":1,"param":"cellCount","value":3}
-```
-
-### Servo Configuration
-```
-GET /api/servo-config?servo=FL
-POST /api/servo-config
-Body: {"servo":"FL","param":"minPulse","value":1000}
-```
-
-### Servo Calibration
-```
-POST /api/calibrate
-Body: {"servo":"FL"}
-```
-
-### WebSocket
-```
-WS /ws
-Messages:
-- {"type":"sensor","roll":0.0,"pitch":0.0,"accelZ":0.0}
-- {"type":"servo","FL":90,"FR":90,"RL":90,"RR":90}
-- {"type":"battery","voltage0":12.6,"voltage1":7.4,"voltage2":0.0}
-```
-
-## CORS Headers
-
-CORS is enabled for all origins to allow PWA app connection.
+Device name in BLE advertising comes from persisted `deviceName` in config (default: `ESP32-RCDCC`).
 
 ## Flash Usage
 
-- ~30-40% (minimal HTML, API-only)
-- Previous version: ~77% (with embedded HTML pages)
+- BLE-only firmware build is currently around ~64% flash on `min_spiffs.csv`.
 
-## Key Features
+## Notes
 
-- 50Hz MPU6050 sensor loop
-- Complementary filter for orientation
-- 4-corner independent suspension control
-- Real-time WebSocket data streaming
-- Persistent configuration in SPIFFS
-- Battery voltage monitoring with color-coded thresholds
-- Automatic AP fallback if WiFi connection fails
+- HTTP/WebSocket webserver support has been removed from runtime code.
+- Configuration and control now flow through BLE payload handlers and SPIFFS persistence.

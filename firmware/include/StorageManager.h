@@ -4,6 +4,7 @@
 #include "Config.h"
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
+#include <cstring>
 
 class StorageManager {
 private:
@@ -94,6 +95,9 @@ public:
     
     // Load device name from JSON
     const char* deviceNameStr = doc["deviceName"] | DEFAULT_DEVICE_NAME;
+    if (deviceNameStr == nullptr || strlen(deviceNameStr) == 0) {
+      deviceNameStr = DEFAULT_DEVICE_NAME;
+    }
     strncpy(config.deviceName, deviceNameStr, sizeof(config.deviceName) - 1);
     config.deviceName[sizeof(config.deviceName) - 1] = '\0';
     
@@ -379,6 +383,9 @@ public:
   }
   
   const char* getDeviceName() const {
+    if (config.deviceName[0] == '\0') {
+      return DEFAULT_DEVICE_NAME;
+    }
     return config.deviceName;
   }
   
@@ -441,6 +448,45 @@ public:
     String output;
     serializeJson(doc, output);
     return output;
+  }
+  
+  void saveConfigFromJSON(const String& jsonStr) {
+    DynamicJsonDocument doc(2048);
+    DeserializationError error = deserializeJson(doc, jsonStr);
+    
+    if (error) {
+      Serial.print("Failed to parse config JSON: ");
+      Serial.println(error.c_str());
+      return;
+    }
+    
+    // Update config parameters if present in JSON
+    if (doc.containsKey("reactionSpeed")) config.reactionSpeed = doc["reactionSpeed"];
+    if (doc.containsKey("rideHeightOffset")) config.rideHeightOffset = doc["rideHeightOffset"];
+    if (doc.containsKey("rangeLimit")) config.rangeLimit = doc["rangeLimit"];
+    if (doc.containsKey("damping")) config.damping = doc["damping"];
+    if (doc.containsKey("frontRearBalance")) config.frontRearBalance = doc["frontRearBalance"];
+    if (doc.containsKey("stiffness")) config.stiffness = doc["stiffness"];
+    if (doc.containsKey("sampleRate")) config.sampleRate = doc["sampleRate"];
+    if (doc.containsKey("telemetryRate")) config.telemetryRate = doc["telemetryRate"];
+    if (doc.containsKey("mpuOrientation")) config.mpuOrientation = doc["mpuOrientation"];
+    if (doc.containsKey("deviceName")) {
+      const char* name = doc["deviceName"];
+      strncpy(config.deviceName, name, sizeof(config.deviceName) - 1);
+      config.deviceName[sizeof(config.deviceName) - 1] = '\0';
+    }
+    
+    // Update LED color if present
+    if (doc.containsKey("ledColor")) {
+      const char* colorStr = doc["ledColor"];
+      if (strcmp(colorStr, "red") == 0) ledConfig.color = LED_COLOR_RED;
+      else if (strcmp(colorStr, "green") == 0) ledConfig.color = LED_COLOR_GREEN;
+      else if (strcmp(colorStr, "blue") == 0) ledConfig.color = LED_COLOR_BLUE;
+    }
+    
+    // Save to SPIFFS
+    saveConfig();
+    Serial.println("Config updated from JSON via BLE");
   }
   
   ServoConfig getServoConfig() const {

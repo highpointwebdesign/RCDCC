@@ -211,7 +211,7 @@
             animation: none;
         }
         
-        #wifiIcon.disconnected::after {
+        /* #wifiIcon.disconnected::after {
             content: '';
             position: absolute;
             width: 130%;
@@ -220,7 +220,7 @@
             top: 50%;
             left: -15%;
             transform: translateY(-50%) rotate(-45deg);
-        }
+        } */
         
         /* Atom pulsate animation - similar to wifi scan */
         @keyframes atomPulsate {

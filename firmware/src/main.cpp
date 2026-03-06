@@ -1,9 +1,4 @@
 #include <Arduino.h>
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <HTTPClient.h>
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
@@ -12,19 +7,19 @@
 #include "Config.h"
 #include "SensorFusion.h"
 #include "SuspensionSimulator.h"
-#include "WebServer.h"
 #include "StorageManager.h"
 #include "PWMOutputs.h"
 #include "LightsEngine.h"
+#include "BluetoothService.h"
 
 // Global instances
 MPU6050 mpu;
 SensorFusion sensorFusion;
 SuspensionSimulator suspensionSimulator;
-WebServerManager webServer;
 StorageManager storageManager;
 PWMOutputs pwmOutputs;
 LightsEngine* lightsEngine = nullptr;  // Initialize as pointer in setup()
+BluetoothService* bluetoothService = nullptr;  // Initialize in setup()
 
 // LED feedback pin
 #define LED_PIN 2
@@ -53,8 +48,6 @@ EmergencyLightPattern currentPattern = {};
 uint8_t currentPatternStep = 0;
 unsigned long patternStepStartTime = 0;
 unsigned long emergencyLightLastUpdate = 0;
-
-const char* DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1478218472709292145/9hSRUvb3wEMC-cTIs7OOILUkbqyO1MyEAOlS4zKmR5ztsuUaIxf_d7MNFmorPcISyGNp";
 
 // Function to get RGB values from LED color enum
 void getLEDColorRGB(LEDColor color, uint8_t& r, uint8_t& g, uint8_t& b) {
@@ -124,39 +117,6 @@ void updateEmergencyLights() {
   statusLED.show();
 }
 
-void notifyDiscordOnHomeWiFiJoin(const char* deviceName) {
-  if (WiFi.status() != WL_CONNECTED) {
-    return;
-  }
-
-  String connectedSSID = WiFi.SSID();
-  if (connectedSSID != String(HOME_WIFI_SSID)) {
-    Serial.printf("Discord webhook skipped: connected to '%s' (not home SSID)\n", connectedSSID.c_str());
-    return;
-  }
-
-  WiFiClientSecure secureClient;
-  secureClient.setInsecure();
-
-  HTTPClient http;
-  if (!http.begin(secureClient, DISCORD_WEBHOOK_URL)) {
-    Serial.println("Discord webhook init failed");
-    return;
-  }
-
-  http.addHeader("Content-Type", "application/json");
-
-  String payload = "{\"content\":\"" +
-                   String(deviceName) +
-                   " joined " + connectedSSID +
-                   " with IP " + WiFi.localIP().toString() +
-                   "\"}";
-
-  int responseCode = http.POST(payload);
-  Serial.printf("Discord webhook POST response: %d\n", responseCode);
-  http.end();
-}
-
 // Timing variables
 unsigned long lastMPUReadTime = 0;
 unsigned long lastSimulationTime = 0;
@@ -164,14 +124,14 @@ unsigned long lastSimulationTime = 0;
 // Development mode flag
 bool mpuConnected = false;
 
-// Diagnostic flag to isolate WebSocket broadcast blocking
-const bool disableWebSocketTelemetry = true;
-
-// Sensor data for HTTP polling
+// Sensor data for BLE telemetry
 float currentRoll = 0.0f;
 float currentPitch = 0.0f;
 float currentYaw = 0.0f;
 float currentVerticalAccel = 0.0f;
+float currentAccelX = 0.0f;
+float currentAccelY = 0.0f;
+float currentAccelZ = 0.0f;
 
 // Function to start LED blink (250ms)
 void startLedBlink() {
@@ -180,14 +140,223 @@ void startLedBlink() {
   ledBlinkEndTime = millis() + 250; // Turn off after 250ms
 }
 
+uint32_t parseHexColor(const String& colorStr) {
+  String normalized = colorStr;
+  normalized.trim();
+  if (normalized.startsWith("#")) {
+    normalized.remove(0, 1);
+  }
+  if (normalized.length() == 0) {
+    return 0;
+  }
+  return strtoul(normalized.c_str(), nullptr, 16) & 0xFFFFFF;
+}
+
+bool applyConfigUpdatePayload(const String& payload) {
+  DynamicJsonDocument doc(2048);
+  DeserializationError error = deserializeJson(doc, payload);
+  if (error) {
+    Serial.printf("BLE config JSON parse error: %s\n", error.c_str());
+    return false;
+  }
+
+  if (doc.containsKey("reactionSpeed")) storageManager.updateParameter("reactionSpeed", doc["reactionSpeed"]);
+  if (doc.containsKey("rideHeightOffset")) storageManager.updateParameter("rideHeightOffset", doc["rideHeightOffset"]);
+  if (doc.containsKey("rangeLimit")) storageManager.updateParameter("rangeLimit", doc["rangeLimit"]);
+  if (doc.containsKey("damping")) storageManager.updateParameter("damping", doc["damping"]);
+  if (doc.containsKey("frontRearBalance")) storageManager.updateParameter("frontRearBalance", doc["frontRearBalance"]);
+  if (doc.containsKey("stiffness")) storageManager.updateParameter("stiffness", doc["stiffness"]);
+  if (doc.containsKey("sampleRate")) storageManager.updateParameter("sampleRate", doc["sampleRate"]);
+  if (doc.containsKey("telemetryRate")) storageManager.updateParameter("telemetryRate", doc["telemetryRate"]);
+  if (doc.containsKey("mpuOrientation")) {
+    uint8_t orientation = doc["mpuOrientation"];
+    storageManager.updateParameter("mpuOrientation", orientation);
+    sensorFusion.setOrientation(orientation);
+  }
+  if (doc.containsKey("fpvAutoMode")) {
+    bool autoMode = doc["fpvAutoMode"];
+    storageManager.updateParameter("fpvAutoMode", autoMode ? 1.0f : 0.0f);
+  }
+
+  if (doc.containsKey("deviceName")) {
+    storageManager.updateDeviceName(doc["deviceName"].as<String>());
+  }
+
+  if (doc.containsKey("ledColor")) {
+    storageManager.setLEDColor(doc["ledColor"].as<String>());
+    updateStatusLEDColor();
+  }
+
+  if (doc.containsKey("servos")) {
+    JsonObject servos = doc["servos"];
+    for (const char* servoName : {"frontLeft", "frontRight", "rearLeft", "rearRight"}) {
+      if (!servos.containsKey(servoName)) continue;
+      JsonObject servo = servos[servoName];
+      if (servo.containsKey("min")) storageManager.updateServoParameter(servoName, "min", servo["min"]);
+      if (servo.containsKey("max")) storageManager.updateServoParameter(servoName, "max", servo["max"]);
+      if (servo.containsKey("trim")) storageManager.updateServoParameter(servoName, "trim", servo["trim"]);
+      if (servo.containsKey("reversed")) storageManager.updateServoParameter(servoName, "reversed", servo["reversed"]);
+    }
+  }
+
+  startLedBlink();
+  return true;
+}
+
+bool applyServoConfigPayload(const String& payload) {
+  DynamicJsonDocument doc(1024);
+  DeserializationError error = deserializeJson(doc, payload);
+  if (error) {
+    Serial.printf("BLE servo JSON parse error: %s\n", error.c_str());
+    return false;
+  }
+
+  if (!(doc.containsKey("servo") && doc.containsKey("param") && doc.containsKey("value"))) {
+    return false;
+  }
+
+  storageManager.updateServoParameter(
+    doc["servo"].as<String>(),
+    doc["param"].as<String>(),
+    doc["value"].as<int>()
+  );
+
+  startLedBlink();
+  return true;
+}
+
+bool applyLightsPayload(const String& payload) {
+  DynamicJsonDocument doc(4096);
+  DeserializationError error = deserializeJson(doc, payload);
+  if (error) {
+    Serial.printf("BLE lights JSON parse error: %s\n", error.c_str());
+    return false;
+  }
+
+  NewLightsConfig config;
+  memset(&config, 0, sizeof(NewLightsConfig));
+
+  if (doc.containsKey("lightGroupsArray")) {
+    JsonArray groupsArray = doc["lightGroupsArray"];
+    config.useLegacyMode = false;
+    config.groupCount = 0;
+
+    for (JsonObject groupObj : groupsArray) {
+      if (config.groupCount >= 10) break;
+
+      ExtendedLightGroup& group = config.groups[config.groupCount];
+      memset(&group, 0, sizeof(ExtendedLightGroup));
+
+      if (groupObj.containsKey("name")) {
+        strncpy(group.name, groupObj["name"], sizeof(group.name) - 1);
+        group.name[sizeof(group.name) - 1] = '\0';
+      }
+
+      const char* pattern = groupObj["pattern"] | "Steady";
+      strncpy(group.pattern, pattern, sizeof(group.pattern) - 1);
+      group.pattern[sizeof(group.pattern) - 1] = '\0';
+
+      group.enabled = groupObj["enabled"] | false;
+      group.brightness = groupObj["brightness"] | 255;
+      group.mode = groupObj["mode"] | LIGHT_MODE_SOLID;
+      group.blinkRate = groupObj["blinkRate"] | 500;
+
+      if (groupObj.containsKey("color")) {
+        if (groupObj["color"].is<const char*>()) {
+          group.color = parseHexColor(groupObj["color"].as<String>());
+        } else {
+          group.color = groupObj["color"].as<uint32_t>();
+        }
+      }
+      if (groupObj.containsKey("color2")) {
+        if (groupObj["color2"].is<const char*>()) {
+          group.color2 = parseHexColor(groupObj["color2"].as<String>());
+        } else {
+          group.color2 = groupObj["color2"].as<uint32_t>();
+        }
+      }
+
+      if (groupObj.containsKey("indices")) {
+        JsonArray indicesArray = groupObj["indices"];
+        for (uint16_t idx : indicesArray) {
+          if (group.ledCount >= 100) break;
+          group.ledIndices[group.ledCount++] = idx;
+        }
+      }
+
+      config.groupCount++;
+    }
+  } else if (doc.containsKey("lightGroups")) {
+    JsonObject groups = doc["lightGroups"];
+    config.useLegacyMode = true;
+    config.groupCount = 0;
+
+    if (groups.containsKey("headlights")) {
+      JsonObject hl = groups["headlights"];
+      config.legacy.headlights.enabled = hl["enabled"] | false;
+      config.legacy.headlights.brightness = hl["brightness"] | 255;
+      config.legacy.headlights.mode = hl["mode"] | LIGHT_MODE_SOLID;
+      config.legacy.headlights.blinkRate = hl["blinkRate"] | 500;
+    }
+    if (groups.containsKey("tailLights")) {
+      JsonObject tl = groups["tailLights"];
+      config.legacy.tailLights.enabled = tl["enabled"] | false;
+      config.legacy.tailLights.brightness = tl["brightness"] | 255;
+      config.legacy.tailLights.mode = tl["mode"] | LIGHT_MODE_SOLID;
+      config.legacy.tailLights.blinkRate = tl["blinkRate"] | 500;
+    }
+    if (groups.containsKey("emergencyLights")) {
+      JsonObject el = groups["emergencyLights"];
+      config.legacy.emergencyLights.enabled = el["enabled"] | false;
+      config.legacy.emergencyLights.brightness = el["brightness"] | 255;
+      config.legacy.emergencyLights.mode = el["mode"] | LIGHT_MODE_SOLID;
+      config.legacy.emergencyLights.blinkRate = el["blinkRate"] | 500;
+    }
+  } else {
+    return false;
+  }
+
+  storageManager.setNewLightsConfig(config);
+  if (lightsEngine) {
+    lightsEngine->updateFromPayload(config);
+  }
+
+  return true;
+}
+
+bool applySystemCommandPayload(const String& payload) {
+  DynamicJsonDocument doc(512);
+  DeserializationError error = deserializeJson(doc, payload);
+  if (error) {
+    Serial.printf("BLE system JSON parse error: %s\n", error.c_str());
+    return false;
+  }
+
+  String command = doc["command"] | "";
+  command.toLowerCase();
+
+  if (command == "autolevel" || command == "resetgyro" || command == "calibrate") {
+    if (mpuConnected) {
+      sensorFusion.calibrate(mpu, [](const String& msg) {
+        Serial.println(msg);
+      });
+    }
+    return true;
+  }
+
+  if (command == "reset" || command == "resetconfig") {
+    storageManager.resetToDefaults();
+    return true;
+  }
+
+  return false;
+}
+
 void setup() {
   Serial.begin(115200);
   delay(500);
   
   Serial.println("\n\nESP32 Active Suspension Simulator - Starting...");
-  if (disableWebSocketTelemetry) {
-    Serial.println("WebSocket telemetry broadcast DISABLED for diagnostics");
-  }
   
   // Initialize SPIFFS
   if (!SPIFFS.begin(true)) {
@@ -248,7 +417,6 @@ void setup() {
     Serial.println("MPU6050 connection failed - using simulated sensor data for testing");
     Serial.println("Check wiring: SDA=GPIO21, SCL=GPIO22, VCC=3.3V, GND=GND");
     Serial.println("MPU6050 should be at I2C address 0x68");
-    webServer.init(storageManager, lightsEngine);
   } else {
     Serial.println("MPU6050 initialized successfully");
     Serial.println("MPU6050 found at I2C address 0x68");
@@ -260,11 +428,6 @@ void setup() {
   // Initialize sensor fusion with config
   sensorFusion.init(config.sampleRate);
   
-  // Initialize and start WiFi + Web Server (if not already started)
-  if (mpuConnected) {
-    webServer.init(storageManager, lightsEngine);
-  }
-
   // Initialize LED pin for feedback
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
@@ -276,112 +439,6 @@ void setup() {
   statusLED.show();
   updateStatusLEDColor(); // Load color from config
   Serial.println("Status LED initialized");
-  
-  // Set up recalibration callback for web interface
-  webServer.setCalibrationCallback([&]() {
-    if (mpuConnected) {
-      sensorFusion.calibrate(mpu, [](const String& msg) {
-        Serial.println(msg);
-      });
-    }
-  });
-  
-  // Set up orientation callback for web interface
-  webServer.setOrientationCallback([&](uint8_t orientation) {
-    sensorFusion.setOrientation(orientation);
-  });
-  
-  // Set up MPU status callback for web interface
-  webServer.setMPUStatusCallback([&]() {
-    // Test if sensor is currently responding
-    if (!mpuConnected) return false;
-    
-    // Quick test: try to read WHO_AM_I register
-    Wire.beginTransmission(0x68);
-    byte error = Wire.endTransmission();
-    return (error == 0);
-  });
-  
-  // Set up LED blink callback for config saves
-  webServer.setLedBlinkCallback(startLedBlink);
-  
-  // Set up LED update callback for color changes
-  webServer.setLedUpdateCallback(updateStatusLEDColor);
-  
-  // Set up emergency light callbacks
-  webServer.setEmergencyLightSetCallback([&](String patternJson) {
-    // Parse JSON pattern and load it
-    // Format: {enabled: bool, pattern: {steps: [{led0, led1, duration}, ...], isLooping: bool}}
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, patternJson);
-    
-    if (error) {
-      Serial.printf("Failed to parse pattern JSON: %s\n", error.c_str());
-      return;
-    }
-    
-    bool enabled = doc["enabled"] | false;
-    emergencyLightsEnabled = enabled;
-    
-    if (!enabled) {
-      Serial.println("Emergency lights: OFF");
-      return;
-    }
-    
-    // Parse pattern structure
-    JsonObject patternObj = doc["pattern"];
-    if (!patternObj) {
-      Serial.println("No pattern data in request");
-      return;
-    }
-    
-    JsonArray stepsArray = patternObj["steps"];
-    currentPattern.stepCount = stepsArray.size();
-    currentPattern.isLooping = patternObj["isLooping"] | true;
-    
-    if (currentPattern.stepCount > MAX_PATTERN_STEPS) {
-      currentPattern.stepCount = MAX_PATTERN_STEPS;
-    }
-    
-    // Load steps
-    for (uint8_t i = 0; i < currentPattern.stepCount; i++) {
-      JsonObject step = stepsArray[i];
-      currentPattern.steps[i].led0Color = strtol(step["led0"] | "000000", nullptr, 16);
-      currentPattern.steps[i].led1Color = strtol(step["led1"] | "000000", nullptr, 16);
-      currentPattern.steps[i].duration = step["duration"] | 250;
-    }
-    
-    currentPatternStep = 0;
-    patternStepStartTime = millis();
-    
-    Serial.printf("Emergency lights: Pattern loaded with %d steps\n", currentPattern.stepCount);
-  });
-  
-  webServer.setEmergencyLightGetCallback([&](String& patternJson) {
-    // Return current pattern state as JSON
-    JsonDocument doc;
-    doc["enabled"] = emergencyLightsEnabled;
-    
-    if (emergencyLightsEnabled && currentPattern.stepCount > 0) {
-      JsonObject pattern = doc["pattern"].to<JsonObject>();
-      pattern["stepCount"] = currentPattern.stepCount;
-      pattern["currentStep"] = currentPatternStep;
-      pattern["isLooping"] = currentPattern.isLooping;
-      
-      JsonArray steps = pattern["steps"].to<JsonArray>();
-      for (uint8_t i = 0; i < currentPattern.stepCount; i++) {
-        JsonObject step = steps.add<JsonObject>();
-        char led0Hex[7], led1Hex[7];
-        snprintf(led0Hex, sizeof(led0Hex), "%06lX", currentPattern.steps[i].led0Color);
-        snprintf(led1Hex, sizeof(led1Hex), "%06lX", currentPattern.steps[i].led1Color);
-        step["led0"] = led0Hex;
-        step["led1"] = led1Hex;
-        step["duration"] = currentPattern.steps[i].duration;
-      }
-    }
-    
-    serializeJson(doc, patternJson);
-  });
   
   // Calibrate to current position as level
   if (mpuConnected) {
@@ -396,6 +453,20 @@ void setup() {
   // Initialize PWM outputs
   pwmOutputs.init();
   
+  // Initialize Bluetooth Low Energy service
+  bluetoothService = new BluetoothService(&storageManager);
+  bluetoothService->setConfigWriteHandler(applyConfigUpdatePayload);
+  bluetoothService->setServoWriteHandler(applyServoConfigPayload);
+  bluetoothService->setLightsWriteHandler(applyLightsPayload);
+  bluetoothService->setSystemWriteHandler(applySystemCommandPayload);
+  const char* bleDeviceName = storageManager.getDeviceName();
+  if (bleDeviceName == nullptr || bleDeviceName[0] == '\0') {
+    bleDeviceName = DEFAULT_DEVICE_NAME;
+  }
+  Serial.printf("Starting BLE advertising as: %s\n", bleDeviceName);
+  bluetoothService->begin(bleDeviceName);
+  Serial.println("Bluetooth service started");
+  
   Serial.println("Setup complete!");
 }
 
@@ -405,18 +476,6 @@ void loop() {
   unsigned long currentTime = loopStartTime;
   static unsigned long lastLoopTime = 0;
   static bool firstLoop = true;
-  static bool discordJoinNotified = false;
-
-  // Non-blocking WiFi manager update (WLED-style STA/AP state handling)
-  webServer.updateConnectivity();
-
-  // Notify Discord only when home STA is actually connected
-  if (WiFi.status() == WL_CONNECTED && !discordJoinNotified) {
-    notifyDiscordOnHomeWiFiJoin(storageManager.getDeviceName());
-    discordJoinNotified = true;
-  } else if (WiFi.status() != WL_CONNECTED) {
-    discordJoinNotified = false;
-  }
   
   // Log loop execution time every 5 seconds for diagnostics
   if (!firstLoop && (currentTime - lastLoopTime) > 5000) {
@@ -507,6 +566,11 @@ void loop() {
     // Update sensor fusion
     sensorFusion.update(accelX, accelY, accelZ, gyroX, gyroY, gyroZ);
     
+    // Store acceleration values for BLE telemetry
+    currentAccelX = accelX;
+    currentAccelY = accelY;
+    currentAccelZ = accelZ;
+    
     lastMPUReadTime = currentTime;
     
     unsigned long afterSensorTime = millis();
@@ -571,30 +635,9 @@ void loop() {
     
     uint16_t telemetryIntervalMs = 1000 / config.telemetryRate;  // Convert Hz to milliseconds
     if (currentTime - lastBroadcast >= telemetryIntervalMs) {
-      unsigned long beforeBroadcast = millis();
-      
-      if (!disableWebSocketTelemetry) {
-        // Store sensor data for HTTP polling
-        if (mpuConnected) {
-          webServer.setSensorData(roll, pitch, yaw, verticalAccel);
-        } else {
-          // Store NaN values when sensor offline - dashboard will display '--'
-          webServer.setSensorData(NAN, NAN, NAN, NAN);
-        }
-        
-        unsigned long afterBroadcast = millis();
-        unsigned long broadcastTime = afterBroadcast - beforeBroadcast;
-        if (broadcastTime > 100) {
-          Serial.printf("⚠️  SLOW TELEMETRY BROADCAST: %lums\n", broadcastTime);
-        }
-        Serial.printf("✓ [TELEMETRY] Broadcast complete at %lu ms (took %lu ms)\n", afterBroadcast, broadcastTime);
-      } else {
-        // Diagnostic mode: skip WebSocket sends, keep HTTP polling updated
-        if (mpuConnected) {
-          webServer.setSensorData(roll, pitch, yaw, verticalAccel);
-        } else {
-          webServer.setSensorData(NAN, NAN, NAN, NAN);
-        }
+      // Send telemetry via Bluetooth LE if connected
+      if (bluetoothService && bluetoothService->isConnected() && mpuConnected) {
+        bluetoothService->sendTelemetry(roll, pitch, currentAccelX, currentAccelY, currentAccelZ);
       }
       
       lastBroadcast = currentTime;
