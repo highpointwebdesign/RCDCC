@@ -122,33 +122,42 @@ private:
     }
 
     /**
-     * Dense candle-style twinkle: all LEDs stay lit with randomized per-LED shimmer.
+     * WLED-inspired candle twinkle: slow, organic shimmer without hard strobing.
      */
     uint32_t twinklePattern(uint8_t groupIdx, const ExtendedLightGroup& group, uint8_t ledLocalIndex, unsigned long now) {
-        // Faster blinkRate => quicker shimmer updates.
-        uint16_t updateMs = group.blinkRate > 0 ? group.blinkRate : 90U;
-        if (updateMs < 35U) updateMs = 35U;
-        if (updateMs > 220U) updateMs = 220U;
+        // Slower temporal window to avoid high-frequency blink appearance.
+        uint16_t windowMs = group.blinkRate > 0 ? (uint16_t)(350U + (uint16_t)group.blinkRate * 4U) : 700U;
+        if (windowMs < 250U) windowMs = 250U;
+        if (windowMs > 1600U) windowMs = 1600U;
 
-        // Independent per-LED timing offsets and two random layers for organic motion.
-        uint32_t t1 = (now + ((uint32_t)ledLocalIndex * 67U)) / updateMs;
-        uint32_t t2 = (now + ((uint32_t)ledLocalIndex * 131U)) / (updateMs + 47U);
-        uint8_t n1 = pseudoRandom8(groupIdx, ledLocalIndex, t1);
-        uint8_t n2 = pseudoRandom8(groupIdx, ledLocalIndex, t2 + 97U);
+        // Per-LED desync, then smooth between two random samples.
+        uint32_t localNow = now + ((uint32_t)ledLocalIndex * 83U);
+        uint32_t idx = localNow / windowMs;
+        uint16_t phase = (uint16_t)(localNow % windowMs);
 
-        // Keep lights on: base candle body plus random shimmer.
-        uint16_t lum = 85U + ((uint16_t)n1 * 110U) / 255U; // 85..195
-        lum += ((uint16_t)n2 * 40U) / 255U;                // +0..40 => 85..235
+        uint8_t a = pseudoRandom8(groupIdx, ledLocalIndex, idx);
+        uint8_t b = pseudoRandom8(groupIdx, ledLocalIndex, idx + 1U);
+        int16_t delta = (int16_t)b - (int16_t)a;
+        uint8_t smooth = (uint8_t)((int16_t)a + ((int32_t)delta * phase) / windowMs);
 
-        // Rare bright pops for lively twinkle (deterministic per LED/time slice).
-        uint8_t spark = pseudoRandom8(groupIdx, ledLocalIndex, t1 * 3U + 17U);
-        if (spark < 20U) {
-            lum += 20U + (spark & 0x0FU); // +20..35
+        // Main candle body: mostly-on with soft variation.
+        uint16_t lum = 90U + ((uint16_t)smooth * 120U) / 255U; // 90..210
+
+        // Small fast dips for natural turbulence (not full blackouts).
+        uint8_t micro = pseudoRandom8(groupIdx, ledLocalIndex, (localNow / 37U) + 13U);
+        if (micro < 22U) {
+            lum -= (uint16_t)(22U - micro) * 2U;
         }
 
+        // Rare warm pops.
+        uint8_t pop = pseudoRandom8(groupIdx, ledLocalIndex, (localNow / 211U) + 37U);
+        if (pop < 5U) {
+            lum += 20U + (uint16_t)pop * 5U;
+        }
+
+        if (lum < 40U) lum = 40U;
         if (lum > 255U) lum = 255U;
 
-        // Blend from secondary/base to primary. If secondary is black, this is candle-on-primary.
         return colorLerp(group.color2, group.color, (uint8_t)lum);
     }
 
