@@ -122,39 +122,34 @@ private:
     }
 
     /**
-     * WLED-style twinkle pattern: sparse random sparkles with smooth fades.
+     * Dense candle-style twinkle: all LEDs stay lit with randomized per-LED shimmer.
      */
     uint32_t twinklePattern(uint8_t groupIdx, const ExtendedLightGroup& group, uint8_t ledLocalIndex, unsigned long now) {
-        // Blink rate controls twinkle duration (slower -> longer twinkles).
-        uint16_t twinkleDurationMs = group.blinkRate > 0 ? (uint16_t)(group.blinkRate * 4U) : 360U;
-        if (twinkleDurationMs < 140U) twinkleDurationMs = 140U;
-        if (twinkleDurationMs > 900U) twinkleDurationMs = 900U;
+        // Faster blinkRate => quicker shimmer updates.
+        uint16_t updateMs = group.blinkRate > 0 ? group.blinkRate : 90U;
+        if (updateMs < 35U) updateMs = 35U;
+        if (updateMs > 220U) updateMs = 220U;
 
-        // Offset each LED so twinkles are de-synchronized.
-        uint32_t localNow = now + ((uint32_t)ledLocalIndex * 47U);
-        uint32_t frame = localNow / twinkleDurationMs;
-        uint16_t phase = (uint16_t)(localNow % twinkleDurationMs);
+        // Independent per-LED timing offsets and two random layers for organic motion.
+        uint32_t t1 = (now + ((uint32_t)ledLocalIndex * 67U)) / updateMs;
+        uint32_t t2 = (now + ((uint32_t)ledLocalIndex * 131U)) / (updateMs + 47U);
+        uint8_t n1 = pseudoRandom8(groupIdx, ledLocalIndex, t1);
+        uint8_t n2 = pseudoRandom8(groupIdx, ledLocalIndex, t2 + 97U);
 
-        // Deterministic per-frame random per LED: stable sparkle shape inside each frame.
-        uint8_t seed = pseudoRandom8(groupIdx, ledLocalIndex, frame);
+        // Keep lights on: base candle body plus random shimmer.
+        uint16_t lum = 85U + ((uint16_t)n1 * 110U) / 255U; // 85..195
+        lum += ((uint16_t)n2 * 40U) / 255U;                // +0..40 => 85..235
 
-        // Roughly 25% of LEDs twinkle in a frame.
-        bool isTwinkle = (seed < 64U);
-        if (!isTwinkle) {
-            return group.color2;
+        // Rare bright pops for lively twinkle (deterministic per LED/time slice).
+        uint8_t spark = pseudoRandom8(groupIdx, ledLocalIndex, t1 * 3U + 17U);
+        if (spark < 20U) {
+            lum += 20U + (spark & 0x0FU); // +20..35
         }
 
-        // Smooth triangle envelope 0..255..0 across twinkle duration.
-        uint16_t half = twinkleDurationMs >> 1;
-        if (half == 0U) half = 1U;
-        uint16_t rise = (phase <= half) ? phase : (twinkleDurationMs - phase);
-        uint8_t envelope = (uint8_t)((rise * 255U) / half);
+        if (lum > 255U) lum = 255U;
 
-        // Ease curve for less harsh attack/decay.
-        uint16_t eased = (uint16_t)envelope * (uint16_t)envelope;
-        uint8_t sparkle = (uint8_t)(eased / 255U);
-
-        return colorLerp(group.color2, group.color, sparkle);
+        // Blend from secondary/base to primary. If secondary is black, this is candle-on-primary.
+        return colorLerp(group.color2, group.color, (uint8_t)lum);
     }
 
     uint32_t dualBreathePattern(uint8_t groupIdx, const ExtendedLightGroup& group, unsigned long now) {
