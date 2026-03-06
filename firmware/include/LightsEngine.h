@@ -343,32 +343,19 @@ public:
      * Pulse/breathe pattern - WLED-inspired smooth sine wave breathing
      */
     uint32_t pulsePattern(uint8_t groupIdx, const ExtendedLightGroup& group, unsigned long now) {
-        // WLED breathe effect: smooth sine-based fade
-        // For 2-second breathing cycle (0.5 Hz), counter must advance 16384 in 2000ms
-        // Rate needed: 16384 / 2000ms = 8.192 per ms
-        // Formula: (speed / 8) = rate, so speed = rate * 8 = 8.192 * 8 ≈ 16
-        uint16_t speed = group.blinkRate > 0 ? ((group.blinkRate * 16) / 255) : 16;
-        if (speed < 5) speed = 5;    // Minimum: very slow
-        if (speed > 40) speed = 40;  // Maximum: reasonably fast
-        
-        // Calculate counter - advances at speed/8 per millisecond
-        uint32_t counter = ((now * speed) >> 3) & 0x3FFF; // Divide by 8, keep in 0-16383 range
-        
-        // Calculate sine wave brightness (parabolic approximation)
-        uint16_t var = 0;
-        if (counter < 16384) {
-            uint16_t workCounter = counter;
-            if (workCounter > 8192) {
-                workCounter = 8192 - (workCounter - 8192);
-            }
-            // Use sin16 for smooth curve, scaled to brightness range
-            int16_t sineVal = sin16(workCounter * 4); // Multiply to use full sin16 range
-            var = (sineVal + 32768) / 280; // Convert from [-32768,32767] to [~30,~230]
-        }
-        
-        uint8_t lum = 30 + var; // Brightness oscillates between 30-253
-        
-        // Blend between secondary color (dim) and primary color (bright)
+        (void)groupIdx;
+
+        // One smooth breathing algorithm: fixed 2s cycle (inhale + exhale).
+        const uint32_t cycleMs = 2000;
+        uint32_t phaseMs = now % cycleMs;
+        uint16_t theta = (uint16_t)((phaseMs * 65535UL) / cycleMs);
+
+        // Convert sine [-32768..32767] to brightness [30..255] without overflow.
+        int16_t sineVal = sin16(theta);
+        uint32_t scaled = ((uint32_t)(sineVal + 32768) * 225UL) / 65535UL;
+        uint8_t lum = (uint8_t)(30U + scaled);
+
+        // Blend from secondary (dim phase) to primary (bright phase).
         return colorLerp(group.color2, group.color, lum);
     }
 
