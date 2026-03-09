@@ -3598,56 +3598,60 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let hasShownInitialConfigToast = false;
 
         async function fetchConfigFromESP32(showToast = true) {
-            const applyLoadedConfig = (data) => {
-                fullConfig = data;
+            const applyLoadedConfig = (configData, lightsData) => {
+                // Merge for fullConfig (used by app logic)
+                fullConfig = {
+                    ...configData,
+                    totalLEDCount: lightsData.totalLEDCount,
+                    lightGroupsArray: lightsData.lightGroupsArray
+                };
                 hasLoadedConfigFromDevice = true;
 
                 // Update suspension settings display
-                updateSuspensionSettings(data);
+                updateSuspensionSettings(fullConfig);
 
                 // Load settings into Settings page
-                loadSettingsFromConfig(data);
+                loadSettingsFromConfig(fullConfig);
 
                 // Update tuning sliders from config data
-                updateTuningSliders(data);
+                updateTuningSliders(fullConfig);
 
                 // Update servo sliders from config data
-                updateServoSliders(data);
+                updateServoSliders(fullConfig);
 
                 // Load light groups from ESP32 if available
-                if (data.lightGroupsArray && Array.isArray(data.lightGroupsArray)) {
-                    loadLightGroups(data.lightGroupsArray);
+                if (lightsData.lightGroupsArray && Array.isArray(lightsData.lightGroupsArray)) {
+                    loadLightGroups(lightsData.lightGroupsArray);
                 }
                 
                 // Load total LED count from ESP32 if available
-                if (data.totalLEDCount !== undefined) {
+                if (lightsData.totalLEDCount !== undefined) {
                     const totalLEDInput = document.getElementById('totalLEDCount');
                     if (totalLEDInput) {
-                        totalLEDInput.value = data.totalLEDCount;
+                        totalLEDInput.value = lightsData.totalLEDCount;
                     }
-                    localStorage.setItem(TOTAL_LED_COUNT_KEY, String(data.totalLEDCount));
-                    console.log('Loaded total LED count from ESP32:', data.totalLEDCount);
+                    localStorage.setItem(TOTAL_LED_COUNT_KEY, String(lightsData.totalLEDCount));
+                    console.log('Loaded total LED count from ESP32:', lightsData.totalLEDCount);
                 }
 
-                if (data.warnings && data.warnings.servoTrimReset) {
-                    const warningMessage = data.warnings.message
+                if (fullConfig.warnings && fullConfig.warnings.servoTrimReset) {
+                    const warningMessage = fullConfig.warnings.message
                         || 'Unexpected servo trim value was reset to 0. Check settings before driving.';
                     toast.warning(warningMessage, { duration: 10000 });
                 }
 
-                // Display config data in the Config Data card (Settings page)
-                const configData = document.getElementById('configData');
-                if (configData) configData.textContent = JSON.stringify(data, null, 2);
+                // Display config data in the Config Data card (Settings page) - CONFIG ONLY
+                const configDataEl = document.getElementById('configData');
+                if (configDataEl) configDataEl.textContent = JSON.stringify(configData, null, 2);
 
-                // Display tuning data in the Tuning Configuration Data card.
+                // Display tuning data in the Tuning Configuration Data card - CONFIG ONLY
                 const tuningConfigData = document.getElementById('tuningConfigData');
-                if (tuningConfigData) tuningConfigData.textContent = JSON.stringify(data, null, 2);
+                if (tuningConfigData) tuningConfigData.textContent = JSON.stringify(configData, null, 2);
 
-                // Display lighting data in the Lighting Configuration Data card.
+                // Display lighting data in the Lighting Configuration Data card - LIGHTS ONLY
                 const lightingConfigData = document.getElementById('lightingConfigData');
                 if (lightingConfigData) {
-                    const lightingData = data?.lights || data?.lightConfig || data;
-                    lightingConfigData.textContent = JSON.stringify(lightingData, null, 2);
+                    lightingConfigData.textContent = JSON.stringify(lightsData, null, 2);
                 }
 
                 if (showToast && !hasShownInitialConfigToast) {
@@ -3681,18 +3685,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     bleManager.readLights()
                 ]);
                 
-                // Merge lights data into config
-                const bleData = {
-                    ...configData,
-                    totalLEDCount: lightsData.totalLEDCount,
-                    lightGroupsArray: lightsData.lightGroupsArray
-                };
-                
-                applyLoadedConfig(bleData);
+                applyLoadedConfig(configData, lightsData);
             } catch (error) {
                 console.error('Failed to fetch config:', error);
-                const configData = document.getElementById('configData');
-                if (configData) configData.textContent = `Error: ${error.message}`;
+                const configDataEl = document.getElementById('configData');
+                if (configDataEl) configDataEl.textContent = `Error: ${error.message}`;
                 const tuningConfigData = document.getElementById('tuningConfigData');
                 if (tuningConfigData) tuningConfigData.textContent = `Error: ${error.message}`;
                 const lightingConfigData = document.getElementById('lightingConfigData');
