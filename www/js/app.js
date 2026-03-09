@@ -5042,7 +5042,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 }
             })
             .then(() => {
-                toast.success('Bluetooth connection verified! ESP32 is responding.', { duration: 4000 });
+                // connectBLE() already showed success toast, no need for duplicate
             })
             .catch(error => {
                 toast.error(`Connection test failed: ${error.message}`, { duration: 5000 });
