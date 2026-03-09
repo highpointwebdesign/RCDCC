@@ -49,11 +49,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         //     }
         // }, 1000);
         
-        // ==================== Configuration ====================
-        // Determine ESP32 IP: prefer localStorage, then use actual IP if on ESP32 (192.168.x.x), else default to AP IP
-        const ESP32_IP = localStorage.getItem('esp32Ip') || 
-                         (window.location.hostname.startsWith('192.168.') ? window.location.hostname : '192.168.4.1');
-        
         // ==================== Version Configuration ====================
         // Update this version number when releasing new app versions
         // For automated versioning, this could be replaced by a build script that:
@@ -4833,31 +4828,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
         }
         
-        // Update ESP32 IP address
-        function updateEsp32Ip(newIp) {
-            if (!newIp || newIp.trim() === '') {
-                toast.error('IP address cannot be empty');
-                return;
-            }
-            
-            // Validate IP format (basic validation)
-            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-            if (!ipPattern.test(newIp)) {
-                toast.error('Invalid IP address format');
-                return;
-            }
-            
-            // Save to localStorage
-            localStorage.setItem('esp32Ip', newIp);
-            
-            toast.success('IP address saved. Reconnecting...');
-            
-            // Reload to apply the new IP
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
-        }
-
         // Test ESP32 connection
         function testEsp32Connection() {
             const testBtn = document.getElementById('testConnectionBtn');
@@ -4887,7 +4857,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             });
         }
 
-        // Save and apply connection settings
+        // Save device name
         function saveAndApplyConnection() {
             const deviceNameInput = document.getElementById('deviceNameInput');
             const saveBtn = document.getElementById('saveNetworkBtn');
@@ -4912,7 +4882,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 toast.success('No changes to apply', { duration: 2000 });
                 if (saveBtn) {
                     saveBtn.disabled = false;
-                    saveBtn.innerHTML = '<span class="material-symbols-outlined" >cloud_upload</span> Save & Apply';
+                    saveBtn.innerHTML = '<span class="material-symbols-outlined" >save</span> Save Device Name';
                 }
                 return;
             }
@@ -4929,122 +4899,23 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateConnectionMethodDisplay();
                     if (saveBtn) {
                         saveBtn.disabled = false;
-                        saveBtn.innerHTML = '<span class="material-symbols-outlined" >cloud_upload</span> Save & Apply';
+                        saveBtn.innerHTML = '<span class="material-symbols-outlined" >save</span> Save Device Name';
                     }
                 });
         }
 
         // Initialize network settings controls
         function initNetworkSettings() {
-            // Load current IP into input field
-            // Smart default: if on a non-ESP32 network, default to AP mode (192.168.4.1)
-            // Otherwise use whatever was saved
-            let currentIp = localStorage.getItem('esp32Ip');
-            if (!currentIp) {
-                // If not saved, check if we're on an ESP32 network
-                currentIp = window.location.hostname.startsWith('192.168.') 
-                    ? window.location.hostname 
-                    : '192.168.4.1'; // Default to AP mode for dev servers
-            }
-            
-            const ipInput = document.getElementById('esp32IpAddress');
-            if (ipInput) ipInput.value = currentIp;
-            
-            // Detect initial mode based on IP
-            const isStandaloneMode = currentIp === '192.168.4.1';
-            const standaloneSwitch = document.getElementById('modeStandalone');
-            const homeSwitch = document.getElementById('modeHomeWifi');
-            
-            if (isStandaloneMode) {
-                if (standaloneSwitch) standaloneSwitch.checked = true;
-                if (homeSwitch) homeSwitch.checked = false;
-                setStandaloneMode();
-            } else {
-                if (homeSwitch) homeSwitch.checked = true;
-                if (standaloneSwitch) standaloneSwitch.checked = false;
-                setHomeWifiMode();
-            }
-            
-            // Handle Home WiFi toggle switch
-            if (homeSwitch) {
-                homeSwitch.addEventListener('change', function() {
-                    if (this.checked) {
-                        // Turn off standalone when home is turned on
-                        if (standaloneSwitch) standaloneSwitch.checked = false;
-                        setHomeWifiMode();
-                    } else {
-                        // If unchecked, turn on standalone
-                        if (standaloneSwitch) standaloneSwitch.checked = true;
-                        setStandaloneMode();
-                    }
-                });
-            }
-            
-            // Handle Standalone toggle switch
-            if (standaloneSwitch) {
-                standaloneSwitch.addEventListener('change', function() {
-                    if (this.checked) {
-                        // Turn off home wifi when standalone is turned on
-                        if (homeSwitch) homeSwitch.checked = false;
-                        setStandaloneMode();
-                    } else {
-                        // If unchecked, turn on home wifi
-                        if (homeSwitch) homeSwitch.checked = true;
-                        setHomeWifiMode();
-                    }
-                });
-            }
-            
             // Test connection button
             const testBtn = document.getElementById('testConnectionBtn');
             if (testBtn) {
                 testBtn.addEventListener('click', testEsp32Connection);
             }
             
-            // Save & Apply button
+            // Save Device Name button
             const saveBtn = document.getElementById('saveNetworkBtn');
             if (saveBtn) {
                 saveBtn.addEventListener('click', saveAndApplyConnection);
-            }
-            
-        }
-
-        function setStandaloneMode() {
-            const ipInput = document.getElementById('esp32IpAddress');
-            const helpText = document.getElementById('ipHelpText');
-            
-            // Set IP to Stand Alone Mode default
-            if (ipInput) {
-                ipInput.value = '192.168.4.1';
-                ipInput.readOnly = true;
-                ipInput.classList.add('bg-light');
-            }
-            
-            // Update help text
-            if (helpText) {
-                helpText.innerHTML = '<span class="material-symbols-outlined">info</span> Stand Alone Mode always uses 192.168.4.1 (click Save to apply)';
-            }
-        }
-
-        function setHomeWifiMode() {
-            const ipInput = document.getElementById('esp32IpAddress');
-            const helpText = document.getElementById('ipHelpText');
-            
-            // Enable IP editing
-            if (ipInput) {
-                ipInput.readOnly = false;
-                ipInput.classList.remove('bg-light');
-            }
-            
-            // Update help text
-            // if (helpText) {
-            //     helpText.innerHTML = '<span class="material-symbols-outlined">info</span> Enter your network IP and click Save to apply';
-            // }
-            
-            // If IP was on standalone, clear it so user enters their network IP
-            if (ipInput && ipInput.value === '192.168.4.1') {
-                ipInput.value = '';
-                ipInput.placeholder = 'e.g., 192.168.1.100';
             }
         }
 

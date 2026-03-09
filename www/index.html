@@ -510,55 +510,6 @@
                                 Network Settings
                             </div>
                             <div class="card-body">
-                                <!-- Connection Method Section -->
-                                <div style="color: #000; margin-bottom: 2rem;">
-                                    <h6 class="mb-3"><strong>Select Connection Method</strong></h6>
-                                    
-                                    <!-- Home WiFi Mode Toggle -->
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" id="modeHomeWifi" checked>
-                                        <label class="form-check-label" for="modeHomeWifi">
-                                            <span>Home WiFi</span>
-                                            <span class="badge bg-success ms-2">Recommended</span>
-                                        </label>
-                                        <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('homeWifi')">?</span>
-                                    </div>
-                                    <div id="helpHomeWifi" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 1rem;">
-                                        <strong>Home WiFi Mode:</strong>  <br>
-                                        • RCDCC module connects to your home WiFi network<br>
-                                        • Check serial monitor for assigned IP address<br>
-                                        • Enter the IP and click "Save & Apply" to connect<br>
-                                        • Test connection verifies RCDCC module connectivity<br>
-                                        • IP may change if router reassigns it
-                                    </div>
-                                    
-                                    <!-- Standalone Mode Toggle -->
-                                    <div class="form-check form-switch mt-3">
-                                        <input class="form-check-input" type="checkbox" id="modeStandalone">
-                                        <label class="form-check-label" for="modeStandalone">
-                                            <span>Stand Alone Mode</span>
-                                        </label>
-                                        <span class="help-icon" onclick="event.stopPropagation(); toggleHelp('standaloneMode')">?</span>
-                                    </div>
-                                    <div id="helpStandaloneMode" class="alert alert-info mt-2" style="display: none; font-size: 0.875rem; margin-bottom: 0.5rem;">
-                                        <strong>Stand Alone Mode:</strong><br>
-                                        1. RCDCC module creates its own WiFi network<br>
-                                        2. SSID: <strong>RCDCC</strong><br>
-                                        3. Password: <strong>12345678</strong><br>
-                                        4. IP is always: <strong>192.168.4.1</strong><br>
-                                        5. Connect your phone to RCDCC WiFi<br>
-                                        6. Click "Save & Apply" to switch to this mode
-                                    </div>
-                                </div>
-
-                                <div style="color: #000; margin-bottom: 2rem;">
-                                    <h6 class="mb-3"><strong>Enter RCDCC IP Address</strong></h6>
-                                    <div class="form-check">
-                                        <!-- <label for="esp32IpAddress" class="form-label"><strong>Enter RCDCC IP Address</strong></label> -->
-                                        <input type="text" class="form-control" id="esp32IpAddress" placeholder="192.168.87.100">
-                                    </div>
-                                </div>
-
                                 <div style="color: #000; margin-bottom: 2rem;">
                                     <h6 class="mb-3"><strong>Device Name</strong></h6>
                                     <div class="form-check">
@@ -569,10 +520,10 @@
                                
                     
                                 <button type="button" class="btn w-100 mt-2 btn-gold" id="testConnectionBtn">
-                                    <span class="material-symbols-outlined" >network_check</span> Test Connection
+                                    <span class="material-symbols-outlined" >bluetooth</span> Test Bluetooth Connection
                                 </button>
                                 <button type="button" class="btn w-100 mt-2 btn-gold" id="saveNetworkBtn">
-                                    <span class="material-symbols-outlined" >cloud_upload</span> Save & Apply
+                                    <span class="material-symbols-outlined" >save</span> Save Device Name
                                 </button>
                             </div>
                         </div>
