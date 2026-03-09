@@ -585,22 +585,13 @@
                                     <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">Firmware Version</div>
                                     <div style="color: #666; font-size: 0.875rem;" id="firmwareVersion">Loading...</div>
                                 </div>
-                                <div>
+                                <div style="margin-bottom: 1rem;">
                                     <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">Build Date</div>
                                     <div style="color: #666; font-size: 0.875rem;" id="buildDate">Loading...</div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Developer Mode Card -->
-                    <div class="col-12 col-md-6">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">developer_mode</span>
-                                Developer Mode
-                            </div>
-                            <div class="card-body">
+                                
+                                <hr style="margin: 1.25rem 0; border-color: #e5e7eb;">
+                                
                                 <div class="d-flex justify-content-between align-items-center">
                                     <label class="form-check-label mb-0" for="developerModeToggle">
                                         <strong>Show Debugging Cards</strong>
@@ -609,85 +600,92 @@
                                         <input class="form-check-input" type="checkbox" id="developerModeToggle">
                                     </div>
                                 </div>
-                                <div class="form-text mt-2">
-                                    <small>When enabled, Console and configuration debug cards will be shown below the About card.</small>
-                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="col-12" id="developerDebugCards" style="display: none;">
-                        <div class="row g-3">
-                        <!-- Console Card -->
-                        <div class="col-12 col-md-6">
-                            <div class="card h-100" style="background-color: #1E1E1E;">
-                                <div class="card-header" style="background-color: black; color: white;">
-                                    <span class="material-symbols-outlined" style="color: var(--danger);">terminal</span>
-                                    Console
-                                    <div class="float-end" style="display: flex; gap: 10px; align-items: center;">
-                                        <span class="material-symbols-outlined icon-action" id="consoleCopyBtn" title="Copy console to clipboard">content_copy</span>
-                                        <span class="material-symbols-outlined icon-action" id="consoleClearBtn" title="Clear console">delete</span>
-                                    </div>
-                                </div>
-                                <div class="console-output" id="consoleOutput">
-                                    <!-- Console logs will appear here -->
-                                </div>
+                    <!-- Debug Card -->
+                    <div class="col-12" id="developerDebugCard" style="display: none;">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">pest_control</span>
+                                <span class="d-none d-md-inline">Debugging</span>
+                                <span class="d-inline d-md-none">Debug</span>
                             </div>
-                        </div>
-
-                        <!-- Configuration Data Card -->
-                        <div class="col-12 col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <span class="material-symbols-outlined" style="color: var(--danger);">settings</span>
-                                        Configuration Data
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <!-- Console Card -->
+                                    <div class="col-12 col-md-6">
+                                        <div class="card h-100" style="background-color: #1E1E1E;">
+                                            <div class="card-header" style="background-color: black; color: white;">
+                                                <span class="material-symbols-outlined" style="color: var(--danger);">terminal</span>
+                                                Console
+                                                <div class="float-end" style="display: flex; gap: 10px; align-items: center;">
+                                                    <span class="material-symbols-outlined icon-action" id="consoleCopyBtn" title="Copy console to clipboard">content_copy</span>
+                                                    <span class="material-symbols-outlined icon-action" id="consoleClearBtn" title="Clear console">delete</span>
+                                                </div>
+                                            </div>
+                                            <div class="console-output" id="consoleOutput">
+                                                <!-- Console logs will appear here -->
+                                            </div>
+                                        </div>
                                     </div>
-                                    <span class="material-symbols-outlined icon-action" id="configCopyBtn" title="Copy configuration to clipboard">content_copy</span>
-                                </div>
-                                <div class="card-body" style="background-color: #1E1E1E;">
-                                    <div class="data-display" id="configData">{
+
+                                    <!-- Configuration Data Card -->
+                                    <div class="col-12 col-md-6">
+                                        <div class="card h-100">
+                                            <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
+                                                <div>
+                                                    <span class="material-symbols-outlined" style="color: var(--danger);">settings</span>
+                                                    Configuration Data
+                                                </div>
+                                                <span class="material-symbols-outlined icon-action" id="configCopyBtn" title="Copy configuration to clipboard">content_copy</span>
+                                            </div>
+                                            <div class="card-body" style="background-color: #1E1E1E;">
+                                                <div class="data-display" id="configData">{
   "loading": "Fetching configuration..."
 }</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Lighting Configuration Data Card -->
-                        <div class="col-12 col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
-                                        Lighting Configuration Data
+                                            </div>
+                                        </div>
                                     </div>
-                                    <span class="material-symbols-outlined icon-action" id="lightingConfigCopyBtn" title="Copy lighting configuration to clipboard">content_copy</span>
-                                </div>
-                                <div class="card-body" style="background-color: #1E1E1E;">
-                                    <div class="data-display" id="lightingConfigData">{
+
+                                    <!-- Lighting Configuration Data Card -->
+                                    <div class="col-12 col-md-6">
+                                        <div class="card h-100">
+                                            <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
+                                                <div>
+                                                    <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
+                                                    Lighting Configuration Data
+                                                </div>
+                                                <span class="material-symbols-outlined icon-action" id="lightingConfigCopyBtn" title="Copy lighting configuration to clipboard">content_copy</span>
+                                            </div>
+                                            <div class="card-body" style="background-color: #1E1E1E;">
+                                                <div class="data-display" id="lightingConfigData">{
   "loading": "Fetching lighting configuration..."
 }</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Tuning Configuration Data Card -->
-                        <div class="col-12 col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <span class="material-symbols-outlined" style="color: var(--danger);">tune</span>
-                                        Tuning Configuration Data
+                                            </div>
+                                        </div>
                                     </div>
-                                    <span class="material-symbols-outlined icon-action" id="tuningConfigCopyBtn" title="Copy tuning configuration to clipboard">content_copy</span>
-                                </div>
-                                <div class="card-body" style="background-color: #1E1E1E;">
-                                    <div class="data-display" id="tuningConfigData">{
+
+                                    <!-- Tuning Configuration Data Card -->
+                                    <div class="col-12 col-md-6">
+                                        <div class="card h-100">
+                                            <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
+                                                <div>
+                                                    <span class="material-symbols-outlined" style="color: var(--danger);">tune</span>
+                                                    Tuning Configuration Data
+                                                </div>
+                                                <span class="material-symbols-outlined icon-action" id="tuningConfigCopyBtn" title="Copy tuning configuration to clipboard">content_copy</span>
+                                            </div>
+                                            <div class="card-body" style="background-color: #1E1E1E;">
+                                                <div class="data-display" id="tuningConfigData">{
   "loading": "Fetching tuning configuration..."
 }</div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
                         </div>
                     </div>
                 </div>

@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function applyDeveloperModeVisibility(enabled) {
-            const debugCardsContainer = document.getElementById('developerDebugCards');
+            const debugCardsContainer = document.getElementById('developerDebugCard');
             if (debugCardsContainer) {
                 debugCardsContainer.style.display = enabled ? 'block' : 'none';
             }
