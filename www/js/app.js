@@ -109,9 +109,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return { status: 'ok' };
         }
 
-        async function connectBLE() {
+        async function connectBLE(options = {}) {
+            const showSuccessToast = options.showSuccessToast !== false;
+            const showErrorToast = options.showErrorToast !== false;
             if (!bleManager) {
-                toast.error('Bluetooth manager unavailable in this build');
+                if (showErrorToast) toast.error('Bluetooth manager unavailable in this build');
                 return false;
             }
 
@@ -125,12 +127,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 updateConnectionMethodDisplay();
                 refreshConfigAfterConnection('manual-connect');
                 toast.dismiss('ble-config-required');
-                toast.success('Connected via Bluetooth LE');
+                if (showSuccessToast) toast.success('Connected via Bluetooth LE');
                 return true;
             } catch (error) {
                 communicationMode = 'ble';
                 updateConnectionStatus(false);
-                toast.error(`BLE connect failed: ${error.message}`);
+                if (showErrorToast) toast.error(`BLE connect failed: ${error.message}`);
                 return false;
             }
         }
@@ -5093,7 +5095,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
         
         // Test ESP32 connection
-        function testEsp32Connection() {
+        async function testEsp32Connection() {
             const testBtn = document.getElementById('testConnectionBtn');
             
             // Disable button and show testing state
@@ -5103,46 +5105,29 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (icon) icon.classList.add('pulsating');
             }
 
-            connectBLE()
-            .then(success => {
-                if (success) {
-                    // Connection established, now verify ESP32 is responding with data
-                    return new Promise((resolve, reject) => {
-                        let dataReceived = false;
-                        const timeout = setTimeout(() => {
-                            if (!dataReceived) {
-                                reject(new Error('No response from ESP32 - device may be powered off'));
-                            }
-                        }, 3000); // 3 second timeout to receive telemetry
-                        
-                        // Check if we're receiving telemetry updates
-                        const checkInterval = setInterval(() => {
-                            // Check if fullConfig has been populated (indicates data received)
-                            if (fullConfig && (fullConfig.deviceName || fullConfig.firmwareVersion)) {
-                                dataReceived = true;
-                                clearTimeout(timeout);
-                                clearInterval(checkInterval);
-                                resolve(true);
-                            }
-                        }, 100);
-                    });
-                } else {
-                    throw new Error('Failed to establish Bluetooth connection');
+            try {
+                const connected = await connectBLE({ showSuccessToast: false, showErrorToast: false });
+                if (!connected) {
+                    throw new Error('Unable to establish Bluetooth connection');
                 }
-            })
-            .then(() => {
-                // connectBLE() already showed success toast, no need for duplicate
-            })
-            .catch(error => {
+
+                // Require a fresh read from ESP32 to count as success.
+                const verifyRead = bleManager.readConfig();
+                const timeoutGuard = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('No response from ESP32 - device may be powered off')), 3000);
+                });
+
+                await Promise.race([verifyRead, timeoutGuard]);
+                toast.success('Bluetooth connection verified! ESP32 is responding.', { duration: 4000 });
+            } catch (error) {
                 toast.error(`Connection test failed: ${error.message}`, { duration: 5000 });
-            })
-            .finally(() => {
+            } finally {
                 if (testBtn) {
                     testBtn.disabled = false;
                     const icon = testBtn.querySelector('.material-symbols-outlined');
                     if (icon) icon.classList.remove('pulsating');
                 }
-            });
+            }
         }
 
         // Save device name
