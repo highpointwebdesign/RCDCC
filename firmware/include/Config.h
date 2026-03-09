@@ -39,7 +39,7 @@
 #define DEFAULT_FRONT_REAR_BALANCE 0.5f
 #define DEFAULT_STIFFNESS 1.0f
 #define DEFAULT_FPV_AUTO_MODE false // FPV auto mode default
-#define DEFAULT_DEVICE_NAME "ESP32-RCDCC" // Device hostname on network
+#define DEFAULT_DEVICE_NAME "SAVAGE-CAT-TEST" // Device hostname on network
 
 // Default servo calibration parameters
 #define DEFAULT_SERVO_TRIM 0         // No trim offset (degrees)

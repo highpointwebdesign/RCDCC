@@ -43,9 +43,6 @@ private:
     std::function<bool(const String&)> lightsWriteHandler;
     std::function<bool(const String&)> systemWriteHandler;
     
-    // Maximum MTU size for chunked transfers
-    static const int MAX_CHUNK_SIZE = 512;
-    
 public:
     BluetoothService(StorageManager* storageManager);
     
@@ -101,16 +98,8 @@ public:
     
     void onRead(BLECharacteristic* pCharacteristic) {
         String json = storage->getConfigJSON();
-        Serial.println("BLE: Config read requested");
-        
-        // For large JSON, we'll need to chunk it
-        if (json.length() > MAX_CHUNK_SIZE) {
-            // Send size indicator first
-            String sizeMsg = "{\"size\":" + String(json.length()) + "}";
-            pCharacteristic->setValue(sizeMsg.c_str());
-        } else {
-            pCharacteristic->setValue(json.c_str());
-        }
+        Serial.printf("BLE: Config read requested (%d bytes)\n", json.length());
+        pCharacteristic->setValue(json.c_str());
     }
 };
 
@@ -203,6 +192,10 @@ void BluetoothService::begin(const char* deviceName) {
     
     // Create BLE Device
     BLEDevice::init(deviceName);
+    
+    // Set MTU to support larger data transfers (up to 517 bytes)
+    BLEDevice::setMTU(517);
+    Serial.println("BLE: MTU set to 517 bytes");
     
     // Create BLE Server
     pServer = BLEDevice::createServer();

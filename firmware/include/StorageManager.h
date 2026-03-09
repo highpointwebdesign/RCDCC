@@ -426,7 +426,7 @@ public:
   }
   
   String getConfigJSON() {
-    DynamicJsonDocument doc(2048);
+    DynamicJsonDocument doc(4096);  // Increased size for full config including servos
     
     doc["reactionSpeed"] = config.reactionSpeed;
     doc["rideHeightOffset"] = config.rideHeightOffset;
@@ -444,6 +444,40 @@ public:
     if (ledConfig.color == LED_COLOR_GREEN) colorStr = "green";
     else if (ledConfig.color == LED_COLOR_BLUE) colorStr = "blue";
     doc["ledColor"] = colorStr;
+    
+    // Add servo configuration
+    JsonObject servos = doc.createNestedObject("servos");
+    
+    JsonObject fl = servos.createNestedObject("frontLeft");
+    fl["trim"] = servoConfig.frontLeft.trim;
+    fl["min"] = servoConfig.frontLeft.minLimit;
+    fl["max"] = servoConfig.frontLeft.maxLimit;
+    fl["reversed"] = servoConfig.frontLeft.reversed;
+    
+    JsonObject fr = servos.createNestedObject("frontRight");
+    fr["trim"] = servoConfig.frontRight.trim;
+    fr["min"] = servoConfig.frontRight.minLimit;
+    fr["max"] = servoConfig.frontRight.maxLimit;
+    fr["reversed"] = servoConfig.frontRight.reversed;
+    
+    JsonObject rl = servos.createNestedObject("rearLeft");
+    rl["trim"] = servoConfig.rearLeft.trim;
+    rl["min"] = servoConfig.rearLeft.minLimit;
+    rl["max"] = servoConfig.rearLeft.maxLimit;
+    rl["reversed"] = servoConfig.rearLeft.reversed;
+    
+    JsonObject rr = servos.createNestedObject("rearRight");
+    rr["trim"] = servoConfig.rearRight.trim;
+    rr["min"] = servoConfig.rearRight.minLimit;
+    rr["max"] = servoConfig.rearRight.maxLimit;
+    rr["reversed"] = servoConfig.rearRight.reversed;
+    
+    // Add warning flag for servlet trim reset if needed
+    if (servoTrimResetWarning) {
+      JsonObject warnings = doc.createNestedObject("warnings");
+      warnings["servoTrimReset"] = true;
+      warnings["message"] = "Unexpected servo trim value was reset to 0. Check settings before driving.";
+    }
     
     String output;
     serializeJson(doc, output);
