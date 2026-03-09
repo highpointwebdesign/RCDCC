@@ -57,7 +57,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // - Generates from CI/CD pipeline build number
         const APP_VERSION = '6f3e740';
         const BUILD_DATE = '2026-03-04';
-        const DEVELOPER_MODE_KEY = 'developerModeEnabled';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -69,28 +68,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function isBleConnected() {
             return !!(bleManager && bleManager.getConnectionStatus && bleManager.getConnectionStatus());
-        }
-
-        function applyDeveloperModeVisibility(enabled) {
-            const debugCardsContainer = document.getElementById('developerDebugCard');
-            if (debugCardsContainer) {
-                debugCardsContainer.style.display = enabled ? 'block' : 'none';
-            }
-        }
-
-        function initDeveloperMode() {
-            const developerToggle = document.getElementById('developerModeToggle');
-            if (!developerToggle) return;
-
-            const enabled = localStorage.getItem(DEVELOPER_MODE_KEY) === 'true';
-            developerToggle.checked = enabled;
-            applyDeveloperModeVisibility(enabled);
-
-            developerToggle.addEventListener('change', function() {
-                localStorage.setItem(DEVELOPER_MODE_KEY, String(this.checked));
-                applyDeveloperModeVisibility(this.checked);
-                toast.success(this.checked ? 'Developer mode enabled' : 'Developer mode disabled');
-            });
         }
 
         function ensureBleConnectedOrThrow() {
@@ -1563,7 +1540,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             initNetworkSettings();
             applyRequestedLayoutMoves();
             initSettingsTabs();
-            initDeveloperMode();
 
             // Initialize notification sounds toggle
             const enableSoundsCheckbox = document.getElementById('enableNotificationSounds');
