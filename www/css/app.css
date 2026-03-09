@@ -748,6 +748,17 @@
             background-color: #f3f4f6;
             border-color: var(--primary);
         }
+        
+        /* Flash animation for reordered groups */
+        @keyframes border-flash {
+            0% { border-color: inherit; }
+            50% { border-color: var(--bright-impact); border-width: 2px; }
+            100% { border-color: inherit; }
+        }
+        
+        .light-group-item.flash-border {
+            animation: border-flash 0.6s ease-in-out;
+        }
 
         .light-group-info {
             flex: 1;

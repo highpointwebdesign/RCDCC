@@ -1540,6 +1540,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             initNetworkSettings();
             applyRequestedLayoutMoves();
             initSettingsTabs();
+            initDebugModeToggle();
 
             // Initialize notification sounds toggle
             const enableSoundsCheckbox = document.getElementById('enableNotificationSounds');
@@ -1732,11 +1733,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             // ==================== Light Hierarchy Controls ====================
-            const lightsToggleIcon = document.getElementById('lightsToggleIcon');
+            const masterLightsToggle = document.getElementById('masterLightsToggle');
             const lightsToggleDashboard = document.getElementById('lightsToggleDashboard');
             const lightsToggleHeaderIcon = document.getElementById('lightsToggleHeaderIcon');
 
-            bindHeaderLightIcon(lightsToggleIcon);
+            bindMasterLightSwitch(masterLightsToggle);
             bindMasterLightSwitch(lightsToggleDashboard);
             bindHeaderLightIcon(lightsToggleHeaderIcon);
             syncMasterLightSwitches(getMasterLightsEnabled());
@@ -2235,14 +2236,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function syncMasterLightSwitches(isEnabled) {
-            const masterIcon = document.getElementById('lightsToggleIcon');
+            const masterToggle = document.getElementById('masterLightsToggle');
             const dashboardToggle = document.getElementById('lightsToggleDashboard');
             const headerIcon = document.getElementById('lightsToggleHeaderIcon');
+            
+            if (masterToggle) masterToggle.checked = isEnabled;
             if (dashboardToggle) dashboardToggle.checked = isEnabled;
-            if (masterIcon) {
-                masterIcon.style.color = isEnabled ? 'var(--bluetooth-blue)' : 'var(--text-muted)';
-                masterIcon.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
-            }
             if (headerIcon) {
                 headerIcon.style.color = isEnabled ? 'var(--bluetooth-blue)' : 'var(--text-muted)';
                 headerIcon.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
@@ -2560,6 +2559,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             renderLightGroupsList();
             renderLightsHierarchyControls();
             
+            // Flash the moved group to highlight its new position
+            flashLightGroupBorder(index);
+            
             // Now push to hardware with updated order
             applyLightsHierarchyToHardware();
         }
@@ -2577,8 +2579,27 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             renderLightGroupsList();
             renderLightsHierarchyControls();
             
+            // Flash the moved group to highlight its new position
+            flashLightGroupBorder(index);
+            
             // Now push to hardware with updated order
             applyLightsHierarchyToHardware();
+        }
+        
+        // Flash border animation to highlight a reordered group
+        function flashLightGroupBorder(index) {
+            // Wait for DOM update
+            setTimeout(() => {
+                const groupElements = document.querySelectorAll('.light-group-item');
+                if (groupElements[index]) {
+                    const element = groupElements[index];
+                    element.classList.add('flash-border');
+                    // Remove the class after animation completes
+                    setTimeout(() => {
+                        element.classList.remove('flash-border');
+                    }, 600); // Match animation duration in CSS
+                }
+            }, 50);
         }
         
         // Make functions globally accessible
@@ -4996,11 +5017,35 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             connectBLE()
             .then(success => {
                 if (success) {
-                    toast.success('Bluetooth connection successful!');
+                    // Connection established, now verify ESP32 is responding with data
+                    return new Promise((resolve, reject) => {
+                        let dataReceived = false;
+                        const timeout = setTimeout(() => {
+                            if (!dataReceived) {
+                                reject(new Error('No response from ESP32 - device may be powered off'));
+                            }
+                        }, 3000); // 3 second timeout to receive telemetry
+                        
+                        // Check if we're receiving telemetry updates
+                        const checkInterval = setInterval(() => {
+                            // Check if fullConfig has been populated (indicates data received)
+                            if (fullConfig && (fullConfig.deviceName || fullConfig.firmwareVersion)) {
+                                dataReceived = true;
+                                clearTimeout(timeout);
+                                clearInterval(checkInterval);
+                                resolve(true);
+                            }
+                        }, 100);
+                    });
+                } else {
+                    throw new Error('Failed to establish Bluetooth connection');
                 }
             })
+            .then(() => {
+                toast.success('Bluetooth connection verified! ESP32 is responding.', { duration: 4000 });
+            })
             .catch(error => {
-                toast.error(`Bluetooth connection failed: ${error.message}`, { duration: 5000 });
+                toast.error(`Connection test failed: ${error.message}`, { duration: 5000 });
             })
             .finally(() => {
                 if (testBtn) {
@@ -5185,6 +5230,44 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             // Activate the saved tab
             openSettingsTab(savedTab);
+        }
+        
+        // Initialize debug mode toggle
+        function initDebugModeToggle() {
+            const debugToggle = document.getElementById('debugModeToggle');
+            const debugTab = document.getElementById('debugTab');
+            const debugPane = document.getElementById('tab-debug');
+            
+            if (!debugToggle || !debugTab || !debugPane) return;
+            
+            // Apply initial visibility state (default: hidden)
+            const isDebugEnabled = false; // Never remember state per user request
+            debugToggle.checked = isDebugEnabled;
+            updateDebugTabVisibility(isDebugEnabled);
+            
+            // Add change listener
+            debugToggle.addEventListener('change', function() {
+                const isEnabled = this.checked;
+                updateDebugTabVisibility(isEnabled);
+                
+                // If debug tab was active when disabled, switch to network tab
+                if (!isEnabled && debugPane.classList.contains('active')) {
+                    openSettingsTab('network');
+                }
+            });
+        }
+        
+        // Update debug tab visibility based on toggle state
+        function updateDebugTabVisibility(isEnabled) {
+            const debugTab = document.getElementById('debugTab');
+            const debugPane = document.getElementById('tab-debug');
+            
+            if (debugTab) {
+                debugTab.style.display = isEnabled ? '' : 'none';
+            }
+            if (debugPane && !isEnabled) {
+                debugPane.classList.remove('active');
+            }
         }
 
         function offlineMode() {

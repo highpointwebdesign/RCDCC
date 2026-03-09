@@ -591,9 +591,21 @@
                                     <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">Firmware Version</div>
                                     <div style="color: #666; font-size: 0.875rem;" id="firmwareVersion">Loading...</div>
                                 </div>
-                                <div>
+                                <div style="margin-bottom: 1rem;">
                                     <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">Build Date</div>
                                     <div style="color: #666; font-size: 0.875rem;" id="buildDate">Loading...</div>
+                                </div>
+                                <hr style="margin: 1rem 0;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label mb-0" for="debugModeToggle">
+                                        <strong>Enable Debug Mode</strong>
+                                    </label>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" id="debugModeToggle">
+                                    </div>
+                                </div>
+                                <div class="form-text mt-2">
+                                    <small>Show Debug tab with developer tools and raw configuration data.</small>
                                 </div>
                             </div>
                         </div>
@@ -938,15 +950,17 @@
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">power_settings_new</span>
+                            <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
                             Lighting Control
                         </div>
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3 border rounded px-2 py-2">
-                                <label class="form-check-label mb-0" for="lightsToggleIcon">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <label class="form-check-label mb-0" for="masterLightsToggle">
                                     <strong>Master Switch</strong>
                                 </label>
-                                <span class="material-symbols-outlined" id="lightsToggleIcon" role="button" tabindex="0" title="Master lights switch" style="cursor: pointer; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted);">lightbulb</span>
+                                <div class="form-check form-switch m-0">
+                                    <input class="form-check-input" type="checkbox" id="masterLightsToggle">
+                                </div>
                             </div>
                             <div class="form-text mb-3">
                                 <small>When Master is off, all lights are off. When Master is on, only enabled groups run.</small>
