@@ -752,7 +752,7 @@
         /* Flash animation for reordered groups */
         @keyframes border-flash {
             0% { border-color: inherit; }
-            50% { border-color: var(--bright-impact); border-width: 2px; }
+            50% { border-color: var(--high-impact-color); border-width: 2px; }
             100% { border-color: inherit; }
         }
         

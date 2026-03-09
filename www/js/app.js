@@ -2559,8 +2559,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             renderLightGroupsList();
             renderLightsHierarchyControls();
             
-            // Flash the moved group to highlight its new position
-            flashLightGroupBorder(index);
+            // Flash the moved group at its NEW position (index-1)
+            flashLightGroupBorder(index - 1);
             
             // Now push to hardware with updated order
             applyLightsHierarchyToHardware();
@@ -2579,8 +2579,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             renderLightGroupsList();
             renderLightsHierarchyControls();
             
-            // Flash the moved group to highlight its new position
-            flashLightGroupBorder(index);
+            // Flash the moved group at its NEW position (index+1)
+            flashLightGroupBorder(index + 1);
             
             // Now push to hardware with updated order
             applyLightsHierarchyToHardware();
