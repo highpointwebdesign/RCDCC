@@ -427,30 +427,42 @@
             <!-- Tab Content: Bluetooth Settings -->
             <div class="tab-pane active" id="tab-network">
                 <div class="row g-3">
-                    <!-- Bluetooth Settings Card -->
+                    <!-- Device Configuration Card -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                badge
+                                </span>
+                                Device Configuration
+                            </div>
+                            <div class="card-body">
+                                <div style="color: #000;">
+                                    <label for="deviceNameInput" class="form-label"><strong>Device Name</strong></label>
+                                    <input type="text" class="form-control" id="deviceNameInput" placeholder="esp32-a49g4" maxlength="63">
+                                    <div class="form-text">This name identifies your RCDCC module during Bluetooth pairing.</div>
+                                </div>
+                                
+                                <button type="button" class="btn w-100 mt-3 btn-gold" id="saveNetworkBtn">
+                                    <span class="material-symbols-outlined">save</span> Save Device Name
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connection Testing Card -->
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header" style="background-color: black; color: white;">
                                 <span class="material-symbols-outlined" style="color: var(--danger);">
                                 bluetooth
                                 </span>
-                                Bluetooth Settings
+                                Connection Diagnostics
                             </div>
                             <div class="card-body">
-                                <div style="color: #000; margin-bottom: 2rem;">
-                                    <h6 class="mb-3"><strong>Device Name</strong></h6>
-                                    <div class="form-check">
-                                        <input type="text" class="form-control" id="deviceNameInput" placeholder="esp32-a49g4" maxlength="63">
-                                    </div>
-                                </div>
-                                
-                               
-                    
-                                <button type="button" class="btn w-100 mt-2 btn-gold" id="testConnectionBtn">
-                                    <span class="material-symbols-outlined" >bluetooth</span> Test Bluetooth Connection
-                                </button>
-                                <button type="button" class="btn w-100 mt-2 btn-gold" id="saveNetworkBtn">
-                                    <span class="material-symbols-outlined" >save</span> Save Device Name
+                                <p class="text-muted mb-3">Test the Bluetooth Low Energy connection to verify communication with your RCDCC module.</p>
+                                <button type="button" class="btn w-100 btn-gold" id="testConnectionBtn">
+                                    <span class="material-symbols-outlined">bluetooth</span> Test Bluetooth Connection
                                 </button>
                             </div>
                         </div>
