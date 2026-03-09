@@ -1900,16 +1900,35 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         
         // Get the selected notification group name
         function getNotificationGroup() {
+            // Try to get from ESP32 config first (travels with the truck)
+            if (fullConfig && fullConfig.notificationGroup) {
+                return fullConfig.notificationGroup;
+            }
+            // Fallback to localStorage for offline/pre-connection state
             return localStorage.getItem(NOTIFICATION_GROUP_KEY) || '__all__';
         }
         
         // Save the selected notification group
-        function saveNotificationGroup() {
+        async function saveNotificationGroup() {
             const select = document.getElementById('notificationGroupSelect');
             if (!select) return;
             
             const value = select.value;
             localStorage.setItem(NOTIFICATION_GROUP_KEY, value);
+            
+            // Update ESP32 config if connected
+            if (isBleConnected()) {
+                try {
+                    await pushConfigPayload({ notificationGroup: value });
+                    if (fullConfig) {
+                        fullConfig.notificationGroup = value;
+                    }
+                } catch (error) {
+                    console.error('Failed to save notification group to ESP32:', error);
+                    toast.error('Failed to save notification group to device');
+                    return;
+                }
+            }
             
             if (value === '__none__') {
                 window.toast.success('LED notifications disabled');
@@ -3656,7 +3675,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             try {
                 communicationMode = 'ble';
-                const bleData = await bleManager.readConfig();
+                // Fetch config and lights separately for better reliability and isolation
+                const [configData, lightsData] = await Promise.all([
+                    bleManager.readConfig(),
+                    bleManager.readLights()
+                ]);
+                
+                // Merge lights data into config
+                const bleData = {
+                    ...configData,
+                    totalLEDCount: lightsData.totalLEDCount,
+                    lightGroupsArray: lightsData.lightGroupsArray
+                };
+                
                 applyLoadedConfig(bleData);
             } catch (error) {
                 console.error('Failed to fetch config:', error);

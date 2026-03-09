@@ -14,6 +14,7 @@
 // Configuration Characteristics
 #define CONFIG_READ_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define CONFIG_WRITE_UUID   "1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e"
+#define LIGHTS_READ_UUID    "a1b2c3d4-5678-90ab-cdef-1234567890ab"
 
 // Telemetry Characteristics (real-time sensor data)
 #define TELEMETRY_UUID      "d8de624e-140f-4a22-8594-e2216b84a5f2"
@@ -31,6 +32,7 @@ private:
     // Characteristics
     BLECharacteristic* pConfigReadChar;
     BLECharacteristic* pConfigWriteChar;
+    BLECharacteristic* pLightsReadChar;
     BLECharacteristic* pTelemetryChar;
     BLECharacteristic* pServoCommandChar;
     BLECharacteristic* pLightsCommandChar;
@@ -63,6 +65,7 @@ public:
     // Callback classes (defined below)
     class ServerCallbacks;
     class ConfigReadCallbacks;
+    class LightsReadCallbacks;
     class ConfigWriteCallbacks;
     class ServoCommandCallbacks;
     class LightsCommandCallbacks;
@@ -99,6 +102,20 @@ public:
     void onRead(BLECharacteristic* pCharacteristic) {
         String json = storage->getConfigJSON();
         Serial.printf("BLE: Config read requested (%d bytes)\n", json.length());
+        pCharacteristic->setValue(json.c_str());
+    }
+};
+
+// Lights read callbacks
+class BluetoothService::LightsReadCallbacks : public BLECharacteristicCallbacks {
+private:
+    StorageManager* storage;
+public:
+    LightsReadCallbacks(StorageManager* storageManager) : storage(storageManager) {}
+    
+    void onRead(BLECharacteristic* pCharacteristic) {
+        String json = storage->getLightsJSON();
+        Serial.printf("BLE: Lights config read requested (%d bytes)\n", json.length());
         pCharacteristic->setValue(json.c_str());
     }
 };
@@ -217,6 +234,13 @@ void BluetoothService::begin(const char* deviceName) {
         BLECharacteristic::PROPERTY_WRITE
     );
     pConfigWriteChar->setCallbacks(new ConfigWriteCallbacks(this));
+    
+    // Create Lights Read Characteristic
+    pLightsReadChar = pService->createCharacteristic(
+        LIGHTS_READ_UUID,
+        BLECharacteristic::PROPERTY_READ
+    );
+    pLightsReadChar->setCallbacks(new LightsReadCallbacks(storage));
     
     // Create Telemetry Characteristic (with notifications)
     pTelemetryChar = pService->createCharacteristic(

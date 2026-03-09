@@ -36,6 +36,7 @@ public:
     config.fpvAutoMode = DEFAULT_FPV_AUTO_MODE;
     strncpy(config.deviceName, DEFAULT_DEVICE_NAME, sizeof(config.deviceName) - 1);
     config.deviceName[sizeof(config.deviceName) - 1] = '\0';
+    strcpy(config.notificationGroup, \"__all__\");  // Default to flash all LEDs for notifications
   }
   
   void loadServoDefaults() {
@@ -80,6 +81,12 @@ public:
     if (error) {
       Serial.print("JSON parsing failed: ");
       Serial.println(error.c_str());
+      // Auto-recovery: Delete corrupted file and regenerate from defaults
+      file.close();
+      SPIFFS.remove(CONFIG_SPIFFS_PATH);
+      loadDefaults();
+      saveConfig();
+      Serial.println("Corrupted config.json deleted and regenerated from defaults");
       return;
     }
     
@@ -155,6 +162,15 @@ public:
       else ledConfig.color = DEFAULT_LED_COLOR;
     }
     
+    // Load notification group setting
+    if (doc.containsKey("notificationGroup")) {
+      const char* groupStr = doc["notificationGroup"] | "__all__";
+      strncpy(config.notificationGroup, groupStr, sizeof(config.notificationGroup) - 1);
+      config.notificationGroup[sizeof(config.notificationGroup) - 1] = '\0';
+    } else {
+      strcpy(config.notificationGroup, "__all__");
+    }
+    
     if (trimWasReset) {
       saveConfig();
     }
@@ -181,6 +197,16 @@ public:
     if (error) {
       Serial.print("Lights JSON parsing failed: ");
       Serial.println(error.c_str());
+      // Auto-recovery: Delete corrupted file and regenerate from defaults
+      file.close();
+      SPIFFS.remove(LIGHTS_SPIFFS_PATH);
+      // Initialize with empty lights config
+      memset(&newLightsConfig, 0, sizeof(NewLightsConfig));
+      newLightsConfig.useLegacyMode = false;
+      newLightsConfig.groupCount = 0;
+      newLightsConfig.totalLEDCount = 100;
+      saveLights();
+      Serial.println("Corrupted lights.json deleted and regenerated with defaults");
       return;
     }
     
@@ -377,6 +403,9 @@ public:
     else if (ledConfig.color == LED_COLOR_BLUE) colorStr = "blue";
     doc["ledColor"] = colorStr;
     
+    // Save notification group
+    doc["notificationGroup"] = config.notificationGroup;
+    
     File file = SPIFFS.open(CONFIG_SPIFFS_PATH, "w");
     if (!file) {
       Serial.println("Failed to create config file");
@@ -430,6 +459,17 @@ public:
     }
   }
   
+  void updateNotificationGroup(const String& groupName) {
+    if (groupName.length() > 0 && groupName.length() < sizeof(config.notificationGroup)) {
+      strncpy(config.notificationGroup, groupName.c_str(), sizeof(config.notificationGroup) - 1);
+      config.notificationGroup[sizeof(config.notificationGroup) - 1] = '\0';
+      saveConfig();
+      Serial.printf("Notification group updated to: %s\n", config.notificationGroup);
+    } else {
+      Serial.printf("Invalid notification group name (length: %d)\n", groupName.length());
+    }
+  }
+  
   void resetToDefaults() {
     loadDefaults();
     saveConfig();
@@ -437,7 +477,7 @@ public:
   }
   
   String getConfigJSON() {
-    DynamicJsonDocument doc(8192);  // Increased size for full config including servos and lights
+    DynamicJsonDocument doc(2048);  // Reduced size - lights moved to separate call
     
     doc["reactionSpeed"] = config.reactionSpeed;
     doc["rideHeightOffset"] = config.rideHeightOffset;
@@ -455,6 +495,9 @@ public:
     if (ledConfig.color == LED_COLOR_GREEN) colorStr = "green";
     else if (ledConfig.color == LED_COLOR_BLUE) colorStr = "blue";
     doc["ledColor"] = colorStr;
+    
+    // Add notification group
+    doc["notificationGroup"] = config.notificationGroup;
     
     // Add servo configuration
     JsonObject servos = doc.createNestedObject("servos");
@@ -483,7 +526,21 @@ public:
     rr["max"] = servoConfig.rearRight.maxLimit;
     rr["reversed"] = servoConfig.rearRight.reversed;
     
-    // Add lights configuration
+    // Add warning flag for servo trim reset if needed
+    if (servoTrimResetWarning) {
+      JsonObject warnings = doc.createNestedObject("warnings");
+      warnings["servoTrimReset"] = true;
+      warnings["message"] = "Unexpected servo trim value was reset to 0. Check settings before driving.";
+    }
+    
+    String output;
+    serializeJson(doc, output);
+    return output;
+  }
+  
+  String getLightsJSON() {
+    DynamicJsonDocument doc(8192);  // Large buffer for lights with many groups
+    
     doc["totalLEDCount"] = newLightsConfig.totalLEDCount;
     
     JsonArray lightGroupsArray = doc.createNestedArray("lightGroupsArray");
@@ -503,13 +560,6 @@ public:
       for (uint8_t led = 0; led < group.ledCount && led < 100; led++) {
         idx.add(group.ledIndices[led]);
       }
-    }
-    
-    // Add warning flag for servlet trim reset if needed
-    if (servoTrimResetWarning) {
-      JsonObject warnings = doc.createNestedObject("warnings");
-      warnings["servoTrimReset"] = true;
-      warnings["message"] = "Unexpected servo trim value was reset to 0. Check settings before driving.";
     }
     
     String output;

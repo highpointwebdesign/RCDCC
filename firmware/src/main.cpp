@@ -182,6 +182,10 @@ bool applyConfigUpdatePayload(const String& payload) {
     storageManager.updateDeviceName(doc["deviceName"].as<String>());
   }
 
+  if (doc.containsKey("notificationGroup")) {
+    storageManager.updateNotificationGroup(doc["notificationGroup"].as<String>());
+  }
+
   if (doc.containsKey("ledColor")) {
     storageManager.setLEDColor(doc["ledColor"].as<String>());
     updateStatusLEDColor();

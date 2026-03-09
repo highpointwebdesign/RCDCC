@@ -88,6 +88,7 @@ struct SuspensionConfig {
   uint8_t mpuOrientation;  // MPU6050 mounting orientation
   bool fpvAutoMode;        // FPV auto mode persistent setting
   char deviceName[64];     // Device hostname for network (e.g., "esp32-frontleft")
+  char notificationGroup[64];  // Light group name for LED notifications (e.g., "__all__", "__none__", or custom group name)
 };
 
 // Per-servo calibration settings

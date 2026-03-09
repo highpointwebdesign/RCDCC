@@ -9,6 +9,7 @@ class BluetoothManager {
         this.SERVICE_UUID      = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
         this.CHAR_CONFIG_READ  = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
         this.CHAR_CONFIG_WRITE = '1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e';
+        this.CHAR_LIGHTS_READ  = 'a1b2c3d4-5678-90ab-cdef-1234567890ab';
         this.CHAR_TELEMETRY    = 'd8de624e-140f-4a22-8594-e2216b84a5f2';
         this.CHAR_SERVO_CMD    = 'e8a3c5f2-4b9d-11ec-81d3-0242ac130003';
         this.CHAR_LIGHTS_CMD   = 'f2b4d6e8-4b9d-11ec-81d3-0242ac130003';
@@ -238,6 +239,52 @@ class BluetoothManager {
             console.error('Failed to parse config JSON:', error);
             console.error('Full raw data:', jsonString);
             throw new Error(`Invalid JSON from device: ${error.message}. Check device firmware.`);
+        }
+    }
+
+    async readLights() {
+        if (!this.isConnected) throw new Error('Not connected to BLE device');
+        const startTime = performance.now();
+        const ble = await this._getBle();
+
+        let jsonString = '';
+        const maxAttempts = 4;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const payload = await this.enqueueGattOperation('read-lights', () =>
+                ble.read({
+                    deviceId: this.deviceId,
+                    service: this.SERVICE_UUID,
+                    characteristic: this.CHAR_LIGHTS_READ
+                })
+            );
+
+            jsonString = this._decodeDataView(payload).trim();
+            if (jsonString.length > 0) {
+                if (attempt > 1) {
+                    console.log(`BLE lights read succeeded on retry ${attempt}/${maxAttempts}`);
+                }
+                break;
+            }
+
+            console.warn(`BLE lights read attempt ${attempt}/${maxAttempts} returned empty payload`);
+            if (attempt < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 80));
+            }
+        }
+
+        console.log('BLE raw lights data received:', jsonString.length, 'bytes');
+        
+        try {
+            const lightsData = JSON.parse(jsonString);
+            const latency = performance.now() - startTime;
+            this.stats.lastLatency = latency;
+            this.stats.bytesReceived += jsonString.length;
+            console.log('Lights config received via BLE (' + latency.toFixed(1) + 'ms, ' + jsonString.length + ' bytes)');
+            return lightsData;
+        } catch (error) {
+            console.error('Failed to parse lights JSON:', error);
+            console.error('Full raw data:', jsonString);
+            throw new Error(`Invalid lights JSON from device: ${error.message}. Check device firmware.`);
         }
     }
 
