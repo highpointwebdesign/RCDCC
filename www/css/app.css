@@ -801,6 +801,19 @@
             font-size: 0.9375rem;
         }
 
+        .light-group-color-dot {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            min-width: 14px;
+            min-height: 14px;
+            flex: 0 0 14px;
+            border: 1px solid #ddd;
+            border-radius: 50%;
+            vertical-align: middle;
+            box-sizing: border-box;
+        }
+
         .light-group-details {
             font-size: 0.8125rem;
             color: #666;

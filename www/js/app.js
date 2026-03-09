@@ -124,7 +124,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 stopAutoReconnect();
                 stopHeartbeat();
                 updateConnectionStatus(true);
-                updateConnectionMethodDisplay();
                 refreshConfigAfterConnection('manual-connect');
                 toast.dismiss('ble-config-required');
                 if (showSuccessToast) toast.success('Connected via Bluetooth LE');
@@ -146,7 +145,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             hasLoadedConfigFromDevice = false;
             startHeartbeat();
             updateConnectionStatus(false);
-            updateConnectionMethodDisplay();
         }
 
         async function attemptAutoReconnect(source = 'timer') {
@@ -163,7 +161,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     stopHeartbeat();
                     stopAutoReconnect();
                     updateConnectionStatus(true);
-                    updateConnectionMethodDisplay();
                     refreshConfigAfterConnection(`auto-reconnect:${source}`);
                     toast.dismiss('ble-config-required');
                     toast.success('Bluetooth reconnected', { duration: 2200 });
@@ -1414,7 +1411,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     hasLoadedConfigFromDevice = false;
                     startHeartbeat();
                     updateConnectionStatus(false);
-                    updateConnectionMethodDisplay();
                     if (!manualBleDisconnect) {
                         startAutoReconnect('disconnect-callback');
                     }
@@ -1426,7 +1422,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     communicationMode = 'ble';
                     stopAutoReconnect();
                     updateConnectionStatus(true);
-                    updateConnectionMethodDisplay();
                 });
             }
 
@@ -1483,46 +1478,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Start ESP32 heartbeat monitor
             initHeartbeatMonitor();
             
-            // Display ESP32 IP address on dashboard
-            const ipDisplay = document.getElementById('deviceIpDisplay');
-            if (ipDisplay) ipDisplay.textContent = 'BLE';
-            
-            // Display connection method on dashboard
-            updateConnectionMethodDisplay();
-
             // Best-effort reconnect on page load for already-authorized devices.
             startAutoReconnect('startup');
-            
-            // Display protocol and secure context for debugging (PWA)
-            const protocolDisplay = document.getElementById('protocolDisplay');
-            const secureContextDisplay = document.getElementById('secureContextDisplay');
-            
-            if (protocolDisplay) {
-                const protocol = window.location.protocol;
-                protocolDisplay.textContent = protocol;
-                
-                // Color-code the protocol
-                if (protocol === 'https:') {
-                    protocolDisplay.style.color = 'var(--lime-green)';
-                } else if (protocol === 'http:') {
-                    protocolDisplay.style.color = 'var(--warning)';
-                } else if (protocol === 'file:') {
-                    protocolDisplay.style.color = 'var(--danger)';
-                }
-            }
-            
-            if (secureContextDisplay) {
-                const isSecure = window.isSecureContext;
-                
-                if (isSecure) {
-                    secureContextDisplay.textContent = 'Yes';
-                    secureContextDisplay.style.color = 'var(--lime-green)';
-                } else {
-                    secureContextDisplay.textContent = 'No';
-                    secureContextDisplay.style.color = 'var(--danger)';
-                    console.warn('Not a secure context. Protocol:', window.location.protocol);
-                }
-            }
             
             // Fetch config from ESP32
             fetchConfigFromESP32();
@@ -1752,16 +1709,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 });
             }
             
-            // Connection Settings gear click - navigate to Settings
-            ['connectionSettingsGear', 'wifiIcon'].forEach(elementId => {
-                const element = document.getElementById(elementId);
-                if (element) {
-                    element.addEventListener('click', function() {
-                        navigateToSection('settings');
-                        setTimeout(() => openSettingsTab('network'), 0);
-                    });
-                }
-            });
+            // Header icon click - navigate to Settings
+            const wifiIcon = document.getElementById('wifiIcon');
+            if (wifiIcon) {
+                wifiIcon.addEventListener('click', function() {
+                    navigateToSection('settings');
+                    setTimeout(() => openSettingsTab('network'), 0);
+                });
+            }
             
             // Console Clear button
             const consoleClearBtn = document.getElementById('consoleClearBtn');
@@ -2256,7 +2211,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (masterToggle) masterToggle.checked = isEnabled;
             if (dashboardToggle) dashboardToggle.checked = isEnabled;
             if (headerIcon) {
-                headerIcon.style.color = isEnabled ? 'var(--bluetooth-blue)' : 'var(--text-muted)';
+                headerIcon.style.color = isEnabled ? 'var(--lime-green)' : 'var(--text-muted)';
                 headerIcon.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
             }
         }
@@ -2504,8 +2459,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     
                     // Show both colors if second color is not black/off
                     const colorDisplay = color2 !== '#000000' && color2 !== '#00000000'
-                        ? `<span style="display: inline-block; width: 14px; height: 14px; background-color: ${color}; border: 1px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 3px;"></span><span style="display: inline-block; width: 14px; height: 14px; background-color: ${color2}; border: 1px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 6px;"></span>`
-                        : `<span style="display: inline-block; width: 14px; height: 14px; background-color: ${color}; border: 1px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 6px;"></span>`;
+                        ? `<span class="light-group-color-dot" style="background-color: ${color}; margin-right: 3px;"></span><span class="light-group-color-dot" style="background-color: ${color2}; margin-right: 6px;"></span>`
+                        : `<span class="light-group-color-dot" style="background-color: ${color}; margin-right: 6px;"></span>`;
                     
                     const colorText = color2 !== '#000000' && color2 !== '#00000000'
                         ? `${color.toUpperCase()} / ${color2.toUpperCase()}`
@@ -3431,8 +3386,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 icon.classList.remove('connecting', 'disconnected');
                 icon.textContent = 'bluetooth';
                 icon.style.color = 'var(--bluetooth-blue)';
-                const status = document.getElementById('telemetryStatus');
-                if (status) status.textContent = 'Live';
                 return;
             }
 
@@ -3440,15 +3393,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 icon.classList.remove('connecting', 'disconnected');
                 icon.textContent = 'bluetooth_disabled';
                 icon.style.color = 'var(--bluetooth-blue)';
-                const status = document.getElementById('telemetryStatus');
-                if (status) status.textContent = 'Live';
             } else {
                 icon.classList.remove('connecting');
                 icon.classList.add('disconnected');
                 icon.textContent = 'bluetooth_disabled';
                 icon.style.color = 'var(--text-muted)';
-                const status = document.getElementById('telemetryStatus');
-                if (status) status.textContent = 'Inactive';
             }
         }
 
@@ -3770,7 +3719,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             if (!isBleConnected()) {
                 updateConnectionStatus(false);
-                updateConnectionMethodDisplay();
                 toast.warning(`Bluetooth disconnected. Reconnect before saving ${sliderName}.`, { duration: 3500 });
                 return;
             }
@@ -3828,7 +3776,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             .catch(error => {
                 if (error && error.message === 'Bluetooth LE not connected') {
                     updateConnectionStatus(false);
-                    updateConnectionMethodDisplay();
                 }
                 console.error('Failed to save tuning slider:', error);
                 toast.error(getSaveErrorMessage(`Saving ${sliderName}`, error), { duration: 5000 });
@@ -3842,7 +3789,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function saveServoParameter(servoName, param, value) {
             if (!isBleConnected()) {
                 updateConnectionStatus(false);
-                updateConnectionMethodDisplay();
                 toast.warning('Bluetooth disconnected. Reconnect before saving servo settings.', { duration: 3500 });
                 return;
             }
@@ -3891,7 +3837,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             .catch(error => {
                 if (error && error.message === 'Bluetooth LE not connected') {
                     updateConnectionStatus(false);
-                    updateConnectionMethodDisplay();
                 }
                 console.error('Failed to save servo config:', error);
                 toast.error(getSaveErrorMessage('Saving servo configuration', error), { duration: 5000 });
@@ -5093,18 +5038,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Network Settings Functions ====================
         
         // Update connection method display on dashboard
-        function updateConnectionMethodDisplay() {
-            const connectionMethodDisplay = document.getElementById('connectionMethodDisplay');
-            if (!connectionMethodDisplay) return;
 
-            if (isBleConnected()) {
-                connectionMethodDisplay.textContent = 'Bluetooth LE';
-                connectionMethodDisplay.style.color = 'var(--lime-green)';
-            } else {
-                connectionMethodDisplay.textContent = 'Bluetooth LE (Disconnected)';
-                connectionMethodDisplay.style.color = 'var(--warning)';
-            }
-        }
         
         // Test ESP32 connection
         async function testEsp32Connection() {
@@ -5181,7 +5115,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     toast.error(`Failed to save over Bluetooth LE: ${error.message}`);
                 })
                 .finally(() => {
-                    updateConnectionMethodDisplay();
                     if (saveBtn) {
                         saveBtn.disabled = false;
                         saveBtn.innerHTML = '<span class="material-symbols-outlined" >save</span> Save Device Name';

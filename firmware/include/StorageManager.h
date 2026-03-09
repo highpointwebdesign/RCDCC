@@ -36,7 +36,7 @@ public:
     config.fpvAutoMode = DEFAULT_FPV_AUTO_MODE;
     strncpy(config.deviceName, DEFAULT_DEVICE_NAME, sizeof(config.deviceName) - 1);
     config.deviceName[sizeof(config.deviceName) - 1] = '\0';
-    strcpy(config.notificationGroup, \"__all__\");  // Default to flash all LEDs for notifications
+    strcpy(config.notificationGroup, "__all__");  // Default to flash all LEDs for notifications
   }
   
   void loadServoDefaults() {
