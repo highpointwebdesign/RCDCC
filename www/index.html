@@ -59,156 +59,115 @@
             
             <div class="header-actions">
                 <span class="material-symbols-outlined" title="Reset Gyro" id="setLevelBtn" role="button" tabindex="0" style="color: var(--high-impact-color); cursor: pointer; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center;">camera</span>
+                <span class="material-symbols-outlined" id="lightsToggleHeaderIcon" role="button" tabindex="0" title="Master lights switch" style="cursor: pointer; font-size: 1.5rem; margin-left: 6px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted);">lightbulb</span>
                 <span class="material-symbols-outlined" id="wifiIcon" role="button" tabindex="0" style="cursor: pointer; font-size: 1.5rem; padding-left: 5px; display: inline-flex; align-items: center; justify-content: center;">bluetooth_disabled</span>
             </div>
         </div>
         
         <!-- Dashboard Section -->
         <section id="dashboard" class="page-section active">
-            <h2 class="section-title">Dashboard</h2>
-        <!-- Main Metrics Grid -->
-        <div class="row g-3">
+            <h2 class="section-title">Home</h2>
+            <div class="row g-3">
 
-
-            <!-- Roll/Pitch Snapshot Card -->
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
-                        <div>
-                            <span class="material-symbols-outlined icon-danger">landscape</span>
-                            Roll/Pitch/GPS
+                <!-- Connection Card -->
+                <div class="col-12 col-md-6 col-lg-4">
+                    <div class="card" id="connectionCard">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                            <div>
+                                <span class="material-symbols-outlined icon-danger" title="Bluetooth status.">bluetooth</span>
+                                Connection
+                            </div>
+                            <span class="material-symbols-outlined icon-action" id="connectionSettingsGear" title="Open Bluetooth settings.">network_manage</span>
                         </div>
-                        <span class="material-symbols-outlined icon-action" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values.">refresh</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between">
-                            <span>Roll</span>
-                            <span id="rollPitchRollValue">--</span>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2">
-                            <span>Pitch</span>
-                            <span id="rollPitchPitchValue">--</span>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2">
-                            <span >Latitude</span>
-                            <span class="value" id="latitude">--</span>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2">
-                            <span >Longitude</span>
-                            <span class="value" id="longitude">--</span>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2">
-                            <span >Accuracy</span>
-                            <span class="value" id="accuracy">--</span>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2">
-                            <span >Altitude</span>
-                            <span class="value" id="altitude">--</span>
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between mt-2">
+                                <span>RCDCC IP</span>
+                                <span id="deviceIpDisplay">--</span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mt-2">
+                                <span>Connection Method</span>
+                                <span id="connectionMethodDisplay">--</span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mt-2">
+                                <span>Telemetry Stream</span>
+                                <span id="telemetryStatus">--</span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mt-2">
+                                <span>Protocol</span>
+                                <span id="protocolDisplay">--</span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mt-2">
+                                <span>Secure Context</span>
+                                <span id="secureContextDisplay">--</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Suspension Settings Card -->
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
-                        <div>
-                            <span class="material-symbols-outlined icon-danger">tune</span>
-                            Suspension Settings
+                <!-- Roll/Pitch Snapshot Card -->
+                <div class="col-12 col-md-6 col-lg-4">
+                    <div class="card" id="rollPitchCard">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                            <div>
+                                <span class="material-symbols-outlined icon-danger">landscape</span>
+                                Roll/Pitch/GPS
+                            </div>
+                            <span class="material-symbols-outlined icon-action" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values.">refresh</span>
                         </div>
-                        <span class="material-symbols-outlined icon-action" id="suspensionSettingsGear" title="Modify suspension tuning parameters.">rule_settings</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <span>Reaction Speed</span>
-                            <span class="metric-pill" id="reactionSpeedBadge">--</span>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Ride Height</span>
-                            <span id="rideHeightDisplay">--</span>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Damping</span>
-                            <span id="dampingDisplay">--</span>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Stiffness</span>
-                            <span id="stiffnessDisplay">--</span>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Rear/Front Balance</span>
-                            <span id="frontRearBalanceDisplay">--</span>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <span>Roll</span>
+                                <span id="rollPitchRollValue">--</span>
+                            </div>
+                            <div class="d-flex justify-content-between mt-2">
+                                <span>Pitch</span>
+                                <span id="rollPitchPitchValue">--</span>
+                            </div>
+                            <div class="d-flex justify-content-between mt-2">
+                                <span>Latitude</span>
+                                <span class="value" id="latitude">--</span>
+                            </div>
+                            <div class="d-flex justify-content-between mt-2">
+                                <span>Longitude</span>
+                                <span class="value" id="longitude">--</span>
+                            </div>
+                            <div class="d-flex justify-content-between mt-2">
+                                <span>Accuracy</span>
+                                <span class="value" id="accuracy">--</span>
+                            </div>
+                            <div class="d-flex justify-content-between mt-2">
+                                <span>Altitude</span>
+                                <span class="value" id="altitude">--</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        
-            <!-- Connection Card -->
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="card" id="connectionCard">
-                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
-                        <div>
-                            <span class="material-symbols-outlined icon-danger" title="Current network status.">wifi</span>
-                            Connection
-                        </div>
-                        <span class="material-symbols-outlined icon-action" id="connectionSettingsGear" title="Modify system settings.">network_manage
-</span>
-                        
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>RCDCC IP</span>
-                            <span id="deviceIpDisplay">--</span>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Connection Method</span>
-                            <span id="connectionMethodDisplay">--</span>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Telemetry Stream</span>
-                            <span id="telemetryStatus">--</span>
-                        </div>
-                        <!-- <hr class="my-2"> -->
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Protocol</span>
-                            <span id="protocolDisplay">--</span>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Secure Context</span>
-                            <span id="secureContextDisplay">--</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Lights Control Card (Master Kill Switch) -->
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="card" id="lightsCard">
-                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
-                        <div>
-                            <span class="material-symbols-outlined icon-danger">power_settings_new</span>
-                            Lights
+                <!-- Dance Mode Card -->
+                <div class="col-12 col-lg-4">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                            <div>
+                                <span class="material-symbols-outlined icon-danger">mobile_vibrate</span>
+                                Dance Mode
+                            </div>
                         </div>
-                    </div>
-                    <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <label class="form-check-label mb-0" for="lightsToggleDashboard">
-                                    <strong>Master Switch</strong>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <label class="form-check-label mb-0" for="danceModeToggle">
+                                    <strong>Enable Real-Time Chassis Control</strong>
                                 </label>
                                 <div class="form-check form-switch m-0">
-                                    <input class="form-check-input" type="checkbox" id="lightsToggleDashboard">
+                                    <input class="form-check-input" type="checkbox" id="danceModeToggle">
                                 </div>
                             </div>
-                            <div class="form-text mb-3">
-                                <small>When Master is off, all lights are off. When Master is on, only enabled groups run.</small>
+                            <div class="form-text mt-2">
+                                <small>Tilt your phone while driving to control the TRX4 suspension in real time.</small>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-        </div>
         </section>
 
         <!-- Settings Section -->
@@ -216,14 +175,7 @@
             <h2 class="section-title">Settings</h2>
             <!-- Settings Tabs Navigation -->
             <div class="settings-tabs">
-                <button class="settings-tab active" data-tab="servo">
-                    <span class="material-symbols-outlined">
-                    design_services
-                    </span>
-                    <span class="tab-label-full">Servo Configuration</span>
-                    <span class="tab-label-short">Servo</span>
-                </button>
-                <button class="settings-tab" data-tab="network">
+                <button class="settings-tab active" data-tab="network">
                     <span class="material-symbols-outlined">
                     bluetooth
                     </span>
@@ -241,38 +193,13 @@
             </div>
 
             <!-- Tab Content: Servo Configuration -->
-            <div class="tab-pane active" id="tab-servo">
+            <div class="tab-pane" id="tab-servo">
                 <div class="row g-3">
                     <div class="col-12">
                         <button type="button" class="btn w-100 mt-2 btn-gold" id="autoLevelBtn">
                             <span class="material-symbols-outlined">wand_stars</span>
                             Initiate Auto Level
                         </button>
-                    </div>
-
-                    <!-- Dance Mode Card -->
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
-                                <div>
-                                    <span class="material-symbols-outlined icon-danger">music_note</span>
-                                    Dance Mode
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <label class="form-check-label mb-0" for="danceModeToggle">
-                                        <strong>Enable Dance Mode</strong>
-                                    </label>
-                                    <div class="form-check form-switch m-0">
-                                        <input class="form-check-input" type="checkbox" id="danceModeToggle">
-                                    </div>
-                                </div>
-                                <div class="form-text mt-2">
-                                    <small>Tilt your phone to control the TRX4's suspension in real time. Front/back tilt controls fore/aft balance; left/right tilt controls side-to-side lean.</small>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Auto Level Progress Container -->
@@ -497,17 +424,17 @@
                 </div>
             </div>
 
-            <!-- Tab Content: Network Settings -->
-            <div class="tab-pane" id="tab-network">
+            <!-- Tab Content: Bluetooth Settings -->
+            <div class="tab-pane active" id="tab-network">
                 <div class="row g-3">
-                    <!-- Network Settings Card -->
+                    <!-- Bluetooth Settings Card -->
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header" style="background-color: black; color: white;">
                                 <span class="material-symbols-outlined" style="color: var(--danger);">
-                                wifi
+                                bluetooth
                                 </span>
-                                Network Settings
+                                Bluetooth Settings
                             </div>
                             <div class="card-body">
                                 <div style="color: #000; margin-bottom: 2rem;">
@@ -628,63 +555,25 @@
                         </div>
                     </div>
 
-                    <!-- Console Card -->
+                    <!-- Developer Mode Card -->
                     <div class="col-12 col-md-6">
-                        <div class="card h-100"  style="background-color: #1E1E1E;">
+                        <div class="card">
                             <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">
-                                terminal
-                                </span>
-                                Console
-                                <div class="float-end" style="display: flex; gap: 10px; align-items: center;">
-                                    <span class="material-symbols-outlined icon-action" id="consoleCopyBtn" title="Copy console to clipboard">content_copy</span>
-                                    <span class="material-symbols-outlined icon-action" id="consoleClearBtn" title="Clear console">delete</span>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">developer_mode</span>
+                                Developer Mode
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label mb-0" for="developerModeToggle">
+                                        <strong>Show Debugging Cards</strong>
+                                    </label>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" id="developerModeToggle">
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="console-output" id="consoleOutput">
-                                <!-- Console logs will appear here -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Configuration Data Card (Servo) -->
-                    <div class="col-12 col-md-6">
-                        <div class="card h-100">
-                            <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span class="material-symbols-outlined" style="color: var(--danger);">
-                                settings
-                                </span>
-                                    Configuration Data
+                                <div class="form-text mt-2">
+                                    <small>When enabled, Console and configuration debug cards will be shown below the About card.</small>
                                 </div>
-                                <span class="material-symbols-outlined icon-action" id="configCopyBtn" title="Copy configuration to clipboard">content_copy</span>
-                                
-                            </div>
-                            <div class="card-body" style="background-color: #1E1E1E;">
-                                <div class="data-display" id="configData">{
-  "loading": "Fetching configuration..."
-}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Tuning Configuration Data Card -->
-                    <div class="col-12 col-md-6">
-                        <div class="card h-100">
-                            <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span class="material-symbols-outlined" style="color: var(--danger);">
-                                tune
-                                </span>
-                                    Tuning Configuration Data
-                                </div>
-                                <span class="material-symbols-outlined icon-action" id="tuningConfigCopyBtn" title="Copy tuning configuration to clipboard">content_copy</span>
-                                
-                            </div>
-                            <div class="card-body" style="background-color: #1E1E1E;">
-                                <div class="data-display" id="tuningConfigData">{
-  "loading": "Fetching tuning configuration..."
-}</div>
                             </div>
                         </div>
                     </div>
@@ -714,12 +603,81 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Tab Content: Debugging -->
-            <div class="tab-pane" id="tab-debugging">
-                <div class="row g-3">
+                    <div class="col-12" id="developerDebugCards" style="display: none;">
+                        <div class="row g-3">
+                        <!-- Console Card -->
+                        <div class="col-12 col-md-6">
+                            <div class="card h-100" style="background-color: #1E1E1E;">
+                                <div class="card-header" style="background-color: black; color: white;">
+                                    <span class="material-symbols-outlined" style="color: var(--danger);">terminal</span>
+                                    Console
+                                    <div class="float-end" style="display: flex; gap: 10px; align-items: center;">
+                                        <span class="material-symbols-outlined icon-action" id="consoleCopyBtn" title="Copy console to clipboard">content_copy</span>
+                                        <span class="material-symbols-outlined icon-action" id="consoleClearBtn" title="Clear console">delete</span>
+                                    </div>
+                                </div>
+                                <div class="console-output" id="consoleOutput">
+                                    <!-- Console logs will appear here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Configuration Data Card -->
+                        <div class="col-12 col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <span class="material-symbols-outlined" style="color: var(--danger);">settings</span>
+                                        Configuration Data
+                                    </div>
+                                    <span class="material-symbols-outlined icon-action" id="configCopyBtn" title="Copy configuration to clipboard">content_copy</span>
+                                </div>
+                                <div class="card-body" style="background-color: #1E1E1E;">
+                                    <div class="data-display" id="configData">{
+  "loading": "Fetching configuration..."
+}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lighting Configuration Data Card -->
+                        <div class="col-12 col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
+                                        Lighting Configuration Data
+                                    </div>
+                                    <span class="material-symbols-outlined icon-action" id="lightingConfigCopyBtn" title="Copy lighting configuration to clipboard">content_copy</span>
+                                </div>
+                                <div class="card-body" style="background-color: #1E1E1E;">
+                                    <div class="data-display" id="lightingConfigData">{
+  "loading": "Fetching lighting configuration..."
+}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tuning Configuration Data Card -->
+                        <div class="col-12 col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <span class="material-symbols-outlined" style="color: var(--danger);">tune</span>
+                                        Tuning Configuration Data
+                                    </div>
+                                    <span class="material-symbols-outlined icon-action" id="tuningConfigCopyBtn" title="Copy tuning configuration to clipboard">content_copy</span>
+                                </div>
+                                <div class="card-body" style="background-color: #1E1E1E;">
+                                    <div class="data-display" id="tuningConfigData">{
+  "loading": "Fetching tuning configuration..."
+}</div>
+                                </div>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -730,6 +688,41 @@
         <section id="tuning" class="page-section">
             <h2 class="section-title">Suspension Tuning</h2>
             <div class="row g-3">
+                <!-- Suspension Settings Card -->
+                <div class="col-12 col-md-6 col-lg-4">
+                    <div class="card" id="tuningSuspensionSettingsCard">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                            <div>
+                                <span class="material-symbols-outlined icon-danger">tune</span>
+                                Suspension Settings
+                            </div>
+                            <span class="material-symbols-outlined icon-action" id="suspensionSettingsGear" title="Modify suspension tuning parameters.">rule_settings</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Ride Height</span>
+                                <span id="rideHeightDisplay">--</span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mt-2">
+                                <span>Damping</span>
+                                <span id="dampingDisplay">--</span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mt-2">
+                                <span>Stiffness</span>
+                                <span id="stiffnessDisplay">--</span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mt-2">
+                                <span>Reaction Speed</span>
+                                <span class="metric-pill" id="reactionSpeedBadge">--</span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mt-2">
+                                <span>Rear/Front Balance</span>
+                                <span id="frontRearBalanceDisplay">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Parameters Card -->
                 <div class="col-12 col-md-6 col-lg-4">
                     <div class="card" id="tuningParametersCard">
@@ -946,12 +939,10 @@
                         </div>
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-center mb-3 border rounded px-2 py-2">
-                                <label class="form-check-label mb-0" for="lightsToggle">
+                                <label class="form-check-label mb-0" for="lightsToggleIcon">
                                     <strong>Master Switch</strong>
                                 </label>
-                                <div class="form-check form-switch m-0">
-                                    <input class="form-check-input" type="checkbox" id="lightsToggle">
-                                </div>
+                                <span class="material-symbols-outlined" id="lightsToggleIcon" role="button" tabindex="0" title="Master lights switch" style="cursor: pointer; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted);">lightbulb</span>
                             </div>
                             <div class="form-text mb-3">
                                 <small>When Master is off, all lights are off. When Master is on, only enabled groups run.</small>
@@ -1020,11 +1011,14 @@
                 <!-- How to Configure Light Strip Card -->
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">info</span>
-                            How to Configure Your Light Strip
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" onclick="toggleLightsGuideCard()">
+                            <div>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">info</span>
+                                How to Configure Your Light Strip
+                            </div>
+                            <span class="material-symbols-outlined" id="lightsGuideChevron" style="color: var(--high-impact-color);">keyboard_arrow_down</span>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" id="lightsGuideCardBody">
                             <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.8;">
                                 <li><strong>Set Total LED Count:</strong> Update the "Total LEDs in your strip" field to match the number of addressable LEDs wired to your RCDCC.</li>
                                 <li><strong>Create Light Groups:</strong> Click "Add Light Group" to define a group with a name, pattern, and color(s).</li>
@@ -1050,7 +1044,7 @@
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
                             <span class="material-symbols-outlined" style="color: var(--danger);">videocam</span>
-                            Features
+                            FPV Features
                         </div>
                         <div class="card-body">
                             <ul style="margin: 0; padding-left: 1.5rem;">
@@ -1072,7 +1066,7 @@
     <nav class="footer-nav">
         <button class="active" id="nav-dashboard" data-target="dashboard">
             <span class="material-symbols-outlined">castle</span>
-            <span>Dashboard</span>
+            <span>Home</span>
         </button>
         <button id="nav-tuning" data-target="tuning">
             <span class="material-symbols-outlined">tune</span>

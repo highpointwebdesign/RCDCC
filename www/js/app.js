@@ -56,7 +56,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // - Uses git tags: $(git describe --tags --always)
         // - Generates from CI/CD pipeline build number
         const APP_VERSION = '6f3e740';
-        const BUILD_DATE = '2026-03-04'; // Can be auto-generated: new Date().toISOString().split('T')[0]
+        const BUILD_DATE = '2026-03-04';
+        const DEVELOPER_MODE_KEY = 'developerModeEnabled';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -68,6 +69,28 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function isBleConnected() {
             return !!(bleManager && bleManager.getConnectionStatus && bleManager.getConnectionStatus());
+        }
+
+        function applyDeveloperModeVisibility(enabled) {
+            const debugCardsContainer = document.getElementById('developerDebugCards');
+            if (debugCardsContainer) {
+                debugCardsContainer.style.display = enabled ? 'block' : 'none';
+            }
+        }
+
+        function initDeveloperMode() {
+            const developerToggle = document.getElementById('developerModeToggle');
+            if (!developerToggle) return;
+
+            const enabled = localStorage.getItem(DEVELOPER_MODE_KEY) === 'true';
+            developerToggle.checked = enabled;
+            applyDeveloperModeVisibility(enabled);
+
+            developerToggle.addEventListener('change', function() {
+                localStorage.setItem(DEVELOPER_MODE_KEY, String(this.checked));
+                applyDeveloperModeVisibility(this.checked);
+                toast.success(this.checked ? 'Developer mode enabled' : 'Developer mode disabled');
+            });
         }
 
         function ensureBleConnectedOrThrow() {
@@ -124,6 +147,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 updateConnectionStatus(true);
                 updateConnectionMethodDisplay();
                 refreshConfigAfterConnection('manual-connect');
+                toast.dismiss('ble-config-required');
                 toast.success('Connected via Bluetooth LE');
                 return true;
             } catch (error) {
@@ -162,6 +186,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateConnectionStatus(true);
                     updateConnectionMethodDisplay();
                     refreshConfigAfterConnection(`auto-reconnect:${source}`);
+                    toast.dismiss('ble-config-required');
                     toast.success('Bluetooth reconnected', { duration: 2200 });
                     console.log(`BLE auto reconnect succeeded (${source})`);
                     return true;
@@ -445,15 +470,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 warning: new Audio("./toasty/dist/sounds/warning/1.mp3"),
                 error: new Audio("./toasty/dist/sounds/error/1.mp3")
             },
+            activeToastsByKey: {},
             
             show(message, type = 'info', options = {}) {
                 const duration = options.duration || 3000;
+                const toastKey = options.key || null;
                 const bgClass = {
                     success: 'bg-success',
                     error: 'bg-danger',
                     warning: 'bg-warning',
                     info: 'bg-info'
                 }[type] || 'bg-info';
+
+                if (toastKey) {
+                    this.dismiss(toastKey);
+                }
                 
                 // Create toast element
                 const toastId = 'toast-' + Date.now();
@@ -461,6 +492,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 toastEl.id = toastId;
                 toastEl.className = `toast-box ${bgClass} toast-top tap-to-close`;
                 toastEl.innerHTML = `<div class="in"><div class="text">${message}</div></div>`;
+
+                if (toastKey) {
+                    toastEl.dataset.toastKey = toastKey;
+                    this.activeToastsByKey[toastKey] = toastEl;
+                }
+
+                const removeToast = () => {
+                    toastEl.classList.remove('show');
+                    setTimeout(() => {
+                        if (toastKey && this.activeToastsByKey[toastKey] === toastEl) {
+                            delete this.activeToastsByKey[toastKey];
+                        }
+                        toastEl.remove();
+                    }, 800);
+                };
                 
                 // Add to body
                 document.body.appendChild(toastEl);
@@ -477,19 +523,25 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 
                 // Auto-hide
                 setTimeout(() => {
-                    toastEl.classList.remove('show');
-                    setTimeout(() => {
-                        toastEl.remove();
-                    }, 800);
+                    removeToast();
                 }, duration);
                 
                 // Tap to close
                 toastEl.addEventListener('click', () => {
-                    toastEl.classList.remove('show');
-                    setTimeout(() => {
-                        toastEl.remove();
-                    }, 800);
+                    removeToast();
                 });
+
+                return toastEl;
+            },
+
+            dismiss(key) {
+                const toastEl = this.activeToastsByKey[key];
+                if (!toastEl) return;
+                delete this.activeToastsByKey[key];
+                toastEl.classList.remove('show');
+                setTimeout(() => {
+                    toastEl.remove();
+                }, 800);
             },
             
             success(message, options) {
@@ -1509,7 +1561,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             initServoControls(); // Initialize servo rotation badge click handlers
             // initGyroControls(); // Commented out - slider library not yet connected
             initNetworkSettings();
+            applyRequestedLayoutMoves();
             initSettingsTabs();
+            initDeveloperMode();
 
             // Initialize notification sounds toggle
             const enableSoundsCheckbox = document.getElementById('enableNotificationSounds');
@@ -1561,6 +1615,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (formulasCardBody && formulasChevron) {
                 formulasCardBody.style.display = formulasCollapsed ? 'none' : 'block';
                 formulasChevron.textContent = formulasCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+            }
+
+            // Restore light guide card collapse state from localStorage
+            const lightsGuideCollapsed = localStorage.getItem('lightsGuideCardCollapsed') === 'true';
+            const lightsGuideCardBody = document.getElementById('lightsGuideCardBody');
+            const lightsGuideChevron = document.getElementById('lightsGuideChevron');
+            if (lightsGuideCardBody && lightsGuideChevron) {
+                lightsGuideCardBody.style.display = lightsGuideCollapsed ? 'none' : 'block';
+                lightsGuideChevron.textContent = lightsGuideCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
             }
             
             // Restore servo range lock state from localStorage
@@ -1693,11 +1756,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             // ==================== Light Hierarchy Controls ====================
-            const lightsToggle = document.getElementById('lightsToggle');
+            const lightsToggleIcon = document.getElementById('lightsToggleIcon');
             const lightsToggleDashboard = document.getElementById('lightsToggleDashboard');
+            const lightsToggleHeaderIcon = document.getElementById('lightsToggleHeaderIcon');
 
-            bindMasterLightSwitch(lightsToggle);
+            bindHeaderLightIcon(lightsToggleIcon);
             bindMasterLightSwitch(lightsToggleDashboard);
+            bindHeaderLightIcon(lightsToggleHeaderIcon);
             syncMasterLightSwitches(getMasterLightsEnabled());
             
             // Suspension Settings gear click - navigate to Tuning
@@ -1760,6 +1825,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const tuningConfigData = document.getElementById('tuningConfigData');
                     if (tuningConfigData && tuningConfigData.textContent) {
                         copyToClipboard(tuningConfigData.textContent, tuningConfigCopyBtn);
+                    }
+                });
+            }
+
+            // Lighting Configuration Copy button
+            const lightingConfigCopyBtn = document.getElementById('lightingConfigCopyBtn');
+            if (lightingConfigCopyBtn) {
+                lightingConfigCopyBtn.addEventListener('click', function() {
+                    const lightingConfigData = document.getElementById('lightingConfigData');
+                    if (lightingConfigData && lightingConfigData.textContent) {
+                        copyToClipboard(lightingConfigData.textContent, lightingConfigCopyBtn);
                     }
                 });
             }
@@ -2167,10 +2243,18 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function syncMasterLightSwitches(isEnabled) {
-            const masterToggle = document.getElementById('lightsToggle');
+            const masterIcon = document.getElementById('lightsToggleIcon');
             const dashboardToggle = document.getElementById('lightsToggleDashboard');
-            if (masterToggle) masterToggle.checked = isEnabled;
+            const headerIcon = document.getElementById('lightsToggleHeaderIcon');
             if (dashboardToggle) dashboardToggle.checked = isEnabled;
+            if (masterIcon) {
+                masterIcon.style.color = isEnabled ? 'var(--bluetooth-blue)' : 'var(--text-muted)';
+                masterIcon.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+            }
+            if (headerIcon) {
+                headerIcon.style.color = isEnabled ? 'var(--bluetooth-blue)' : 'var(--text-muted)';
+                headerIcon.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+            }
         }
 
         function bindMasterLightSwitch(toggleElement) {
@@ -2180,6 +2264,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             toggleElement.checked = getMasterLightsEnabled();
             toggleElement.addEventListener('change', function() {
                 setMasterLightsEnabled(this.checked, true);
+            });
+        }
+
+        function bindHeaderLightIcon(iconElement) {
+            if (!iconElement || iconElement.dataset.bound === 'true') return;
+
+            iconElement.dataset.bound = 'true';
+            iconElement.addEventListener('click', function() {
+                setMasterLightsEnabled(!getMasterLightsEnabled(), true);
+            });
+            iconElement.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setMasterLightsEnabled(!getMasterLightsEnabled(), true);
+                }
             });
         }
 
@@ -3155,11 +3254,24 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const appVersionEl = document.getElementById('appVersion');
             const buildDateEl = document.getElementById('buildDate');
             
-            if (appVersionEl) {
-                appVersionEl.textContent = APP_VERSION;
-            }
-            if (buildDateEl) {
-                buildDateEl.textContent = BUILD_DATE;
+            if (appVersionEl) appVersionEl.textContent = APP_VERSION;
+            if (buildDateEl) buildDateEl.textContent = BUILD_DATE;
+
+            // Prefer native app metadata when running under Capacitor.
+            const appPlugin = window.Capacitor?.Plugins?.App;
+            if (appPlugin && typeof appPlugin.getInfo === 'function') {
+                appPlugin.getInfo()
+                    .then(info => {
+                        if (appVersionEl && info?.version) {
+                            appVersionEl.textContent = info.version;
+                        }
+                        if (buildDateEl && (info?.build || info?.version)) {
+                            buildDateEl.textContent = info.build || info.version;
+                        }
+                    })
+                    .catch(error => {
+                        console.warn('Unable to load native app metadata:', error);
+                    });
             }
             
             // Fetch firmware version from ESP32
@@ -3385,11 +3497,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const configData = document.getElementById('configData');
                 if (configData) configData.textContent = JSON.stringify(data, null, 2);
 
-                // Display tuning data in the Tuning Configuration Data card (Tuning page)
+                // Display tuning data in the Tuning Configuration Data card.
                 const tuningConfigData = document.getElementById('tuningConfigData');
                 if (tuningConfigData) tuningConfigData.textContent = JSON.stringify(data, null, 2);
 
+                // Display lighting data in the Lighting Configuration Data card.
+                const lightingConfigData = document.getElementById('lightingConfigData');
+                if (lightingConfigData) {
+                    const lightingData = data?.lights || data?.lightConfig || data;
+                    lightingConfigData.textContent = JSON.stringify(lightingData, null, 2);
+                }
+
                 if (showToast && !hasShownInitialConfigToast) {
+                    toast.dismiss('ble-config-required');
                     toast.success('Configuration loaded from RCDCC module (Bluetooth LE)');
                     hasShownInitialConfigToast = true;
                 }
@@ -3403,8 +3523,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (configData) configData.textContent = 'Bluetooth LE not connected';
                 const tuningConfigData = document.getElementById('tuningConfigData');
                 if (tuningConfigData) tuningConfigData.textContent = 'Bluetooth LE not connected';
+                const lightingConfigData = document.getElementById('lightingConfigData');
+                if (lightingConfigData) lightingConfigData.textContent = 'Bluetooth LE not connected';
                 if (showToast) {
-                    toast.warning('Connect via Bluetooth LE to load configuration');
+                    toast.warning('Connect via Bluetooth LE to load configuration', { key: 'ble-config-required' });
                 }
                 return;
             }
@@ -3419,6 +3541,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (configData) configData.textContent = `Error: ${error.message}`;
                 const tuningConfigData = document.getElementById('tuningConfigData');
                 if (tuningConfigData) tuningConfigData.textContent = `Error: ${error.message}`;
+                const lightingConfigData = document.getElementById('lightingConfigData');
+                if (lightingConfigData) lightingConfigData.textContent = `Error: ${error.message}`;
                 if (showToast) {
                     toast.warning('Could not load configuration from RCDCC module');
                 }
@@ -4349,6 +4473,25 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 localStorage.setItem('formulasCardCollapsed', 'true');
             }
         }
+
+        function toggleLightsGuideCard() {
+            const cardBody = document.getElementById('lightsGuideCardBody');
+            const chevron = document.getElementById('lightsGuideChevron');
+
+            if (!cardBody || !chevron) return;
+
+            const isCollapsed = cardBody.style.display === 'none';
+
+            if (isCollapsed) {
+                cardBody.style.display = 'block';
+                chevron.textContent = 'keyboard_arrow_down';
+                localStorage.setItem('lightsGuideCardCollapsed', 'false');
+            } else {
+                cardBody.style.display = 'none';
+                chevron.textContent = 'keyboard_arrow_right';
+                localStorage.setItem('lightsGuideCardCollapsed', 'true');
+            }
+        }
         
         function toggleServoRangeLock(iconElement) {
             // Play click sound
@@ -4936,11 +5079,73 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 tabButton.click();
             }
         }
+
+        function moveCardToTuning(cardId, beforeNode = null) {
+            const card = document.getElementById(cardId);
+            const tuningRow = document.querySelector('#tuning .row.g-3');
+            if (!card || !tuningRow) return;
+
+            const cardColumn = card.closest('div[class*="col-"]');
+            if (!cardColumn || cardColumn.parentElement === tuningRow) return;
+
+            if (beforeNode && beforeNode.parentElement === tuningRow) {
+                tuningRow.insertBefore(cardColumn, beforeNode);
+            } else {
+                tuningRow.appendChild(cardColumn);
+            }
+        }
+
+        function applyRequestedLayoutMoves() {
+            const dashboardRow = document.querySelector('#dashboard .row.g-3');
+            const rollPitchColumn = document.getElementById('rollPitchCard')
+                ? document.getElementById('rollPitchCard').closest('div[class*="col-"]')
+                : null;
+            const connectionColumn = document.getElementById('connectionCard')
+                ? document.getElementById('connectionCard').closest('div[class*="col-"]')
+                : null;
+            const danceModeColumn = document.getElementById('danceModeToggle')
+                ? document.getElementById('danceModeToggle').closest('div[class*="col-"]')
+                : null;
+
+            const suspensionColumn = document.getElementById('tuningSuspensionSettingsCard')
+                ? document.getElementById('tuningSuspensionSettingsCard').closest('div[class*="col-"]')
+                : null;
+            const parametersColumn = document.getElementById('tuningParametersCard')
+                ? document.getElementById('tuningParametersCard').closest('div[class*="col-"]')
+                : null;
+
+            if (dashboardRow) {
+                // Desired dashboard order: roll/pitch, connection, dance, suspension.
+                [rollPitchColumn, connectionColumn, danceModeColumn, suspensionColumn]
+                    .filter(Boolean)
+                    .forEach(column => dashboardRow.appendChild(column));
+            }
+
+            if (parametersColumn && parametersColumn.parentElement) {
+                parametersColumn.parentElement.insertBefore(parametersColumn, parametersColumn.parentElement.firstChild);
+            }
+
+            const formulasCardColumn = document.getElementById('formulasCardBody')
+                ? document.getElementById('formulasCardBody').closest('div[class*="col-"]')
+                : null;
+
+            moveCardToTuning('servoRangeCard', formulasCardColumn);
+            moveCardToTuning('servoTrimCard', formulasCardColumn);
+            moveCardToTuning('servoRotationCard', formulasCardColumn);
+
+            const servoPane = document.getElementById('tab-servo');
+            if (servoPane) {
+                servoPane.style.display = 'none';
+            }
+        }
         
         // Initialize settings tabs
         function initSettingsTabs() {
             // Restore last active tab from localStorage
-            const savedTab = localStorage.getItem('settings_active_tab') || 'servo';
+            const preferredTab = localStorage.getItem('settings_active_tab') || 'network';
+            const savedTab = document.querySelector(`.settings-tab[data-tab="${preferredTab}"]`)
+                ? preferredTab
+                : 'network';
             
             // Set up tab click handlers
             document.querySelectorAll('.settings-tab').forEach(tab => {
