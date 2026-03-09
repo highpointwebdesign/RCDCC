@@ -2552,6 +2552,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // FLIP: First - capture initial positions
             const groupElements = document.querySelectorAll('.light-group-item');
             const firstPositions = Array.from(groupElements).map(el => el.getBoundingClientRect());
+            const movedFromRect = groupElements[index] ? groupElements[index].getBoundingClientRect() : null;
             
             // Swap with previous item
             const temp = lightGroups[index];
@@ -2565,6 +2566,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             // FLIP: Last & Invert & Play - animate the position change
             animateGroupReorder(firstPositions, index, index - 1);
+            animateMarchingOutline(movedFromRect, index - 1);
             
             // Flash the moved group at its NEW position (index-1)
             flashLightGroupBorder(index - 1);
@@ -2579,6 +2581,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // FLIP: First - capture initial positions
             const groupElements = document.querySelectorAll('.light-group-item');
             const firstPositions = Array.from(groupElements).map(el => el.getBoundingClientRect());
+            const movedFromRect = groupElements[index] ? groupElements[index].getBoundingClientRect() : null;
             
             // Swap with next item
             const temp = lightGroups[index];
@@ -2592,6 +2595,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             // FLIP: Last & Invert & Play - animate the position change
             animateGroupReorder(firstPositions, index, index + 1);
+            animateMarchingOutline(movedFromRect, index + 1);
             
             // Flash the moved group at its NEW position (index+1)
             flashLightGroupBorder(index + 1);
@@ -2634,6 +2638,41 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     }
                 }
             });
+        }
+
+        function animateMarchingOutline(fromRect, toIndex) {
+            if (!fromRect) return;
+
+            const groupElements = document.querySelectorAll('.light-group-item');
+            const targetElement = groupElements[toIndex];
+            if (!targetElement) return;
+
+            const toRect = targetElement.getBoundingClientRect();
+            const overlay = document.createElement('div');
+            overlay.className = 'light-group-march-overlay';
+            overlay.style.left = `${fromRect.left}px`;
+            overlay.style.top = `${fromRect.top}px`;
+            overlay.style.width = `${fromRect.width}px`;
+            overlay.style.height = `${fromRect.height}px`;
+
+            document.body.appendChild(overlay);
+
+            const deltaX = toRect.left - fromRect.left;
+            const deltaY = toRect.top - fromRect.top;
+
+            requestAnimationFrame(() => {
+                overlay.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                overlay.style.opacity = '0.15';
+            });
+
+            const cleanup = () => {
+                if (overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            };
+
+            overlay.addEventListener('transitionend', cleanup, { once: true });
+            setTimeout(cleanup, 500);
         }
         
         // Flash border animation to highlight a reordered group
