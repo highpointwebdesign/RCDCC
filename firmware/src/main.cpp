@@ -235,6 +235,9 @@ bool applyLightsPayload(const String& payload) {
 
   NewLightsConfig config;
   memset(&config, 0, sizeof(NewLightsConfig));
+  
+  // Load total LED count (default to 100 if not specified)
+  config.totalLEDCount = doc["totalLEDCount"] | 100;
 
   if (doc.containsKey("lightGroupsArray")) {
     JsonArray groupsArray = doc["lightGroupsArray"];

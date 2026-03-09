@@ -166,6 +166,7 @@ struct NewLightsConfig {
   LightsConfig legacy;   // Legacy 3-group config for backward compatibility
   ExtendedLightGroup groups[10]; // Support up to 10 dynamic custom groups
   uint8_t groupCount;    // Number of dynamic groups currently configured
+  uint16_t totalLEDCount; // Total number of LEDs in the strip (1-300)
 };
 
 // Default lights configuration

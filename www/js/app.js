@@ -2381,6 +2381,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             // Reverse order so top priority (index 0) processes last and wins LED conflicts
             return {
+                totalLEDCount: parseInt(localStorage.getItem(TOTAL_LED_COUNT_KEY)) || 100,
                 lightGroupsArray: lightGroupsArray.reverse()
             };
         }
@@ -3167,6 +3168,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     if (value >= 1 && value <= 300) {
                         localStorage.setItem(TOTAL_LED_COUNT_KEY, value);
                         window.toast.success(`Total LED count set to ${value}`);
+                        // Push to ESP32 by triggering lights update
+                        applyLightsHierarchyToHardware();
                     } else {
                         alert('Please enter a value between 1 and 300');
                         this.value = localStorage.getItem(TOTAL_LED_COUNT_KEY) || 100;
@@ -3507,6 +3510,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 // Load light groups from ESP32 if available
                 if (data.lightGroupsArray && Array.isArray(data.lightGroupsArray)) {
                     loadLightGroups(data.lightGroupsArray);
+                }
+                
+                // Load total LED count from ESP32 if available
+                if (data.totalLEDCount !== undefined) {
+                    const totalLEDInput = document.getElementById('totalLEDCount');
+                    if (totalLEDInput) {
+                        totalLEDInput.value = data.totalLEDCount;
+                    }
+                    localStorage.setItem(TOTAL_LED_COUNT_KEY, String(data.totalLEDCount));
+                    console.log('Loaded total LED count from ESP32:', data.totalLEDCount);
                 }
 
                 if (data.warnings && data.warnings.servoTrimReset) {

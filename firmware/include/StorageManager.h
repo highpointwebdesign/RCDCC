@@ -57,6 +57,7 @@ public:
     memset(&newLightsConfig, 0, sizeof(NewLightsConfig));
     newLightsConfig.useLegacyMode = false;
     newLightsConfig.groupCount = 0;
+    newLightsConfig.totalLEDCount = 100; // Default to 100 LEDs
     newLightsConfig.legacy = lightsConfig;
   }
   
@@ -215,6 +216,13 @@ public:
     // Keep legacy snapshot in dynamic config for compatibility
     newLightsConfig.legacy = lightsConfig;
 
+    // Load total LED count
+    if (doc.containsKey("totalLEDCount")) {
+      newLightsConfig.totalLEDCount = doc["totalLEDCount"] | 100;
+    } else {
+      newLightsConfig.totalLEDCount = 100; // Default if not present
+    }
+
     // Load dynamic light groups (source of truth for modern UI)
     if (doc.containsKey("lightGroupsArray")) {
       JsonArray groupsArray = doc["lightGroupsArray"];
@@ -284,6 +292,9 @@ public:
     JsonObject defaults = doc.createNestedObject("defaults");
     defaults["brightness"] = 100;
     defaults["blinkRate"] = 500;
+
+    // Save total LED count
+    doc["totalLEDCount"] = newLightsConfig.totalLEDCount;
 
     // Persist dynamic groups and their order as the source of truth.
     JsonArray dynamicGroups = doc.createNestedArray("lightGroupsArray");
@@ -473,6 +484,8 @@ public:
     rr["reversed"] = servoConfig.rearRight.reversed;
     
     // Add lights configuration
+    doc["totalLEDCount"] = newLightsConfig.totalLEDCount;
+    
     JsonArray lightGroupsArray = doc.createNestedArray("lightGroupsArray");
     for (uint8_t i = 0; i < newLightsConfig.groupCount && i < 10; i++) {
       const ExtendedLightGroup& group = newLightsConfig.groups[i];
