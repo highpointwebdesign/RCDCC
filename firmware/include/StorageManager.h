@@ -426,7 +426,7 @@ public:
   }
   
   String getConfigJSON() {
-    DynamicJsonDocument doc(4096);  // Increased size for full config including servos
+    DynamicJsonDocument doc(8192);  // Increased size for full config including servos and lights
     
     doc["reactionSpeed"] = config.reactionSpeed;
     doc["rideHeightOffset"] = config.rideHeightOffset;
@@ -471,6 +471,26 @@ public:
     rr["min"] = servoConfig.rearRight.minLimit;
     rr["max"] = servoConfig.rearRight.maxLimit;
     rr["reversed"] = servoConfig.rearRight.reversed;
+    
+    // Add lights configuration
+    JsonArray lightGroupsArray = doc.createNestedArray("lightGroupsArray");
+    for (uint8_t i = 0; i < newLightsConfig.groupCount && i < 10; i++) {
+      const ExtendedLightGroup& group = newLightsConfig.groups[i];
+      JsonObject g = lightGroupsArray.createNestedObject();
+      g["name"] = group.name;
+      g["pattern"] = group.pattern;
+      g["enabled"] = group.enabled;
+      g["brightness"] = group.brightness;
+      g["mode"] = group.mode;
+      g["blinkRate"] = group.blinkRate;
+      g["color"] = group.color;
+      g["color2"] = group.color2;
+      
+      JsonArray idx = g.createNestedArray("indices");
+      for (uint8_t led = 0; led < group.ledCount && led < 100; led++) {
+        idx.add(group.ledIndices[led]);
+      }
+    }
     
     // Add warning flag for servlet trim reset if needed
     if (servoTrimResetWarning) {

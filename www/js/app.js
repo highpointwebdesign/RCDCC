@@ -2198,21 +2198,37 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
         }
 
-        async function loadLightGroups() {
-            const initialized = localStorage.getItem(LIGHT_GROUPS_INITIALIZED_KEY);
-            const stored = localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY);
-
-            if (!initialized) {
-                lightGroups = JSON.parse(JSON.stringify(PREDEFINED_LIGHT_GROUPS));
+        async function loadLightGroups(esp32LightsData = null) {
+            // Priority: 1) ESP32 data (if provided), 2) localStorage cache, 3) defaults
+            if (esp32LightsData && esp32LightsData.length > 0) {
+                // Load from ESP32 - this is the source of truth
+                lightGroups = esp32LightsData.map(group => ({
+                    ...group,
+                    enabled: !!group.enabled
+                }));
+                console.log('Loaded light groups from ESP32:', lightGroups.length);
+                
+                // Cache to localStorage for offline editing
+                localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(lightGroups));
                 localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
             } else {
-                lightGroups = stored ? JSON.parse(stored) : [];
-            }
+                // Fallback to localStorage or defaults (offline mode)
+                const initialized = localStorage.getItem(LIGHT_GROUPS_INITIALIZED_KEY);
+                const stored = localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY);
 
-            lightGroups = lightGroups.map(group => ({
-                ...group,
-                enabled: !!group.enabled
-            }));
+                if (!initialized) {
+                    lightGroups = JSON.parse(JSON.stringify(PREDEFINED_LIGHT_GROUPS));
+                    localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
+                } else {
+                    lightGroups = stored ? JSON.parse(stored) : [];
+                }
+
+                lightGroups = lightGroups.map(group => ({
+                    ...group,
+                    enabled: !!group.enabled
+                }));
+                console.log('Loaded light groups from localStorage cache:', lightGroups.length);
+            }
 
             saveLightGroups(false);
             renderLightGroupsList();
@@ -2485,7 +2501,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 lightGroups.forEach((group, index) => {
                     const item = document.createElement('div');
                     item.className = 'light-group-item';
-                    item.setAttribute('draggable', 'true');
                     item.setAttribute('data-index', index);
                     
                     const ledDisplay = formatLedRanges(group.indices);
@@ -2500,8 +2515,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     
                     // Show both colors if second color is not black/off
                     const colorDisplay = color2 !== '#000000' && color2 !== '#00000000'
-                        ? `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 4px;"></span><span style="display: inline-block; width: 16px; height: 16px; background-color: ${color2}; border: 2px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 8px;"></span>`
-                        : `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 8px;"></span>`;
+                        ? `<span style="display: inline-block; width: 14px; height: 14px; background-color: ${color}; border: 1px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 3px;"></span><span style="display: inline-block; width: 14px; height: 14px; background-color: ${color2}; border: 1px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 6px;"></span>`
+                        : `<span style="display: inline-block; width: 14px; height: 14px; background-color: ${color}; border: 1px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 6px;"></span>`;
                     
                     const colorText = color2 !== '#000000' && color2 !== '#00000000'
                         ? `${color.toUpperCase()} / ${color2.toUpperCase()}`
@@ -2510,86 +2525,88 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     // Determine configuration status
                     const isConfigured = group.indices && group.indices.length > 0;
                     const statusIcon = isConfigured
-                        ? '<span class="material-symbols-outlined light-group-status-icon configured" title="Configured - LEDs assigned">check_circle</span>'
-                        : '<span class="material-symbols-outlined light-group-status-icon not-configured" title="Setup Required - No LEDs assigned">warning</span>';
+                        ? '<span class="material-symbols-outlined light-group-status-icon configured" title="Configured - LEDs assigned" style="font-size: 18px;">check_circle</span>'
+                        : '<span class="material-symbols-outlined light-group-status-icon not-configured" title="Setup Required - No LEDs assigned" style="font-size: 18px;">warning</span>';
+                    
+                    // Disable up button if first item, down button if last item
+                    const disableUp = index === 0;
+                    const disableDown = index === lightGroups.length - 1;
                     
                     item.innerHTML = `
-                        <div class="light-group-drag-handle" title="Drag to reorder">
-                            <span class="material-symbols-outlined">drag_indicator</span>
+                        <div class="light-group-reorder-buttons">
+                            <button onclick="moveLightGroupUp(${index})" ${disableUp ? 'disabled' : ''} title="Move up (higher priority)" class="btn-reorder" aria-label="Move up">
+                                <span class="material-symbols-outlined">arrow_upward</span>
+                            </button>
+                            <button onclick="moveLightGroupDown(${index})" ${disableDown ? 'disabled' : ''} title="Move down (lower priority)" class="btn-reorder" aria-label="Move down">
+                                <span class="material-symbols-outlined">arrow_downward</span>
+                            </button>
                         </div>
-                        <div class="light-group-priority" title="Priority (top = higher)">${index + 1}</div>
+                        <div class="light-group-priority" title="Priority (top = higher)">#${index + 1}</div>
                         <div class="light-group-info">
                             <div class="light-group-name">
                                 ${colorDisplay}
-                                ${group.name}
+                                <strong>${group.name}</strong>
                                 ${statusIcon}
                             </div>
-                            <div class="light-group-range">LEDs: ${ledDisplay} • Brightness: ${brightnessPercent}% • Color: ${colorText} • Pattern: ${patternDisplay}</div>
+                            <div class="light-group-details">
+                                <span title="LED indices">LEDs: ${ledDisplay}</span>
+                                <span title="Brightness">Br: ${brightnessPercent}%</span>
+                                <span title="Pattern">${patternDisplay}</span>
+                            </div>
                         </div>
                         <div class="light-group-actions">
-                            <button onclick="editLightGroup(${index})" title="Edit this group">Edit</button>
-                            <button onclick="deleteLightGroup(${index})" class="btn-delete" title="Delete this group">Delete</button>
+                            <button onclick="editLightGroup(${index})" title="Edit this group" class="btn-edit">
+                                <span class="material-symbols-outlined">edit</span>
+                            </button>
+                            <button onclick="deleteLightGroup(${index})" class="btn-delete" title="Delete this group">
+                                <span class="material-symbols-outlined">delete</span>
+                            </button>
                         </div>
                     `;
-                    
-                    // Add drag event listeners
-                    item.addEventListener('dragstart', handleDragStart);
-                    item.addEventListener('dragover', handleDragOver);
-                    item.addEventListener('drop', handleDrop);
-                    item.addEventListener('dragend', handleDragEnd);
                     
                     listContainer.appendChild(item);
                 });
             }
         }
         
-        // Drag and drop state
-        let draggedItemIndex = null;
-        
-        function handleDragStart(e) {
-            draggedItemIndex = parseInt(e.currentTarget.getAttribute('data-index'));
-            e.currentTarget.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        }
-        
-        function handleDragOver(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            const dragOverItem = e.currentTarget;
-            if (dragOverItem.classList.contains('light-group-item') && !dragOverItem.classList.contains('dragging')) {
-                dragOverItem.classList.add('drag-over');
-            }
-        }
-        
-        function handleDrop(e) {
-            e.preventDefault();
-            const dropIndex = parseInt(e.currentTarget.getAttribute('data-index'));
+        // Replace drag-and-drop with up/down buttons
+        function moveLightGroupUp(index) {
+            if (index <= 0) return; // Already at top
             
-            if (draggedItemIndex !== null && draggedItemIndex !== dropIndex) {
-                // Reorder the array
-                const draggedItem = lightGroups[draggedItemIndex];
-                lightGroups.splice(draggedItemIndex, 1);
-                lightGroups.splice(dropIndex, 0, draggedItem);
-                
-                // Save and re-render
-                saveLightGroups(false); // Don't push to hardware yet
-                renderLightGroupsList();
-                renderLightsHierarchyControls();
-                
-                // Now push to hardware with updated order
-                applyLightsHierarchyToHardware();
-            }
+            // Swap with previous item
+            const temp = lightGroups[index];
+            lightGroups[index] = lightGroups[index - 1];
+            lightGroups[index - 1] = temp;
             
-            e.currentTarget.classList.remove('drag-over');
+            // Save and re-render
+            saveLightGroups(false); // Don't push to hardware yet
+            renderLightGroupsList();
+            renderLightsHierarchyControls();
+            
+            // Now push to hardware with updated order
+            applyLightsHierarchyToHardware();
         }
         
-        function handleDragEnd(e) {
-            e.currentTarget.classList.remove('dragging');
-            document.querySelectorAll('.light-group-item').forEach(item => {
-                item.classList.remove('drag-over');
-            });
-            draggedItemIndex = null;
+        function moveLightGroupDown(index) {
+            if (index >= lightGroups.length - 1) return; // Already at bottom
+            
+            // Swap with next item
+            const temp = lightGroups[index];
+            lightGroups[index] = lightGroups[index + 1];
+            lightGroups[index + 1] = temp;
+            
+            // Save and re-render
+            saveLightGroups(false); // Don't push to hardware yet
+            renderLightGroupsList();
+            renderLightsHierarchyControls();
+            
+            // Now push to hardware with updated order
+            applyLightsHierarchyToHardware();
         }
+        
+        // Make functions globally accessible
+        window.moveLightGroupUp = moveLightGroupUp;
+        window.moveLightGroupDown = moveLightGroupDown;
 
         // Store current editing context
         let currentEditingGroupIndex = null;
@@ -3486,6 +3503,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
                 // Update servo sliders from config data
                 updateServoSliders(data);
+
+                // Load light groups from ESP32 if available
+                if (data.lightGroupsArray && Array.isArray(data.lightGroupsArray)) {
+                    loadLightGroups(data.lightGroupsArray);
+                }
 
                 if (data.warnings && data.warnings.servoTrimReset) {
                     const warningMessage = data.warnings.message
