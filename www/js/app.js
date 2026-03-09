@@ -2594,10 +2594,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (groupElements[index]) {
                     const element = groupElements[index];
                     element.classList.add('flash-border');
-                    // Remove the class after animation completes
+                    // Remove the class after animation completes (0.6s x 2 iterations = 1.2s)
                     setTimeout(() => {
                         element.classList.remove('flash-border');
-                    }, 600); // Match animation duration in CSS
+                    }, 1200);
                 }
             }, 50);
         }
