@@ -2549,6 +2549,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function moveLightGroupUp(index) {
             if (index <= 0) return; // Already at top
             
+            // FLIP: First - capture initial positions
+            const groupElements = document.querySelectorAll('.light-group-item');
+            const firstPositions = Array.from(groupElements).map(el => el.getBoundingClientRect());
+            
             // Swap with previous item
             const temp = lightGroups[index];
             lightGroups[index] = lightGroups[index - 1];
@@ -2558,6 +2562,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             saveLightGroups(false); // Don't push to hardware yet
             renderLightGroupsList();
             renderLightsHierarchyControls();
+            
+            // FLIP: Last & Invert & Play - animate the position change
+            animateGroupReorder(firstPositions, index, index - 1);
             
             // Flash the moved group at its NEW position (index-1)
             flashLightGroupBorder(index - 1);
@@ -2569,6 +2576,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function moveLightGroupDown(index) {
             if (index >= lightGroups.length - 1) return; // Already at bottom
             
+            // FLIP: First - capture initial positions
+            const groupElements = document.querySelectorAll('.light-group-item');
+            const firstPositions = Array.from(groupElements).map(el => el.getBoundingClientRect());
+            
             // Swap with next item
             const temp = lightGroups[index];
             lightGroups[index] = lightGroups[index + 1];
@@ -2579,11 +2590,50 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             renderLightGroupsList();
             renderLightsHierarchyControls();
             
+            // FLIP: Last & Invert & Play - animate the position change
+            animateGroupReorder(firstPositions, index, index + 1);
+            
             // Flash the moved group at its NEW position (index+1)
             flashLightGroupBorder(index + 1);
             
             // Now push to hardware with updated order
             applyLightsHierarchyToHardware();
+        }
+        
+        // Animate light group reordering using FLIP technique
+        function animateGroupReorder(firstPositions, fromIndex, toIndex) {
+            const groupElements = document.querySelectorAll('.light-group-item');
+            
+            // FLIP: Last - get final positions after DOM update
+            const lastPositions = Array.from(groupElements).map(el => el.getBoundingClientRect());
+            
+            // Animate the two items that swapped
+            [fromIndex, toIndex].forEach(i => {
+                if (groupElements[i]) {
+                    const deltaY = firstPositions[i].top - lastPositions[i].top;
+                    
+                    if (deltaY !== 0) {
+                        const element = groupElements[i];
+                        
+                        // FLIP: Invert - apply transform to make it look like it's still in first position
+                        element.style.transform = `translateY(${deltaY}px)`;
+                        element.style.transition = 'none';
+                        
+                        // Force reflow
+                        element.offsetHeight;
+                        
+                        // FLIP: Play - remove transform with transition to animate to final position
+                        element.style.transition = 'transform 0.3s ease-out';
+                        element.style.transform = 'translateY(0)';
+                        
+                        // Clean up after animation
+                        setTimeout(() => {
+                            element.style.transition = '';
+                            element.style.transform = '';
+                        }, 300);
+                    }
+                }
+            });
         }
         
         // Flash border animation to highlight a reordered group
