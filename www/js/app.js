@@ -1798,15 +1798,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             // Tuning Configuration Copy button
-            const tuningConfigCopyBtn = document.getElementById('tuningConfigCopyBtn');
-            if (tuningConfigCopyBtn) {
-                tuningConfigCopyBtn.addEventListener('click', function() {
-                    const tuningConfigData = document.getElementById('tuningConfigData');
-                    if (tuningConfigData && tuningConfigData.textContent) {
-                        copyToClipboard(tuningConfigData.textContent, tuningConfigCopyBtn);
-                    }
-                });
-            }
+
 
             // Lighting Configuration Copy button
             const lightingConfigCopyBtn = document.getElementById('lightingConfigCopyBtn');
@@ -3644,10 +3636,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const configDataEl = document.getElementById('configData');
                 if (configDataEl) configDataEl.textContent = JSON.stringify(configData, null, 2);
 
-                // Display tuning data in the Tuning Configuration Data card - CONFIG ONLY
-                const tuningConfigData = document.getElementById('tuningConfigData');
-                if (tuningConfigData) tuningConfigData.textContent = JSON.stringify(configData, null, 2);
-
                 // Display lighting data in the Lighting Configuration Data card - LIGHTS ONLY
                 const lightingConfigData = document.getElementById('lightingConfigData');
                 if (lightingConfigData) {
@@ -3667,8 +3655,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 hasLoadedConfigFromDevice = false;
                 const configData = document.getElementById('configData');
                 if (configData) configData.textContent = 'Bluetooth LE not connected';
-                const tuningConfigData = document.getElementById('tuningConfigData');
-                if (tuningConfigData) tuningConfigData.textContent = 'Bluetooth LE not connected';
                 const lightingConfigData = document.getElementById('lightingConfigData');
                 if (lightingConfigData) lightingConfigData.textContent = 'Bluetooth LE not connected';
                 if (showToast) {
@@ -3690,8 +3676,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 console.error('Failed to fetch config:', error);
                 const configDataEl = document.getElementById('configData');
                 if (configDataEl) configDataEl.textContent = `Error: ${error.message}`;
-                const tuningConfigData = document.getElementById('tuningConfigData');
-                if (tuningConfigData) tuningConfigData.textContent = `Error: ${error.message}`;
                 const lightingConfigData = document.getElementById('lightingConfigData');
                 if (lightingConfigData) lightingConfigData.textContent = `Error: ${error.message}`;
                 if (showToast) {
