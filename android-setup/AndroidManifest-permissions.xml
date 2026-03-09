@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    RCDCC Android Manifest - BLE Permissions
+    ==========================================
+    After running: npx cap add android
+    
+    MERGE these permissions into:
+    android/app/src/main/AndroidManifest.xml
+    
+    Add them INSIDE the <manifest> tag, BEFORE the <application> tag.
+    The Capacitor BLE plugin adds most of these automatically, but
+    verify they are all present after syncing.
+-->
+<manifest>
+
+    <!-- BLE Scanning (Android 12+) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+
+    <!-- BLE Connect (Android 12+) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- BLE Advertise - only needed if ESP32 scans for phone, safe to include -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
+    <!-- Legacy BLE (Android 11 and below) -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!-- Location required for BLE scan on Android 10 and below -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"
+        android:maxSdkVersion="30" />
+
+    <!-- Declare that app uses BLE (makes app visible only on BLE-capable devices) -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+
+    <!-- Internet (needed if any HTTP fallback is used) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Keep CPU awake during BLE reconnect -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+</manifest>

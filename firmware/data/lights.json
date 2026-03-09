@@ -1,0 +1,26 @@
+{
+  "lightGroups": {
+    "headlights": {
+      "enabled": false,
+      "brightness": 100,
+      "mode": 0,
+      "blinkRate": 500
+    },
+    "tailLights": {
+      "enabled": false,
+      "brightness": 100,
+      "mode": 0,
+      "blinkRate": 500
+    },
+    "emergencyLights": {
+      "enabled": false,
+      "brightness": 100,
+      "mode": 0,
+      "blinkRate": 500
+    }
+  },
+  "defaults": {
+    "brightness": 100,
+    "blinkRate": 500
+  }
+}

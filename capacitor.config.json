@@ -1,0 +1,29 @@
+{
+  "appId": "com.rcdcc.app",
+  "appName": "RCDCC",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#000000",
+    "captureInput": true,
+    "adjustMarginsForEdgeToEdge": "never",
+    "overrideUserAgent": null,
+    "buildOptions": {
+      "keystorePath": null,
+      "keystoreAlias": null
+    }
+  },
+  "plugins": {
+    "EdgeToEdge": {
+      "enabled": true
+    },
+    "BluetoothLe": {
+      "displayStrings": {
+        "scanning": "Scanning for RCDCC devices...",
+        "cancel": "Cancel",
+        "availableDevices": "Available Devices",
+        "noDeviceFound": "No RCDCC device found"
+      }
+    }
+  }
+}

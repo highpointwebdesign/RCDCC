@@ -1,0 +1,167 @@
+--------- beginning of main
+03-09 08:57:27.060  2037  4494 I sensors-hal: handle_sns_std_sensor_event:131, [SSC_LIGHT] A: 130(130),c:75,b:104,m:13,cl:22,l:129,s:128,l0:26144,l1:736,s0:21500,s1:0,acl:3,opr:0.37,f(r):81,u(bl):84,if:0,wi:2,si:0,po:144(N:0)
+03-09 08:57:27.071  2037  4494 I sensors-hal: handle_sns_client_event:190, auto_rotation_debug_2 mode,255, type,1,0 acc,0.292,0.651,9.830, ar,0, ver,14, pedo,1,e,1,i,3
+03-09 08:57:27.078  2952  6705 D SemWifiUsabilityStatsMonitor: onWifiUsabilityStats - seqNum 124466, isSameBssidAndFreq true
+03-09 08:57:27.081  2952  4309 D InsDataManager: onOutageCountUpdate() - Outage Data: 0, LQ : Y. Outage Triggered: false
+03-09 08:57:27.082  2952  4309 D SemInsManager: {"bssid": "6e5bf8f25745","rssi": -47.0,"latency": 0.0,"outage_count": 0,"lq_callback_triggered": true,"outage_log": "Unreliable statistics: -47.0 / 0 / 0 / 0 / 3 || 6e5bf8f25745: 0.000 / 0.000 / @ || N N / 0 0 / Y 2.0 / Y X 0 / 620635311 0 || Invalid""Magnetic Sensor Events size": "0""Pressure Sensor Events size": "0"}
+03-09 08:57:27.129  2037  3930 I sensors-hal: handle_sns_std_sensor_event:90, light_cct: ts = 1470039229863318 ns; value = [131, 131, 88, 96, 104, 104, 22, 46, 26144, 0]
+03-09 08:57:27.146  2130  2162 E HeatmapThread: ECT Thread time in milliseconds: 1773064647
+03-09 08:57:27.150  2130  2162 D HeatmapThread: !@ batteryplugType : 2
+03-09 08:57:27.150  2130  2162 D HeatmapThread: !@ batteryLevel : 92  batteryTemperature : 256 
+03-09 08:57:27.150  2130  2162 D HeatmapThread: !@ Heatmap currtime: 29551077
+03-09 08:57:27.150  2130  2162 D HeatmapThread: !@ Heatmap prevtime: 29551062
+03-09 08:57:27.150  2130  2162 D HeatmapThread: !@ Heatmap plugstarttime: 29551041
+03-09 08:57:27.150  2130  2162 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29550885
+03-09 08:57:27.150  2130  2162 E HeatmapThread: !@ CAM New BSOH: 100
+--------- beginning of system
+03-09 08:57:28.084  1227  1227 D io_stats: !@   8,0 r 93533488 2151579108 w 25538059 533800572 d 3719997 831656212 f 663017 2236760 iot 17024984 0 th 0 0 0 pt 0 inp 0 0 620636.317
+03-09 08:57:28.085  1227  1227 D io_stats: !@ Read_top(KB): logd(849) 52 system_server(2952) 16
+03-09 08:57:28.085  1227  1227 D io_stats: !@ Write_top(KB): kworker/u16:13(25529) 300
+03-09 08:57:28.146  2130  2162 E HeatmapThread: ECT Thread time in milliseconds: 1773064648
+03-09 08:57:28.149  2130  2162 D HeatmapThread: !@ batteryplugType : 2
+03-09 08:57:28.149  2130  2162 D HeatmapThread: !@ batteryLevel : 92  batteryTemperature : 256 
+03-09 08:57:28.149  2130  2162 D HeatmapThread: !@ Heatmap currtime: 29551077
+03-09 08:57:28.149  2130  2162 D HeatmapThread: !@ Heatmap prevtime: 29551062
+03-09 08:57:28.149  2130  2162 D HeatmapThread: !@ Heatmap plugstarttime: 29551041
+03-09 08:57:28.149  2130  2162 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29550885
+03-09 08:57:28.149  2130  2162 E HeatmapThread: !@ CAM New BSOH: 100
+03-09 08:57:29.142  6418  6418 I wpa_supplicant: Heartbeat 504
+03-09 08:57:29.146  2130  2162 E HeatmapThread: ECT Thread time in milliseconds: 1773064649
+03-09 08:57:29.149  2130  2162 D HeatmapThread: !@ batteryplugType : 2
+03-09 08:57:29.149  2130  2162 D HeatmapThread: !@ batteryLevel : 92  batteryTemperature : 256 
+03-09 08:57:29.149  2130  2162 D HeatmapThread: !@ Heatmap currtime: 29551077
+03-09 08:57:29.149  2130  2162 D HeatmapThread: !@ Heatmap prevtime: 29551062
+03-09 08:57:29.149  2130  2162 D HeatmapThread: !@ Heatmap plugstarttime: 29551041
+03-09 08:57:29.149  2130  2162 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29550885
+03-09 08:57:29.150  2130  2162 E HeatmapThread: !@ CAM New BSOH: 100
+03-09 08:57:29.689  2037  3930 I sensors-hal: handle_sns_std_sensor_event:90, light_cct: ts = 1470041789864880 ns; value = [140, 140, 88, 96, 112, 104, 22, 46, 27936, 0]
+03-09 08:57:29.781  2952  5201 E BatteryStatsService: Invalid uid for waking network packet: -1
+03-09 08:57:30.085  1227  1227 D io_stats: !@   8,0 r 93533488 2151579108 w 25538067 533800596 d 3719997 831656212 f 663018 2236762 iot 17024992 0 th 0 0 0 pt 0 inp 0 0 620638.318
+03-09 08:57:30.120  2952  6705 D SemWifiUsabilityStatsMonitor: onWifiUsabilityStats - seqNum 124467, isSameBssidAndFreq true
+03-09 08:57:30.122  2952  4309 D InsDataManager: onOutageCountUpdate() - Outage Data: 0, LQ : Y. Outage Triggered: false
+03-09 08:57:30.122  2952  4309 D SemInsManager: {"bssid": "6e5bf8f25745","rssi": -46.0,"latency": 0.0,"outage_count": 0,"lq_callback_triggered": true,"outage_log": "Unreliable statistics: -46.0 / 0 / 70 / 2 / 0 || 6e5bf8f25745: 0.000 / 0.000 / @ || N N / 0 0 / Y 2.0 / Y X 0 / 620638353 0 || Invalid""Magnetic Sensor Events size": "0""Pressure Sensor Events size": "0"}
+03-09 08:57:30.146  2130  2162 E HeatmapThread: ECT Thread time in milliseconds: 1773064650
+03-09 08:57:30.150  2130  2162 D HeatmapThread: !@ batteryplugType : 2
+03-09 08:57:30.150  2130  2162 D HeatmapThread: !@ batteryLevel : 92  batteryTemperature : 256 
+03-09 08:57:30.150  2130  2162 D HeatmapThread: !@ Heatmap currtime: 29551077
+03-09 08:57:30.151  2130  2162 D HeatmapThread: !@ Heatmap prevtime: 29551062
+03-09 08:57:30.151  2130  2162 D HeatmapThread: !@ Heatmap plugstarttime: 29551041
+03-09 08:57:30.151  2130  2162 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29550885
+03-09 08:57:30.152  2130  2162 E HeatmapThread: !@ CAM New BSOH: 100
+03-09 08:57:31.146  2130  2162 E HeatmapThread: ECT Thread time in milliseconds: 1773064651
+03-09 08:57:31.150  2130  2162 D HeatmapThread: !@ batteryplugType : 2
+03-09 08:57:31.150  2130  2162 D HeatmapThread: !@ batteryLevel : 92  batteryTemperature : 256 
+03-09 08:57:31.150  2130  2162 D HeatmapThread: !@ Heatmap currtime: 29551077
+03-09 08:57:31.150  2130  2162 D HeatmapThread: !@ Heatmap prevtime: 29551062
+03-09 08:57:31.150  2130  2162 D HeatmapThread: !@ Heatmap plugstarttime: 29551041
+03-09 08:57:31.150  2130  2162 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29550885
+03-09 08:57:31.151  2130  2162 E HeatmapThread: !@ CAM New BSOH: 100
+03-09 08:57:31.854  7529  8405 I SDHMS:x : SIOP:: AP:269 BAT:256 USB:245 CHG:270 PA:275 WIFI:267 CF:261 BLK:0 SUBBAT:0 LRPTHM:258 SKIN:277 SKINF:272 SKINB:277 LRP2:277 LRF2:272 LRB2:277 AP2:277 CHG2:273 WIFI2:277 RCV2:269 SPK2:265 FCAM:245 UPSPK:262 DNSPK:245 VAP02:270 VWIFI:268 AMB2:212 AVGCUR:340 AVGSYS:181 POWER:1456
+03-09 08:57:32.040  2390  2390 I CNSS    : /sys/wifi/max_chipset_log_size doesn't exist
+03-09 08:57:32.086  1227  1227 D io_stats: !@   8,0 r 93533495 2151579248 w 25538067 533800596 d 3719997 831656212 f 663018 2236762 iot 17025000 0 th 0 0 0 pt 0 inp 0 0 620640.319
+03-09 08:57:32.086  1227  1227 D io_stats: !@ Read_top(KB): rkstack.process(4820) 140
+03-09 08:57:32.087  1227  1227 D io_stats: !@ Write_top(KB): soft.appmanager(8954) 16
+03-09 08:57:32.146  2130  2162 E HeatmapThread: ECT Thread time in milliseconds: 1773064652
+03-09 08:57:32.150  2130  2162 D HeatmapThread: !@ batteryplugType : 2
+03-09 08:57:32.150  2130  2162 D HeatmapThread: !@ batteryLevel : 92  batteryTemperature : 256 
+03-09 08:57:32.150  2130  2162 D HeatmapThread: !@ Heatmap currtime: 29551077
+03-09 08:57:32.150  2130  2162 D HeatmapThread: !@ Heatmap prevtime: 29551062
+03-09 08:57:32.151  2130  2162 D HeatmapThread: !@ Heatmap plugstarttime: 29551041
+03-09 08:57:32.151  2130  2162 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29550885
+03-09 08:57:32.151  2130  2162 E HeatmapThread: !@ CAM New BSOH: 100
+03-09 08:57:32.249  2037  3930 I sensors-hal: handle_sns_std_sensor_event:90, light_cct: ts = 1470044349867380 ns; value = [140, 140, 88, 96, 112, 104, 22, 46, 28096, 0]
+03-09 08:57:32.964  2077  2102 E BatteryDump: !@new_battery_dump : 4289,378,475,550,92,255,245,270,256,0,277,270,0,Charging,NO_CHARGING,Normal,Good,USB,1,Normal,0,0,9297,0x0,0x10000,0x0,0,0,0000,0000,00000000,0,0,0,0,302,4247,9117,990,0,
+03-09 08:57:32.967  2952 10335 V [SS]SleepChargingTimeController: [isActivated]mSleepChargingStatus isNowSessionTime False => false
+03-09 08:57:32.968  2090  2090 I seh_thermal_service: getTemperaturesWithType SehTemperatureType: 3
+03-09 08:57:32.968  2077  2077 I sehhealth-service: updateLrpSysfs: write: 277
+03-09 08:57:33.044  2952  5201 E BatteryStatsService: Invalid uid for waking network packet: -1
+03-09 08:57:33.146  2130  2162 E HeatmapThread: ECT Thread time in milliseconds: 1773064653
+03-09 08:57:33.148  2130  2162 D HeatmapThread: !@ batteryplugType : 2
+03-09 08:57:33.149  2130  2162 D HeatmapThread: !@ batteryLevel : 92  batteryTemperature : 255 
+03-09 08:57:33.149  2130  2162 D HeatmapThread: !@ Heatmap currtime: 29551077
+03-09 08:57:33.149  2130  2162 D HeatmapThread: !@ Heatmap prevtime: 29551062
+03-09 08:57:33.149  2130  2162 D HeatmapThread: !@ Heatmap plugstarttime: 29551041
+03-09 08:57:33.149  2130  2162 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29550885
+03-09 08:57:33.150  2130  2162 E HeatmapThread: !@ CAM New BSOH: 100
+03-09 08:57:33.158  2952  6705 D SemWifiUsabilityStatsMonitor: onWifiUsabilityStats - seqNum 124468, isSameBssidAndFreq true
+03-09 08:57:33.159  2952  4309 D InsDataManager: onOutageCountUpdate() - Outage Data: 0, LQ : Y. Outage Triggered: false
+03-09 08:57:33.160  2952  4309 D SemInsManager: {"bssid": "6e5bf8f25745","rssi": -42.0,"latency": 0.0,"outage_count": 0,"lq_callback_triggered": true,"outage_log": "Unreliable statistics: -42.0 / 1 / 275 / 4 / 0 || 6e5bf8f25745: 0.000 / 0.000 / @ || N N / 0 0 / Y 2.0 / Y X 0 / 620641390 0 || Invalid""Magnetic Sensor Events size": "0""Pressure Sensor Events size": "0"}
+03-09 08:57:33.326  2031  6231 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+03-09 08:57:33.327  2031  6231 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK ON
+03-09 08:57:33.327  2031  6231 D vendor.qti.bluetooth@1.1-wake_lock: Acquire wakelock is acquired 
+03-09 08:57:33.327  2031  6231 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Writing IBS_WAKE_ACK
+03-09 08:57:33.370  2037  4494 I sensors-hal: handle_sns_std_sensor_event:131, [SSC_LIGHT] A: 140(140),c:75,b:104,m:13,cl:22,l:140,s:140,l0:28096,l1:736,s0:23500,s1:0,acl:3,opr:0.37,f(r):81,u(bl):84,if:0,wi:2,si:0,po:144(N:0)
+03-09 08:57:33.378  2031  6231 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+03-09 08:57:33.379  2031  6231 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK OFF
+03-09 08:57:33.410  2031  6231 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+03-09 08:57:33.410  2031  6231 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK ON
+03-09 08:57:33.410  2031  6231 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Writing IBS_WAKE_ACK
+03-09 08:57:33.414  4902  6269 I ScanController: onScanResult to scannerId: 10- eventType=0x0, addressType=1, address=XX:XX:XX:XX:56:50, primaryPhy=1, secondaryPhy=1, advertisingSid=0x2, txPower=127, rssi=-96, periodicAdvInt=0x0
+03-09 08:57:33.418  7622 18499 I NearbyConnections: Found BleAdvertisement [ 0x23 0x57 0x48 0x42 0x46 0x11 0x34 0xdb 0xf9 0x11 0x2b 0xa5 0xa2 0x1c 0x40 0xe4 0x56 0xd4 0x9c 0x80 0x92 0x44 0xde ] (with EndpointId WHBF and EndpointInfo [ 0x34 0xdb 0xf9 0x11 0x2b 0xa5 0xa2 0x1c 0x40 0xe4 0x56 0xd4 0x9c 0x80 0x92 0x44 0xde ])
+03-09 08:57:33.419  7622 18499 I NearbyConnections: Unable to record discovered endpoint due to null currentDiscoveryPhase
+03-09 08:57:33.420  7622 18499 I NearbyConnections: ClientProxy(163340084 0p:com.google.android.gms.nearby.sharing) reporting onEndpointFound(WHBF)
+03-09 08:57:33.420  7622 18499 I NearbyConnections: ClientProxy(163340084) reporting onEndpointDistanceChanged(WHBF, UNKNOWN)
+03-09 08:57:33.422  7622 18659 I NearbySharing: NearbySharing Internal event EndpointDiscovered(endpointId=WHBF)
+03-09 08:57:33.436  7622 18666 I NearbySharing: [NS_DISCOVERY] DiscoveryController reported Discovered(endpointId=WHBF, metadata=DeviceMetadata(version=1, deviceType=2, deviceName=Charry's Galaxy Tab S6, displayName=Charry, modelName=null, imageUri=content://com.google.android.gms.fileprovider/nearby_share_images/1592240281.jpg, isSelfShare=false, isKnown=true, bluetoothMacAddress=[-128, -122, -39, 11, -59, 127], vendorId=1, matchesLocalQrCode=false))
+03-09 08:57:33.437  7622 18666 I NearbySharing: [NS_DEBUG] Dedupped: same endpoint ID WHBF
+03-09 08:57:33.437  7622 18666 I NearbySharing: {NS_DEBUG] previous receiver info ReceiverInfo(endpointId=WHBF, metadata=DeviceMetadata(version=1, deviceType=2, deviceName=Charry's Galaxy Tab S6, displayName=Charry, modelName=null, imageUri=content://com.google.android.gms.fileprovider/nearby_share_images/1592240281.jpg, isSelfShare=false, isKnown=true, bluetoothMacAddress=[-128, -122, -39, 11, -59, 127], vendorId=1, matchesLocalQrCode=false), state=Tomb(delayedStateChangeJob=jhki{Active}@aa6fb02))
+03-09 08:57:33.437  7622 18666 I NearbySharing: NearbySharing Internal event ReceiverEndpointMapping(endpointId=WHBF, receiverId=6)
+03-09 08:57:33.438  7622 18659 I NearbySharing: [NS_CONTROL] DiscoveryStateManager emitted ReportDiscovered(id=6, metadata=DeviceMetadata(version=1, deviceType=2, deviceName=Charry's Galaxy Tab S6, displayName=Charry, modelName=null, imageUri=content://com.google.android.gms.fileprovider/nearby_share_images/1592240281.jpg, isSelfShare=false, isKnown=true, bluetoothMacAddress=[-128, -122, -39, 11, -59, 127], vendorId=1, matchesLocalQrCode=false)).
+03-09 08:57:33.438  7622 18659 I NearbySharing: NearbySharing Internal event ReceiverDiscovered(receiverId=6, deviceName=Charry's Galaxy Tab S6, isKnown=true, isSelfShare=false, deviceType=2, hasMatchingQrCode=false, isExternal=false, providerName=null, providerId=null, cloudReceiverSessionId=null)
+03-09 08:57:33.438  7622 18665 I NearbySharing: SendManager event Discovered(receiverId=6, receiverMetadata=DeviceMetadata(version=1, deviceType=2, deviceName=Charry's Galaxy Tab S6, displayName=Charry, modelName=null, imageUri=content://com.google.android.gms.fileprovider/nearby_share_images/1592240281.jpg, isSelfShare=false, isKnown=true, bluetoothMacAddress=[-128, -122, -39, 11, -59, 127], vendorId=1, matchesLocalQrCode=false))
+03-09 08:57:33.439  7622 18665 I NearbySharing: SendManager event DistanceChanged(receiverId=6, distance=1, rangingData=null)
+03-09 08:57:33.451  2031  6231 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+03-09 08:57:33.451  2031  6231 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK OFF
+03-09 08:57:33.457  7622  7622 I NearbySharing: ShortcutInfoManager added shortcut Charry's Galaxy Tab S6
+03-09 08:57:33.457  2952  4284 D BackgroundInstallControlService: Package event received: 0
+03-09 08:57:33.558  2952  4283 I SemExecuteManagerService: onShortcutChanged: com.google.android.gms0
+03-09 08:57:33.572  5106  5106 I HoneySpace.PackageOperationTracker: onShortcutsChanged com.google.android.gms - 1 UserHandle{0}
+03-09 08:57:33.574  5106 11212 I HoneySpace.ShortcutDataSourceImpl: shortcut updated. ShortcutInfo {id=***, flags=0xa481 [DynIc-uStrRetsLiv], packageName=com.google.android.gms, activity=ComponentInfo{com.google.android.gms/com.google.android.gms.nearby.sharing.main.MainActivity}, shortLabel=***, resId=0[null], longLabel=***, resId=0[null], disabledMessage=***, resId=0[null], disabledReason=[Not disabled], categories={com.google.android.gms.nearby.sharing.main.SHARE_TARGET}, persons=null, icon=null, rank=0, timestamp=1773064653456, intents=null, extras=PersistableBundle[mParcelledData.dataSize=1164]}
+03-09 08:57:33.575  5106  5106 I HoneySpace.HoneySpaceManagerContainer: packageUpdateEvent - com.honeyspace.sdk.source.entity.PackageOperation$ShortcutChanged@119191b
+03-09 08:57:33.575  5106 12916 I HoneySpace.HistoryViewModel@129102592@OneUI: handlePackageEvent
+03-09 08:57:33.575  5106 12916 I HoneySpace.HistoryViewModel@129102592@OneUI: skip for alone
+03-09 08:57:33.603  2031  5380 D vendor.qti.bluetooth@1.1-wake_lock: Release wakelock is released 
+03-09 08:57:33.630  2952  4361 D NetdEventListenerService: DNS Requested by 288, 10433(com.ninebot.segway), 4(FAIL), isBlocked=true, 0ms
+03-09 08:57:34.087  1227  1227 D io_stats: !@   8,0 r 93533496 2151579252 w 25538087 533800980 d 3719997 831656212 f 663019 2236765 iot 17025036 0 th 0 0 0 pt 0 inp 0 0 620642.320
+03-09 08:57:34.146  2130  2162 E HeatmapThread: ECT Thread time in milliseconds: 1773064654
+03-09 08:57:34.150  2130  2162 D HeatmapThread: !@ batteryplugType : 2
+03-09 08:57:34.150  2130  2162 D HeatmapThread: !@ batteryLevel : 92  batteryTemperature : 255 
+03-09 08:57:34.150  2130  2162 D HeatmapThread: !@ Heatmap currtime: 29551077
+03-09 08:57:34.150  2130  2162 D HeatmapThread: !@ Heatmap prevtime: 29551062
+03-09 08:57:34.150  2130  2162 D HeatmapThread: !@ Heatmap plugstarttime: 29551041
+03-09 08:57:34.150  2130  2162 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29550885
+03-09 08:57:34.150  2130  2162 E HeatmapThread: !@ CAM New BSOH: 100
+03-09 08:57:34.676  2952  5201 E BatteryStatsService: Invalid uid for waking network packet: -1
+03-09 08:57:34.810  2037  3930 I sensors-hal: handle_sns_std_sensor_event:90, light_cct: ts = 1470046909861287 ns; value = [141, 141, 88, 96, 112, 104, 22, 46, 28128, 0]
+03-09 08:57:35.059  7622 18666 I NearbyMediums: Found Fast Ble Advertisements :
+03-09 08:57:35.059  7622 18666 I NearbyMediums: BleAdvertisement { version=2, socketVersion=2, isFast=true, serviceIdHash=null, data=[ 0x23 0x57 0x48 0x42 0x46 0x11 0x34 0xdb 0xf9 0x11 0x2b 0xa5 0xa2 0x1c 0x40 0xe4 0x56 0xd4 0x9c 0x80 0x92 0x44 0xde ], deviceToken=[ 0xb6 0xeb ], rxAdvertisement=[ 0xa0 0x17 0x57 0x95 0xac 0xc3 0x31 0x6b 0xc8 0x9c 0x37 0xa4 0x93 0x05 0x7f 0x65 0x0b 0x41 0x9d 0x6e 0xfe 0x91 0x3b 0xd5 0xca 0x53 0xd5 0xa6 0x87 0xd8 0x3d 0x30 0x23 0x30 0x84 0x15 0x05 0x7f 0x00 0x00 0x84 0x15 0x06 0x61 0x00 0x00 0x84 0x15 0x04 0x7f 0x00 0x00 0x83 0x15 0x01 0x16 0x71 ] } : 1 times.
+03-09 08:57:35.059  7622 18666 I NearbyMediums: Total 1 fast advertisements from 1 unique advertisers.
+03-09 08:57:35.060  7622 18666 I NearbyMediums: Current Tracked Scanning Clients are : {NearbyConnections.EnvironmentMonitor, NearbySharing, NearbyConnections.TxAdvertisement}
+03-09 08:57:35.146  2130  2162 E HeatmapThread: ECT Thread time in milliseconds: 1773064655
+03-09 08:57:35.150  2130  2162 D HeatmapThread: !@ batteryplugType : 2
+03-09 08:57:35.150  2130  2162 D HeatmapThread: !@ batteryLevel : 92  batteryTemperature : 255 
+03-09 08:57:35.150  2130  2162 D HeatmapThread: !@ Heatmap currtime: 29551077
+03-09 08:57:35.150  2130  2162 D HeatmapThread: !@ Heatmap prevtime: 29551062
+03-09 08:57:35.150  2130  2162 D HeatmapThread: !@ Heatmap plugstarttime: 29551041
+03-09 08:57:35.150  2130  2162 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29550885
+03-09 08:57:35.151  2130  2162 E HeatmapThread: !@ CAM New BSOH: 100
+03-09 08:57:36.089  1227  1227 D io_stats: !@ Read_top(KB): .ninebot.segway(8728) 4
+03-09 08:57:36.089  1227  1227 D io_stats: !@ Write_top(KB): kworker/u16:13(25529) 336 .ninebot.segway(8728) 8 vendor.samsung.(2077) 8
+03-09 08:57:36.098  7826  8007 E msgr.msys: E[N mns]_OnDiskCacheGetData(632)=>Start post callback cache refresh DNS resolution
+03-09 08:57:36.101  2952  4361 D NetdEventListenerService: DNS Requested by 288, 10355(com.facebook.orca), 4(FAIL), isBlocked=true, 0ms
+03-09 08:57:36.105  7826  8007 E msgr.msys: E[N mns]_LogError(228)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+03-09 08:57:36.105  7826  8007 E msgr.msys: E[N mns]_OnDiskCacheGetData(632)=>Start post callback cache refresh DNS resolution
+03-09 08:57:36.107  2952  4361 D NetdEventListenerService: DNS Requested by 288, 10355(com.facebook.orca), 4(FAIL), isBlocked=true, 0ms
+03-09 08:57:36.107  7826  8007 E msgr.msys: E[N mns]_LogError(228)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+03-09 08:57:36.147  2130  2162 E HeatmapThread: ECT Thread time in milliseconds: 1773064656
+03-09 08:57:36.150  2130  2162 D HeatmapThread: !@ batteryplugType : 2
+03-09 08:57:36.150  2130  2162 D HeatmapThread: !@ batteryLevel : 92  batteryTemperature : 255 
+03-09 08:57:36.151  2130  2162 D HeatmapThread: !@ Heatmap currtime: 29551077
+03-09 08:57:36.151  2130  2162 D HeatmapThread: !@ Heatmap prevtime: 29551062
+03-09 08:57:36.151  2130  2162 D HeatmapThread: !@ Heatmap plugstarttime: 29551041
+03-09 08:57:36.151  2130  2162 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29550885
+03-09 08:57:36.151  2130  2162 E HeatmapThread: !@ CAM New BSOH: 100
+03-09 08:57:36.175  2952  6705 D SemWifiUsabilityStatsMonitor: onWifiUsabilityStats - seqNum 124469, isSameBssidAndFreq true
+03-09 08:57:36.177  2952  4309 D InsDataManager: onOutageCountUpdate() - Outage Data: 0, LQ : Y. Outage Triggered: false
+03-09 08:57:36.177  2952  4309 D SemInsManager: {"bssid": "6e5bf8f25745","rssi": -45.0,"latency": 0.0,"outage_count": 0,"lq_callback_triggered": true,"outage_log": "Unreliable statistics: -45.0 / 1 / 129 / 5 / 1 || 6e5bf8f25745: 0.000 / 0.000 / @ || N N / 0 0 / Y 2.0 / Y X 0 / 620644408 0 || Invalid""Magnetic Sensor Events size": "0""Pressure Sensor Events size": "0"}
+03-09 08:57:36.328  2952  4306 I SemWifiServiceDetector: Service det. resumed: T / T / 6493
