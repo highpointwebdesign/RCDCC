@@ -641,7 +641,11 @@
             background-color: #000;
         }
         
-        .settings-tab[data-tab="system"].active {
+        .settings-tab[data-tab="app"].active {
+            background-color: #000;
+        }
+
+        .settings-tab[data-tab="rcdcc"].active {
             background-color: #000;
         }
         
@@ -1756,15 +1760,59 @@
         }
 
         .garage-sheet-modal .modal-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
             border-radius: 1rem 1rem 0 0;
             max-height: 92dvh;
             overflow: hidden;
+            box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
+        }
+
+        .garage-sheet-modal .modal-header {
+            background: #000000;
+            color: #ffffff;
+            border-bottom: 1px solid #111111;
+            padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+        }
+
+        .garage-sheet-modal .modal-title {
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .garage-sheet-modal .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
         }
 
         .garage-sheet-modal .modal-body {
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             padding-bottom: 6rem;
+            color: var(--text-primary);
+            background: var(--card-bg);
+        }
+
+        .garage-sheet-modal .modal-body .form-label,
+        .garage-sheet-modal .modal-body .form-text,
+        .garage-sheet-modal .modal-body small {
+            color: var(--text-primary);
+        }
+
+        .garage-sheet-modal .modal-body .form-control,
+        .garage-sheet-modal .modal-body .form-select {
+            color: var(--text-primary);
+            background-color: #ffffff;
+            border: 1px solid #d1d5db;
+        }
+
+        .garage-sheet-modal .modal-body .form-control::placeholder {
+            color: #9ca3af;
+        }
+
+        .garage-sheet-modal .modal-body .form-control:focus,
+        .garage-sheet-modal .modal-body .form-select:focus {
+            border-color: var(--high-impact-color);
+            box-shadow: 0 0 0 0.2rem rgba(249, 194, 27, 0.25);
         }
 
         .garage-sheet-modal .modal-footer {

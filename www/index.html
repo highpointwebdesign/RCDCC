@@ -184,12 +184,19 @@
             <h2 class="section-title">Settings</h2>
             <!-- Settings Tabs Navigation -->
             <div class="settings-tabs">
-                <button class="settings-tab active" data-tab="system">
+                <button class="settings-tab active" data-tab="app">
                     <span class="material-symbols-outlined">
                     settings
                     </span>
-                    <span class="tab-label-full">System</span>
-                    <span class="tab-label-short">System</span>
+                    <span class="tab-label-full">App Settings</span>
+                    <span class="tab-label-short">App</span>
+                </button>
+                <button class="settings-tab" data-tab="rcdcc">
+                    <span class="material-symbols-outlined">
+                    memory
+                    </span>
+                    <span class="tab-label-full">RCDCC</span>
+                    <span class="tab-label-short">RCDCC</span>
                 </button>
                 <button class="settings-tab" data-tab="debug" id="debugTab">
                     <span class="material-symbols-outlined">
@@ -432,36 +439,10 @@
                 </div>
             </div>
 
-            <!-- Tab Content: System -->
-            <div class="tab-pane active" id="tab-system">
+            <!-- Tab Content: App Settings -->
+            <div class="tab-pane active" id="tab-app">
                 <div class="row g-3">
-                    <!-- RCDCC Mounting Card -->
-                    <div class="col-12 col-md-6">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">
-                                arrows_input
-                                </span>
-                                RCDCC Mounting
-                            </div>
-                            <div class="card-body">
-                                <label for="mpuOrientation" class="form-label"><strong>Select Orientation</strong></label>
-                                <select class="form-select" id="mpuOrientation">
-                                    <option value="0">Arrow Forward, Chip Up (Default)</option>
-                                    <option value="1">Arrow Up, Chip Forward</option>
-                                    <option value="2">Arrow Backward, Chip Up</option>
-                                    <option value="3">Arrow Down, Chip Forward</option>
-                                    <option value="4">Arrow Right, Chip Up</option>
-                                    <option value="5">Arrow Left, Chip Up</option>
-                                </select>
-                                <div class="form-text">
-                                    <small>Select how your DCC is physically mounted. The arrow is printed on the box. Correct orientation is critical for accurate roll/pitch readings.</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Notifications Card -->
+                    <!-- App Notifications Card -->
                     <div class="col-12 col-md-6">
                         <div class="card" id="notificationsCard">
                             <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #000000; color: #ffffff;">
@@ -469,7 +450,7 @@
                                     <span class="material-symbols-outlined" style="color: var(--danger); vertical-align: middle; margin-right: 0.5rem;">
                                         notifications_active
                                     </span>
-                                    Notifications
+                                    App Notifications
                                 </div>
                             </div>
                             <div class="card-body">
@@ -484,62 +465,6 @@
                                         </div>
                                     </div>
                                 </div>
-
-                                <!-- Truck Notifications Section -->
-                                <div class="mb-4 pb-2" style="border-bottom: 1px solid var(--bs-border-color-translucent);">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <label class="form-check-label mb-0" for="enableTruckNotifications">
-                                            <strong>Truck Notifications</strong>
-                                        </label>
-                                        <div class="form-check form-switch m-0">
-                                            <input class="form-check-input" type="checkbox" id="enableTruckNotifications">
-                                        </div>
-                                    </div>
-                                    <div class="form-text mt-2">
-                                        <small>When enabled, app toasts temporarily override the selected light group with a solid toast color for the toast duration. Master lights do not block notifications.</small>
-                                    </div>
-                                </div>
-
-                                
-
-                                <!-- LED Notifications Section -->
-                                <div>
-                                    <h6 class="mb-3" style="font-weight: 600; color: var(--text-primary);">
-                                        <!-- <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: middle; margin-right: 0.5rem; color: var(--danger);">lightbulb</span> -->
-                                        LED Notifications
-                                    </h6>
-                                    <div class="mb-3">
-                                        <label for="notificationGroupSelect" class="form-label">
-                                            Light Group for LED Notifications
-                                        </label>
-                                        <select class="form-select" id="notificationGroupSelect" onchange="saveNotificationGroup()">
-                                            <option value="__none__">None - Disable LED Notifications</option>
-                                            <option value="__all__">All LEDs</option>
-                                            <!-- Light groups dynamically populated here -->
-                                        </select>
-                                        <div class="form-text">
-                                            <small>Select which LEDs flash during notifications. Success=Green, Error=Red, Warning=Amber, Info=Blue. Only the LEDs from the group will flash.</small>
-                                        </div>
-                                    </div>
-                                    <div class="d-flex gap-2">
-                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('success')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">check_circle</span> Test Success
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('error')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">error</span> Test Error
-                                        </button>
-                                    </div>
-                                    <div class="d-flex gap-2 mt-2">
-                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('warning')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">warning</span> Test Warning
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('info')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">info</span> Test Info
-                                        </button>
-                                    </div>
-                                </div>
-
-                               
                             </div>
                         </div>
                     </div>
@@ -582,6 +507,101 @@
                         </div>
                     </div>
 
+                </div>
+            </div>
+
+            <!-- Tab Content: RCDCC -->
+            <div class="tab-pane" id="tab-rcdcc">
+                <div class="row g-3">
+                    <!-- RCDCC Mounting Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                arrows_input
+                                </span>
+                                RCDCC Mounting
+                            </div>
+                            <div class="card-body">
+                                <label for="mpuOrientation" class="form-label"><strong>Select Orientation</strong></label>
+                                <select class="form-select" id="mpuOrientation">
+                                    <option value="0">Arrow Forward, Chip Up (Default)</option>
+                                    <option value="1">Arrow Up, Chip Forward</option>
+                                    <option value="2">Arrow Backward, Chip Up</option>
+                                    <option value="3">Arrow Down, Chip Forward</option>
+                                    <option value="4">Arrow Right, Chip Up</option>
+                                    <option value="5">Arrow Left, Chip Up</option>
+                                </select>
+                                <div class="form-text">
+                                    <small>Per-truck orientation setting for the active garage truck. Correct orientation is critical for accurate roll/pitch readings.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Truck Notifications Card -->
+                    <div class="col-12 col-md-6">
+                        <div class="card" id="truckNotificationsCard">
+                            <div class="card-header d-flex justify-content-between align-items-center" style="background-color: #000000; color: #ffffff;">
+                                <div>
+                                    <span class="material-symbols-outlined" style="color: var(--danger); vertical-align: middle; margin-right: 0.5rem;">
+                                        notifications_active
+                                    </span>
+                                    Truck Notifications
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-4 pb-2" style="border-bottom: 1px solid var(--bs-border-color-translucent);">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <label class="form-check-label mb-0" for="enableTruckNotifications">
+                                            <strong>Truck Notifications</strong>
+                                        </label>
+                                        <div class="form-check form-switch m-0">
+                                            <input class="form-check-input" type="checkbox" id="enableTruckNotifications">
+                                        </div>
+                                    </div>
+                                    <div class="form-text mt-2">
+                                        <small>When enabled, app toasts temporarily override the selected light group with a solid toast color for the toast duration.</small>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h6 class="mb-3" style="font-weight: 600; color: var(--text-primary);">
+                                        LED Notifications
+                                    </h6>
+                                    <div class="mb-3">
+                                        <label for="notificationGroupSelect" class="form-label">
+                                            Light Group for LED Notifications
+                                        </label>
+                                        <select class="form-select" id="notificationGroupSelect" onchange="saveNotificationGroup()">
+                                            <option value="__none__">None - Disable LED Notifications</option>
+                                            <option value="__all__">All LEDs</option>
+                                            <!-- Light groups dynamically populated here -->
+                                        </select>
+                                        <div class="form-text">
+                                            <small>Select which LEDs flash during notifications. Success=Green, Error=Red, Warning=Amber, Info=Blue.</small>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('success')">
+                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">check_circle</span> Test Success
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('error')">
+                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">error</span> Test Error
+                                        </button>
+                                    </div>
+                                    <div class="d-flex gap-2 mt-2">
+                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('warning')">
+                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">warning</span> Test Warning
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('info')">
+                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">info</span> Test Info
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

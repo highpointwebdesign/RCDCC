@@ -5531,11 +5531,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         
         // Initialize settings tabs
         function initSettingsTabs() {
+            const legacyTab = localStorage.getItem('settings_active_tab');
+            if (legacyTab === 'system' || legacyTab === 'network') {
+                localStorage.setItem('settings_active_tab', 'app');
+            }
+
             // Restore last active tab from localStorage
-            const preferredTab = localStorage.getItem('settings_active_tab') || 'network';
+            const preferredTab = localStorage.getItem('settings_active_tab') || 'app';
             const savedTab = document.querySelector(`.settings-tab[data-tab="${preferredTab}"]`)
                 ? preferredTab
-                : 'network';
+                : 'app';
             
             // Set up tab click handlers
             document.querySelectorAll('.settings-tab').forEach(tab => {
@@ -5587,7 +5592,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 
                 // If debug tab was active when disabled, switch to system tab
                 if (!isEnabled && debugPane.classList.contains('active')) {
-                    openSettingsTab('system');
+                    openSettingsTab('app');
                 }
             });
         }
