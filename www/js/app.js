@@ -96,28 +96,43 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
         }
 
-        async function pushConfigPayload(payload, signal = null) {
+        async function pushConfigPayload(payload, signal = null, operationContext = createTruckOperationContext()) {
             try {
                 ensureBleConnectedOrThrow();
+                if (signal?.aborted) {
+                    throw new DOMException('Operation aborted', 'AbortError');
+                }
+                assertTruckOperationContextCurrent(operationContext, 'Config write');
             } catch (e) {
                 return Promise.reject(e);  // now it's a rejected promise, caught by .catch()
             }
             communicationMode = 'ble';
             await bleManager.writeConfig(payload);
+            assertTruckOperationContextCurrent(operationContext, 'Config write');
             return { status: 'ok' };
         }
 
-        async function pushServoPayload(payload, signal = null) {
+        async function pushServoPayload(payload, signal = null, operationContext = createTruckOperationContext()) {
             ensureBleConnectedOrThrow();
+            if (signal?.aborted) {
+                throw new DOMException('Operation aborted', 'AbortError');
+            }
+            assertTruckOperationContextCurrent(operationContext, 'Servo write');
             communicationMode = 'ble';
             await bleManager.sendServoCommand(payload);
+            assertTruckOperationContextCurrent(operationContext, 'Servo write');
             return { status: 'ok' };
         }
 
-        async function pushLightsPayload(payload, signal = null) {
+        async function pushLightsPayload(payload, signal = null, operationContext = createTruckOperationContext()) {
             ensureBleConnectedOrThrow();
+            if (signal?.aborted) {
+                throw new DOMException('Operation aborted', 'AbortError');
+            }
+            assertTruckOperationContextCurrent(operationContext, 'Lights write');
             communicationMode = 'ble';
             await bleManager.sendLightsCommand(payload);
+            assertTruckOperationContextCurrent(operationContext, 'Lights write');
             return { status: 'ok' };
         }
 
@@ -132,10 +147,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
         }
 
-        async function pushSystemCommand(command, params = {}, signal = null) {
+        async function pushSystemCommand(command, params = {}, signal = null, operationContext = createTruckOperationContext()) {
             ensureBleConnectedOrThrow();
+            if (signal?.aborted) {
+                throw new DOMException('Operation aborted', 'AbortError');
+            }
+            assertTruckOperationContextCurrent(operationContext, 'System command');
             communicationMode = 'ble';
             await bleManager.sendSystemCommand(command, params);
+            assertTruckOperationContextCurrent(operationContext, 'System command');
             return { status: 'ok' };
         }
 
@@ -237,7 +257,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!isBleConnected()) return;
             if (configRefreshInFlight) return;
 
-            configRefreshInFlight = fetchConfigFromESP32(false)
+            const operationContext = createTruckOperationContext();
+            configRefreshInFlight = fetchConfigFromESP32(false, operationContext)
                 .catch((error) => {
                     console.warn(`Config refresh failed (${reason}):`, error?.message || error);
                 })
@@ -445,6 +466,43 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const rSliders = {};
         const rSliderSilentTimers = {};
         const rSliderInitState = new Set();
+        let activeTruckSessionToken = 0;
+
+        function getCurrentBleDeviceId() {
+            return String((bleManager && bleManager.deviceId) || '');
+        }
+
+        function createTruckOperationContext() {
+            return {
+                sessionToken: activeTruckSessionToken,
+                deviceId: getCurrentBleDeviceId()
+            };
+        }
+
+        function isTruckOperationContextCurrent(context) {
+            if (!context) return true;
+            return context.sessionToken === activeTruckSessionToken && context.deviceId === getCurrentBleDeviceId();
+        }
+
+        function assertTruckOperationContextCurrent(context, actionLabel = 'Operation') {
+            if (!isTruckOperationContextCurrent(context)) {
+                throw new DOMException(`${actionLabel} canceled because active truck changed`, 'AbortError');
+            }
+        }
+
+        function beginNewTruckSession() {
+            activeTruckSessionToken += 1;
+            return activeTruckSessionToken;
+        }
+
+        function setTruckScopedTimeout(callback, delay, operationContext = createTruckOperationContext()) {
+            return setTimeout(() => {
+                if (!isTruckOperationContextCurrent(operationContext)) {
+                    return;
+                }
+                callback();
+            }, delay);
+        }
 
         function setCardBodiesLoading(isLoading) {
             const cardBodies = document.querySelectorAll('.card-body');
@@ -2214,8 +2272,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             pendingLightsSyncRequested = true;
             if (pendingLightsRollbackTimer) return;
 
+            const operationContext = createTruckOperationContext();
             pendingLightsRollbackTimer = setTimeout(async () => {
                 pendingLightsRollbackTimer = null;
+                if (!isTruckOperationContextCurrent(operationContext)) {
+                    pendingLightsSyncRequested = false;
+                    return;
+                }
                 if (isBleConnected()) {
                     return;
                 }
@@ -2594,12 +2657,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return ranges;
         }
         
-        async function applyLightsPayloadChunked(groups, masterEnabled) {
+        async function applyLightsPayloadChunked(groups, masterEnabled, operationContext = createTruckOperationContext()) {
             if (!isBleConnected()) {
                 console.debug('[Lights] Skipping chunked sync: BLE not connected');
                 return Promise.resolve();
             }
 
+            assertTruckOperationContextCurrent(operationContext, 'Lights sync');
             const chunkRanges = buildLightsChunkRanges(groups, masterEnabled);
             const totalGroups = (masterEnabled ? groups : []).length;
             const numChunks = chunkRanges.length;
@@ -2613,7 +2677,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 
                 try {
                     console.log(`[Lights] Chunk ${chunkIdx + 1}/${numChunks}: groups [${chunkStart}, ${chunkEnd}) ~${payloadBytes} bytes`);
-                    await pushLightsPayload(payload);
+                    await pushLightsPayload(payload, null, operationContext);
                 } catch (error) {
                     const errorMessage = getErrorMessage(error);
                     const isDisconnectedError = String(errorMessage).toLowerCase().includes('not connected');
@@ -2668,7 +2732,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             });
         }
 
-        function applyLightsHierarchyToHardware(override = null) {
+        function applyLightsHierarchyToHardware(override = null, operationContext = createTruckOperationContext()) {
             if (!isBleConnected()) {
                 // Startup and offline states can update local light groups before BLE is connected.
                 console.debug('[Lights] Skipping hardware sync: BLE not connected');
@@ -2682,8 +2746,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             console.log('[Lights] Syncing to ESP32:', sourceGroups.map(g => ({ name: g.name, enabled: g.enabled, indices: g.indices?.length })));
 
             // Use chunked writes for large configs to avoid BLE payload size limits
-            return applyLightsPayloadChunked(sourceGroups, masterEnabled || !!override?.forceMasterOn)
+            return applyLightsPayloadChunked(sourceGroups, masterEnabled || !!override?.forceMasterOn, operationContext)
             .then(() => {
+                assertTruckOperationContextCurrent(operationContext, 'Lights sync');
                 clearPendingLightsRollback();
                 pendingLightsSyncRequested = false;
                 if (!override) {
@@ -3735,7 +3800,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 clearPendingLightsRollback();
                 if (pendingLightsSyncRequested) {
                     pendingLightsSyncRequested = false;
-                    applyLightsHierarchyToHardware();
+                    console.log('Discarding pending automatic lights replay after reconnect');
                 }
             } else if (connected) {
                 icon.classList.remove('connecting', 'disconnected');
@@ -3759,6 +3824,42 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function registerAjaxController(controller) {
             activeAjaxControllers.add(controller);
             return controller;
+        }
+
+        function cancelPendingTruckOperations(reason = 'truck-switch') {
+            console.log(`Cancelling pending truck operations: ${reason}`);
+            cancelActiveAjaxRequests();
+
+            Object.keys(tuningSliderSaveTimers).forEach((key) => {
+                if (tuningSliderSaveTimers[key]) {
+                    clearTimeout(tuningSliderSaveTimers[key]);
+                    tuningSliderSaveTimers[key] = null;
+                }
+            });
+
+            Object.values(servoSliderSaveTimers).forEach((timers) => {
+                if (timers.range) {
+                    clearTimeout(timers.range);
+                    timers.range = null;
+                }
+                if (timers.trim) {
+                    clearTimeout(timers.trim);
+                    timers.trim = null;
+                }
+            });
+
+            if (tuningRefreshAfterSaveTimer) {
+                clearTimeout(tuningRefreshAfterSaveTimer);
+                tuningRefreshAfterSaveTimer = null;
+            }
+
+            if (notificationRestoreTimer) {
+                clearTimeout(notificationRestoreTimer);
+                notificationRestoreTimer = null;
+            }
+
+            clearPendingLightsRollback();
+            pendingLightsSyncRequested = false;
         }
 
         function unregisterAjaxController(controller) {
@@ -3891,8 +3992,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Config Fetching ====================
         let hasShownInitialConfigToast = false;
 
-        async function fetchConfigFromESP32(showToast = true) {
+        async function fetchConfigFromESP32(showToast = true, operationContext = createTruckOperationContext()) {
             const applyLoadedConfig = (configData, lightsData) => {
+                if (!isTruckOperationContextCurrent(operationContext)) {
+                    console.log('Skipping stale config apply for inactive truck session');
+                    return;
+                }
                 // Merge for fullConfig (used by app logic)
                 fullConfig = {
                     ...configData,
@@ -3985,14 +4090,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             try {
                 communicationMode = 'ble';
+                assertTruckOperationContextCurrent(operationContext, 'Config refresh');
                 // Fetch config and lights separately for better reliability and isolation
                 const [configData, lightsData] = await Promise.all([
                     bleManager.readConfig(),
                     bleManager.readLights()
                 ]);
+                assertTruckOperationContextCurrent(operationContext, 'Config refresh');
                 
                 applyLoadedConfig(configData, lightsData);
             } catch (error) {
+                if (!isTruckOperationContextCurrent(operationContext)) {
+                    console.log('Ignoring stale config refresh failure for inactive truck session');
+                    return;
+                }
                 console.error('Failed to fetch config:', error);
                 const configDataEl = document.getElementById('configData');
                 if (configDataEl) configDataEl.textContent = `Error: ${error.message}`;
@@ -4072,7 +4183,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             if (error.name === 'AbortError') {
-                return `${contextLabel} timed out. Check BLE connection and retry.`;
+                return null;
             }
 
             if (typeof error.message === 'string' && error.message.trim().length > 0) {
@@ -4114,8 +4225,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             const controller = registerAjaxController(new AbortController());
             const timeout = setTimeout(() => controller.abort(), 8000);
+            const operationContext = createTruckOperationContext();
 
-            pushConfigPayload(payload, controller.signal)
+            pushConfigPayload(payload, controller.signal, operationContext)
             .then(data => {
                 console.log('Tuning slider saved:', sliderName, value);
                 
@@ -4140,16 +4252,22 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
                 // Re-read config from device to confirm persistence and normalize UI values.
                 if (tuningRefreshAfterSaveTimer) clearTimeout(tuningRefreshAfterSaveTimer);
-                tuningRefreshAfterSaveTimer = setTimeout(() => {
-                    fetchConfigFromESP32(false);
-                }, 900);
+                tuningRefreshAfterSaveTimer = setTruckScopedTimeout(() => {
+                    fetchConfigFromESP32(false, operationContext);
+                }, 900, operationContext);
             })
             .catch(error => {
+                if (error?.name === 'AbortError') {
+                    return;
+                }
                 if (error && error.message === 'Bluetooth LE not connected') {
                     updateConnectionStatus(false);
                 }
                 console.error('Failed to save tuning slider:', error);
-                toast.error(getSaveErrorMessage(`Saving ${sliderName}`, error), { duration: 5000 });
+                const errorMessage = getSaveErrorMessage(`Saving ${sliderName}`, error);
+                if (errorMessage) {
+                    toast.error(errorMessage, { duration: 5000 });
+                }
             })
             .finally(() => {
                 clearTimeout(timeout);
@@ -4181,8 +4299,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             const controller = registerAjaxController(new AbortController());
             const timeout = setTimeout(() => controller.abort(), 8000);
+            const operationContext = createTruckOperationContext();
 
-            pushConfigPayload(payload, controller.signal)
+            pushConfigPayload(payload, controller.signal, operationContext)
             .then(data => {
                 console.log('Servo config saved:', data);
                 
@@ -4206,11 +4325,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 }
             })
             .catch(error => {
+                if (error?.name === 'AbortError') {
+                    return;
+                }
                 if (error && error.message === 'Bluetooth LE not connected') {
                     updateConnectionStatus(false);
                 }
                 console.error('Failed to save servo config:', error);
-                toast.error(getSaveErrorMessage('Saving servo configuration', error), { duration: 5000 });
+                const errorMessage = getSaveErrorMessage('Saving servo configuration', error);
+                if (errorMessage) {
+                    toast.error(errorMessage, { duration: 5000 });
+                }
             })
             .finally(() => {
                 clearTimeout(timeout);
@@ -5159,15 +5284,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Save to ESP32
             const controller = registerAjaxController(new AbortController());
             const timeout = setTimeout(() => controller.abort(), 8000);
+            const operationContext = createTruckOperationContext();
 
             try {
-                await pushServoPayload(payload, controller.signal);
+                await pushServoPayload(payload, controller.signal, operationContext);
                 fullConfig.servos[servoKey][param] = value;
                 if (showToast) toast.success('Saved');
                 if (refreshConfig) {
-                    setTimeout(() => {
-                        fetchConfigFromESP32(false);
-                    }, 800);
+                    setTruckScopedTimeout(() => {
+                        fetchConfigFromESP32(false, operationContext);
+                    }, 800, operationContext);
                 }
             } catch (error) {
                 if (error.name === 'AbortError') return;
@@ -5193,15 +5319,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             const controller = registerAjaxController(new AbortController());
             const timeout = setTimeout(() => controller.abort(), 8000);
+            const operationContext = createTruckOperationContext();
 
-            pushConfigPayload(payload, controller.signal)
+            pushConfigPayload(payload, controller.signal, operationContext)
             .then(data => {
                 fullConfig.mpuOrientation = parseInt(value);
                 toast.success('Saved');
                 // Re-fetch config to verify persistence
-                setTimeout(() => {
-                    fetchConfigFromESP32(false);
-                }, 800);
+                setTruckScopedTimeout(() => {
+                    fetchConfigFromESP32(false, operationContext);
+                }, 800, operationContext);
             })
             .catch(error => {
                 if (error.name === 'AbortError') return;
@@ -5224,15 +5351,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             const controller = registerAjaxController(new AbortController());
             const timeout = setTimeout(() => controller.abort(), 8000);
+            const operationContext = createTruckOperationContext();
 
-            pushConfigPayload(payload, controller.signal)
+            pushConfigPayload(payload, controller.signal, operationContext)
             .then(data => {
                 fullConfig.sampleRate = parseInt(value);
                 toast.success('Saved');
                 // Re-fetch config to verify persistence
-                setTimeout(() => {
-                    fetchConfigFromESP32(false);
-                }, 800);
+                setTruckScopedTimeout(() => {
+                    fetchConfigFromESP32(false, operationContext);
+                }, 800, operationContext);
             })
             .catch(error => {
                 if (error.name === 'AbortError') return;
@@ -6259,6 +6387,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             const outgoing = getActiveGarageTruck();
             let switchSucceeded = false;
+            beginNewTruckSession();
+            cancelPendingTruckOperations('garage-switch');
             suspendAutoReconnect = true;
             stopAutoReconnect();
             garageState.switchingTruckId = truckId;
@@ -6268,11 +6398,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             try {
                 if (isBleConnected()) {
-                    try {
-                        await bleManager.sendSystemCommand('flash', { color: 'red', count: 2 });
-                    } catch (error) {
-                        console.warn('Outgoing flash command failed:', error?.message || error);
-                    }
                     await disconnectWithTimeout(2000);
                 }
 
