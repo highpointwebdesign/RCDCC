@@ -55,8 +55,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // - Reads from package.json
         // - Uses git tags: $(git describe --tags --always)
         // - Generates from CI/CD pipeline build number
-        const APP_VERSION = '6f3e740';
-        const BUILD_DATE = '2026-03-04';
+        const APP_VERSION = 'bedc0f6';
+        const BUILD_DATE = '2026-03-10 21:45:23';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -65,6 +65,25 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let autoReconnectTimer = null;
         let autoReconnectInFlight = false;
         let manualBleDisconnect = false;
+        let suspendAutoReconnect = false;
+
+        function getAutoReconnectTargetDeviceId() {
+            const activeGarageId = localStorage.getItem('rcdccActiveGarageId');
+            if (activeGarageId) {
+                try {
+                    const garage = JSON.parse(localStorage.getItem('rcdccGarage') || '[]');
+                    if (!Array.isArray(garage)) return null;
+                    const activeTruck = garage.find((truck) => truck && truck.id === activeGarageId);
+                    return activeTruck && activeTruck.deviceId ? activeTruck.deviceId : null;
+                } catch (error) {
+                    console.warn('Failed to read garage for auto reconnect target:', error?.message || error);
+                    return null;
+                }
+            }
+
+            // Legacy fallback for users who have not created garage entries yet.
+            return localStorage.getItem('rcdccBlePreferredDeviceId') || null;
+        }
 
         function isBleConnected() {
             return !!(bleManager && bleManager.getConnectionStatus && bleManager.getConnectionStatus());
@@ -100,6 +119,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             communicationMode = 'ble';
             await bleManager.sendLightsCommand(payload);
             return { status: 'ok' };
+        }
+
+        function getErrorMessage(error) {
+            if (!error) return 'Unknown error';
+            if (typeof error === 'string') return error;
+            if (error.message) return error.message;
+            try {
+                return JSON.stringify(error);
+            } catch (_) {
+                return String(error);
+            }
         }
 
         async function pushSystemCommand(command, params = {}, signal = null) {
@@ -149,9 +179,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         async function attemptAutoReconnect(source = 'timer') {
             if (!bleManager || !bleManager.connectToKnownDevice) return false;
-            if (manualBleDisconnect || autoReconnectInFlight || isBleConnected() || document.hidden || !navigator.onLine) {
+            if (manualBleDisconnect || suspendAutoReconnect || autoReconnectInFlight || isBleConnected() || document.hidden || !navigator.onLine) {
                 return false;
             }
+
+            const reconnectTargetDeviceId = getAutoReconnectTargetDeviceId();
+            if (!reconnectTargetDeviceId) return false;
+            bleManager.preferredDeviceId = reconnectTargetDeviceId;
 
             autoReconnectInFlight = true;
             try {
@@ -177,7 +211,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function startAutoReconnect(reason = 'disconnect') {
-            if (!bleManager || manualBleDisconnect) return;
+            if (!bleManager || manualBleDisconnect || suspendAutoReconnect) return;
             if (autoReconnectTimer) return;
 
             // Try immediately, then continue in the background.
@@ -522,22 +556,35 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             success(message, options) {
                 this.show(message, 'success', options);
-                flashNotificationLEDs('success');
+                flashNotificationLEDs('success', {
+                    duration: options && options.duration,
+                    force: !!(options && options.forceTruckNotification)
+                });
             },
             
             error(message, options) {
                 this.show(message, 'error', options);
-                flashNotificationLEDs('error');
+                flashNotificationLEDs('error', {
+                    duration: options && options.duration,
+                    force: !!(options && options.forceTruckNotification)
+                });
+                appendErrorToConsole(message);
             },
             
             warning(message, options) {
                 this.show(message, 'warning', options);
-                flashNotificationLEDs('warning');
+                flashNotificationLEDs('warning', {
+                    duration: options && options.duration,
+                    force: !!(options && options.forceTruckNotification)
+                });
             },
             
             info(message, options) {
                 this.show(message, 'info', options);
-                flashNotificationLEDs('info');
+                flashNotificationLEDs('info', {
+                    duration: options && options.duration,
+                    force: !!(options && options.forceTruckNotification)
+                });
             }
         };
     
@@ -1411,7 +1458,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     hasLoadedConfigFromDevice = false;
                     startHeartbeat();
                     updateConnectionStatus(false);
-                    if (!manualBleDisconnect) {
+                    if (!manualBleDisconnect && !suspendAutoReconnect) {
                         startAutoReconnect('disconnect-callback');
                     }
                 });
@@ -1500,6 +1547,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             applyRequestedLayoutMoves();
             initSettingsTabs();
             initDebugModeToggle();
+            initGarageFeature();
 
             // Initialize notification sounds toggle
             const enableSoundsCheckbox = document.getElementById('enableNotificationSounds');
@@ -1512,6 +1560,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     notificationSoundsEnabled = this.checked;
                     localStorage.setItem('notificationSoundsEnabled', this.checked);
                     toast.success('Notification sounds ' + (this.checked ? 'enabled' : 'disabled'));
+                });
+            }
+
+            // Initialize truck notifications toggle
+            const enableTruckNotificationsCheckbox = document.getElementById('enableTruckNotifications');
+            if (enableTruckNotificationsCheckbox) {
+                enableTruckNotificationsCheckbox.checked = getTruckNotificationsEnabled();
+                enableTruckNotificationsCheckbox.addEventListener('change', function() {
+                    localStorage.setItem(NOTIFICATION_TRUCK_ENABLED_KEY, this.checked ? 'true' : 'false');
+                    toast.success('Truck notifications ' + (this.checked ? 'enabled' : 'disabled'));
                 });
             }
 
@@ -1709,12 +1767,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 });
             }
             
-            // Header icon click - navigate to Settings
+            // Header icon click - navigate to Garage
             const wifiIcon = document.getElementById('wifiIcon');
             if (wifiIcon) {
                 wifiIcon.addEventListener('click', function() {
-                    navigateToSection('settings');
-                    setTimeout(() => openSettingsTab('network'), 0);
+                    navigateToSection('garage');
                 });
             }
             
@@ -1763,6 +1820,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     if (lightingConfigData && lightingConfigData.textContent) {
                         copyToClipboard(lightingConfigData.textContent, lightingConfigCopyBtn);
                     }
+                });
+            }
+
+            // Lighting Configuration Refresh button
+            const refreshLightingConfigBtn = document.getElementById('refreshLightingConfigBtn');
+            if (refreshLightingConfigBtn) {
+                refreshLightingConfigBtn.addEventListener('click', function() {
+                    refreshLightingConfigBtn.classList.add('rotate-cw');
+                    fetchConfigFromESP32(true).then(() => {
+                        refreshLightingConfigBtn.classList.remove('rotate-cw');
+                        window.toast.success('Lighting config refreshed from device');
+                    }).catch(error => {
+                        refreshLightingConfigBtn.classList.remove('rotate-cw');
+                        window.toast.error('Failed to refresh config: ' + error.message);
+                    });
                 });
             }
             
@@ -1844,6 +1916,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         // ==================== System Notification LEDs ====================
         const NOTIFICATION_GROUP_KEY = 'systemNotificationGroup';
+        const NOTIFICATION_TRUCK_ENABLED_KEY = 'truckNotificationsEnabled';
+        const NOTIFICATION_FLASH_MIN_DURATION_MS = 300;
+        let notificationRestoreTimer = null;
+        let notificationFlashSequence = 0;
+
+        function getTruckNotificationsEnabled() {
+            return localStorage.getItem(NOTIFICATION_TRUCK_ENABLED_KEY) !== 'false';
+        }
         
         // Get the selected notification group name
         function getNotificationGroup() {
@@ -1923,7 +2003,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
         
         // Flash LEDs for system notifications
-        function flashNotificationLEDs(type) {
+        function flashNotificationLEDs(type, options = {}) {
+            const force = !!options.force;
+            if (!force && !getTruckNotificationsEnabled()) {
+                return;
+            }
+
+            if (!isBleConnected()) {
+                return;
+            }
+
             const groupName = getNotificationGroup();
             
             // Check if notifications are disabled
@@ -1968,22 +2057,55 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 }
             }
             
-            // TODO: Send flash command to ESP32
-            // For now, log the flash request
-            console.log(`Flash notification: type=${type}, color=${color}, LEDs=${indices.join(',')}`);
-            
-            // API call would look something like:
-            // fetch(getApiUrl('/api/notification-flash'), {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({ indices, color, duration: 300, flashes: 2 })
-            // });
+            if (!indices.length) {
+                return;
+            }
+
+            const duration = Number.isFinite(Number(options.duration)) && Number(options.duration) > 0
+                ? Number(options.duration)
+                : 3000;
+            const flashDuration = Math.max(NOTIFICATION_FLASH_MIN_DURATION_MS, duration);
+
+            const overlayGroup = {
+                name: '__notification_overlay__',
+                enabled: true,
+                brightness: 255,
+                color,
+                color2: color,
+                indices,
+                pattern: 'Steady'
+            };
+
+            const baseGroups = lightGroups.map(group => ({
+                ...group,
+                enabled: !!group.enabled,
+                indices: Array.isArray(group.indices) ? [...group.indices] : []
+            }));
+
+            const sequence = ++notificationFlashSequence;
+            if (notificationRestoreTimer) {
+                clearTimeout(notificationRestoreTimer);
+                notificationRestoreTimer = null;
+            }
+
+            // Force flash delivery regardless of master light state.
+            applyLightsHierarchyToHardware({
+                forceMasterOn: true,
+                masterEnabled: true,
+                groups: [overlayGroup, ...baseGroups]
+            });
+
+            notificationRestoreTimer = setTimeout(() => {
+                if (sequence !== notificationFlashSequence) {
+                    return;
+                }
+                applyLightsHierarchyToHardware();
+                notificationRestoreTimer = null;
+            }, flashDuration);
         }
         
         // Test notification flash
         function testNotification(type) {
-            flashNotificationLEDs(type);
-            
             // Show a toast as visual confirmation
             const messages = {
                 success: 'Testing success notification',
@@ -1992,13 +2114,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 info: 'Testing info notification'
             };
             
-            window.toast[type](messages[type] || 'Testing notification flash');
+            window.toast[type](messages[type] || 'Testing notification flash', { forceTruckNotification: true });
         }
 
         // ==================== Light Groups Management ====================
         const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
         const LIGHT_MASTER_STORAGE_KEY = 'lightsMasterEnabled';
         const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
+        const TOTAL_LED_COUNT_USER_OVERRIDE_KEY = 'totalLEDCountUserOverride';
         const COLOR_PRESETS_KEY = 'lightGroupColorPresets';
         const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
         const LIGHT_GROUP_DEFAULT_PATTERN = 'Steady';
@@ -2149,7 +2272,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 // Load from ESP32 - this is the source of truth
                 lightGroups = esp32LightsData.map(group => ({
                     ...group,
-                    enabled: !!group.enabled
+                    name: typeof group?.name === 'string' ? group.name : 'Unnamed Group',
+                    indices: Array.isArray(group?.indices)
+                        ? group.indices.filter(idx => Number.isInteger(idx) && idx >= 0)
+                        : [],
+                    brightness: Number.isFinite(Number(group?.brightness))
+                        ? Math.max(0, Math.min(255, Number(group.brightness)))
+                        : 255,
+                    color: typeof group?.color === 'string' ? group.color : '#ff0000',
+                    color2: typeof group?.color2 === 'string' ? group.color2 : '#000000',
+                    pattern: group?.pattern || LIGHT_GROUP_DEFAULT_PATTERN,
+                    enabled: !!group?.enabled
                 }));
                 console.log('Loaded light groups from ESP32:', lightGroups.length);
                 
@@ -2170,7 +2303,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
                 lightGroups = lightGroups.map(group => ({
                     ...group,
-                    enabled: !!group.enabled
+                    name: typeof group?.name === 'string' ? group.name : 'Unnamed Group',
+                    indices: Array.isArray(group?.indices)
+                        ? group.indices.filter(idx => Number.isInteger(idx) && idx >= 0)
+                        : [],
+                    brightness: Number.isFinite(Number(group?.brightness))
+                        ? Math.max(0, Math.min(255, Number(group.brightness)))
+                        : 255,
+                    color: typeof group?.color === 'string' ? group.color : '#ff0000',
+                    color2: typeof group?.color2 === 'string' ? group.color2 : '#000000',
+                    pattern: group?.pattern || LIGHT_GROUP_DEFAULT_PATTERN,
+                    enabled: !!group?.enabled
                 }));
                 console.log('Loaded light groups from localStorage cache:', lightGroups.length);
             }
@@ -2292,14 +2435,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             };
         }
 
-        function getFirmwareLightsPayload(groups, masterEnabled) {
+        function getFirmwareLightsPayload(groups, masterEnabled, chunkStart = 0, chunkEnd = null) {
             const active = masterEnabled ? groups : [];
+            if (chunkEnd === null) chunkEnd = active.length;
             
             // Build new format with full light groups array
-            const lightGroupsArray = active.map(group => {
-                // Parse pattern to get mode and blink rate
-                const mode = getPatternMode(group.pattern);
-                const blinkRate = getPatternBlinkRate(group.pattern);
+            const lightGroupsArray = active.slice(chunkStart, chunkEnd).map(group => {
                 const rawBrightness = Number(group.brightness);
                 const brightness = Number.isFinite(rawBrightness)
                     ? Math.max(0, Math.min(255, rawBrightness))
@@ -2309,6 +2450,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const colorStr = (group.color || '#ff0000').replace('#', '');
                 const color2Str = (group.color2 || '#000000').replace('#', '');
                 
+                // Omit mode/blinkRate to save space; firmware derives from pattern with defaults
                 return {
                     name: group.name,
                     enabled: !!group.enabled,
@@ -2316,17 +2458,103 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     color: colorStr,
                     color2: color2Str,
                     indices: group.indices || [],
-                    mode: mode,
-                    blinkRate: blinkRate,
                     pattern: group.pattern
                 };
             });
 
             // Reverse order so top priority (index 0) processes last and wins LED conflicts
-            return {
-                totalLEDCount: parseInt(localStorage.getItem(TOTAL_LED_COUNT_KEY)) || 100,
+            const payload = {
                 lightGroupsArray: lightGroupsArray.reverse()
             };
+            
+            // Only include totalLEDCount on first chunk
+            if (chunkStart === 0) {
+                payload.totalLEDCount = parseInt(localStorage.getItem(TOTAL_LED_COUNT_KEY)) || 100;
+            }
+            
+            return payload;
+        }
+
+        function estimateLightsPayloadBytes(payload) {
+            try {
+                return new TextEncoder().encode(JSON.stringify(payload)).length;
+            } catch (_) {
+                return Number.MAX_SAFE_INTEGER;
+            }
+        }
+
+        function buildLightsChunkRanges(groups, masterEnabled) {
+            const active = masterEnabled ? groups : [];
+            const totalGroups = active.length;
+            const ranges = [];
+            const MAX_LIGHTS_WRITE_BYTES = 440; // Keep headroom below practical BLE write limits
+
+            if (totalGroups === 0) {
+                return ranges;
+            }
+
+            let start = 0;
+            while (start < totalGroups) {
+                let end = start + 1;
+                let bestEnd = -1;
+
+                while (end <= totalGroups) {
+                    const payload = getFirmwareLightsPayload(groups, masterEnabled, start, end);
+                    const payloadBytes = estimateLightsPayloadBytes(payload);
+
+                    if (payloadBytes <= MAX_LIGHTS_WRITE_BYTES) {
+                        bestEnd = end;
+                        end++;
+                        continue;
+                    }
+
+                    break;
+                }
+
+                if (bestEnd === -1) {
+                    const singlePayload = getFirmwareLightsPayload(groups, masterEnabled, start, start + 1);
+                    const singleBytes = estimateLightsPayloadBytes(singlePayload);
+                    throw new Error(`Light group at index ${start} is too large for BLE write (${singleBytes} bytes). Reduce LED indices in that group.`);
+                }
+
+                ranges.push([start, bestEnd]);
+                start = bestEnd;
+            }
+
+            return ranges;
+        }
+        
+        async function applyLightsPayloadChunked(groups, masterEnabled) {
+            if (!isBleConnected()) {
+                console.debug('[Lights] Skipping chunked sync: BLE not connected');
+                return Promise.resolve();
+            }
+
+            const chunkRanges = buildLightsChunkRanges(groups, masterEnabled);
+            const totalGroups = (masterEnabled ? groups : []).length;
+            const numChunks = chunkRanges.length;
+            
+            console.log(`[Lights] Sending ${totalGroups} groups in ${numChunks} chunk(s)`);
+
+            for (let chunkIdx = 0; chunkIdx < chunkRanges.length; chunkIdx++) {
+                const [chunkStart, chunkEnd] = chunkRanges[chunkIdx];
+                const payload = getFirmwareLightsPayload(groups, masterEnabled, chunkStart, chunkEnd);
+                const payloadBytes = estimateLightsPayloadBytes(payload);
+                
+                try {
+                    console.log(`[Lights] Chunk ${chunkIdx + 1}/${numChunks}: groups [${chunkStart}, ${chunkEnd}) ~${payloadBytes} bytes`);
+                    await pushLightsPayload(payload);
+                } catch (error) {
+                    const errorMessage = getErrorMessage(error);
+                    console.error(`Failed to send lights chunk ${chunkIdx + 1}: ${errorMessage}`, error);
+                    if (window.toast) {
+                        window.toast.error(`Failed to send light config chunk ${chunkIdx + 1}/${numChunks}: ${errorMessage}`);
+                    }
+                    throw error;
+                }
+            }
+            
+            console.log('[Lights] All chunks sent successfully');
         }
 
         function renderLightsHierarchyControls() {
@@ -2374,14 +2602,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             const masterEnabled = override?.masterEnabled ?? getMasterLightsEnabled();
             const sourceGroups = override?.groups || lightGroups;
-            const payload = getFirmwareLightsPayload(sourceGroups, masterEnabled || !!override?.forceMasterOn);
 
-            console.log('[Lights] Sending to ESP32:', JSON.stringify(payload, null, 2));
-            console.log('[Lights] Source groups:', sourceGroups.map(g => ({ name: g.name, enabled: g.enabled, indices: g.indices?.length })));
+            console.log('[Lights] Syncing to ESP32:', sourceGroups.map(g => ({ name: g.name, enabled: g.enabled, indices: g.indices?.length })));
 
-            return pushLightsPayload(payload)
+            // Use chunked writes for large configs to avoid BLE payload size limits
+            return applyLightsPayloadChunked(sourceGroups, masterEnabled || !!override?.forceMasterOn)
             .catch(error => {
-                console.error('Failed to apply hierarchy lights payload:', error);
+                const errorMessage = getErrorMessage(error);
+                console.error(`Failed to apply lights to hardware: ${errorMessage}`, error);
+                if (window.toast) {
+                    window.toast.error(errorMessage || 'Failed to send light settings to device');
+                }
             });
         }
 
@@ -2447,7 +2678,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     item.className = 'light-group-item';
                     item.setAttribute('data-index', index);
                     
-                    const ledDisplay = formatLedRanges(group.indices);
+                    const ledDisplay = formatLedRanges(Array.isArray(group.indices) ? group.indices : []);
                     const brightnessPercent = group.brightness !== undefined ? 
                         Math.round(group.brightness * 100 / 255) : 100;
                     const color = group.color || '#ff0000';
@@ -2478,14 +2709,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     
                     item.innerHTML = `
                         <div class="light-group-reorder-buttons">
-                            <button onclick="moveLightGroupUp(${index})" ${disableUp ? 'disabled' : ''} title="Move up (higher priority)" class="btn-reorder" aria-label="Move up">
+                            <button type="button" onclick="moveLightGroupUp(${index})" ${disableUp ? 'disabled' : ''} title="Move up (higher priority)" class="btn-reorder" aria-label="Move up">
                                 <span class="material-symbols-outlined">arrow_upward</span>
                             </button>
-                            <button onclick="moveLightGroupDown(${index})" ${disableDown ? 'disabled' : ''} title="Move down (lower priority)" class="btn-reorder" aria-label="Move down">
+                            <button type="button" onclick="moveLightGroupDown(${index})" ${disableDown ? 'disabled' : ''} title="Move down (lower priority)" class="btn-reorder" aria-label="Move down">
                                 <span class="material-symbols-outlined">arrow_downward</span>
                             </button>
                         </div>
-                        <div class="light-group-priority" title="Priority (top = higher)">#${index + 1}</div>
                         <div class="light-group-info">
                             <div class="light-group-name">
                                 ${colorDisplay}
@@ -2499,10 +2729,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                             </div>
                         </div>
                         <div class="light-group-actions">
-                            <button onclick="editLightGroup(${index})" title="Edit this group" class="btn-edit">
+                            <button type="button" onclick="editLightGroup(${index})" title="Edit this group" class="btn-edit">
                                 <span class="material-symbols-outlined">edit</span>
                             </button>
-                            <button onclick="deleteLightGroup(${index})" class="btn-delete" title="Delete this group">
+                            <button type="button" onclick="deleteLightGroup(${index})" class="btn-delete" title="Delete this group">
                                 <span class="material-symbols-outlined">delete</span>
                             </button>
                         </div>
@@ -2835,9 +3065,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (index !== null) {
                 // Edit mode
                 const group = lightGroups[index];
+                if (!group) {
+                    console.error('Light group not found for edit index:', index);
+                    if (window.toast) window.toast.error('Could not open group editor. Please refresh and try again.');
+                    return;
+                }
+                const groupIndices = Array.isArray(group.indices) ? group.indices : [];
                 titleSpan.textContent = 'Edit';
                 nameInput.value = group.name;
-                group.indices.forEach(idx => currentSelectedLEDs.add(idx));
+                groupIndices.forEach(idx => currentSelectedLEDs.add(idx));
                 
                 // Set brightness (convert 0-255 to 0-100 percentage)
                 const brightnessPercent = group.brightness !== undefined ? 
@@ -2898,12 +3134,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             updateSelectionSummary();
             renderColorPresets();
 
-            // While editing, isolate only this group for visual feedback.
-            if (index !== null) {
-                isolateGroupForPreview(index, lightGroups[index]);
-            } else {
-                applyLightsHierarchyToHardware({ masterEnabled: true, groups: [] });
-            }
+            // Do not push live preview to hardware on modal open. This avoids oversized BLE payloads.
             
             const bsModal = new bootstrap.Modal(modal);
             bsModal.show();
@@ -3059,8 +3290,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function attemptAutoPreviewFromModal() {
-            // Do not show toasts while editing; preview only after required fields exist.
-            testLightGroupFromModal(false);
+            // Disabled to avoid frequent oversized BLE writes while editing.
+            return;
         }
 
         function saveLightGroupFromModal() {
@@ -3165,7 +3396,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             // Delete the group
             lightGroups.splice(index, 1);
-            saveLightGroups();
+            // Persist locally and sync to ESP32 via chunked writes
+            saveLightGroups(true);
             
             // Failover: If deleted group was used for notifications, switch to "All LEDs"
             if (wasNotificationGroup) {
@@ -3221,9 +3453,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const value = parseInt(this.value);
                     if (value >= 1 && value <= 300) {
                         localStorage.setItem(TOTAL_LED_COUNT_KEY, value);
+                        localStorage.setItem(TOTAL_LED_COUNT_USER_OVERRIDE_KEY, 'true');
                         window.toast.success(`Total LED count set to ${value}`);
-                        // Push to ESP32 by triggering lights update
-                        applyLightsHierarchyToHardware();
                     } else {
                         alert('Please enter a value between 1 and 300');
                         this.value = localStorage.getItem(TOTAL_LED_COUNT_KEY) || 100;
@@ -3306,14 +3537,30 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const lightGroupModal = document.getElementById('lightGroupEditorModal');
             if (lightGroupModal) {
                 lightGroupModal.addEventListener('hidden.bs.modal', () => {
-                    restoreLightsAfterModal();
+                    if (!lightGroupModalSaved) {
+                        restoreLightsAfterModal();
+                    } else {
+                        // Save path already persisted locally; sync to ESP32 via chunked writes
+                        applyLightsHierarchyToHardware();
+                        lightGroupsStateBeforeModal = null;
+                    }
                     lightGroupModalSaved = false;
                     currentEditingGroupIndex = null;
                 });
             }
             
             // Load light groups and color presets
-            await loadLightGroups();
+            // Note: fetchConfigFromESP32() is called earlier (async) and may populate lightGroups.
+            // Only call loadLightGroups() if config hasn't been loaded from device yet.
+            // This prevents race conditions where stale cached data overwrites device data.
+            if (!hasLoadedConfigFromDevice) {
+                // Not yet loaded from device; load from cache/defaults
+                await loadLightGroups();
+            } else {
+                // Already loaded from device in fetchConfigFromESP32(); ensure UI is rendered
+                renderLightGroupsList();
+                renderLightsHierarchyControls();
+            }
             loadColorPresets();
             populateNotificationGroupSelect(); // Initialize system notification LED dropdown
             setMasterLightsEnabled(getMasterLightsEnabled(), false);
@@ -3356,6 +3603,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const firmwareVersionEl = document.getElementById('firmwareVersion');
             if (!firmwareVersionEl) return;
 
+            // First check if we already have it in fullConfig
+            if (fullConfig && (fullConfig.version || fullConfig.firmwareVersion)) {
+                firmwareVersionEl.textContent = fullConfig.version || fullConfig.firmwareVersion;
+                return;
+            }
+
+            // Otherwise try to fetch it if connected
             if (isBleConnected()) {
                 bleManager.readConfig()
                     .then(data => {
@@ -3380,6 +3634,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!icon) return;
 
             const bleConnected = !!(bleManager && bleManager.getConnectionStatus && bleManager.getConnectionStatus());
+            const effectiveConnected = bleConnected || !!connected;
+            const previousState = updateConnectionStatus._lastState;
+            updateConnectionStatus._lastState = effectiveConnected;
 
             // BLE state has priority for this header icon.
             if (bleConnected) {
@@ -3398,6 +3655,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 icon.classList.add('disconnected');
                 icon.textContent = 'bluetooth_disabled';
                 icon.style.color = 'var(--text-muted)';
+            }
+
+            if (previousState !== effectiveConnected && window.GarageFeature && window.GarageFeature.onConnectionStatusChanged) {
+                window.GarageFeature.onConnectionStatusChanged();
             }
         }
 
@@ -3568,11 +3829,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 // Load total LED count from ESP32 if available
                 if (lightsData.totalLEDCount !== undefined) {
                     const totalLEDInput = document.getElementById('totalLEDCount');
-                    if (totalLEDInput) {
+                    const hasUserOverride = localStorage.getItem(TOTAL_LED_COUNT_USER_OVERRIDE_KEY) === 'true';
+                    const localOverrideValue = parseInt(localStorage.getItem(TOTAL_LED_COUNT_KEY), 10);
+
+                    if (hasUserOverride && Number.isFinite(localOverrideValue) && localOverrideValue >= 1 && localOverrideValue <= 300) {
+                        if (totalLEDInput) {
+                            totalLEDInput.value = localOverrideValue;
+                        }
+                        console.log('Keeping local total LED count override:', localOverrideValue, '(ESP32 has', lightsData.totalLEDCount + ')');
+                    } else if (totalLEDInput) {
                         totalLEDInput.value = lightsData.totalLEDCount;
+                        localStorage.setItem(TOTAL_LED_COUNT_KEY, String(lightsData.totalLEDCount));
+                        localStorage.removeItem(TOTAL_LED_COUNT_USER_OVERRIDE_KEY);
+                        console.log('Loaded total LED count from ESP32:', lightsData.totalLEDCount);
                     }
-                    localStorage.setItem(TOTAL_LED_COUNT_KEY, String(lightsData.totalLEDCount));
-                    console.log('Loaded total LED count from ESP32:', lightsData.totalLEDCount);
                 }
 
                 if (fullConfig.warnings && fullConfig.warnings.servoTrimReset) {
@@ -3589,6 +3859,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const lightingConfigData = document.getElementById('lightingConfigData');
                 if (lightingConfigData) {
                     lightingConfigData.textContent = JSON.stringify(lightsData, null, 2);
+                }
+
+                // Update firmware version display
+                const firmwareVersionEl = document.getElementById('firmwareVersion');
+                if (firmwareVersionEl && (configData?.version || configData?.firmwareVersion)) {
+                    firmwareVersionEl.textContent = configData.version || configData.firmwareVersion;
+                } else if (firmwareVersionEl) {
+                    firmwareVersionEl.textContent = 'Not available (not in config)';
                 }
 
                 if (showToast && !hasShownInitialConfigToast) {
@@ -4752,11 +5030,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 }
             }
             
-            // Load device name
-            const deviceNameInput = document.getElementById('deviceNameInput');
-            if (deviceNameInput && config.deviceName) {
-                deviceNameInput.value = config.deviceName;
-            }
         }
 
         // Helper function to convert telemetry slider position to Hz and label
@@ -5076,52 +5349,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
         }
 
-        // Save device name
-        function saveAndApplyConnection() {
-            const deviceNameInput = document.getElementById('deviceNameInput');
-            const saveBtn = document.getElementById('saveNetworkBtn');
-            const newDeviceName = deviceNameInput ? deviceNameInput.value.trim() : '';
-            
-            // Validate device name if provided
-            if (newDeviceName) {
-                const namePattern = /^[a-zA-Z0-9\-]+$/; // Allow alphanumeric and hyphens, no spaces
-                if (!namePattern.test(newDeviceName) || newDeviceName.length > 63) {
-                    toast.error('Device name must be alphanumeric (hyphens allowed, no spaces, max 63 chars)');
-                    return;
-                }
-            }
-            
-            // Disable button and show saving state
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.innerHTML = 'Saving...';
-            }
-
-            if (!newDeviceName || !fullConfig || fullConfig.deviceName === newDeviceName) {
-                toast.success('No changes to apply', { duration: 2000 });
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.innerHTML = '<span class="material-symbols-outlined" >save</span> Save Device Name';
-                }
-                return;
-            }
-
-            pushConfigPayload({ deviceName: newDeviceName })
-                .then(() => {
-                    fullConfig.deviceName = newDeviceName;
-                    toast.success('Device name saved over Bluetooth LE');
-                })
-                .catch(error => {
-                    toast.error(`Failed to save over Bluetooth LE: ${error.message}`);
-                })
-                .finally(() => {
-                    if (saveBtn) {
-                        saveBtn.disabled = false;
-                        saveBtn.innerHTML = '<span class="material-symbols-outlined" >save</span> Save Device Name';
-                    }
-                });
-        }
-
         // Initialize network settings controls
         function initNetworkSettings() {
             // Test connection button
@@ -5130,11 +5357,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 testBtn.addEventListener('click', testEsp32Connection);
             }
             
-            // Save Device Name button
-            const saveBtn = document.getElementById('saveNetworkBtn');
-            if (saveBtn) {
-                saveBtn.addEventListener('click', saveAndApplyConnection);
-            }
         }
 
         // ==================== Settings Tab Management ====================
@@ -5259,19 +5481,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             if (!debugToggle || !debugTab || !debugPane) return;
             
-            // Apply initial visibility state (default: hidden)
-            const isDebugEnabled = false; // Never remember state per user request
+            // Restore persisted state (default: hidden)
+            const isDebugEnabled = localStorage.getItem('debugModeEnabled') === 'true';
             debugToggle.checked = isDebugEnabled;
             updateDebugTabVisibility(isDebugEnabled);
             
             // Add change listener
             debugToggle.addEventListener('change', function() {
                 const isEnabled = this.checked;
+                localStorage.setItem('debugModeEnabled', isEnabled);
                 updateDebugTabVisibility(isEnabled);
                 
-                // If debug tab was active when disabled, switch to network tab
+                // If debug tab was active when disabled, switch to system tab
                 if (!isEnabled && debugPane.classList.contains('active')) {
-                    openSettingsTab('network');
+                    openSettingsTab('system');
                 }
             });
         }
@@ -5287,6 +5510,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (debugPane && !isEnabled) {
                 debugPane.classList.remove('active');
             }
+        }
+
+        function appendErrorToConsole(message) {
+            const consoleOutput = document.getElementById('consoleOutput');
+            if (!consoleOutput) return;
+            const now = new Date().toLocaleTimeString();
+            const line = document.createElement('div');
+            line.style.color = '#f87171';
+            line.textContent = `[${now}] ERROR: ${message}`;
+            consoleOutput.appendChild(line);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
         }
 
         function offlineMode() {
@@ -5305,3 +5539,905 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 toast.classList.remove('show');
             }, 3000);
         }
+
+        // ==================== Garage Feature ====================
+        const GARAGE_STORAGE_KEY = 'rcdccGarage';
+        const GARAGE_ACTIVE_ID_KEY = 'rcdccActiveGarageId';
+        const GARAGE_ACTIVE_NAME_KEY = 'rcdccActiveTruckName';
+        const GARAGE_PREFERRED_DEVICE_KEY = 'rcdccBlePreferredDeviceId';
+        const GARAGE_LAST_BACKUP_KEY = 'rcdccLastGarageBackup';
+        const GARAGE_BACKUP_SNOOZE_KEY = 'rcdccGarageBackupSnoozeUntil';
+        const GARAGE_SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+
+        const garageState = {
+            modalMode: 'add',
+            editingTruckId: null,
+            pendingDeviceId: null,
+            pendingDeviceName: null,
+            pendingPhotoPath: null,
+            pendingImport: null,
+            switchingTruckId: null,
+            colors: ['#f9c21b', '#22c55e', '#0ea5e9', '#ef4444', '#f97316', '#a855f7', '#111827', '#14b8a6'],
+            photoUrlCache: Object.create(null)
+        };
+
+        function loadGarage() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(GARAGE_STORAGE_KEY) || '[]');
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (error) {
+                console.warn('Failed to parse garage storage:', error?.message || error);
+                return [];
+            }
+        }
+
+        function saveGarage(garage) {
+            localStorage.setItem(GARAGE_STORAGE_KEY, JSON.stringify(garage));
+        }
+
+        function getActiveGarageId() {
+            return localStorage.getItem(GARAGE_ACTIVE_ID_KEY) || null;
+        }
+
+        function getActiveGarageTruck() {
+            const activeId = getActiveGarageId();
+            if (!activeId) return null;
+            return loadGarage().find((truck) => truck.id === activeId) || null;
+        }
+
+        function sanitizeDeviceId(deviceId) {
+            return String(deviceId || '').replace(/[^A-Za-z0-9]/g, '');
+        }
+
+        function normalizeGarageDeviceId(deviceId) {
+            return String(deviceId || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        }
+
+        function normalizeGarageName(name) {
+            return String(name || '').trim().toLowerCase();
+        }
+
+        function findGarageTruckIndexByDevice(garage, selectedDeviceId, selectedDeviceName = '') {
+            const selectedIdRaw = String(selectedDeviceId || '').trim();
+            const selectedIdNorm = normalizeGarageDeviceId(selectedDeviceId);
+            const selectedNameNorm = normalizeGarageName(selectedDeviceName);
+
+            return garage.findIndex((truck) => {
+                const truckIdRaw = String(truck?.deviceId || '').trim();
+                const truckIdNorm = normalizeGarageDeviceId(truck?.deviceId);
+                const truckBleNameNorm = normalizeGarageName(truck?.bleName);
+                const truckNameNorm = normalizeGarageName(truck?.name);
+
+                const exactIdMatch = !!selectedIdRaw && truckIdRaw === selectedIdRaw;
+                const normalizedIdMatch = !!selectedIdNorm && truckIdNorm === selectedIdNorm;
+                const bleNameMatch = !!selectedNameNorm && !!truckBleNameNorm && truckBleNameNorm === selectedNameNorm;
+                const fallbackNameMatch = !!selectedNameNorm && !truckBleNameNorm && truckNameNorm === selectedNameNorm;
+
+                return exactIdMatch || normalizedIdMatch || bleNameMatch || fallbackNameMatch;
+            });
+        }
+
+        function makeTruckImagePath(deviceId) {
+            return `rcdcc/trucks/${sanitizeDeviceId(deviceId)}.jpg`;
+        }
+
+        function generateGarageId() {
+            return `truck_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        }
+
+        function updateActiveTruckMirrors(truck) {
+            if (!truck) {
+                localStorage.removeItem(GARAGE_ACTIVE_ID_KEY);
+                localStorage.removeItem(GARAGE_ACTIVE_NAME_KEY);
+                localStorage.removeItem(GARAGE_PREFERRED_DEVICE_KEY);
+                if (bleManager) {
+                    bleManager.preferredDeviceId = null;
+                }
+                updateActiveVehicleRow();
+                return;
+            }
+
+            localStorage.setItem(GARAGE_ACTIVE_ID_KEY, truck.id);
+            localStorage.setItem(GARAGE_ACTIVE_NAME_KEY, truck.name);
+            localStorage.setItem(GARAGE_PREFERRED_DEVICE_KEY, truck.deviceId);
+
+            if (bleManager) {
+                bleManager.preferredDeviceId = truck.deviceId;
+            }
+
+            updateActiveVehicleRow();
+        }
+
+        function setActiveGarageTruckById(truckId) {
+            const garage = loadGarage();
+            const truck = garage.find((item) => item.id === truckId) || null;
+            updateActiveTruckMirrors(truck);
+        }
+
+        function updateActiveVehicleRow() {
+            const vehicleRow = document.getElementById('activeVehicleNameDisplay');
+            if (!vehicleRow) return;
+            const activeName = localStorage.getItem(GARAGE_ACTIVE_NAME_KEY);
+            if (!activeName) {
+                vehicleRow.textContent = '--';
+                return;
+            }
+
+            let status = 'Disconnected';
+            if (isBleConnected()) {
+                status = 'Connected';
+            } else if (garageState.switchingTruckId || autoReconnectInFlight) {
+                status = 'Reconnecting';
+            }
+            vehicleRow.textContent = `${activeName} (${status})`;
+        }
+
+        async function resolveTruckPhotoUrl(truck) {
+            if (!truck || !truck.imagePath) return null;
+            if (garageState.photoUrlCache[truck.imagePath]) {
+                return garageState.photoUrlCache[truck.imagePath];
+            }
+
+            const plugins = window.Capacitor && window.Capacitor.Plugins;
+            const filesystem = plugins && plugins.Filesystem;
+            if (!filesystem) return null;
+
+            try {
+                const result = await filesystem.getUri({
+                    directory: 'DATA',
+                    path: truck.imagePath
+                });
+                const converted = window.Capacitor.convertFileSrc(result.uri);
+                garageState.photoUrlCache[truck.imagePath] = converted;
+                return converted;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function getTruckStatusClass(truck) {
+            if (garageState.switchingTruckId === truck.id || autoReconnectInFlight) return 'reconnecting';
+            const active = getActiveGarageTruck();
+            if (active && active.id === truck.id && isBleConnected()) return 'connected';
+            return 'disconnected';
+        }
+
+        function getTruckStatusText(statusClass) {
+            if (statusClass === 'connected') return 'Connected';
+            if (statusClass === 'reconnecting') return 'Reconnecting';
+            return 'Disconnected';
+        }
+
+        async function renderGarageGrid() {
+            const garageGrid = document.getElementById('garageGrid');
+            if (!garageGrid) return;
+
+            const garage = loadGarage();
+            const activeId = getActiveGarageId();
+
+            if (!garage.length) {
+                garageGrid.innerHTML = '<div class="text-muted">No trucks yet. Add your first truck.</div>';
+                updateActiveVehicleRow();
+                updateGarageBackupBanner();
+                updateLastBackupInfo();
+                return;
+            }
+
+            const cardHtml = await Promise.all(garage.map(async (truck) => {
+                const isActive = truck.id === activeId;
+                const statusClass = getTruckStatusClass(truck);
+                const statusText = getTruckStatusText(statusClass);
+                const photoUrl = await resolveTruckPhotoUrl(truck);
+                const escapedName = String(truck.name || 'My Truck').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const escapedId = String(truck.id).replace(/'/g, '&#39;');
+                const hint = isActive ? '' : '<div class="garage-switch-hint">TAP TO SWITCH</div>';
+                const photoBlock = photoUrl
+                    ? `<div class="garage-truck-photo" style="background-image:url('${photoUrl}')"></div>`
+                    : '';
+
+                return `
+                    <div class="garage-truck-card ${isActive ? 'active' : ''}" data-truck-id="${escapedId}">
+                        ${photoBlock}
+                        <div class="garage-truck-actions">
+                            <button type="button" class="garage-icon-btn garage-edit-btn" data-truck-id="${escapedId}" aria-label="Edit truck">
+                                <span class="material-symbols-outlined" style="font-size: 18px;">edit</span>
+                            </button>
+                            <button type="button" class="garage-icon-btn garage-delete-btn" data-truck-id="${escapedId}" aria-label="Delete truck">
+                                <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
+                            </button>
+                        </div>
+                        <div class="garage-truck-overlay">
+                            <div class="garage-truck-colorbar" style="background:${truck.color || '#f9c21b'};"></div>
+                            <div class="garage-truck-title">${escapedName}</div>
+                            ${hint}
+                            <div class="garage-status-badge ${statusClass}">${statusText}</div>
+                        </div>
+                    </div>
+                `;
+            }));
+
+            garageGrid.innerHTML = cardHtml.join('');
+            bindGarageCardEvents();
+            updateActiveVehicleRow();
+            updateGarageBackupBanner();
+            updateLastBackupInfo();
+        }
+
+        function bindGarageCardEvents() {
+            document.querySelectorAll('.garage-truck-card').forEach((card) => {
+                card.addEventListener('click', async function() {
+                    const truckId = this.getAttribute('data-truck-id');
+                    if (!truckId || truckId === getActiveGarageId()) return;
+                    await switchGarageTruck(truckId);
+                });
+            });
+
+            document.querySelectorAll('.garage-edit-btn').forEach((btn) => {
+                btn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const truckId = btn.getAttribute('data-truck-id');
+                    openGarageTruckModal('edit', truckId);
+                });
+            });
+
+            document.querySelectorAll('.garage-delete-btn').forEach((btn) => {
+                btn.addEventListener('click', async (event) => {
+                    event.stopPropagation();
+                    const truckId = btn.getAttribute('data-truck-id');
+                    await deleteGarageTruck(truckId);
+                });
+            });
+        }
+
+        async function requestDeviceForGarage() {
+            const ble = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BluetoothLe;
+            if (!ble) throw new Error('Bluetooth plugin unavailable');
+            await ble.initialize();
+            const device = await ble.requestDevice({ services: [GARAGE_SERVICE_UUID] });
+            if (!device || !device.deviceId) {
+                throw new Error('No BLE device selected');
+            }
+            return device;
+        }
+
+        function renderColorSwatches(selectedColor) {
+            const swatches = document.getElementById('garageColorSwatches');
+            if (!swatches) return;
+            swatches.innerHTML = garageState.colors
+                .map((color) => `<button type="button" class="garage-color-swatch ${selectedColor === color ? 'active' : ''}" data-color="${color}" style="background:${color};"></button>`)
+                .join('');
+
+            swatches.querySelectorAll('.garage-color-swatch').forEach((swatch) => {
+                swatch.addEventListener('click', () => {
+                    swatches.querySelectorAll('.garage-color-swatch').forEach((item) => item.classList.remove('active'));
+                    swatch.classList.add('active');
+                });
+            });
+        }
+
+        async function saveTruckPhotoFromDataUrl(deviceId, dataUrl) {
+            const plugins = window.Capacitor && window.Capacitor.Plugins;
+            const filesystem = plugins && plugins.Filesystem;
+            if (!filesystem) return null;
+
+            const path = makeTruckImagePath(deviceId);
+            const base64 = String(dataUrl || '').split(',')[1];
+            if (!base64) return null;
+
+            await filesystem.writeFile({
+                directory: 'DATA',
+                path,
+                data: base64,
+                recursive: true
+            });
+
+            delete garageState.photoUrlCache[path];
+            return path;
+        }
+
+        async function pickGarageTruckPhoto() {
+            const plugins = window.Capacitor && window.Capacitor.Plugins;
+            const camera = plugins && plugins.Camera;
+            if (!camera) {
+                toast.error('Camera plugin unavailable');
+                return;
+            }
+
+            const deviceId = garageState.pendingDeviceId;
+            if (!deviceId) {
+                toast.error('Select a truck first');
+                return;
+            }
+
+            try {
+                const photo = await camera.getPhoto({
+                    quality: 65,
+                    width: 800,
+                    height: 600,
+                    allowEditing: false,
+                    resultType: 'dataUrl',
+                    source: 'PROMPT'
+                });
+
+                if (!photo || !photo.dataUrl) return;
+                const savedPath = await saveTruckPhotoFromDataUrl(deviceId, photo.dataUrl);
+                if (!savedPath) {
+                    toast.error('Unable to save photo');
+                    return;
+                }
+
+                garageState.pendingPhotoPath = savedPath;
+                const photoInfo = document.getElementById('garageTruckPhotoInfo');
+                if (photoInfo) {
+                    photoInfo.textContent = 'Photo selected and saved.';
+                }
+            } catch (error) {
+                const message = error?.message || '';
+                if (!message.toLowerCase().includes('cancel')) {
+                    toast.error(`Photo pick failed: ${message}`);
+                }
+            }
+        }
+
+        function openGarageTruckModal(mode, truckId = null) {
+            const modalEl = document.getElementById('garageTruckModal');
+            if (!modalEl) return;
+
+            const garage = loadGarage();
+            const existing = mode === 'edit' ? garage.find((truck) => truck.id === truckId) : null;
+            const modalTitle = document.getElementById('garageTruckModalTitle');
+            const nameInput = document.getElementById('garageTruckNameInput');
+            const photoInfo = document.getElementById('garageTruckPhotoInfo');
+
+            garageState.modalMode = mode;
+            garageState.editingTruckId = existing ? existing.id : null;
+            garageState.pendingDeviceId = existing ? existing.deviceId : garageState.pendingDeviceId;
+            garageState.pendingDeviceName = existing ? (existing.bleName || existing.name || null) : garageState.pendingDeviceName;
+            garageState.pendingPhotoPath = existing ? existing.imagePath || null : garageState.pendingPhotoPath;
+
+            if (modalTitle) modalTitle.textContent = mode === 'edit' ? 'Edit Truck' : 'Add Truck';
+            if (nameInput) {
+                if (existing) {
+                    nameInput.value = existing.name;
+                } else {
+                    const suggestedName = String(garageState.pendingDeviceName || '').trim() || 'My Vehicle';
+                    nameInput.value = suggestedName.slice(0, 40);
+                }
+            }
+            if (photoInfo) photoInfo.textContent = existing && existing.imagePath ? 'Existing photo saved.' : 'No photo selected.';
+
+            renderColorSwatches(existing ? existing.color : garageState.colors[0]);
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+
+        function selectedGarageColor() {
+            const activeSwatch = document.querySelector('.garage-color-swatch.active');
+            return (activeSwatch && activeSwatch.getAttribute('data-color')) || garageState.colors[0];
+        }
+
+        async function saveGarageTruckFromModal() {
+            const nameInput = document.getElementById('garageTruckNameInput');
+            const name = (nameInput && nameInput.value ? nameInput.value : '').trim().slice(0, 40);
+            if (!name) {
+                toast.error('Please enter a truck name');
+                return;
+            }
+
+            const color = selectedGarageColor();
+            const garage = loadGarage();
+            const isFirstTruck = garage.length === 0;
+
+            if (garageState.modalMode === 'edit') {
+                const idx = garage.findIndex((truck) => truck.id === garageState.editingTruckId);
+                if (idx < 0) return;
+
+                garage[idx] = {
+                    ...garage[idx],
+                    name,
+                    color,
+                    imagePath: garageState.pendingPhotoPath || garage[idx].imagePath || null
+                };
+                saveGarage(garage);
+
+                if (getActiveGarageId() === garage[idx].id) {
+                    updateActiveTruckMirrors(garage[idx]);
+                }
+            } else {
+                const deviceId = garageState.pendingDeviceId;
+                if (!deviceId) {
+                    toast.error('No BLE device selected');
+                    return;
+                }
+
+                const existingIdx = findGarageTruckIndexByDevice(garage, deviceId, garageState.pendingDeviceName || '');
+                if (existingIdx >= 0) {
+                    const shouldUpdateExisting = confirm(`This device is already in your garage as "${garage[existingIdx].name}". Update that existing truck entry?`);
+                    if (!shouldUpdateExisting) {
+                        return;
+                    }
+
+                    garage[existingIdx] = {
+                        ...garage[existingIdx],
+                        name,
+                        color,
+                        deviceId,
+                        bleName: garageState.pendingDeviceName || garage[existingIdx].bleName || null,
+                        imagePath: garageState.pendingPhotoPath || garage[existingIdx].imagePath || null
+                    };
+                } else {
+                    garage.push({
+                        id: generateGarageId(),
+                        name,
+                        color,
+                        deviceId,
+                        bleName: garageState.pendingDeviceName || null,
+                        imagePath: garageState.pendingPhotoPath || null
+                    });
+                }
+
+                saveGarage(garage);
+
+                if (isFirstTruck || !getActiveGarageId()) {
+                    const first = existingIdx >= 0 ? garage[existingIdx] : garage[garage.length - 1];
+                    updateActiveTruckMirrors(first);
+                }
+            }
+
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('garageTruckModal')).hide();
+            garageState.pendingPhotoPath = null;
+            garageState.pendingDeviceId = null;
+            garageState.pendingDeviceName = null;
+            garageState.editingTruckId = null;
+            renderGarageGrid();
+            toast.success('Truck saved');
+        }
+
+        async function deleteGarageTruck(truckId) {
+            const garage = loadGarage();
+            const truck = garage.find((item) => item.id === truckId);
+            if (!truck) return;
+
+            if (!confirm('Delete this truck from your garage?')) return;
+
+            const plugins = window.Capacitor && window.Capacitor.Plugins;
+            const filesystem = plugins && plugins.Filesystem;
+            if (filesystem && truck.imagePath) {
+                try {
+                    await filesystem.deleteFile({ directory: 'DATA', path: truck.imagePath });
+                } catch (error) {
+                    // ignore missing file
+                }
+            }
+
+            const filtered = garage.filter((item) => item.id !== truckId);
+            saveGarage(filtered);
+
+            if (getActiveGarageId() === truckId) {
+                const nextActive = filtered[0] || null;
+                updateActiveTruckMirrors(nextActive);
+            }
+
+            renderGarageGrid();
+        }
+
+        async function switchGarageTruck(truckId) {
+            if (!bleManager) {
+                toast.error('Bluetooth manager unavailable');
+                return;
+            }
+
+            const garage = loadGarage();
+            const incoming = garage.find((truck) => truck.id === truckId);
+            if (!incoming) return;
+
+            const outgoing = getActiveGarageTruck();
+            let switchSucceeded = false;
+            suspendAutoReconnect = true;
+            stopAutoReconnect();
+            garageState.switchingTruckId = truckId;
+            renderGarageGrid();
+
+            try {
+                if (isBleConnected()) {
+                    try {
+                        await bleManager.sendSystemCommand('flash', { color: 'red', count: 2 });
+                    } catch (error) {
+                        console.warn('Outgoing flash command failed:', error?.message || error);
+                    }
+                    await bleManager.disconnect();
+                }
+
+                updateActiveTruckMirrors(incoming);
+                bleManager.preferredDeviceId = incoming.deviceId;
+
+                const connected = await bleManager.connectToKnownDevice();
+                if (!connected) {
+                    throw new Error('Failed to connect to selected truck');
+                }
+
+                try {
+                    await bleManager.sendSystemCommand('flash', { color: 'green', count: 2 });
+                } catch (error) {
+                    console.warn('Incoming flash command failed:', error?.message || error);
+                }
+
+                communicationMode = 'ble';
+                stopHeartbeat();
+                stopAutoReconnect();
+                updateConnectionStatus(true);
+                refreshConfigAfterConnection('garage-switch');
+                switchSucceeded = true;
+
+                if (outgoing && outgoing.id !== incoming.id) {
+                    toast.success(`Switched to ${incoming.name}`);
+                }
+            } catch (error) {
+                updateConnectionStatus(false);
+                toast.error(`Switch failed: ${error?.message || error}`);
+            } finally {
+                suspendAutoReconnect = false;
+                if (!switchSucceeded) {
+                    startAutoReconnect('garage-switch-failed');
+                }
+                garageState.switchingTruckId = null;
+                renderGarageGrid();
+            }
+        }
+
+        function formatDateForBackup(dateObj) {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const result = String(reader.result || '');
+                    resolve(result.split(',')[1] || '');
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        async function buildGarageZip() {
+            if (!window.JSZip) {
+                throw new Error('JSZip is not available');
+            }
+
+            const zip = new window.JSZip();
+            const garage = loadGarage();
+            const plugins = window.Capacitor && window.Capacitor.Plugins;
+            const filesystem = plugins && plugins.Filesystem;
+
+            const garageExport = [];
+            for (const truck of garage) {
+                const exportTruck = {
+                    id: truck.id,
+                    name: truck.name,
+                    color: truck.color,
+                    deviceId: truck.deviceId,
+                    imageFile: null
+                };
+
+                if (filesystem && truck.imagePath) {
+                    try {
+                        const file = await filesystem.readFile({ directory: 'DATA', path: truck.imagePath });
+                        const imageFilename = `${sanitizeDeviceId(truck.deviceId)}.jpg`;
+                        zip.file(`photos/${imageFilename}`, file.data, { base64: true });
+                        exportTruck.imageFile = imageFilename;
+                    } catch (error) {
+                        console.warn('Skipping missing truck image:', truck.imagePath);
+                    }
+                }
+
+                garageExport.push(exportTruck);
+            }
+
+            const now = new Date();
+            const meta = {
+                appVersion: APP_VERSION,
+                exportDate: now.toISOString(),
+                truckCount: garageExport.length,
+                activeId: getActiveGarageId()
+            };
+
+            zip.file('garage.json', JSON.stringify(garageExport, null, 2));
+            zip.file('meta.json', JSON.stringify(meta, null, 2));
+
+            const blob = await zip.generateAsync({ type: 'blob' });
+            return {
+                blob,
+                fileName: `rcdcc-garage-${formatDateForBackup(now)}.zip`
+            };
+        }
+
+        async function exportGarageBackup() {
+            const plugins = window.Capacitor && window.Capacitor.Plugins;
+            const filesystem = plugins && plugins.Filesystem;
+            const share = plugins && plugins.Share;
+
+            if (!filesystem || !share) {
+                toast.error('Share or filesystem plugin unavailable');
+                return;
+            }
+
+            try {
+                const { blob, fileName } = await buildGarageZip();
+                const base64 = await blobToBase64(blob);
+                const backupPath = `rcdcc/backups/${fileName}`;
+
+                await filesystem.writeFile({
+                    directory: 'DATA',
+                    path: backupPath,
+                    data: base64,
+                    recursive: true
+                });
+
+                const fileUri = await filesystem.getUri({ directory: 'DATA', path: backupPath });
+                await share.share({
+                    title: 'RCDCC Garage Backup',
+                    text: 'Garage backup export',
+                    url: fileUri.uri,
+                    dialogTitle: 'Share garage backup'
+                });
+
+                localStorage.setItem(GARAGE_LAST_BACKUP_KEY, new Date().toISOString());
+                localStorage.removeItem(GARAGE_BACKUP_SNOOZE_KEY);
+                updateGarageBackupBanner();
+                updateLastBackupInfo();
+                toast.success('Garage backup exported');
+            } catch (error) {
+                toast.error(`Export failed: ${error?.message || error}`);
+            }
+        }
+
+        async function openGarageImportPicker() {
+            const input = document.getElementById('garageImportFileInput');
+            if (!input) return;
+            input.value = '';
+            input.click();
+        }
+
+        async function handleGarageImportFileSelected(event) {
+            const file = event.target && event.target.files && event.target.files[0];
+            if (!file) return;
+            if (!window.JSZip) {
+                toast.error('JSZip is not available');
+                return;
+            }
+
+            try {
+                const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
+                const metaText = await zip.file('meta.json').async('string');
+                const garageText = await zip.file('garage.json').async('string');
+                const meta = JSON.parse(metaText);
+                const garageData = JSON.parse(garageText);
+
+                garageState.pendingImport = { zip, meta, garageData };
+
+                const metaInfo = document.getElementById('garageImportMetaInfo');
+                if (metaInfo) {
+                    const exportedDate = meta && meta.exportDate ? new Date(meta.exportDate).toLocaleString() : 'Unknown';
+                    const truckCount = Array.isArray(garageData) ? garageData.length : 0;
+                    metaInfo.textContent = `Export date: ${exportedDate} | Trucks: ${truckCount}`;
+                }
+
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('garageImportConfirmModal')).show();
+            } catch (error) {
+                toast.error(`Import parse failed: ${error?.message || error}`);
+            }
+        }
+
+        async function confirmGarageImport() {
+            const bundle = garageState.pendingImport;
+            if (!bundle) return;
+
+            const plugins = window.Capacitor && window.Capacitor.Plugins;
+            const filesystem = plugins && plugins.Filesystem;
+
+            try {
+                const garageData = Array.isArray(bundle.garageData) ? bundle.garageData : [];
+                const imported = [];
+
+                for (const item of garageData) {
+                    const deviceId = item.deviceId || item.id;
+                    if (!deviceId) continue;
+
+                    let imagePath = null;
+                    if (filesystem && item.imageFile) {
+                        const zipEntry = bundle.zip.file(`photos/${item.imageFile}`);
+                        if (zipEntry) {
+                            const base64 = await zipEntry.async('base64');
+                            imagePath = makeTruckImagePath(deviceId);
+                            await filesystem.writeFile({
+                                directory: 'DATA',
+                                path: imagePath,
+                                data: base64,
+                                recursive: true
+                            });
+                        }
+                    }
+
+                    imported.push({
+                        id: item.id || generateGarageId(),
+                        name: (item.name || 'My Truck').slice(0, 40),
+                        color: item.color || '#f9c21b',
+                        deviceId,
+                        imagePath
+                    });
+                }
+
+                saveGarage(imported);
+                const preferredActiveId = bundle.meta && bundle.meta.activeId;
+                const activeTruck = imported.find((truck) => truck.id === preferredActiveId) || imported[0] || null;
+                updateActiveTruckMirrors(activeTruck);
+                garageState.pendingImport = null;
+
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('garageImportConfirmModal')).hide();
+                renderGarageGrid();
+                toast.success('Garage import complete');
+            } catch (error) {
+                toast.error(`Import failed: ${error?.message || error}`);
+            }
+        }
+
+        function daysSince(dateString) {
+            if (!dateString) return Number.POSITIVE_INFINITY;
+            const then = new Date(dateString).getTime();
+            if (!Number.isFinite(then)) return Number.POSITIVE_INFINITY;
+            const now = Date.now();
+            return Math.floor((now - then) / 86400000);
+        }
+
+        function updateLastBackupInfo() {
+            const lastBackupInfo = document.getElementById('garageLastBackupInfo');
+            if (!lastBackupInfo) return;
+            const lastBackup = localStorage.getItem(GARAGE_LAST_BACKUP_KEY);
+            if (!lastBackup) {
+                lastBackupInfo.textContent = 'No backup yet.';
+                return;
+            }
+            const days = daysSince(lastBackup);
+            lastBackupInfo.textContent = `Last backup: ${new Date(lastBackup).toLocaleDateString()} (${days} days ago)`;
+        }
+
+        function updateGarageBackupBanner() {
+            const banner = document.getElementById('garageBackupBanner');
+            if (!banner) return;
+
+            const garage = loadGarage();
+            if (!garage.length) {
+                banner.style.display = 'none';
+                return;
+            }
+
+            const snoozeUntil = localStorage.getItem(GARAGE_BACKUP_SNOOZE_KEY);
+            if (snoozeUntil && Date.now() < new Date(snoozeUntil).getTime()) {
+                banner.style.display = 'none';
+                return;
+            }
+
+            const lastBackup = localStorage.getItem(GARAGE_LAST_BACKUP_KEY);
+            const days = daysSince(lastBackup);
+            if (days >= 60) {
+                const text = banner.querySelector('.garage-backup-banner-text');
+                if (text) {
+                    text.textContent = lastBackup
+                        ? `Your garage has not been backed up in ${days} days.`
+                        : 'Your garage has never been backed up.';
+                }
+                banner.style.display = 'flex';
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
+        function dismissGarageBackupBanner() {
+            const snoozeDate = new Date(Date.now() + (3 * 86400000));
+            localStorage.setItem(GARAGE_BACKUP_SNOOZE_KEY, snoozeDate.toISOString());
+            updateGarageBackupBanner();
+        }
+
+        function migrateLegacyGarageIfNeeded() {
+            const garage = loadGarage();
+            if (garage.length) return;
+
+            const preferredDeviceId = localStorage.getItem(GARAGE_PREFERRED_DEVICE_KEY);
+            if (!preferredDeviceId) return;
+
+            const migrated = [{
+                id: generateGarageId(),
+                name: 'My Truck',
+                color: '#f9c21b',
+                deviceId: preferredDeviceId,
+                imagePath: null
+            }];
+            saveGarage(migrated);
+            updateActiveTruckMirrors(migrated[0]);
+        }
+
+        async function handleAddGarageTruck() {
+            try {
+                const selected = await requestDeviceForGarage();
+                const garage = loadGarage();
+                const existingIdx = findGarageTruckIndexByDevice(garage, selected.deviceId, selected.name || '');
+                const existing = existingIdx >= 0 ? garage[existingIdx] : null;
+                if (existing) {
+                    const shouldEditExisting = confirm(`This device is already in your garage as "${existing.name}". Edit that truck instead?`);
+                    if (shouldEditExisting) {
+                        openGarageTruckModal('edit', existing.id);
+                    } else {
+                        toast.warning('Device already in garage');
+                    }
+                    return;
+                }
+
+                garageState.pendingDeviceId = selected.deviceId;
+                garageState.pendingDeviceName = selected.name || null;
+                garageState.pendingPhotoPath = null;
+                openGarageTruckModal('add');
+            } catch (error) {
+                const message = (error && error.message) ? error.message : String(error);
+                if (!message.toLowerCase().includes('cancel')) {
+                    toast.error(`Device picker failed: ${message}`);
+                }
+            }
+        }
+
+        function bindGarageUIEvents() {
+            const addBtn = document.getElementById('garageAddTruckBtn');
+            if (addBtn) addBtn.addEventListener('click', handleAddGarageTruck);
+
+            const saveBtn = document.getElementById('garageTruckSaveBtn');
+            if (saveBtn) saveBtn.addEventListener('click', saveGarageTruckFromModal);
+
+            const photoBtn = document.getElementById('garageTruckPhotoBtn');
+            if (photoBtn) photoBtn.addEventListener('click', pickGarageTruckPhoto);
+
+            const exportBtn = document.getElementById('garageExportBtn');
+            if (exportBtn) exportBtn.addEventListener('click', exportGarageBackup);
+
+            const importBtn = document.getElementById('garageImportBtn');
+            if (importBtn) importBtn.addEventListener('click', openGarageImportPicker);
+
+            const importInput = document.getElementById('garageImportFileInput');
+            if (importInput) importInput.addEventListener('change', handleGarageImportFileSelected);
+
+            const importConfirmBtn = document.getElementById('garageImportConfirmBtn');
+            if (importConfirmBtn) importConfirmBtn.addEventListener('click', confirmGarageImport);
+
+            const backupNowBtn = document.getElementById('garageBackupNowBtn');
+            if (backupNowBtn) backupNowBtn.addEventListener('click', exportGarageBackup);
+
+            const backupDismissBtn = document.getElementById('garageBackupDismissBtn');
+            if (backupDismissBtn) backupDismissBtn.addEventListener('click', dismissGarageBackupBanner);
+        }
+
+        function initGarageFeature() {
+            migrateLegacyGarageIfNeeded();
+            bindGarageUIEvents();
+
+            const activeTruck = getActiveGarageTruck();
+            if (activeTruck) {
+                updateActiveTruckMirrors(activeTruck);
+            } else {
+                const garage = loadGarage();
+                if (garage.length) {
+                    updateActiveTruckMirrors(garage[0]);
+                }
+            }
+
+            renderGarageGrid();
+        }
+
+        window.GarageFeature = {
+            init: initGarageFeature,
+            onConnectionStatusChanged: () => {
+                renderGarageGrid();
+                updateActiveVehicleRow();
+            }
+        };

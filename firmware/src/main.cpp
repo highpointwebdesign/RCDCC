@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <MPU6050.h>
 #include <Adafruit_NeoPixel.h>
+#include <esp_mac.h>
 #include "Config.h"
 #include "SensorFusion.h"
 #include "SuspensionSimulator.h"
@@ -152,6 +153,15 @@ uint32_t parseHexColor(const String& colorStr) {
   return strtoul(normalized.c_str(), nullptr, 16) & 0xFFFFFF;
 }
 
+String buildBleDeviceNameFromMac() {
+  uint8_t mac[6] = {0};
+  esp_efuse_mac_get_default(mac);
+
+  char name[14]; // "RCDCC-" + 6 hex chars + '\0'
+  snprintf(name, sizeof(name), "RCDCC-%02X%02X%02X", mac[3], mac[4], mac[5]);
+  return String(name);
+}
+
 bool applyConfigUpdatePayload(const String& payload) {
   DynamicJsonDocument doc(2048);
   DeserializationError error = deserializeJson(doc, payload);
@@ -176,10 +186,6 @@ bool applyConfigUpdatePayload(const String& payload) {
   if (doc.containsKey("fpvAutoMode")) {
     bool autoMode = doc["fpvAutoMode"];
     storageManager.updateParameter("fpvAutoMode", autoMode ? 1.0f : 0.0f);
-  }
-
-  if (doc.containsKey("deviceName")) {
-    storageManager.updateDeviceName(doc["deviceName"].as<String>());
   }
 
   if (doc.containsKey("notificationGroup")) {
@@ -466,10 +472,8 @@ void setup() {
   bluetoothService->setServoWriteHandler(applyServoConfigPayload);
   bluetoothService->setLightsWriteHandler(applyLightsPayload);
   bluetoothService->setSystemWriteHandler(applySystemCommandPayload);
-  const char* bleDeviceName = storageManager.getDeviceName();
-  if (bleDeviceName == nullptr || bleDeviceName[0] == '\0') {
-    bleDeviceName = DEFAULT_DEVICE_NAME;
-  }
+  String generatedBleName = buildBleDeviceNameFromMac();
+  const char* bleDeviceName = generatedBleName.c_str();
   Serial.printf("Starting BLE advertising as: %s\n", bleDeviceName);
   bluetoothService->begin(bleDeviceName);
   Serial.println("Bluetooth service started");
@@ -481,21 +485,31 @@ void setup() {
 void loop() {
   unsigned long loopStartTime = millis();
   unsigned long currentTime = loopStartTime;
-  static unsigned long lastLoopTime = 0;
-  static bool firstLoop = true;
-  
-  // Log loop execution time every 5 seconds for diagnostics
-  if (!firstLoop && (currentTime - lastLoopTime) > 5000) {
-    unsigned long loopDuration = currentTime - lastLoopTime;
-    Serial.printf("[LOOP] Loop cycle time: %lums\n", loopDuration);
-    if (loopDuration > 2000) {
-      Serial.printf("⚠️  LONG LOOP DETECTED: %lums - possible blocking operation!\n", loopDuration);
-    }
-    lastLoopTime = currentTime;
+  static unsigned long previousLoopStartTime = 0;
+  static unsigned long loopDiagWindowStart = 0;
+  static unsigned long maxLoopCycleInWindow = 0;
+
+  if (loopDiagWindowStart == 0) {
+    loopDiagWindowStart = currentTime;
   }
-  if (firstLoop) {
-    lastLoopTime = currentTime;
-    firstLoop = false;
+
+  // Measure true loop cycle time using the delta between loop() start timestamps.
+  if (previousLoopStartTime != 0) {
+    unsigned long loopCycleTime = currentTime - previousLoopStartTime;
+    if (loopCycleTime > maxLoopCycleInWindow) {
+      maxLoopCycleInWindow = loopCycleTime;
+    }
+    if (loopCycleTime > 2000) {
+      Serial.printf("⚠️  LONG LOOP DETECTED: %lums - possible blocking operation!\n", loopCycleTime);
+    }
+  }
+  previousLoopStartTime = currentTime;
+
+  // Emit a lightweight 5s diagnostic summary without creating false positives.
+  if ((currentTime - loopDiagWindowStart) >= 5000) {
+    Serial.printf("[LOOP] Max loop cycle in last %lums: %lums\n", currentTime - loopDiagWindowStart, maxLoopCycleInWindow);
+    loopDiagWindowStart = currentTime;
+    maxLoopCycleInWindow = 0;
   }
   
   // Handle LED blink timeout

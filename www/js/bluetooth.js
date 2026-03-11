@@ -326,6 +326,11 @@ class BluetoothManager {
         if (!this.isConnected) throw new Error('Not connected to BLE device');
         const ble = await this._getBle();
         const data = this._encodeJson(lightsConfig);
+        const payloadBytes = Math.ceil(data.length / 2);
+        const MAX_LIGHTS_WRITE_BYTES = 480;
+        if (payloadBytes > MAX_LIGHTS_WRITE_BYTES) {
+            throw new Error(`Lights payload too large for BLE write (${payloadBytes} bytes > ${MAX_LIGHTS_WRITE_BYTES} bytes). Reduce LED indices per update.`);
+        }
         await this.enqueueGattOperation('write-lights', () =>
             ble.write({
                 deviceId: this.deviceId,

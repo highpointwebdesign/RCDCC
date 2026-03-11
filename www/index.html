@@ -67,6 +67,13 @@
         <!-- Dashboard Section -->
         <section id="dashboard" class="page-section active">
             <h2 class="section-title">Home</h2>
+            <div id="garageBackupBanner" class="garage-backup-banner" style="display: none;">
+                <div class="garage-backup-banner-text">Your garage has not been backed up recently.</div>
+                <div class="garage-backup-banner-actions">
+                    <button type="button" class="btn btn-gold btn-sm" id="garageBackupNowBtn">Backup Now</button>
+                    <button type="button" class="btn-close" aria-label="Dismiss" id="garageBackupDismissBtn"></button>
+                </div>
+            </div>
             <div class="row g-3">
 
                 <!-- Roll/Pitch Snapshot Card -->
@@ -135,19 +142,64 @@
             </div>
         </section>
 
+        <!-- Garage Section -->
+        <section id="garage" class="page-section">
+            <h2 class="section-title">Garage</h2>
+            <div id="garageGrid" class="garage-grid"></div>
+            <div class="d-grid mt-3">
+                <button type="button" class="btn btn-gold" id="garageAddTruckBtn">
+                    <span class="material-symbols-outlined">add_circle</span>
+                    Add New Truck
+                </button>
+            </div>
+            <!-- Connection Diagnostics Card -->
+            <div class="card mt-3">
+                <div class="card-header" style="background-color: black; color: white;">
+                    <span class="material-symbols-outlined" style="color: var(--danger);">
+                    bluetooth
+                    </span>
+                    Connection Diagnostics
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">Test the Bluetooth Low Energy connection to verify communication with your RCDCC module.</p>
+                    <button type="button" class="btn w-100 btn-gold" id="testConnectionBtn">
+                        <span class="material-symbols-outlined">bluetooth</span> Test Bluetooth Connection
+                    </button>
+                </div>
+            </div>
+            <!-- Garage Backup Card -->
+            <div class="card mt-3">
+                <div class="card-header" style="background-color: black; color: white;">
+                    <span class="material-symbols-outlined" style="color: var(--danger);">archive</span>
+                    Garage Backup
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">Export or import your garage including truck photos.</p>
+                    <div class="row g-2">
+                        <div class="col-12 col-md-6">
+                            <button type="button" class="btn w-100 btn-gold" id="garageExportBtn">
+                                <span class="material-symbols-outlined">ios_share</span>
+                                Export Garage Backup
+                            </button>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <button type="button" class="btn w-100 btn-outline-dark" id="garageImportBtn">
+                                <span class="material-symbols-outlined">upload_file</span>
+                                Import Garage Backup
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-text mt-2" id="garageLastBackupInfo">No backup yet.</div>
+                </div>
+            </div>
+        </section>
+
         <!-- Settings Section -->
         <section id="settings" class="page-section">
             <h2 class="section-title">Settings</h2>
             <!-- Settings Tabs Navigation -->
             <div class="settings-tabs">
-                <button class="settings-tab active" data-tab="network">
-                    <span class="material-symbols-outlined">
-                    bluetooth
-                    </span>
-                    <span class="tab-label-full">Bluetooth Settings</span>
-                    <span class="tab-label-short">Bluetooth</span>
-                </button>  
-                <button class="settings-tab" data-tab="system">
+                <button class="settings-tab active" data-tab="system">
                     <span class="material-symbols-outlined">
                     settings
                     </span>
@@ -395,54 +447,8 @@
                 </div>
             </div>
 
-            <!-- Tab Content: Bluetooth Settings -->
-            <div class="tab-pane active" id="tab-network">
-                <div class="row g-3">
-                    <!-- Device Configuration Card -->
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">
-                                badge
-                                </span>
-                                Device Configuration
-                            </div>
-                            <div class="card-body">
-                                <div style="color: #000;">
-                                    <label for="deviceNameInput" class="form-label"><strong>Device Name</strong></label>
-                                    <input type="text" class="form-control" id="deviceNameInput" placeholder="esp32-a49g4" maxlength="63">
-                                    <div class="form-text">This name identifies your RCDCC module during Bluetooth pairing.</div>
-                                </div>
-                                
-                                <button type="button" class="btn w-100 mt-3 btn-gold" id="saveNetworkBtn">
-                                    <span class="material-symbols-outlined">save</span> Save Device Name
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Connection Testing Card -->
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header" style="background-color: black; color: white;">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">
-                                bluetooth
-                                </span>
-                                Connection Diagnostics
-                            </div>
-                            <div class="card-body">
-                                <p class="text-muted mb-3">Test the Bluetooth Low Energy connection to verify communication with your RCDCC module.</p>
-                                <button type="button" class="btn w-100 btn-gold" id="testConnectionBtn">
-                                    <span class="material-symbols-outlined">bluetooth</span> Test Bluetooth Connection
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Tab Content: System -->
-            <div class="tab-pane" id="tab-system">
+            <div class="tab-pane active" id="tab-system">
                 <div class="row g-3">
                     <!-- RCDCC Mounting Card -->
                     <div class="col-12 col-md-6">
@@ -491,6 +497,21 @@
                                         <div class="form-check form-switch m-0">
                                             <input class="form-check-input" type="checkbox" id="enableNotificationSounds">
                                         </div>
+                                    </div>
+                                </div>
+
+                                <!-- Truck Notifications Section -->
+                                <div class="mb-4 pb-2" style="border-bottom: 1px solid var(--bs-border-color-translucent);">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <label class="form-check-label mb-0" for="enableTruckNotifications">
+                                            <strong>Truck Notifications</strong>
+                                        </label>
+                                        <div class="form-check form-switch m-0">
+                                            <input class="form-check-input" type="checkbox" id="enableTruckNotifications">
+                                        </div>
+                                    </div>
+                                    <div class="form-text mt-2">
+                                        <small>When enabled, app toasts temporarily override the selected light group with a solid toast color for the toast duration. Master lights do not block notifications.</small>
                                     </div>
                                 </div>
 
@@ -575,6 +596,7 @@
                             </div>
                         </div>
                     </div>
+
                 </div>
             </div>
 
@@ -625,7 +647,10 @@
                                     <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
                                     Lighting Configuration Data
                                 </div>
-                                <span class="material-symbols-outlined icon-action" id="lightingConfigCopyBtn" title="Copy lighting configuration to clipboard">content_copy</span>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <span class="material-symbols-outlined icon-action" id="refreshLightingConfigBtn" title="Refresh lighting configuration from device" style="cursor: pointer;">refresh</span>
+                                    <span class="material-symbols-outlined icon-action" id="lightingConfigCopyBtn" title="Copy lighting configuration to clipboard">content_copy</span>
+                                </div>
                             </div>
                             <div class="card-body" style="background-color: #1E1E1E;">
                                 <div class="data-display" id="lightingConfigData">{
@@ -655,6 +680,10 @@
                             <span class="material-symbols-outlined icon-action" id="suspensionSettingsGear" title="Modify suspension tuning parameters.">rule_settings</span>
                         </div>
                         <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>Vehicle</span>
+                                <span id="activeVehicleNameDisplay">--</span>
+                            </div>
                             <div class="d-flex align-items-center justify-content-between">
                                 <span>Ride Height</span>
                                 <span id="rideHeightDisplay">--</span>
@@ -1026,6 +1055,10 @@
             <span class="material-symbols-outlined">castle</span>
             <span>Home</span>
         </button>
+        <button id="nav-garage" data-target="garage">
+            <span class="material-symbols-outlined">directions_car</span>
+            <span>Garage</span>
+        </button>
         <button id="nav-tuning" data-target="tuning">
             <span class="material-symbols-outlined">tune</span>
             <span>Tuning</span>
@@ -1043,6 +1076,59 @@
             <span>Settings</span>
         </button>
     </nav>
+
+    <input type="file" id="garageImportFileInput" accept=".zip,application/zip" style="display: none;">
+
+    <div class="modal fade garage-sheet-modal" id="garageTruckModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable garage-sheet-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="garageTruckModalTitle">Add Truck</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="garageTruckNameInput">Truck Name</label>
+                        <input type="text" class="form-control" id="garageTruckNameInput" maxlength="40" placeholder="My TRX4">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Color Tag</label>
+                        <div id="garageColorSwatches" class="garage-color-swatches"></div>
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-outline-dark w-100" id="garageTruckPhotoBtn">
+                            <span class="material-symbols-outlined">photo_camera</span>
+                            Select Photo
+                        </button>
+                        <div class="form-text" id="garageTruckPhotoInfo">No photo selected.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-gold" id="garageTruckSaveBtn">Save Truck</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="garageImportConfirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Import Garage Backup</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">This will replace your current garage data.</p>
+                    <div class="small text-muted" id="garageImportMetaInfo">No file selected.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-gold" id="garageImportConfirmBtn">Import</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
 
     
@@ -1233,6 +1319,7 @@
     
     <!-- Range Slider JS -->
     <script src="lib/range-slider/rangeslider.umd.min.js"></script>
+    <script src="js/lib/jszip.min.js"></script>
     
     <script src="js/console.js"></script>
     <script src="js/bluetooth.js"></script>

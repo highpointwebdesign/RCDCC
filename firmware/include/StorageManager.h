@@ -479,6 +479,9 @@ public:
   String getConfigJSON() {
     DynamicJsonDocument doc(2048);  // Reduced size - lights moved to separate call
     
+    // Add firmware version (auto-incremented on each build)
+    doc["version"] = FIRMWARE_VERSION;
+    
     doc["reactionSpeed"] = config.reactionSpeed;
     doc["rideHeightOffset"] = config.rideHeightOffset;
     doc["rangeLimit"] = config.rangeLimit;

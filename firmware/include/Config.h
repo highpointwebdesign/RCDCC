@@ -7,7 +7,7 @@
 //   -DFIRMWARE_VERSION=\"$(git describe --tags --always)\"
 // Or use a pre-build script to generate this from version.txt or package.json
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "1.0.0"
+#define FIRMWARE_VERSION "1.0.19"
 #endif
 
 // Sensor configuration
