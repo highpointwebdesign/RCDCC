@@ -200,6 +200,7 @@ class BluetoothManager {
         const ble = await this._getBle();
 
         let jsonString = '';
+        let lastParseError = null;
         const maxAttempts = 4;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             const payload = await this.enqueueGattOperation('read-config', () =>
@@ -211,35 +212,40 @@ class BluetoothManager {
             );
 
             jsonString = this._decodeDataView(payload).trim();
-            if (jsonString.length > 0) {
+            if (jsonString.length === 0) {
+                console.warn(`BLE config read attempt ${attempt}/${maxAttempts} returned empty payload`);
+                if (attempt < maxAttempts) {
+                    await new Promise(resolve => setTimeout(resolve, 80));
+                }
+                continue;
+            }
+
+            try {
+                const config = JSON.parse(jsonString);
                 if (attempt > 1) {
                     console.log(`BLE config read succeeded on retry ${attempt}/${maxAttempts}`);
                 }
-                break;
-            }
-
-            console.warn(`BLE config read attempt ${attempt}/${maxAttempts} returned empty payload`);
-            if (attempt < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 80));
+                const latency = performance.now() - startTime;
+                this.stats.lastLatency = latency;
+                this.stats.bytesReceived += jsonString.length;
+                console.log('Config received via BLE (' + latency.toFixed(1) + 'ms, ' + jsonString.length + ' bytes)');
+                return config;
+            } catch (error) {
+                lastParseError = error;
+                console.warn(`BLE config read attempt ${attempt}/${maxAttempts} returned malformed JSON (${error.message})`);
+                if (attempt < maxAttempts) {
+                    await new Promise(resolve => setTimeout(resolve, 120));
+                }
             }
         }
 
         console.log('BLE raw config data received:', jsonString.length, 'bytes');
         console.log('First 100 chars:', jsonString.substring(0, 100));
         console.log('Last 100 chars:', jsonString.substring(Math.max(0, jsonString.length - 100)));
-        
-        try {
-            const config = JSON.parse(jsonString);
-            const latency = performance.now() - startTime;
-            this.stats.lastLatency = latency;
-            this.stats.bytesReceived += jsonString.length;
-            console.log('Config received via BLE (' + latency.toFixed(1) + 'ms, ' + jsonString.length + ' bytes)');
-            return config;
-        } catch (error) {
-            console.error('Failed to parse config JSON:', error);
-            console.error('Full raw data:', jsonString);
-            throw new Error(`Invalid JSON from device: ${error.message}. Check device firmware.`);
-        }
+
+        console.error('Failed to parse config JSON after retries:', lastParseError || 'Unknown parse error');
+        console.error('Full raw data:', jsonString);
+        throw new Error(`Invalid JSON from device after ${maxAttempts} attempts: ${(lastParseError && lastParseError.message) || 'Unknown parse error'}. Check device firmware and confirm matching firmware version on this truck.`);
     }
 
     async readLights() {
@@ -248,6 +254,7 @@ class BluetoothManager {
         const ble = await this._getBle();
 
         let jsonString = '';
+        let lastParseError = null;
         const maxAttempts = 4;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             const payload = await this.enqueueGattOperation('read-lights', () =>
@@ -259,33 +266,38 @@ class BluetoothManager {
             );
 
             jsonString = this._decodeDataView(payload).trim();
-            if (jsonString.length > 0) {
+            if (jsonString.length === 0) {
+                console.warn(`BLE lights read attempt ${attempt}/${maxAttempts} returned empty payload`);
+                if (attempt < maxAttempts) {
+                    await new Promise(resolve => setTimeout(resolve, 80));
+                }
+                continue;
+            }
+
+            try {
+                const lightsData = JSON.parse(jsonString);
                 if (attempt > 1) {
                     console.log(`BLE lights read succeeded on retry ${attempt}/${maxAttempts}`);
                 }
-                break;
-            }
-
-            console.warn(`BLE lights read attempt ${attempt}/${maxAttempts} returned empty payload`);
-            if (attempt < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 80));
+                const latency = performance.now() - startTime;
+                this.stats.lastLatency = latency;
+                this.stats.bytesReceived += jsonString.length;
+                console.log('Lights config received via BLE (' + latency.toFixed(1) + 'ms, ' + jsonString.length + ' bytes)');
+                return lightsData;
+            } catch (error) {
+                lastParseError = error;
+                console.warn(`BLE lights read attempt ${attempt}/${maxAttempts} returned malformed JSON (${error.message})`);
+                if (attempt < maxAttempts) {
+                    await new Promise(resolve => setTimeout(resolve, 120));
+                }
             }
         }
 
         console.log('BLE raw lights data received:', jsonString.length, 'bytes');
-        
-        try {
-            const lightsData = JSON.parse(jsonString);
-            const latency = performance.now() - startTime;
-            this.stats.lastLatency = latency;
-            this.stats.bytesReceived += jsonString.length;
-            console.log('Lights config received via BLE (' + latency.toFixed(1) + 'ms, ' + jsonString.length + ' bytes)');
-            return lightsData;
-        } catch (error) {
-            console.error('Failed to parse lights JSON:', error);
-            console.error('Full raw data:', jsonString);
-            throw new Error(`Invalid lights JSON from device: ${error.message}. Check device firmware.`);
-        }
+
+        console.error('Failed to parse lights JSON after retries:', lastParseError || 'Unknown parse error');
+        console.error('Full raw data:', jsonString);
+        throw new Error(`Invalid lights JSON from device after ${maxAttempts} attempts: ${(lastParseError && lastParseError.message) || 'Unknown parse error'}. Check device firmware and confirm matching firmware version on this truck.`);
     }
 
     async writeConfig(config) {
