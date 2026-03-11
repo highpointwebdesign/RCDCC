@@ -564,10 +564,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             error(message, options) {
                 this.show(message, 'error', options);
-                flashNotificationLEDs('error', {
-                    duration: options && options.duration,
-                    force: !!(options && options.forceTruckNotification)
-                });
+                const messageText = String(message || '').toLowerCase();
+                const isBleDisconnectedMessage = messageText.includes('not connected to device') || messageText.includes('bluetooth le not connected');
+                if (!isBleDisconnectedMessage) {
+                    flashNotificationLEDs('error', {
+                        duration: options && options.duration,
+                        force: !!(options && options.forceTruckNotification)
+                    });
+                }
                 appendErrorToConsole(message);
             },
             
@@ -1497,7 +1501,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             document.addEventListener('touchmove', function(e) {
                 const currentY = e.touches[0].clientY;
                 // Prevent pull-to-refresh (scroll down from top)
-                if (currentY > lastY && window.scrollY === 0) {
+                if (currentY > lastY && window.scrollY === 0 && e.cancelable) {
                     e.preventDefault();
                 }
             }, { passive: false });
@@ -2127,6 +2131,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const LIGHT_GROUP_DEFAULT_PATTERN = 'Steady';
         const LIGHT_GROUP_CYCLE_INTERVAL_SECONDS = 30;
         const LIGHT_GROUP_EXTRA_PATTERNS = ['Steady', 'Double Flash', 'Strobe', 'Breathe', 'Flicker', 'Cycle', 'Cycle Favorites'];
+        const LIGHTS_PENDING_ROLLBACK_MS = 6000;
         
         // Predefined light groups (initialized on first load)
         const PREDEFINED_LIGHT_GROUPS = [
@@ -2158,6 +2163,71 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let lightGroupsStateBeforeModal = null;
         let masterStateBeforeModal = false;
         let lightGroupModalSaved = false;
+        let lastEsp32LightsSnapshot = null;
+        let pendingLightsRollbackTimer = null;
+        let pendingLightsSyncRequested = false;
+
+        function clearPendingLightsRollback() {
+            if (pendingLightsRollbackTimer) {
+                clearTimeout(pendingLightsRollbackTimer);
+                pendingLightsRollbackTimer = null;
+            }
+        }
+
+        function captureEsp32LightsSnapshot(lightsData) {
+            if (!lightsData || !Array.isArray(lightsData.lightGroupsArray)) return;
+            lastEsp32LightsSnapshot = {
+                totalLEDCount: Number.isFinite(Number(lightsData.totalLEDCount))
+                    ? Number(lightsData.totalLEDCount)
+                    : (parseInt(localStorage.getItem(TOTAL_LED_COUNT_KEY), 10) || 100),
+                lightGroupsArray: JSON.parse(JSON.stringify(lightsData.lightGroupsArray))
+            };
+        }
+
+        function captureLocalLightsSnapshotAsAuthoritative() {
+            lastEsp32LightsSnapshot = {
+                totalLEDCount: parseInt(localStorage.getItem(TOTAL_LED_COUNT_KEY), 10) || 100,
+                lightGroupsArray: JSON.parse(JSON.stringify(lightGroups))
+            };
+        }
+
+        async function rollbackLightsToLastEsp32Snapshot(reason = '') {
+            if (!lastEsp32LightsSnapshot) return;
+
+            await loadLightGroups(lastEsp32LightsSnapshot.lightGroupsArray);
+
+            const rolledBackCount = Number(lastEsp32LightsSnapshot.totalLEDCount);
+            if (Number.isFinite(rolledBackCount) && rolledBackCount >= 1 && rolledBackCount <= 300) {
+                localStorage.setItem(TOTAL_LED_COUNT_KEY, String(rolledBackCount));
+                localStorage.removeItem(TOTAL_LED_COUNT_USER_OVERRIDE_KEY);
+                const totalLEDInput = document.getElementById('totalLEDCount');
+                if (totalLEDInput) {
+                    totalLEDInput.value = String(rolledBackCount);
+                }
+            }
+
+            const suffix = reason ? ` (${reason})` : '';
+            window.toast.warning(`Bluetooth did not reconnect within 6s. Reverted lights to ESP32 state${suffix}.`, { duration: 6000 });
+        }
+
+        function scheduleLightsRollback(reason = 'sync-pending') {
+            pendingLightsSyncRequested = true;
+            if (pendingLightsRollbackTimer) return;
+
+            pendingLightsRollbackTimer = setTimeout(async () => {
+                pendingLightsRollbackTimer = null;
+                if (isBleConnected()) {
+                    return;
+                }
+
+                pendingLightsSyncRequested = false;
+                try {
+                    await rollbackLightsToLastEsp32Snapshot(reason);
+                } catch (error) {
+                    console.warn('Failed to rollback lights state after disconnect timeout:', error?.message || error);
+                }
+            }, LIGHTS_PENDING_ROLLBACK_MS);
+        }
 
         // Load color presets from localStorage or use defaults
         function loadColorPresets() {
@@ -2487,7 +2557,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const active = masterEnabled ? groups : [];
             const totalGroups = active.length;
             const ranges = [];
-            const MAX_LIGHTS_WRITE_BYTES = 440; // Keep headroom below practical BLE write limits
+            const MAX_LIGHTS_WRITE_BYTES = 480; // Must match BLE writer cap in bluetooth.js
 
             if (totalGroups === 0) {
                 return ranges;
@@ -2546,8 +2616,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     await pushLightsPayload(payload);
                 } catch (error) {
                     const errorMessage = getErrorMessage(error);
-                    console.error(`Failed to send lights chunk ${chunkIdx + 1}: ${errorMessage}`, error);
-                    if (window.toast) {
+                    const isDisconnectedError = String(errorMessage).toLowerCase().includes('not connected');
+                    if (isDisconnectedError) {
+                        console.warn(`Failed to send lights chunk ${chunkIdx + 1}: ${errorMessage}`);
+                    } else {
+                        console.error(`Failed to send lights chunk ${chunkIdx + 1}: ${errorMessage}`, error);
+                    }
+                    if (!isDisconnectedError && window.toast) {
                         window.toast.error(`Failed to send light config chunk ${chunkIdx + 1}/${numChunks}: ${errorMessage}`);
                     }
                     throw error;
@@ -2597,6 +2672,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!isBleConnected()) {
                 // Startup and offline states can update local light groups before BLE is connected.
                 console.debug('[Lights] Skipping hardware sync: BLE not connected');
+                scheduleLightsRollback('ble-disconnected');
                 return Promise.resolve();
             }
 
@@ -2607,8 +2683,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             // Use chunked writes for large configs to avoid BLE payload size limits
             return applyLightsPayloadChunked(sourceGroups, masterEnabled || !!override?.forceMasterOn)
+            .then(() => {
+                clearPendingLightsRollback();
+                pendingLightsSyncRequested = false;
+                if (!override) {
+                    captureLocalLightsSnapshotAsAuthoritative();
+                }
+            })
             .catch(error => {
                 const errorMessage = getErrorMessage(error);
+                if (String(errorMessage).toLowerCase().includes('not connected')) {
+                    console.warn(`[Lights] Skipping hardware sync while disconnected: ${errorMessage}`);
+                    scheduleLightsRollback('ble-write-disconnected');
+                    return;
+                }
                 console.error(`Failed to apply lights to hardware: ${errorMessage}`, error);
                 if (window.toast) {
                     window.toast.error(errorMessage || 'Failed to send light settings to device');
@@ -3455,6 +3543,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         localStorage.setItem(TOTAL_LED_COUNT_KEY, value);
                         localStorage.setItem(TOTAL_LED_COUNT_USER_OVERRIDE_KEY, 'true');
                         window.toast.success(`Total LED count set to ${value}`);
+                        applyLightsHierarchyToHardware();
                     } else {
                         alert('Please enter a value between 1 and 300');
                         this.value = localStorage.getItem(TOTAL_LED_COUNT_KEY) || 100;
@@ -3643,10 +3732,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 icon.classList.remove('connecting', 'disconnected');
                 icon.textContent = 'bluetooth';
                 icon.style.color = 'var(--bluetooth-blue)';
-                return;
-            }
-
-            if (connected) {
+                clearPendingLightsRollback();
+                if (pendingLightsSyncRequested) {
+                    pendingLightsSyncRequested = false;
+                    applyLightsHierarchyToHardware();
+                }
+            } else if (connected) {
                 icon.classList.remove('connecting', 'disconnected');
                 icon.textContent = 'bluetooth_disabled';
                 icon.style.color = 'var(--bluetooth-blue)';
@@ -3657,7 +3748,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 icon.style.color = 'var(--text-muted)';
             }
 
-            if (previousState !== effectiveConnected && window.GarageFeature && window.GarageFeature.onConnectionStatusChanged) {
+            // ALWAYS trigger garage callback on any state change, not just transitions
+            if (window.GarageFeature && window.GarageFeature.onConnectionStatusChanged) {
                 window.GarageFeature.onConnectionStatusChanged();
             }
         }
@@ -3825,6 +3917,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (lightsData.lightGroupsArray && Array.isArray(lightsData.lightGroupsArray)) {
                     loadLightGroups(lightsData.lightGroupsArray);
                 }
+                captureEsp32LightsSnapshot(lightsData);
                 
                 // Load total LED count from ESP32 if available
                 if (lightsData.totalLEDCount !== undefined) {
@@ -5557,6 +5650,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             pendingPhotoPath: null,
             pendingImport: null,
             switchingTruckId: null,
+            renderToken: 0,
             colors: ['#f9c21b', '#22c55e', '#0ea5e9', '#ef4444', '#f97316', '#a855f7', '#111827', '#14b8a6'],
             photoUrlCache: Object.create(null)
         };
@@ -5696,9 +5790,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function getTruckStatusClass(truck) {
-            if (garageState.switchingTruckId === truck.id || autoReconnectInFlight) return 'reconnecting';
             const active = getActiveGarageTruck();
             if (active && active.id === truck.id && isBleConnected()) return 'connected';
+            if (garageState.switchingTruckId === truck.id || (autoReconnectInFlight && active && active.id === truck.id)) return 'reconnecting';
             return 'disconnected';
         }
 
@@ -5711,6 +5805,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         async function renderGarageGrid() {
             const garageGrid = document.getElementById('garageGrid');
             if (!garageGrid) return;
+
+            const renderToken = ++garageState.renderToken;
 
             const garage = loadGarage();
             const activeId = getActiveGarageId();
@@ -5755,6 +5851,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     </div>
                 `;
             }));
+
+            if (renderToken !== garageState.renderToken) {
+                return;
+            }
 
             garageGrid.innerHTML = cardHtml.join('');
             bindGarageCardEvents();
@@ -5923,9 +6023,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 return;
             }
 
+            const isAddFlow = garageState.modalMode !== 'edit';
+
             const color = selectedGarageColor();
             const garage = loadGarage();
             const isFirstTruck = garage.length === 0;
+            let truckToActivateId = null;
 
             if (garageState.modalMode === 'edit') {
                 const idx = garage.findIndex((truck) => truck.id === garageState.editingTruckId);
@@ -5981,6 +6084,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const first = existingIdx >= 0 ? garage[existingIdx] : garage[garage.length - 1];
                     updateActiveTruckMirrors(first);
                 }
+
+                // Newly added/selected device should become active for immediate handoff.
+                const selectedTruck = existingIdx >= 0 ? garage[existingIdx] : garage[garage.length - 1];
+                if (selectedTruck && selectedTruck.id) {
+                    truckToActivateId = selectedTruck.id;
+                    updateActiveTruckMirrors(selectedTruck);
+                }
             }
 
             bootstrap.Modal.getOrCreateInstance(document.getElementById('garageTruckModal')).hide();
@@ -5988,8 +6098,28 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             garageState.pendingDeviceId = null;
             garageState.pendingDeviceName = null;
             garageState.editingTruckId = null;
-            renderGarageGrid();
-            toast.success('Truck saved');
+            await renderGarageGrid();
+
+            // Handoff live BLE connection to the newly active truck.
+            let switchFailed = false;
+            if (truckToActivateId) {
+                try {
+                    await switchGarageTruck(truckToActivateId, {
+                        bindingMode: true,
+                        loadingMessage: isAddFlow ? 'Adding truck...' : 'Switching truck...'
+                    });
+                } catch (error) {
+                    console.warn('Auto-switch after save failed:', error?.message || error);
+                    switchFailed = true;
+                }
+            }
+
+            // If we just switched trucks, skip notification LED flash until connection stabilizes
+            if (switchFailed || truckToActivateId) {
+                toast.show('Truck saved', 'success');
+            } else {
+                toast.success('Truck saved');
+            }
         }
 
         async function deleteGarageTruck(truckId) {
@@ -5997,30 +6127,110 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const truck = garage.find((item) => item.id === truckId);
             if (!truck) return;
 
-            if (!confirm('Delete this truck from your garage?')) return;
+            // Use custom confirm modal instead of browser's blocking confirm
+            const shouldDelete = await new Promise((resolve) => {
+                const modal = document.createElement('div');
+                modal.className = 'custom-confirm-modal';
+                modal.innerHTML = `
+                    <div class="custom-confirm-backdrop"></div>
+                    <div class="custom-confirm-dialog">
+                        <h5>Delete Truck?</h5>
+                        <p>Delete "${String(truck.name || 'This truck').replace(/"/g, '&quot;')}" from your garage?</p>
+                        <div class="custom-confirm-buttons">
+                            <button class="btn btn-secondary custom-confirm-cancel">Cancel</button>
+                            <button class="btn btn-danger custom-confirm-ok">Delete</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                const backdrop = modal.querySelector('.custom-confirm-backdrop');
+                const cancelBtn = modal.querySelector('.custom-confirm-cancel');
+                const okBtn = modal.querySelector('.custom-confirm-ok');
+                const cleanup = () => { modal.remove(); };
+                cancelBtn.addEventListener('click', () => { cleanup(); resolve(false); });
+                okBtn.addEventListener('click', () => { cleanup(); resolve(true); });
+                backdrop.addEventListener('click', () => { cleanup(); resolve(false); });
+            });
+            
+            if (!shouldDelete) return;
 
-            const plugins = window.Capacitor && window.Capacitor.Plugins;
-            const filesystem = plugins && plugins.Filesystem;
-            if (filesystem && truck.imagePath) {
-                try {
-                    await filesystem.deleteFile({ directory: 'DATA', path: truck.imagePath });
-                } catch (error) {
-                    // ignore missing file
+            showLoadingIndicator('Deleting truck...');
+
+            const targetId = String(truckId || '');
+            const targetDeviceId = String(truck.deviceId || '');
+            const deletingActiveTruck = String(getActiveGarageId() || '') === targetId;
+            const deletingConnectedTruck = isBleConnected() && bleManager && truck.deviceId && bleManager.deviceId === truck.deviceId;
+
+            try {
+                // If the deleted truck is currently connected, disconnect first so the ESP32 can resume advertising.
+                if (deletingActiveTruck || deletingConnectedTruck) {
+                    suspendAutoReconnect = true;
+                    stopAutoReconnect();
+                    try {
+                        await disconnectWithTimeout(2000);
+                    } finally {
+                        suspendAutoReconnect = false;
+                    }
                 }
+
+                const plugins = window.Capacitor && window.Capacitor.Plugins;
+                const filesystem = plugins && plugins.Filesystem;
+                if (filesystem && truck.imagePath) {
+                    try {
+                        await filesystem.deleteFile({ directory: 'DATA', path: truck.imagePath });
+                    } catch (error) {
+                        // ignore missing file
+                    }
+                }
+
+                const filtered = garage.filter((item) => {
+                    const itemId = String(item?.id || '');
+                    const itemDeviceId = String(item?.deviceId || '');
+                    return itemId !== targetId && (!targetDeviceId || itemDeviceId !== targetDeviceId);
+                });
+                saveGarage(filtered);
+
+                // Guard against edge-case races by verifying persisted storage no longer contains this truck.
+                const persisted = loadGarage();
+                const stillPresent = persisted.some((item) => {
+                    const itemId = String(item?.id || '');
+                    const itemDeviceId = String(item?.deviceId || '');
+                    return itemId === targetId || (targetDeviceId && itemDeviceId === targetDeviceId);
+                });
+                if (stillPresent) {
+                    const repaired = persisted.filter((item) => {
+                        const itemId = String(item?.id || '');
+                        const itemDeviceId = String(item?.deviceId || '');
+                        return itemId !== targetId && (!targetDeviceId || itemDeviceId !== targetDeviceId);
+                    });
+                    saveGarage(repaired);
+                }
+
+                if (String(getActiveGarageId() || '') === targetId) {
+                    const nextActive = (loadGarage()[0] || null);
+                    updateActiveTruckMirrors(nextActive);
+                    if (nextActive) {
+                        startAutoReconnect('garage-delete-active');
+                    }
+                }
+
+                garageState.switchingTruckId = null;
+                
+                // Render first to update UI immediately, THEN notify
+                await renderGarageGrid();
+                
+                // Brief delay to let render complete before toast appears
+                await new Promise(resolve => setTimeout(resolve, 50));
+                hideLoadingIndicator();
+                toast.success('Truck deleted');
+            } catch (error) {
+                hideLoadingIndicator();
+                console.error('Delete truck error:', error?.message || error);
+                toast.error('Failed to delete truck');
             }
-
-            const filtered = garage.filter((item) => item.id !== truckId);
-            saveGarage(filtered);
-
-            if (getActiveGarageId() === truckId) {
-                const nextActive = filtered[0] || null;
-                updateActiveTruckMirrors(nextActive);
-            }
-
-            renderGarageGrid();
         }
 
-        async function switchGarageTruck(truckId) {
+        async function switchGarageTruck(truckId, options = {}) {
             if (!bleManager) {
                 toast.error('Bluetooth manager unavailable');
                 return;
@@ -6030,12 +6240,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const incoming = garage.find((truck) => truck.id === truckId);
             if (!incoming) return;
 
+            // If we're already connected to this exact device, avoid disconnect/reconnect churn.
+            if (isBleConnected() && bleManager.deviceId && incoming.deviceId && bleManager.deviceId === incoming.deviceId) {
+                updateActiveTruckMirrors(incoming);
+                communicationMode = 'ble';
+                stopHeartbeat();
+                stopAutoReconnect();
+                updateConnectionStatus(true);
+                refreshConfigAfterConnection('garage-switch-same-device');
+                await renderGarageGrid();
+                return;
+            }
+
             const outgoing = getActiveGarageTruck();
             let switchSucceeded = false;
             suspendAutoReconnect = true;
             stopAutoReconnect();
             garageState.switchingTruckId = truckId;
-            renderGarageGrid();
+            await renderGarageGrid();
+
+            showLoadingIndicator(options.loadingMessage || 'Switching truck...');
 
             try {
                 if (isBleConnected()) {
@@ -6044,7 +6268,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     } catch (error) {
                         console.warn('Outgoing flash command failed:', error?.message || error);
                     }
-                    await bleManager.disconnect();
+                    await disconnectWithTimeout(2000);
                 }
 
                 updateActiveTruckMirrors(incoming);
@@ -6055,10 +6279,38 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     throw new Error('Failed to connect to selected truck');
                 }
 
-                try {
-                    await bleManager.sendSystemCommand('flash', { color: 'green', count: 2 });
-                } catch (error) {
-                    console.warn('Incoming flash command failed:', error?.message || error);
+                // Brief pause to ensure GATT is fully ready for operations
+                await new Promise(resolve => setTimeout(resolve, 250));
+
+                if (options.bindingMode) {
+                    let bindingProbeOk = false;
+                    try {
+                        // Confirm read path is healthy before sending visual bind indicator.
+                        const bindProbe = await bleManager.readConfig();
+                        bindingProbeOk = !!(bindProbe && typeof bindProbe === 'object');
+                        if (bindingProbeOk) {
+                            console.log('Binding probe/read succeeded; attempting incoming flash');
+                        } else {
+                            console.warn('Binding probe returned unexpected payload; skipping incoming flash');
+                        }
+                    } catch (error) {
+                        console.warn('Binding probe/read failed; skipping incoming flash:', error?.message || error);
+                    }
+
+                    if (bindingProbeOk) {
+                        try {
+                            await bleManager.sendSystemCommand('flash', { color: 'green', count: 2 });
+                            console.log('Incoming flash command sent after binding probe');
+                        } catch (error) {
+                            console.warn('Binding flash failed after successful probe:', error?.message || error);
+                        }
+                    }
+                } else {
+                    try {
+                        await bleManager.sendSystemCommand('flash', { color: 'green', count: 2 });
+                    } catch (error) {
+                        console.warn('Incoming flash command failed:', error?.message || error);
+                    }
                 }
 
                 communicationMode = 'ble';
@@ -6072,15 +6324,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     toast.success(`Switched to ${incoming.name}`);
                 }
             } catch (error) {
+                hideLoadingIndicator();
                 updateConnectionStatus(false);
                 toast.error(`Switch failed: ${error?.message || error}`);
             } finally {
+                hideLoadingIndicator();
                 suspendAutoReconnect = false;
                 if (!switchSucceeded) {
                     startAutoReconnect('garage-switch-failed');
                 }
                 garageState.switchingTruckId = null;
-                renderGarageGrid();
+                await renderGarageGrid();
             }
         }
 
@@ -6360,8 +6614,52 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             updateActiveTruckMirrors(migrated[0]);
         }
 
-        async function handleAddGarageTruck() {
+        // Helper to disconnect with timeout to prevent hangs
+        async function disconnectWithTimeout(timeoutMs = 2000) {
+            if (!isBleConnected() || !bleManager) return;
             try {
+                await Promise.race([
+                    bleManager.disconnect(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Disconnect timeout')), timeoutMs))
+                ]);
+            } catch (error) {
+                console.warn('Disconnect attempt:', error?.message || error);
+                // Force reset state even if disconnect failed
+                bleManager.isConnected = false;
+            }
+            updateConnectionStatus(false);
+        }
+
+        function showLoadingIndicator(message = 'Loading...') {
+            const existing = document.getElementById('global-loading-indicator');
+            if (existing) existing.remove();
+            
+            const indicator = document.createElement('div');
+            indicator.id = 'global-loading-indicator';
+            indicator.innerHTML = `
+                <div class="loading-backdrop"></div>
+                <div class="loading-spinner">
+                    <div class="spinner-circle"></div>
+                    <p>${message}</p>
+                </div>
+            `;
+            document.body.appendChild(indicator);
+        }
+
+        function hideLoadingIndicator() {
+            const indicator = document.getElementById('global-loading-indicator');
+            if (indicator) {
+                indicator.classList.add('fade-out');
+                setTimeout(() => indicator.remove(), 200);
+            }
+        }
+
+        async function handleAddGarageTruck() {
+            const previousSuspend = suspendAutoReconnect;
+            try {
+                showLoadingIndicator('Scanning for devices...');
+
+                hideLoadingIndicator();
                 const selected = await requestDeviceForGarage();
                 const garage = loadGarage();
                 const existingIdx = findGarageTruckIndexByDevice(garage, selected.deviceId, selected.name || '');
@@ -6381,9 +6679,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 garageState.pendingPhotoPath = null;
                 openGarageTruckModal('add');
             } catch (error) {
+                hideLoadingIndicator();
                 const message = (error && error.message) ? error.message : String(error);
                 if (!message.toLowerCase().includes('cancel')) {
                     toast.error(`Device picker failed: ${message}`);
+                }
+            } finally {
+                hideLoadingIndicator();
+                suspendAutoReconnect = previousSuspend;
+                if (!suspendAutoReconnect && !isBleConnected()) {
+                    startAutoReconnect('garage-add-picker-close');
                 }
             }
         }
