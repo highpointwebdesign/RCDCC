@@ -108,13 +108,28 @@ class BluetoothManager {
         this.isConnecting = true;
         try {
             const ble = await this._getBle();
-            const device = await ble.requestDevice({ services: [this.SERVICE_UUID] });
+            let device = null;
+            try {
+                // Primary path: filter by required service UUID.
+                device = await ble.requestDevice({ services: [this.SERVICE_UUID] });
+            } catch (primaryError) {
+                console.warn('BLE service-filter discovery failed, attempting name-prefix fallback:', primaryError?.message || primaryError);
+                // Fallback path: discover by naming convention and then connect.
+                // Some Android stacks can miss service-filtered devices right after reflashing.
+                device = await ble.requestDevice({
+                    namePrefix: 'RCDCC-',
+                    optionalServices: [this.SERVICE_UUID]
+                });
+            }
             if (!device) throw new Error('No device selected');
             await this._connectToDeviceId(ble, device.deviceId, device.name || 'RCDCC');
             return true;
         } catch (error) {
             this._resetConnectionState();
             if (error.message && error.message.includes('cancelled')) throw new Error('Device selection cancelled');
+            if (error?.message && /no device|not found|no devices/i.test(error.message)) {
+                throw new Error('No RCDCC devices found. Confirm ESP32 is powered, Bluetooth is on, and Android Location is enabled.');
+            }
             throw error;
         } finally {
             this.isConnecting = false;
