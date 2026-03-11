@@ -6375,6 +6375,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             // If we're already connected to this exact device, avoid disconnect/reconnect churn.
             if (isBleConnected() && bleManager.deviceId && incoming.deviceId && bleManager.deviceId === incoming.deviceId) {
+                // CRITICAL: Even though we're not reconnecting, we MUST call beginNewTruckSession() to invalidate pending ops
+                // and ensure operationContext tracks the new truck logically. This prevents stale data from being applied.
+                beginNewTruckSession();
+                cancelPendingTruckOperations('garage-switch-same-device');
                 updateActiveTruckMirrors(incoming);
                 communicationMode = 'ble';
                 stopHeartbeat();
