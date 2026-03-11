@@ -107,7 +107,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 return Promise.reject(e);  // now it's a rejected promise, caught by .catch()
             }
             communicationMode = 'ble';
-            await bleManager.writeConfig(payload);
+                try {
+                    await bleManager.writeConfig(payload);
+                } catch (error) {
+                    // CRITICAL: Android BLE write error 201 (GATT_ERROR) means connection dropped
+                    if (error?.code === 201 || String(error?.message).toLowerCase().includes('gatt')) {
+                        console.error('GATT write error 201 - connection dropped. Resetting BLE state.');
+                        bleManager.resetConnectionState?.();
+                        updateConnectionStatus(false);
+                    }
+                    throw error;
+                }
             assertTruckOperationContextCurrent(operationContext, 'Config write');
             return { status: 'ok' };
         }
@@ -119,7 +129,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             assertTruckOperationContextCurrent(operationContext, 'Servo write');
             communicationMode = 'ble';
-            await bleManager.sendServoCommand(payload);
+                try {
+                    await bleManager.sendServoCommand(payload);
+                } catch (error) {
+                    if (error?.code === 201 || String(error?.message).toLowerCase().includes('gatt')) {
+                        console.error('GATT write error 201 - connection dropped. Resetting BLE state.');
+                        bleManager.resetConnectionState?.();
+                        updateConnectionStatus(false);
+                    }
+                    throw error;
+                }
             assertTruckOperationContextCurrent(operationContext, 'Servo write');
             return { status: 'ok' };
         }
@@ -131,7 +150,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             assertTruckOperationContextCurrent(operationContext, 'Lights write');
             communicationMode = 'ble';
-            await bleManager.sendLightsCommand(payload);
+                try {
+                    await bleManager.sendLightsCommand(payload);
+                } catch (error) {
+                    if (error?.code === 201 || String(error?.message).toLowerCase().includes('gatt')) {
+                        console.error('GATT write error 201 - connection dropped. Resetting BLE state.');
+                        bleManager.resetConnectionState?.();
+                        updateConnectionStatus(false);
+                    }
+                    throw error;
+                }
             assertTruckOperationContextCurrent(operationContext, 'Lights write');
             return { status: 'ok' };
         }
@@ -154,7 +182,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             assertTruckOperationContextCurrent(operationContext, 'System command');
             communicationMode = 'ble';
-            await bleManager.sendSystemCommand(command, params);
+                try {
+                    await bleManager.sendSystemCommand(command, params);
+                } catch (error) {
+                    if (error?.code === 201 || String(error?.message).toLowerCase().includes('gatt')) {
+                        console.error('GATT write error 201 - connection dropped. Resetting BLE state.');
+                        bleManager.resetConnectionState?.();
+                        updateConnectionStatus(false);
+                    }
+                    throw error;
+                }
             assertTruckOperationContextCurrent(operationContext, 'System command');
             return { status: 'ok' };
         }
