@@ -65,14 +65,197 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
+        window.bleManager = bleManager;
         let communicationMode = 'ble';
         const AUTO_RECONNECT_INTERVAL_MS = 5000;
         let autoReconnectTimer = null;
         let autoReconnectInFlight = false;
         let manualBleDisconnect = false;
+        let hasEverBleConnection = false;
+        const GARAGE_STORAGE_KEY = 'rcdcc_garage_vehicles';
+
+        // ==================== Phase 6: Dance Mode ====================
+        const DANCE_TILT_INTERVAL_MS = 50; // ~20Hz
+        const DANCE_TILT_FULL_SCALE_DEG = 45;
+        const DANCE_DEADZONE_MIN_DEG = 1;
+        const DANCE_DEADZONE_MAX_DEG = 15;
+        const DANCE_DEADZONE_DEFAULT_DEG = 5;
+        const DANCE_DEADZONE_STORAGE_KEY = 'danceModeDeadzoneDeg';
+
+        const danceModeState = {
+            enabled: false,
+            toggleSync: false,
+            deadzoneDeg: DANCE_DEADZONE_DEFAULT_DEG,
+            latestRawRollDeg: 0,
+            latestRawPitchDeg: 0,
+            orientationListenerAttached: false,
+            orientationTimerId: null,
+            tiltSendInFlight: false,
+            pendingTilt: null
+        };
 
         function isBleConnected() {
             return !!(bleManager && bleManager.getConnectionStatus && bleManager.getConnectionStatus());
+        }
+
+        function getGarageVehicleNameById(deviceId) {
+            try {
+                const vehicles = JSON.parse(localStorage.getItem(GARAGE_STORAGE_KEY) || '[]');
+                const hit = vehicles.find(v => v.id === deviceId);
+                return hit ? (hit.friendlyName || hit.name || hit.bleName || null) : null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function ensureDashboardVehicleRow() {
+            const existing = document.getElementById('activeVehicleDisplay');
+            if (existing) return;
+            const drivingRow = document.getElementById('activeDrivingProfileDisplay')?.closest('.d-flex');
+            if (!drivingRow || !drivingRow.parentElement) return;
+
+            const row = document.createElement('div');
+            row.className = 'd-flex align-items-center justify-content-between mt-2';
+            row.innerHTML = '<span>Vehicle</span><span id="activeVehicleDisplay" class="badge" style="background-color:#6f7d8d;color:#fff;font-size:0.75rem;">--</span>';
+            drivingRow.parentElement.insertBefore(row, drivingRow);
+        }
+
+        function updateDashboardVehicleName(name = null) {
+            ensureDashboardVehicleRow();
+            const el = document.getElementById('activeVehicleDisplay');
+            if (!el) return;
+            if (!isBleConnected()) {
+                el.textContent = '--';
+                return;
+            }
+            const fallbackName = bleManager?.deviceName || 'RCDCC Truck';
+            el.textContent = (name && String(name).trim()) || fallbackName;
+        }
+
+        function clearDashboardActiveStatus() {
+            const driving = document.getElementById('activeDrivingProfileDisplay');
+            const lighting = document.getElementById('activeLightingProfileDisplay');
+            if (driving) driving.textContent = '--';
+            if (lighting) lighting.textContent = '--';
+            updateDashboardVehicleName(null);
+        }
+
+        function appendToSettingsConsoleCard(message, level = 'error') {
+            const consoleOutput = document.getElementById('consoleOutput');
+            if (!consoleOutput) return;
+
+            const line = document.createElement('div');
+            const ts = new Date().toLocaleTimeString();
+            line.textContent = `[TOAST ${String(level).toUpperCase()} ${ts}] ${String(message || '')}`;
+
+            if (level === 'error') {
+                line.style.color = '#ff5555';
+            } else if (level === 'warn') {
+                line.style.color = '#ffaa00';
+            } else {
+                line.style.color = '#00aaff';
+            }
+
+            consoleOutput.appendChild(line);
+            while (consoleOutput.childElementCount > 300) {
+                consoleOutput.removeChild(consoleOutput.firstElementChild);
+            }
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        function applyFeatureAvailabilityGate() {
+            const kvReady = !!(bleManager && bleManager.supportsKvUpdates);
+            const disable = !kvReady;
+
+            const idsToDisable = [
+                'saveNewProfileBtn',
+                'loadLightingProfileBtn',
+                'saveLightingProfileBtn',
+                'deleteLightingProfileBtn',
+                'lightingProfileSelect',
+                'addAuxServoBtn',
+                'danceModeToggle',
+                'addLightGroupBtn'
+            ];
+            idsToDisable.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.disabled = disable || !isBleConnected();
+            });
+
+            const auxTabBtn = document.querySelector('.settings-tab[data-tab="aux-servos"]');
+            if (auxTabBtn) {
+                auxTabBtn.style.display = disable ? 'none' : '';
+            }
+
+            const dancePanel = document.getElementById('danceModePanel');
+            if (dancePanel && disable) {
+                dancePanel.style.display = 'none';
+            }
+        }
+
+        function clearAllDirtyPages() {
+            ['tuning', 'servo', 'system'].forEach(clearPageDirty);
+        }
+
+        function hasAnyDirtyPages() {
+            return dirtyPages.size > 0;
+        }
+
+        function configsEqual(a, b) {
+            try {
+                return JSON.stringify(a) === JSON.stringify(b);
+            } catch (_) {
+                return false;
+            }
+        }
+
+        async function reapplyDirtyPagesToDevice() {
+            const reapplyWrites = [];
+            if (isPageDirty('tuning')) {
+                reapplyWrites.push(pushConfigPayload({
+                    rideHeightOffset: tuningSliderValues.rideHeightOffset,
+                    damping: tuningSliderValues.damping,
+                    stiffness: tuningSliderValues.stiffness,
+                    reactionSpeed: tuningSliderValues.reactionSpeed,
+                    frontRearBalance: tuningSliderValues.frontRearBalance,
+                    sampleRate: tuningSliderValues.sampleRate
+                }));
+            }
+            if (isPageDirty('servo')) {
+                reapplyWrites.push(pushConfigPayload({
+                    servos: {
+                        frontLeft: servoSliderValues.frontLeft,
+                        frontRight: servoSliderValues.frontRight,
+                        rearLeft: servoSliderValues.rearLeft,
+                        rearRight: servoSliderValues.rearRight
+                    }
+                }));
+            }
+            if (isPageDirty('system')) {
+                const mpuOrientation = parseInt(document.getElementById('mpuOrientation')?.value || '0', 10);
+                if (Number.isFinite(mpuOrientation)) {
+                    reapplyWrites.push(pushConfigPayload({ mpuOrientation }));
+                }
+            }
+
+            await Promise.allSettled(reapplyWrites);
+        }
+
+        function handleBleWriteFailure(payload) {
+            const key = String(payload?.key || '');
+            const error = payload?.error;
+            console.error('BLE writeValue failed:', key, error);
+
+            if (key.startsWith('suspension.') || key.startsWith('imu.')) {
+                markPageDirty('tuning');
+            } else if (key.startsWith('srv_fl.') || key.startsWith('srv_fr.') || key.startsWith('srv_rl.') || key.startsWith('srv_rr.')) {
+                markPageDirty('servo');
+            } else if (key.startsWith('system.')) {
+                markPageDirty('system');
+            }
+
+            toast.warning('Connection issue — changes may not have applied', { duration: 2500 });
         }
 
         function ensureBleConnectedOrThrow() {
@@ -89,7 +272,84 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 return Promise.reject(e);  // now it's a rejected promise, caught by .catch()
             }
             communicationMode = 'ble';
-            await bleManager.writeConfig(payload);
+
+            const canUseKv = !!(bleManager
+                && typeof bleManager.writeValue === 'function'
+                && bleManager.supportsKvUpdates);
+
+            if (!canUseKv) {
+                await bleManager.writeConfig(payload);
+                return { status: 'ok' };
+            }
+
+            const writes = [];
+            const pushWrite = (key, value) => writes.push(bleManager.writeValue(key, value));
+
+            const toInt = (value) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
+            const degToUs = (deg) => 1000 + Math.round((Math.max(0, Math.min(180, Number(deg) || 0)) / 180) * 1000);
+            const trimDegToUs = (trimDeg) => 1500 + Math.round((Number(trimDeg) || 0) * (1000 / 180));
+
+            if (Object.prototype.hasOwnProperty.call(payload, 'reactionSpeed')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_REACT_SPD, toInt((Number(payload.reactionSpeed) || 0) * 50));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'damping')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_DAMPING, toInt((Number(payload.damping) || 0) * 100));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'stiffness')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_STIFFNESS, toInt((Number(payload.stiffness) || 0) * 50));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'frontRearBalance')) {
+                const raw = Number(payload.frontRearBalance) || 0;
+                const mapped = Math.abs(raw) <= 1 ? (raw * 200) - 100 : raw;
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_FR_BAL, toInt(mapped));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'rideHeightOffset')) {
+                const ride = toInt(payload.rideHeightOffset);
+                pushWrite(window.RCDCC_KEYS.SERVO_FL_RIDE_HT, ride);
+                pushWrite(window.RCDCC_KEYS.SERVO_FR_RIDE_HT, ride);
+                pushWrite(window.RCDCC_KEYS.SERVO_RL_RIDE_HT, ride);
+                pushWrite(window.RCDCC_KEYS.SERVO_RR_RIDE_HT, ride);
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'mpuOrientation')) {
+                pushWrite(window.RCDCC_KEYS.IMU_ORIENT, toInt(payload.mpuOrientation));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'deviceName')) {
+                pushWrite(window.RCDCC_KEYS.SYSTEM_DEVICE_NM, String(payload.deviceName || ''));
+            }
+
+            if (payload && payload.servos) {
+                const servoMap = [
+                    { key: 'frontLeft', ns: 'SERVO_FL' },
+                    { key: 'frontRight', ns: 'SERVO_FR' },
+                    { key: 'rearLeft', ns: 'SERVO_RL' },
+                    { key: 'rearRight', ns: 'SERVO_RR' }
+                ];
+
+                servoMap.forEach((entry) => {
+                    const cfg = payload.servos[entry.key];
+                    if (!cfg) return;
+
+                    if (Object.prototype.hasOwnProperty.call(cfg, 'trim')) {
+                        pushWrite(window.RCDCC_KEYS[`${entry.ns}_TRIM`], trimDegToUs(cfg.trim));
+                    }
+                    if (Object.prototype.hasOwnProperty.call(cfg, 'min')) {
+                        pushWrite(window.RCDCC_KEYS[`${entry.ns}_MIN`], degToUs(cfg.min));
+                    }
+                    if (Object.prototype.hasOwnProperty.call(cfg, 'max')) {
+                        pushWrite(window.RCDCC_KEYS[`${entry.ns}_MAX`], degToUs(cfg.max));
+                    }
+                    if (Object.prototype.hasOwnProperty.call(cfg, 'reversed')) {
+                        pushWrite(window.RCDCC_KEYS[`${entry.ns}_REVERSE`], cfg.reversed ? 1 : 0);
+                    }
+                });
+            }
+
+            if (writes.length > 0) {
+                for (const writeOp of writes) {
+                    await writeOp;
+                }
+            }
+
             return { status: 'ok' };
         }
 
@@ -114,6 +374,205 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return { status: 'ok' };
         }
 
+        // ==================== Phase 2: Debounce Utility ====================
+        function debounce(fn, delay) {
+            let timer = null;
+            return function(...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
+        // ==================== Phase 2: Dirty State System ====================
+        // pageKey: 'tuning' | 'servo' | 'system'
+        const dirtyPages = new Set();
+
+        function markPageDirty(pageKey) {
+            dirtyPages.add(pageKey);
+            updateDirtyUI(pageKey, true);
+        }
+
+        function clearPageDirty(pageKey) {
+            dirtyPages.delete(pageKey);
+            updateDirtyUI(pageKey, false);
+        }
+
+        function isPageDirty(pageKey) {
+            return dirtyPages.has(pageKey);
+        }
+
+        function updateDirtyUI(pageKey, dirty) {
+            const bannerId = `${pageKey}-dirty-banner`;
+            const saveBtn  = document.getElementById(`${pageKey}-save-btn`);
+            const banner   = document.getElementById(bannerId);
+            if (banner) banner.style.display = dirty ? '' : 'none';
+            if (saveBtn) {
+                saveBtn.disabled = !dirty;
+                saveBtn.classList.toggle('btn-gold', dirty);
+                saveBtn.classList.toggle('btn-secondary', !dirty);
+            }
+            // Amber dot on section/tab title
+            const dotId = `${pageKey}-dirty-dot`;
+            const dot = document.getElementById(dotId);
+            if (dot) dot.style.display = dirty ? 'inline' : 'none';
+        }
+
+        function showDirtyConfirmDialog() {
+            return new Promise((resolve) => {
+                const existing = document.getElementById('dirty-confirm-overlay');
+                if (existing) existing.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'dirty-confirm-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                overlay.innerHTML = `
+                  <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+                    <h5 style="margin:0 0 12px;color:#fff;">Unsaved Changes</h5>
+                    <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">You have unsaved changes. Save before leaving?</p>
+                    <div style="display:flex;gap:8px;">
+                      <button id="ddc-save"    style="flex:1;padding:10px;border:none;border-radius:8px;background:#c8a800;color:#000;font-weight:600;cursor:pointer;">Save</button>
+                      <button id="ddc-discard" style="flex:1;padding:10px;border:none;border-radius:8px;background:#555;color:#fff;cursor:pointer;">Discard</button>
+                      <button id="ddc-cancel"  style="flex:1;padding:10px;border:none;border-radius:8px;background:#222;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
+                    </div>
+                  </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelector('#ddc-save').onclick    = () => { overlay.remove(); resolve('save'); };
+                overlay.querySelector('#ddc-discard').onclick = () => { overlay.remove(); resolve('discard'); };
+                overlay.querySelector('#ddc-cancel').onclick  = () => { overlay.remove(); resolve('cancel'); };
+            });
+        }
+
+        async function savePage(pageKey) {
+            if (!isBleConnected()) {
+                toast.warning('Connect to Bluetooth before saving');
+                return;
+            }
+            const btn = document.getElementById(`${pageKey}-save-btn`);
+            const originalText = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="material-symbols-outlined" style="vertical-align:middle;font-size:1rem;">hourglass_empty</span> Saving...';
+            }
+            try {
+                await bleManager.sendSaveCommandWithTimeout(3000);
+                clearPageDirty(pageKey);
+                // Snapshot the current config as the new saved state
+                try {
+                    bleManager.lastKnownSavedState = await bleManager.readConfig();
+                } catch (_) { /* best effort */ }
+                toast.success('Settings saved');
+            } catch (e) {
+                toast.error('Save failed - please try again');
+                console.error('Save timeout or failure for page:', pageKey);
+                console.error('savePage failed:', e);
+                if (btn) { btn.disabled = false; }
+            } finally {
+                if (btn) btn.innerHTML = originalText;
+                updateDirtyUI(pageKey, isPageDirty(pageKey));
+            }
+        }
+
+        async function discardPage(pageKey) {
+            const saved = bleManager && bleManager.lastKnownSavedState;
+            if (!saved) {
+                clearPageDirty(pageKey);
+                return;
+            }
+            // Revert UI to saved state values
+            if (pageKey === 'tuning') {
+                isLoadingTuningConfig = true;
+                updateTuningSliders(saved);
+                isLoadingTuningConfig = false;
+                // Re-send reverted values to ESP32 RAM
+                const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                if (canUseKv) {
+                    const toInt = (v) => Math.round(Number(v) || 0);
+                    const k = window.RCDCC_KEYS;
+                    const promises = [];
+                    if (saved.rideHeightOffset !== undefined) {
+                        const ride = toInt(saved.rideHeightOffset);
+                        promises.push(bleManager.writeValue(k.SERVO_FL_RIDE_HT, ride));
+                        promises.push(bleManager.writeValue(k.SERVO_FR_RIDE_HT, ride));
+                        promises.push(bleManager.writeValue(k.SERVO_RL_RIDE_HT, ride));
+                        promises.push(bleManager.writeValue(k.SERVO_RR_RIDE_HT, ride));
+                    }
+                    if (saved.damping       !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_DAMPING,   toInt((saved.damping || 0) * 100)));
+                    if (saved.stiffness     !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_STIFFNESS, toInt((saved.stiffness || 0) * 50)));
+                    if (saved.reactionSpeed !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_REACT_SPD, toInt((saved.reactionSpeed || 0) * 50)));
+                    if (saved.frontRearBalance !== undefined) {
+                        const mapped = toInt(((Number(saved.frontRearBalance) || 0) / 100) * 200 - 100);
+                        promises.push(bleManager.writeValue(k.SUSPENSION_FR_BAL, mapped));
+                    }
+                    await Promise.allSettled(promises);
+                }
+            } else if (pageKey === 'servo') {
+                isLoadingTuningConfig = true;
+                updateServoSliders(saved);
+                loadSettingsFromConfig(saved);
+                isLoadingTuningConfig = false;
+                const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                if (canUseKv && saved.servos) {
+                    const trimDegToUs = (d) => 1500 + Math.round((Number(d) || 0) * (1000 / 180));
+                    const degToUs     = (d) => 1000 + Math.round((Number(d) || 0) / 180 * 1000);
+                    const k = window.RCDCC_KEYS;
+                    const servoMap = [
+                        { key: 'frontLeft',  ns: 'SERVO_FL' },
+                        { key: 'frontRight', ns: 'SERVO_FR' },
+                        { key: 'rearLeft',   ns: 'SERVO_RL' },
+                        { key: 'rearRight',  ns: 'SERVO_RR' },
+                    ];
+                    const promises = [];
+                    servoMap.forEach(({ key, ns }) => {
+                        const cfg = saved.servos[key];
+                        if (!cfg) return;
+                        if (cfg.trim   !== undefined) promises.push(bleManager.writeValue(k[`${ns}_TRIM`],    trimDegToUs(cfg.trim)));
+                        if (cfg.min    !== undefined) promises.push(bleManager.writeValue(k[`${ns}_MIN`],     degToUs(cfg.min)));
+                        if (cfg.max    !== undefined) promises.push(bleManager.writeValue(k[`${ns}_MAX`],     degToUs(cfg.max)));
+                        if (cfg.reversed !== undefined) promises.push(bleManager.writeValue(k[`${ns}_REVERSE`], cfg.reversed ? 1 : 0));
+                    });
+                    await Promise.allSettled(promises);
+                }
+            } else if (pageKey === 'system') {
+                loadSettingsFromConfig(saved);
+                const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                if (canUseKv) {
+                    const promises = [];
+                    if (saved.mpuOrientation !== undefined) promises.push(bleManager.writeValue(window.RCDCC_KEYS.IMU_ORIENT, parseInt(saved.mpuOrientation)));
+                    await Promise.allSettled(promises);
+                }
+            }
+            clearPageDirty(pageKey);
+        }
+
+        async function runPostConnectFlow(connectionLabel = null, showToast = true) {
+            communicationMode = 'ble';
+            hasEverBleConnection = true;
+            stopAutoReconnect();
+            stopHeartbeat();
+            updateConnectionStatus(true);
+            updateConnectionMethodDisplay();
+
+            await fetchConfigFromESP32(false);
+            applyFeatureAvailabilityGate();
+
+            const vehicleName = connectionLabel
+                || getGarageVehicleNameById(bleManager?.deviceId)
+                || bleManager?.deviceName
+                || 'RCDCC Truck';
+            updateDashboardVehicleName(vehicleName);
+            updateDashboardActiveProfile();
+            updateDashboardActiveLightingProfile();
+
+            try {
+                await bleManager.sendSystemCommand('flash', { color: 'green', count: 2 });
+            } catch (error) {
+                console.warn('Post-connect green flash command failed:', error?.message || error);
+            }
+
+            if (showToast) {
+                toast.success(`Connected to ${vehicleName}`);
+            }
+        }
+
         async function connectBLE() {
             if (!bleManager) {
                 toast.error('Bluetooth manager unavailable in this build');
@@ -122,26 +581,64 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             try {
                 manualBleDisconnect = false;
+                // Always open the OS picker fresh — disconnect any existing connection first.
+                if (bleManager.isConnected) {
+                    await bleManager.disconnect();
+                }
                 await bleManager.connect();
-                communicationMode = 'ble';
-                stopAutoReconnect();
-                stopHeartbeat();
-                updateConnectionStatus(true);
-                updateConnectionMethodDisplay();
-                refreshConfigAfterConnection('manual-connect');
-                toast.success('Connected via Bluetooth LE');
+                await runPostConnectFlow();
                 return true;
             } catch (error) {
+                const message = error?.message || '';
                 communicationMode = 'ble';
                 updateConnectionStatus(false);
-                toast.error(`BLE connect failed: ${error.message}`);
+                clearDashboardActiveStatus();
+                if (/cancel/i.test(message)) {
+                    return false;
+                }
+                toast.error(`BLE connect failed: ${message}`);
                 return false;
             }
         }
 
-        async function disconnectBLE() {
+        async function connectBLEToVehicle(deviceId, vehicleName = null) {
+            if (!bleManager) return false;
+
+            manualBleDisconnect = false;
+
+            try {
+                const currentId = bleManager.deviceId;
+                if (isBleConnected() && currentId && currentId !== deviceId) {
+                    try {
+                        await bleManager.sendSystemCommand('flash', { color: 'red', count: 2 });
+                        await delay(800);
+                    } catch (error) {
+                        console.warn('Outgoing truck flash failed:', error?.message || error);
+                    }
+                    await disconnectBLE(false);
+                }
+
+                localStorage.setItem('rcdccBlePreferredDeviceId', deviceId);
+                bleManager.preferredDeviceId = deviceId;
+
+                const connected = await bleManager.connectToKnownDevice();
+                if (!connected) {
+                    toast.error('Could not connect - make sure vehicle is powered on');
+                    return false;
+                }
+
+                await runPostConnectFlow(vehicleName, true);
+                return true;
+            } catch (error) {
+                console.error('connectBLEToVehicle failed:', error);
+                toast.error('Could not connect - make sure vehicle is powered on');
+                return false;
+            }
+        }
+
+        async function disconnectBLE(markManual = true) {
             if (!bleManager) return;
-            manualBleDisconnect = true;
+            manualBleDisconnect = !!markManual;
             stopAutoReconnect();
             await bleManager.disconnect();
             communicationMode = 'ble';
@@ -149,11 +646,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             startHeartbeat();
             updateConnectionStatus(false);
             updateConnectionMethodDisplay();
+            clearDashboardActiveStatus();
+            applyFeatureAvailabilityGate();
+            // Refresh garage UI so Connected badges and button labels update.
+            if (window.GarageManager && typeof window.GarageManager.renderGarage === 'function') {
+                window.GarageManager.renderGarage();
+            }
         }
 
         async function attemptAutoReconnect(source = 'timer') {
             if (!bleManager || !bleManager.connectToKnownDevice) return false;
-            if (manualBleDisconnect || autoReconnectInFlight || isBleConnected() || document.hidden || !navigator.onLine) {
+            if (!hasEverBleConnection || manualBleDisconnect || autoReconnectInFlight || isBleConnected() || document.hidden || !navigator.onLine) {
                 return false;
             }
 
@@ -161,12 +664,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             try {
                 const didReconnect = await bleManager.connectToKnownDevice();
                 if (didReconnect) {
-                    communicationMode = 'ble';
-                    stopHeartbeat();
-                    stopAutoReconnect();
-                    updateConnectionStatus(true);
-                    updateConnectionMethodDisplay();
-                    refreshConfigAfterConnection(`auto-reconnect:${source}`);
+                    await runPostConnectFlow(null, false);
                     toast.success('Bluetooth reconnected', { duration: 2200 });
                     console.log(`BLE auto reconnect succeeded (${source})`);
                     return true;
@@ -182,6 +680,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function startAutoReconnect(reason = 'disconnect') {
             if (!bleManager || manualBleDisconnect) return;
+            if (!hasEverBleConnection) return;
             if (autoReconnectTimer) return;
 
             // Try immediately, then continue in the background.
@@ -201,6 +700,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         // Expose manual control for quick testing from browser console.
         window.connectBLE = connectBLE;
+        window.connectBLEToVehicle = connectBLEToVehicle;
         window.disconnectBLE = disconnectBLE;
 
         function refreshConfigAfterConnection(reason = 'ble-connect') {
@@ -412,6 +912,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let hasLoadedConfigFromDevice = false;
         let configRefreshInFlight = null;
         let hasAppliedInitialDeviceConfig = false;
+
+        // Phase 3: Driving profile state
+        let drivingProfiles = [];       // [{index, name}, ...]
+        let activeDrivingProfileIndex = 0;
+
+        // Phase 4: Servo registry state
+        let servoRegistry = null;       // { count, aux_count, aux_servos: [...] }
         const rSliders = {};
         const rSliderSilentTimers = {};
         const rSliderInitState = new Set();
@@ -466,6 +973,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 toastEl.id = toastId;
                 toastEl.className = `toast-box ${bgClass} toast-top tap-to-close`;
                 toastEl.innerHTML = `<div class="in"><div class="text">${message}</div></div>`;
+
+                if (type === 'error') {
+                    appendToSettingsConsoleCard(message, 'error');
+                }
                 
                 // Add to body
                 document.body.appendChild(toastEl);
@@ -857,6 +1368,392 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function notifyTelemetryListeners(roll, pitch) {
             telemetryListeners.forEach(listener => listener({ roll, pitch }));
+        }
+
+        function getDanceModeElements() {
+            return {
+                toggle: document.getElementById('danceModeToggle'),
+                panel: document.getElementById('danceModePanel'),
+                banner: document.getElementById('danceModeStatusBanner'),
+                dot: document.getElementById('danceTiltDot'),
+                deadzoneCircle: document.getElementById('danceDeadzoneCircle'),
+                slider: document.getElementById('danceDeadzoneSlider'),
+                deadzoneValue: document.getElementById('danceDeadzoneValue'),
+                indicatorWrap: document.getElementById('danceTiltIndicatorWrap')
+            };
+        }
+
+        function injectDanceModeStyles() {
+            if (document.getElementById('danceModeStyles')) return;
+            const style = document.createElement('style');
+            style.id = 'danceModeStyles';
+            style.textContent = `
+                .dance-mode-panel {
+                    margin-top: 14px;
+                    display: none;
+                    border-radius: 12px;
+                    border: 1px solid rgba(200, 168, 0, 0.4);
+                    background: linear-gradient(180deg, rgba(22, 22, 22, 0.95) 0%, rgba(10, 10, 10, 0.95) 100%);
+                    padding: 12px;
+                }
+                .dance-mode-banner {
+                    border: 1px solid rgba(200, 168, 0, 0.6);
+                    border-radius: 10px;
+                    padding: 8px 10px;
+                    font-size: 0.85rem;
+                    font-weight: 600;
+                    color: #ffe69a;
+                    background: rgba(200, 168, 0, 0.08);
+                    animation: dancePulseBorder 1.2s ease-in-out infinite;
+                }
+                .dance-tilt-wrap {
+                    margin-top: 12px;
+                    display: flex;
+                    justify-content: center;
+                }
+                .dance-tilt-indicator {
+                    width: 196px;
+                    height: 196px;
+                    border-radius: 50%;
+                    position: relative;
+                    border: 2px solid rgba(79, 156, 255, 0.7);
+                    background: radial-gradient(circle at center, rgba(79, 156, 255, 0.18) 0%, rgba(79, 156, 255, 0.04) 45%, rgba(0, 0, 0, 0.25) 100%);
+                    box-shadow: inset 0 0 24px rgba(79, 156, 255, 0.22);
+                    overflow: hidden;
+                }
+                .dance-grid-line {
+                    position: absolute;
+                    background: rgba(79, 156, 255, 0.35);
+                }
+                .dance-grid-line.h {
+                    left: 12px;
+                    right: 12px;
+                    top: 50%;
+                    height: 1px;
+                    transform: translateY(-50%);
+                }
+                .dance-grid-line.v {
+                    top: 12px;
+                    bottom: 12px;
+                    left: 50%;
+                    width: 1px;
+                    transform: translateX(-50%);
+                }
+                .dance-deadzone-circle {
+                    position: absolute;
+                    left: 50%;
+                    top: 50%;
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    border: 1.5px solid rgba(200, 168, 0, 0.9);
+                    background: rgba(200, 168, 0, 0.12);
+                    transform: translate(-50%, -50%);
+                    transition: width 120ms linear, height 120ms linear;
+                }
+                .dance-tilt-dot {
+                    position: absolute;
+                    left: 50%;
+                    top: 50%;
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    border: 2px solid #0d0d0d;
+                    background: #50ff9a;
+                    transform: translate(-50%, -50%);
+                    box-shadow: 0 0 14px rgba(80, 255, 154, 0.65);
+                    transition: transform 40ms linear;
+                }
+                @keyframes dancePulseBorder {
+                    0% { box-shadow: 0 0 0 0 rgba(200, 168, 0, 0.35); }
+                    70% { box-shadow: 0 0 0 8px rgba(200, 168, 0, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(200, 168, 0, 0); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        function ensureDanceModePanel() {
+            const toggle = document.getElementById('danceModeToggle');
+            if (!toggle) return;
+
+            const cardBody = toggle.closest('.card-body');
+            if (!cardBody) return;
+            if (document.getElementById('danceModePanel')) return;
+
+            injectDanceModeStyles();
+
+            const panel = document.createElement('div');
+            panel.id = 'danceModePanel';
+            panel.className = 'dance-mode-panel';
+            panel.innerHTML = `
+                <div id="danceModeStatusBanner" class="dance-mode-banner">
+                    Dance Mode Active - Tilt phone to control suspension
+                </div>
+                <div id="danceTiltIndicatorWrap" class="dance-tilt-wrap" aria-label="Dance Mode Tilt Indicator">
+                    <div class="dance-tilt-indicator">
+                        <div class="dance-grid-line h"></div>
+                        <div class="dance-grid-line v"></div>
+                        <div id="danceDeadzoneCircle" class="dance-deadzone-circle"></div>
+                        <div id="danceTiltDot" class="dance-tilt-dot"></div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label for="danceDeadzoneSlider" class="form-label mb-1"><strong>Deadzone</strong> <span id="danceDeadzoneValue">${DANCE_DEADZONE_DEFAULT_DEG}°</span></label>
+                    <input type="range" id="danceDeadzoneSlider" class="form-range" min="${DANCE_DEADZONE_MIN_DEG}" max="${DANCE_DEADZONE_MAX_DEG}" step="1" value="${DANCE_DEADZONE_DEFAULT_DEG}">
+                </div>
+            `;
+
+            cardBody.appendChild(panel);
+        }
+
+        function setDanceModeToggleChecked(checked) {
+            const { toggle } = getDanceModeElements();
+            if (!toggle) return;
+            danceModeState.toggleSync = true;
+            toggle.checked = !!checked;
+            danceModeState.toggleSync = false;
+        }
+
+        function normalizeDanceAxis(rawTiltDeg, deadzoneDeg) {
+            const magnitude = Math.abs(rawTiltDeg);
+            if (magnitude < deadzoneDeg) return 0;
+
+            const headroom = Math.max(1, DANCE_TILT_FULL_SCALE_DEG - deadzoneDeg);
+            const normalized = (magnitude - deadzoneDeg) / headroom;
+            const signed = (rawTiltDeg >= 0 ? 1 : -1) * Math.min(1, normalized);
+            return Math.max(-1, Math.min(1, signed));
+        }
+
+        function updateDanceDeadzoneUi() {
+            const { slider, deadzoneValue, deadzoneCircle } = getDanceModeElements();
+            if (!slider || !deadzoneValue || !deadzoneCircle) return;
+
+            slider.value = String(danceModeState.deadzoneDeg);
+            deadzoneValue.textContent = `${danceModeState.deadzoneDeg}°`;
+
+            const radiusMaxPx = 86;
+            const ratio = Math.max(0, Math.min(1, danceModeState.deadzoneDeg / DANCE_TILT_FULL_SCALE_DEG));
+            const radiusPx = Math.max(6, Math.round(radiusMaxPx * ratio));
+            const diameterPx = radiusPx * 2;
+            deadzoneCircle.style.width = `${diameterPx}px`;
+            deadzoneCircle.style.height = `${diameterPx}px`;
+        }
+
+        function updateDanceTiltIndicator(rollNorm, pitchNorm) {
+            const { dot } = getDanceModeElements();
+            if (!dot) return;
+
+            const limitPx = 86;
+            const clampedRoll = Math.max(-1, Math.min(1, Number(rollNorm) || 0));
+            const clampedPitch = Math.max(-1, Math.min(1, Number(pitchNorm) || 0));
+            const x = clampedRoll * limitPx;
+            const y = -clampedPitch * limitPx;
+
+            dot.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+        }
+
+        function centerDanceTiltIndicator() {
+            updateDanceTiltIndicator(0, 0);
+        }
+
+        function handleDanceOrientationEvent(event) {
+            if (!danceModeState.enabled) return;
+            if (!event) return;
+
+            // Map browser orientation to spec: left tilt = positive roll, forward tilt = positive pitch.
+            const gamma = Number(event.gamma);
+            const beta = Number(event.beta);
+            if (!Number.isFinite(gamma) || !Number.isFinite(beta)) return;
+
+            danceModeState.latestRawRollDeg = -gamma;
+            danceModeState.latestRawPitchDeg = -beta;
+        }
+
+        async function drainDanceTiltQueue() {
+            if (danceModeState.tiltSendInFlight) return;
+            danceModeState.tiltSendInFlight = true;
+
+            try {
+                while (danceModeState.enabled && isBleConnected() && danceModeState.pendingTilt) {
+                    const tilt = danceModeState.pendingTilt;
+                    danceModeState.pendingTilt = null;
+                    await pushSystemCommand('servo_tilt', { roll: tilt.roll, pitch: tilt.pitch });
+                }
+            } catch (error) {
+                console.warn('Dance Mode tilt send failed:', error?.message || error);
+            } finally {
+                danceModeState.tiltSendInFlight = false;
+                if (danceModeState.enabled && isBleConnected() && danceModeState.pendingTilt) {
+                    drainDanceTiltQueue();
+                }
+            }
+        }
+
+        function queueDanceTiltUpdate(rollNorm, pitchNorm) {
+            danceModeState.pendingTilt = {
+                roll: Number((Number(rollNorm) || 0).toFixed(4)),
+                pitch: Number((Number(pitchNorm) || 0).toFixed(4))
+            };
+            drainDanceTiltQueue();
+        }
+
+        function stopDanceModeSampling() {
+            if (danceModeState.orientationTimerId) {
+                clearInterval(danceModeState.orientationTimerId);
+                danceModeState.orientationTimerId = null;
+            }
+            if (danceModeState.orientationListenerAttached) {
+                window.removeEventListener('deviceorientation', handleDanceOrientationEvent, true);
+                danceModeState.orientationListenerAttached = false;
+            }
+            danceModeState.pendingTilt = null;
+        }
+
+        function startDanceModeSampling() {
+            if (!danceModeState.orientationListenerAttached) {
+                window.addEventListener('deviceorientation', handleDanceOrientationEvent, true);
+                danceModeState.orientationListenerAttached = true;
+            }
+            if (danceModeState.orientationTimerId) {
+                clearInterval(danceModeState.orientationTimerId);
+            }
+
+            danceModeState.orientationTimerId = setInterval(() => {
+                if (!danceModeState.enabled) return;
+                if (!isBleConnected()) {
+                    disableDanceMode({ sendCommand: false, bleDisconnected: true });
+                    return;
+                }
+
+                const rollNorm = normalizeDanceAxis(danceModeState.latestRawRollDeg, danceModeState.deadzoneDeg);
+                const pitchNorm = normalizeDanceAxis(danceModeState.latestRawPitchDeg, danceModeState.deadzoneDeg);
+                updateDanceTiltIndicator(rollNorm, pitchNorm);
+                queueDanceTiltUpdate(rollNorm, pitchNorm);
+            }, DANCE_TILT_INTERVAL_MS);
+        }
+
+        async function requestDanceModeOrientationPermission() {
+            if (typeof window.DeviceOrientationEvent === 'undefined') {
+                toast.error('Device orientation is not supported on this device');
+                return false;
+            }
+
+            if (typeof window.DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const result = await window.DeviceOrientationEvent.requestPermission();
+                    if (result !== 'granted') {
+                        toast.error('Gyroscope access is required for Dance Mode');
+                        return false;
+                    }
+                } catch (error) {
+                    toast.error('Gyroscope access is required for Dance Mode');
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        async function enableDanceMode() {
+            if (!(bleManager && bleManager.supportsKvUpdates)) {
+                toast.warning('Dance Mode requires firmware 2.0.0 or newer');
+                setDanceModeToggleChecked(false);
+                return;
+            }
+            if (!isBleConnected()) {
+                toast.warning('Connect to Bluetooth before enabling Dance Mode');
+                setDanceModeToggleChecked(false);
+                return;
+            }
+
+            const permissionGranted = await requestDanceModeOrientationPermission();
+            if (!permissionGranted) {
+                setDanceModeToggleChecked(false);
+                return;
+            }
+
+            await pushSystemCommand('dance_mode', { enabled: true });
+
+            const { panel } = getDanceModeElements();
+            danceModeState.enabled = true;
+            danceModeState.latestRawRollDeg = 0;
+            danceModeState.latestRawPitchDeg = 0;
+            if (panel) panel.style.display = 'block';
+            centerDanceTiltIndicator();
+            startDanceModeSampling();
+        }
+
+        async function disableDanceMode(options = {}) {
+            const sendCommand = options.sendCommand !== false;
+            const bleDisconnected = options.bleDisconnected === true;
+
+            stopDanceModeSampling();
+            danceModeState.enabled = false;
+            danceModeState.latestRawRollDeg = 0;
+            danceModeState.latestRawPitchDeg = 0;
+
+            const { panel } = getDanceModeElements();
+            if (panel) panel.style.display = 'none';
+            centerDanceTiltIndicator();
+            setDanceModeToggleChecked(false);
+
+            if (sendCommand && isBleConnected()) {
+                try {
+                    await pushSystemCommand('dance_mode', { enabled: false });
+                } catch (error) {
+                    console.warn('Dance Mode disable command failed:', error?.message || error);
+                }
+            }
+
+            if (bleDisconnected) {
+                toast.warning('Dance Mode disabled - BLE disconnected');
+            }
+        }
+
+        function handleDanceModeToggleChange(event) {
+            if (danceModeState.toggleSync) return;
+            const isEnabled = !!event?.target?.checked;
+
+            if (isEnabled) {
+                enableDanceMode().catch(error => {
+                    console.error('Failed to enable Dance Mode:', error);
+                    toast.error('Failed to enable Dance Mode');
+                    setDanceModeToggleChecked(false);
+                    danceModeState.enabled = false;
+                    stopDanceModeSampling();
+                });
+            } else {
+                disableDanceMode({ sendCommand: true }).catch(error => {
+                    console.error('Failed to disable Dance Mode:', error);
+                });
+            }
+        }
+
+        function initDanceModeUi() {
+            ensureDanceModePanel();
+            const { toggle, slider } = getDanceModeElements();
+            if (!toggle) return;
+
+            const storedDeadzone = parseInt(localStorage.getItem(DANCE_DEADZONE_STORAGE_KEY) || `${DANCE_DEADZONE_DEFAULT_DEG}`, 10);
+            danceModeState.deadzoneDeg = Math.max(
+                DANCE_DEADZONE_MIN_DEG,
+                Math.min(DANCE_DEADZONE_MAX_DEG, Number.isFinite(storedDeadzone) ? storedDeadzone : DANCE_DEADZONE_DEFAULT_DEG)
+            );
+            updateDanceDeadzoneUi();
+            centerDanceTiltIndicator();
+
+            toggle.addEventListener('change', handleDanceModeToggleChange);
+            setDanceModeToggleChecked(false);
+
+            if (slider) {
+                slider.addEventListener('input', function() {
+                    const next = parseInt(this.value || `${DANCE_DEADZONE_DEFAULT_DEG}`, 10);
+                    danceModeState.deadzoneDeg = Math.max(DANCE_DEADZONE_MIN_DEG, Math.min(DANCE_DEADZONE_MAX_DEG, next));
+                    localStorage.setItem(DANCE_DEADZONE_STORAGE_KEY, String(danceModeState.deadzoneDeg));
+                    updateDanceDeadzoneUi();
+                });
+            }
         }
 
 
@@ -1382,13 +2279,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         document.addEventListener('DOMContentLoaded', function() {
             setCardBodiesLoading(true);
 
+            ensureDashboardVehicleRow();
+            clearDashboardActiveStatus();
+            applyFeatureAvailabilityGate();
+
+            if (bleManager && bleManager.setWriteFailureCallback) {
+                bleManager.setWriteFailureCallback(handleBleWriteFailure);
+            }
+
             if (bleManager && bleManager.setDisconnectCallback) {
                 bleManager.setDisconnectCallback(() => {
+                    if (danceModeState.enabled) {
+                        disableDanceMode({ sendCommand: false, bleDisconnected: true });
+                    }
                     communicationMode = 'ble';
                     hasLoadedConfigFromDevice = false;
                     startHeartbeat();
                     updateConnectionStatus(false);
                     updateConnectionMethodDisplay();
+                    clearDashboardActiveStatus();
+                    applyFeatureAvailabilityGate();
                     if (!manualBleDisconnect) {
                         startAutoReconnect('disconnect-callback');
                     }
@@ -1464,8 +2374,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Display connection method on dashboard
             updateConnectionMethodDisplay();
 
-            // Best-effort reconnect on page load for already-authorized devices.
-            startAutoReconnect('startup');
+            // Manual scan is preferred at startup. Auto-reconnect starts only
+            // after the app has had at least one successful BLE session.
             
             // Display protocol and secure context for debugging (PWA)
             const protocolDisplay = document.getElementById('protocolDisplay');
@@ -1512,6 +2422,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             // Initialize settings controls
             initServoControls(); // Initialize servo rotation badge click handlers
+            initDanceModeUi();
             // initGyroControls(); // Commented out - slider library not yet connected
             initNetworkSettings();
             initSettingsTabs();
@@ -1560,12 +2471,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             
             // Restore formulas card collapse state from localStorage
-            const formulasCollapsed = localStorage.getItem('formulasCardCollapsed') === 'true';
+            const formulasCollapsed = localStorage.getItem('formulasCardCollapsed') !== 'false';
             const formulasCardBody = document.getElementById('formulasCardBody');
             const formulasChevron = document.getElementById('formulasChevron');
             if (formulasCardBody && formulasChevron) {
                 formulasCardBody.style.display = formulasCollapsed ? 'none' : 'block';
                 formulasChevron.textContent = formulasCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+            }
+
+            const lightsGuideCollapsed = localStorage.getItem('lightsGuideCardCollapsed') === 'true';
+            const lightsGuideCardBody = document.getElementById('lightsGuideCardBody');
+            const lightsGuideChevron = document.getElementById('lightsGuideChevron');
+            if (lightsGuideCardBody && lightsGuideChevron) {
+                lightsGuideCardBody.style.display = lightsGuideCollapsed ? 'none' : 'block';
+                lightsGuideChevron.textContent = lightsGuideCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
             }
             
             // Restore servo range lock state from localStorage
@@ -1581,9 +2500,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Restore servo trim lock state from localStorage
             servoTrimLocked = localStorage.getItem('servoTrimLocked') === 'true';
             const servoTrimLockIcon = document.getElementById('servoTrimLockIcon');
-            const servoTrimCard = document.getElementById('servoTrimCard');
-            if (servoTrimLockIcon && servoTrimCard) {
-                servoTrimCard.classList.toggle('slider-locked', servoTrimLocked);
+            const servoSettingsCard = document.getElementById('servoSettingsCard');
+            if (servoTrimLockIcon && servoSettingsCard) {
+                servoSettingsCard.classList.toggle('trim-locked', servoTrimLocked);
                 servoTrimLockIcon.textContent = servoTrimLocked ? 'lock' : 'lock_open_right';
                 servoTrimLockIcon.style.color = servoTrimLocked ? 'var(--lime-green)' : 'var(--high-impact-color)'; // Lime green if locked, yellow if unlocked
             }
@@ -1591,9 +2510,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Restore servo rotation lock state from localStorage
             servoRotationLocked = localStorage.getItem('servoRotationLocked') === 'true';
             const servoRotationLockIcon = document.getElementById('servoRotationLockIcon');
-            const servoRotationCard = document.getElementById('servoRotationCard');
+            const servoRotationCard = document.getElementById('servoSettingsCard');
             if (servoRotationLockIcon && servoRotationCard) {
-                servoRotationCard.classList.toggle('slider-locked', servoRotationLocked);
+                servoRotationCard.classList.toggle('rotation-locked', servoRotationLocked);
                 servoRotationLockIcon.textContent = servoRotationLocked ? 'lock' : 'lock_open_right';
                 servoRotationLockIcon.style.color = servoRotationLocked ? 'var(--lime-green)' : 'var(--high-impact-color)'; // Lime green if locked, yellow if unlocked
             }
@@ -1641,10 +2560,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             // Page navigation - footer nav buttons
             document.querySelectorAll('.footer-nav button').forEach(btn => {
-                btn.addEventListener('click', function() {
+                btn.addEventListener('click', async function() {
                     const target = this.dataset.target;
                     if (target) {
-                        navigateToSection(target);
+                        await navigateToSection(target);
                     }
                 });
             });
@@ -1713,13 +2632,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 });
             }
             
-            // Connection Settings gear click - navigate to Settings
+            // Connection icon click - navigate to Garage (Bluetooth management lives there)
             ['connectionSettingsGear', 'wifiIcon'].forEach(elementId => {
                 const element = document.getElementById(elementId);
                 if (element) {
                     element.addEventListener('click', function() {
-                        navigateToSection('settings');
-                        setTimeout(() => openSettingsTab('network'), 0);
+                        navigateToSection('garage');
                     });
                 }
             });
@@ -1822,7 +2740,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         // Helper function to navigate to a section
-        function navigateToSection(sectionId) {
+        async function navigateToSection(sectionId) {
+            // Dirty guard: check page being navigated away from
+            const currentSection = localStorage.getItem('currentPage') || 'dashboard';
+            if (currentSection !== sectionId) {
+                let dirtyKeys = [];
+                if (currentSection === 'tuning') dirtyKeys = ['tuning'];
+                else if (currentSection === 'settings') dirtyKeys = ['servo', 'system'];
+                const dirtyKey = dirtyKeys.find(k => isPageDirty(k));
+                if (dirtyKey) {
+                    const choice = await showDirtyConfirmDialog();
+                    if (choice === 'cancel') return;
+                    if (choice === 'save') {
+                        await savePage(dirtyKey);
+                        if (isPageDirty(dirtyKey)) return; // save failed, abort
+                    } else if (choice === 'discard') {
+                        await discardPage(dirtyKey);
+                    }
+                }
+            }
+
             document.querySelectorAll('.footer-nav button').forEach(b => b.classList.remove('active'));
             const navBtn = document.querySelector(`.footer-nav button[data-target="${sectionId}"]`);
             if (navBtn) navBtn.classList.add('active');
@@ -1844,6 +2781,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 setTimeout(refreshServoSliderRender, 50);
             }
         }
+
+        window.navigateToSection = navigateToSection;
 
         // ==================== System Notification LEDs ====================
         const NOTIFICATION_GROUP_KEY = 'systemNotificationGroup';
@@ -1985,20 +2924,24 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
         const COLOR_PRESETS_KEY = 'lightGroupColorPresets';
         const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
-        const LIGHT_GROUP_DEFAULT_PATTERN = 'Steady';
+        const LIGHT_GROUP_DEFAULT_PATTERN = 'solid';
         const LIGHT_GROUP_CYCLE_INTERVAL_SECONDS = 30;
-        const LIGHT_GROUP_EXTRA_PATTERNS = ['Steady', 'Double Flash', 'Strobe', 'Breathe', 'Flicker', 'Cycle', 'Cycle Favorites'];
+        const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'blink', 'strobe', 'breathe', 'fade', 'twinkle', 'sparkle', 'flash_sparkle', 'glitter', 'running', 'larson', 'flicker', 'heartbeat', 'alternate'];
+
+        // Phase 5: Lighting profiles are stored on ESP32 LittleFS (slots 0-9)
+        let lightingProfiles = []; // [{index, name}]
+        let activeLightingProfileIndex = 0;
         
         // Predefined light groups (initialized on first load)
         const PREDEFINED_LIGHT_GROUPS = [
-            { name: 'Brake Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
-            { name: 'Emergency/Police Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#0000ff', pattern: 'Whip Sweep', enabled: false, isPredefined: true },
-            { name: 'Hazard Lights', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', enabled: false, isPredefined: true },
-            { name: 'Headlights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
-            { name: 'Reverse Lights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
-            { name: 'Taillights', indices: [], brightness: 128, color: '#ff0000', color2: '#000000', pattern: 'Steady', enabled: false, isPredefined: true },
-            { name: 'Turn Signals Left', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', enabled: false, isPredefined: true },
-            { name: 'Turn Signals Right', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'Fast Flash', enabled: false, isPredefined: true }
+            { name: 'Brake Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#000000', pattern: 'solid', enabled: false, isPredefined: true },
+            { name: 'Emergency/Police Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#0000ff', pattern: 'alternate', enabled: false, isPredefined: true },
+            { name: 'Hazard Lights', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'blink', enabled: false, isPredefined: true },
+            { name: 'Headlights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'solid', enabled: false, isPredefined: true },
+            { name: 'Reverse Lights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'solid', enabled: false, isPredefined: true },
+            { name: 'Taillights', indices: [], brightness: 128, color: '#ff0000', color2: '#000000', pattern: 'solid', enabled: false, isPredefined: true },
+            { name: 'Turn Signals Left', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'blink', enabled: false, isPredefined: true },
+            { name: 'Turn Signals Right', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'blink', enabled: false, isPredefined: true }
         ];
         const DEFAULT_COLOR_PRESETS = [
             '#ff0000', // Red
@@ -2148,6 +3091,146 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             renderLightsHierarchyControls();
         }
 
+        function updateDashboardActiveLightingProfile() {
+            const el = document.getElementById('activeLightingProfileDisplay');
+            if (!el) return;
+            if (!isBleConnected()) {
+                el.textContent = '--';
+                return;
+            }
+            const hit = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
+            el.textContent = hit ? (hit.name || `Profile ${hit.index}`) : '--';
+        }
+
+        function populateLightingProfileSelector() {
+            const select = document.getElementById('lightingProfileSelect');
+            if (!select) return;
+            select.innerHTML = '';
+            lightingProfiles
+                .slice()
+                .sort((a, b) => Number(a.index) - Number(b.index))
+                .forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = String(p.index);
+                    opt.textContent = `${p.index}: ${p.name || 'Unnamed'}`;
+                    if (Number(p.index) === Number(activeLightingProfileIndex)) opt.selected = true;
+                    select.appendChild(opt);
+                });
+            updateDashboardActiveLightingProfile();
+        }
+
+        function hydrateLightGroupsFromActiveProfile(profileData) {
+            if (!profileData) return;
+            const totalLeds = Number(profileData.total_leds || 20);
+            const totalInput = document.getElementById('totalLEDCount');
+            if (totalInput) totalInput.value = totalLeds;
+            localStorage.setItem(TOTAL_LED_COUNT_KEY, String(totalLeds));
+
+            const groups = Array.isArray(profileData.groups) ? profileData.groups : [];
+            lightGroups = groups.map(g => ({
+                name: g.name || `Group ${g.id}`,
+                indices: Array.isArray(g.leds) ? g.leds.map(v => Number(v)).filter(v => Number.isFinite(v) && v >= 0) : [],
+                brightness: Math.round((Number(g.brightness ?? 100) * 255) / 100),
+                color: (g.color_primary || '#ffffff').toLowerCase(),
+                color2: (g.color_secondary || '#000000').toLowerCase(),
+                pattern: (g.effect || 'solid').toLowerCase(),
+                effect_speed: Number(g.effect_speed ?? 50),
+                effect_intensity: Number(g.effect_intensity ?? 100),
+                enabled: !!g.enabled
+            }));
+            setMasterLightsEnabled(!!profileData.master, false);
+            saveLightGroups(false);
+            applyLightsHierarchyToHardware();
+        }
+
+        async function loadLightingProfileFlow(index) {
+            if (!(bleManager && bleManager.supportsKvUpdates)) {
+                toast.warning('Lighting profiles require firmware 2.0.0 or newer');
+                return;
+            }
+            if (!isBleConnected()) {
+                toast.warning('Connect via Bluetooth to load lighting profiles');
+                return;
+            }
+            try {
+                await bleManager.sendSystemCommand('load_lt_profile', { index: Number(index) });
+                const cfg = await bleManager.readConfig();
+                if (cfg.lt_profiles) lightingProfiles = cfg.lt_profiles;
+                activeLightingProfileIndex = Number(cfg.act_lt_prof ?? index ?? 0);
+                if (cfg.active_lt_profile) hydrateLightGroupsFromActiveProfile(cfg.active_lt_profile);
+                populateLightingProfileSelector();
+                toast.success('Lighting profile loaded');
+            } catch (e) {
+                toast.error('Failed to load lighting profile: ' + e.message);
+            }
+        }
+
+        async function saveLightingProfileFlow() {
+            if (!(bleManager && bleManager.supportsKvUpdates)) {
+                toast.warning('Lighting profiles require firmware 2.0.0 or newer');
+                return;
+            }
+            if (!isBleConnected()) {
+                toast.warning('Connect via Bluetooth to save profiles');
+                return;
+            }
+            const name = (prompt('Profile name (max 20 chars):', 'New Lighting Profile') || '').trim().substring(0, 20);
+            if (!name) return;
+            const used = new Set(lightingProfiles.map(p => Number(p.index)));
+            let slot = -1;
+            for (let i = 0; i < 10; i++) { if (!used.has(i)) { slot = i; break; } }
+            if (slot < 0) {
+                const replacementSlot = await showProfileOverwriteDialog(lightingProfiles);
+                if (replacementSlot == null) return;
+                const replacement = lightingProfiles.find(p => Number(p.index) === Number(replacementSlot));
+                const replaceName = replacement ? replacement.name : `slot ${replacementSlot}`;
+                const confirmed = confirm(`Overwrite lighting profile "${replaceName}"?`);
+                if (!confirmed) {
+                    return;
+                }
+                slot = Number(replacementSlot);
+            }
+            try {
+                await bleManager.sendSystemCommand('save_lt_profile', { index: slot, name });
+                const cfg = await bleManager.readConfig();
+                if (cfg.lt_profiles) lightingProfiles = cfg.lt_profiles;
+                activeLightingProfileIndex = Number(cfg.act_lt_prof ?? slot);
+                populateLightingProfileSelector();
+                toast.success(`Saved lighting profile "${name}" to slot ${slot}`);
+            } catch (e) {
+                toast.error('Failed to save lighting profile: ' + e.message);
+            }
+        }
+
+        async function deleteLightingProfileFlow() {
+            if (!(bleManager && bleManager.supportsKvUpdates)) {
+                toast.warning('Lighting profiles require firmware 2.0.0 or newer');
+                return;
+            }
+            if (!isBleConnected()) {
+                toast.warning('Connect via Bluetooth to delete profiles');
+                return;
+            }
+            if (lightingProfiles.length <= 1) {
+                toast.warning('Cannot delete the last remaining profile.');
+                return;
+            }
+            const select = document.getElementById('lightingProfileSelect');
+            const idx = Number(select?.value ?? activeLightingProfileIndex);
+            if (!confirm(`Delete lighting profile slot ${idx}? This cannot be undone.`)) return;
+            try {
+                await bleManager.sendSystemCommand('delete_lt_profile', { index: idx });
+                const cfg = await bleManager.readConfig();
+                if (cfg.lt_profiles) lightingProfiles = cfg.lt_profiles;
+                activeLightingProfileIndex = Number(cfg.act_lt_prof ?? 0);
+                if (cfg.active_lt_profile) hydrateLightGroupsFromActiveProfile(cfg.active_lt_profile);
+                populateLightingProfileSelector();
+                toast.success('Lighting profile deleted');
+            } catch (e) {
+                toast.error('Failed to delete lighting profile: ' + e.message);
+            }
+        }
+
         function saveLightGroups(pushToHardware = true) {
             localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(lightGroups));
             renderLightGroupsList();
@@ -2191,25 +3274,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function getPatternMode(patternName) {
             const value = (patternName || '').toLowerCase();
             if (!value) return 1;
-            if (value.includes('dual color pulse')) return 7;
-            if (value.includes('breathe') || value.includes('pulse')) return 3;
-            if (value.includes('whip sweep') || value.includes('cycle')) return 4;
-            if (value.includes('chase') || value.includes('wig wag')) return 5;
-            if (value.includes('flicker')) return 6;
-            if (value.includes('flash') || value.includes('strobe') || value.includes('beacon') || value.includes('double')) return 2;
-            return 1;
+            if (value === 'blink' || value === 'strobe' || value === 'alternate') return 2;
+            if (value === 'breathe' || value === 'fade' || value === 'heartbeat') return 3;
+            if (value === 'running' || value === 'larson') return 4;
+            if (value === 'twinkle' || value === 'sparkle' || value === 'flash_sparkle' || value === 'glitter') return 5;
+            if (value === 'flicker') return 6;
+            return 1; // solid default
         }
 
         function getPatternBlinkRate(patternName) {
             const value = (patternName || '').toLowerCase();
-            if (value.includes('wig wag') || value.includes('chase')) return 120;
-            if (value.includes('whip sweep') || value.includes('cycle')) return 210;
-            if (value.includes('flicker')) return 90;
-            if (value.includes('dual color pulse') || value.includes('breathe')) return 650;
-            if (value.includes('strobe')) return 120;
-            if (value.includes('fast')) return 180;
-            if (value.includes('double')) return 220;
-            if (value.includes('slow')) return 650;
+            if (value === 'strobe') return 80;
+            if (value === 'blink' || value === 'alternate') return 220;
+            if (value === 'flicker' || value === 'sparkle' || value === 'glitter') return 120;
+            if (value === 'running' || value === 'larson') return 180;
+            if (value === 'breathe' || value === 'fade' || value === 'heartbeat') return 650;
             return 450;
         }
 
@@ -2516,32 +3595,24 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         // Pattern metadata: which patterns need dual colors
         const PATTERN_METADATA = {
-            // Single-color patterns
-            'Steady': { needsDualColor: false },
-            'Double Flash': { needsDualColor: false },
-            'Strobe': { needsDualColor: false },
-            'Breathe': { needsDualColor: false },
-            'Flicker': { needsDualColor: false },
-            'Cycle': { needsDualColor: false },
-            'Cycle Favorites': { needsDualColor: false },
-            // Dual-color patterns
-            'Whip Sweep': { needsDualColor: true },
-            'Dual Beacon': { needsDualColor: true },
-            'Chase': { needsDualColor: true },
-            'Dual Color Pulse': { needsDualColor: true },
-            'Wig Wag': { needsDualColor: true },
-            'Steady Amber': { needsDualColor: false },
-            'Double Pulse': { needsDualColor: false },
-            'Slow Beacon': { needsDualColor: false },
-            'Fast Flash': { needsDualColor: false }
+            solid: { needsDualColor: false },
+            blink: { needsDualColor: true },
+            strobe: { needsDualColor: false },
+            breathe: { needsDualColor: false },
+            fade: { needsDualColor: true },
+            twinkle: { needsDualColor: true },
+            sparkle: { needsDualColor: false },
+            flash_sparkle: { needsDualColor: true },
+            glitter: { needsDualColor: false },
+            running: { needsDualColor: false },
+            larson: { needsDualColor: false },
+            flicker: { needsDualColor: false },
+            heartbeat: { needsDualColor: false },
+            alternate: { needsDualColor: true }
         };
 
         function getLightGroupPatternNames() {
-            return {
-                general: LIGHT_GROUP_EXTRA_PATTERNS.filter(p => p !== 'Cycle').sort(),
-                emergency: [...new Set(PATTERNS.police.map(p => p.name))].sort(),
-                warning: [...new Set([...PATTERNS.construction.map(p => p.name), ...PATTERNS.warning.map(p => p.name)])].filter(p => !PATTERNS.police.find(pp => pp.name === p)).sort()
-            };
+            return [...LIGHT_GROUP_EXTRA_PATTERNS];
         }
 
         function populateLightGroupPatternOptions(selectedPattern = LIGHT_GROUP_DEFAULT_PATTERN) {
@@ -2551,17 +3622,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const patterns = getLightGroupPatternNames();
             patternSelect.innerHTML = '';
 
-            // Consolidate all patterns into single flat list and deduplicate
-            const allPatternsMap = new Map();
-            [...patterns.general, 'Cycle', 'Cycle Favorites', ...patterns.emergency, ...patterns.warning].forEach(p => {
-                if (!allPatternsMap.has(p)) {
-                    allPatternsMap.set(p, p);
-                }
-            });
-            
-            const uniquePatterns = Array.from(allPatternsMap.keys()).sort();
-
-            uniquePatterns.forEach(patternName => {
+            patterns.forEach(patternName => {
                 const option = document.createElement('option');
                 option.value = patternName;
                 // Add asterisk for dual-color patterns
@@ -2614,15 +3675,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (metadata.needsDualColor) {
                 // Ensure we have two distinct colors for dual-color patterns
                 if (currentColor === currentColor2 || currentColor2 === '#000000') {
-                    if (pattern.includes('Police') || pattern.includes('Whip') || pattern.includes('Chase') || pattern.includes('Dual') || pattern.includes('Wig')) {
-                        // Emergency patterns: Red + Blue
-                        currentColor = '#ff0000';
-                        currentColor2 = '#0000ff';
-                    } else {
-                        // Warning patterns: Amber + White
-                        currentColor = '#ffa500';
-                        currentColor2 = '#ffffff';
-                    }
+                    currentColor = '#ff0000';
+                    currentColor2 = '#0000ff';
                 }
             } else {
                 // Single-color patterns - reset secondary color to off
@@ -2765,7 +3819,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'led-grid-button';
-                button.textContent = (i + 1); // Display 1-100 for user
+                button.textContent = String(i); // Zero-based display: LED 0 is first LED
                 
                 // Check if this LED is already selected
                 if (currentSelectedLEDs.has(i)) {
@@ -2833,15 +3887,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     rangeEnd = indices[i];
                 } else {
                     ranges.push(rangeStart === rangeEnd ? 
-                        String(rangeStart + 1) : 
-                        `${rangeStart + 1}-${rangeEnd + 1}`);
+                        String(rangeStart) : 
+                        `${rangeStart}-${rangeEnd}`);
                     rangeStart = indices[i];
                     rangeEnd = indices[i];
                 }
             }
             ranges.push(rangeStart === rangeEnd ? 
-                String(rangeStart + 1) : 
-                `${rangeStart + 1}-${rangeEnd + 1}`);
+                String(rangeStart) : 
+                `${rangeStart}-${rangeEnd}`);
             
             return ranges.join(', ');
         }
@@ -3043,6 +4097,22 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (addBtn) {
                 addBtn.addEventListener('click', addLightGroup);
             }
+
+            const ltSelect = document.getElementById('lightingProfileSelect');
+            const ltLoadBtn = document.getElementById('loadLightingProfileBtn');
+            const ltSaveBtn = document.getElementById('saveLightingProfileBtn');
+            const ltDeleteBtn = document.getElementById('deleteLightingProfileBtn');
+            if (ltLoadBtn && ltSelect) {
+                ltLoadBtn.addEventListener('click', () => loadLightingProfileFlow(Number(ltSelect.value || 0)));
+            }
+            if (ltSelect) {
+                ltSelect.addEventListener('change', () => {
+                    activeLightingProfileIndex = Number(ltSelect.value || 0);
+                    updateDashboardActiveLightingProfile();
+                });
+            }
+            if (ltSaveBtn) ltSaveBtn.addEventListener('click', saveLightingProfileFlow);
+            if (ltDeleteBtn) ltDeleteBtn.addEventListener('click', deleteLightingProfileFlow);
             
             const totalLEDInput = document.getElementById('totalLEDCount');
             if (totalLEDInput) {
@@ -3360,6 +4430,754 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return R * c;
         }
 
+        // ==================== Phase 4: Servo Registry ====================
+
+        const MAX_AUX_SERVOS = 10;
+
+        // Render editable label rows for the 4 reserved servos
+        function renderReservedServoLabels(config) {
+            const container = document.getElementById('reservedServoLabelsList');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const reserved = [
+                { ns: 'srv_fl', label: config?.srv_fl?.label || 'Front Left',  key: RCDCC_KEYS.SERVO_FL_LABEL },
+                { ns: 'srv_fr', label: config?.srv_fr?.label || 'Front Right', key: RCDCC_KEYS.SERVO_FR_LABEL },
+                { ns: 'srv_rl', label: config?.srv_rl?.label || 'Rear Left',   key: RCDCC_KEYS.SERVO_RL_LABEL },
+                { ns: 'srv_rr', label: config?.srv_rr?.label || 'Rear Right',  key: RCDCC_KEYS.SERVO_RR_LABEL },
+            ];
+
+            reserved.forEach(s => {
+                const row = document.createElement('div');
+                row.className = 'd-flex align-items-center gap-2';
+
+                const lbl = document.createElement('label');
+                lbl.className = 'text-muted flex-shrink-0';
+                lbl.style.cssText = 'width:80px;font-size:0.8rem;';
+                lbl.textContent = s.ns;
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.maxLength = 20;
+                input.className = 'form-control form-control-sm flex-grow-1';
+                input.value = s.label;
+                input.disabled = !isBleConnected();
+
+                let saveTimer = null;
+                input.addEventListener('input', () => {
+                    clearTimeout(saveTimer);
+                    saveTimer = setTimeout(async () => {
+                        if (!isBleConnected()) return;
+                        try {
+                            await bleManager.writeValue(s.key, input.value.trim() || s.label);
+                        } catch (e) {
+                            toast.error('Failed to save label: ' + e.message);
+                        }
+                    }, 800);
+                });
+
+                row.appendChild(lbl);
+                row.appendChild(input);
+                container.appendChild(row);
+            });
+        }
+
+        function renderAuxServoRegistry(registry) {
+            const container = document.getElementById('auxServoList');
+            if (!container) return;
+            container.innerHTML = '';
+
+            // Enable/disable Add button
+            const addBtn = document.getElementById('addAuxServoBtn');
+            if (addBtn) {
+                addBtn.disabled = !isBleConnected() || (registry && registry.aux_count >= MAX_AUX_SERVOS);
+            }
+
+            if (!registry || registry.aux_count === 0) {
+                const msg = document.createElement('div');
+                msg.className = 'text-muted text-center py-2';
+                msg.style.fontSize = '0.875rem';
+                msg.textContent = 'No aux servos configured. Tap "Add Servo" to get started.';
+                container.appendChild(msg);
+                return;
+            }
+
+            registry.aux_servos.forEach(aux => {
+                const card = buildAuxServoCard(aux);
+                container.appendChild(card);
+            });
+        }
+
+        function buildAuxServoCard(aux) {
+            const card = document.createElement('div');
+            card.className = 'card mb-0';
+            card.dataset.auxNs = aux.ns;
+
+            // Header
+            const header = document.createElement('div');
+            header.className = 'card-header card-header-dark d-flex justify-content-between align-items-center py-2 px-3';
+            header.innerHTML = `
+                <div class="d-flex align-items-center gap-2">
+                    <span class="material-symbols-outlined icon-danger" style="font-size:1.1rem;">cable</span>
+                    <strong style="font-size:0.9rem;">${escapeHtml(aux.label)}</strong>
+                    <span class="badge" style="background:#333;color:#aaa;font-size:0.7rem;">${escapeHtml(aux.ns)}</span>
+                </div>
+                <button type="button" class="btn btn-link p-0" style="color:#888;" title="Delete servo"
+                        onclick="confirmRemoveAuxServo('${escapeHtml(aux.ns)}')">
+                    <span class="material-symbols-outlined" style="font-size:1.1rem;">delete</span>
+                </button>`;
+
+            // Body
+            const body = document.createElement('div');
+            body.className = 'card-body p-3';
+            body.appendChild(buildAuxServoControls(aux));
+
+            card.appendChild(header);
+            card.appendChild(body);
+            return card;
+        }
+
+        function buildAuxServoControls(aux) {
+            const frag = document.createDocumentFragment();
+            const connected = isBleConnected();
+
+            // Type selector
+            const typeRow = document.createElement('div');
+            typeRow.className = 'mb-3 d-flex align-items-center gap-2';
+            typeRow.innerHTML = `<label class="form-label mb-0 flex-shrink-0" style="width:60px;font-size:0.8rem;">Type</label>`;
+            const typeSelect = document.createElement('select');
+            typeSelect.className = 'form-select form-select-sm flex-grow-1';
+            typeSelect.disabled = !connected;
+            ['positional', 'continuous', 'pan', 'relay'].forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t; opt.textContent = t.charAt(0).toUpperCase() + t.slice(1);
+                if (t === aux.type) opt.selected = true;
+                typeSelect.appendChild(opt);
+            });
+            typeSelect.addEventListener('change', async () => {
+                if (!connected) return;
+                try {
+                    await bleManager.writeValue(auxServoKey(auxNsToSlot(aux.ns), 'type'), typeSelect.value);
+                    // Re-fetch config to get updated controls
+                    const cfg = await bleManager.readConfig();
+                    bleManager.lastKnownSavedState = cfg;
+                    if (cfg.servo_registry) {
+                        servoRegistry = cfg.servo_registry;
+                        renderAuxServoRegistry(servoRegistry);
+                        renderReservedServoLabels(cfg);
+                    }
+                } catch (e) { toast.error('Failed to change type: ' + e.message); }
+            });
+            typeRow.appendChild(typeSelect);
+            frag.appendChild(typeRow);
+
+            // Type-specific controls
+            const t = aux.type;
+
+            if (t === 'positional' || t === 'pan') {
+                frag.appendChild(auxSliderRow(aux.ns, 'trim', 'Trim (µs)', aux.trim ?? 1500, 900, 2100));
+                frag.appendChild(auxSliderRow(aux.ns, 'min',  'Min (µs)',  aux.min  ?? 1000, 900, 2100));
+                frag.appendChild(auxSliderRow(aux.ns, 'max',  'Max (µs)',  aux.max  ?? 2000, 900, 2100));
+                frag.appendChild(auxToggleRow(aux.ns, 'reverse', 'Reverse', aux.reverse));
+            }
+            if (t === 'positional') {
+                frag.appendChild(auxSliderRow(aux.ns, 'ride_ht', 'Ride Ht %', aux.ride_ht ?? 50, 0, 100));
+            }
+            if (t === 'pan') {
+                frag.appendChild(auxSliderRow(aux.ns, 'spd', 'Speed %', aux.spd ?? 50, 0, 100));
+                frag.appendChild(auxDirectionButtons(aux.ns));
+            }
+            if (t === 'continuous') {
+                frag.appendChild(auxSliderRow(aux.ns, 'spd_fwd', 'Fwd Speed %', aux.spd_fwd ?? 50, 0, 100));
+                frag.appendChild(auxSliderRow(aux.ns, 'spd_rev', 'Rev Speed %', aux.spd_rev ?? 50, 0, 100));
+                frag.appendChild(auxToggleRow(aux.ns, 'reverse', 'Invert Dir', aux.reverse));
+                frag.appendChild(auxContinuousButtons(aux.ns));
+            }
+            if (t === 'relay') {
+                const isMomentary = aux.momentary === 1;
+                frag.appendChild(auxRelayTypeRow(aux.ns, isMomentary));
+                frag.appendChild(auxRelayControl(aux.ns, aux.state, isMomentary));
+            }
+
+            return frag;
+        }
+
+        function auxNsToSlot(ns) {
+            // "srv_aux_04" → 4
+            const m = ns.match(/srv_aux_(\d+)/);
+            return m ? parseInt(m[1]) : 0;
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function auxSliderRow(ns, key, label, currentVal, min, max) {
+            const slot = auxNsToSlot(ns);
+            const id = `aux-${ns.replace('_','')}-${key}`;
+            const row = document.createElement('div');
+            row.className = 'mb-2';
+            row.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small class="text-muted">${label}</small>
+                    <span id="${id}-val" style="font-size:0.75rem;color:#c8a800;">${currentVal}</span>
+                </div>
+                <input type="range" class="form-range" id="${id}" min="${min}" max="${max}" value="${currentVal}"
+                       ${isBleConnected() ? '' : 'disabled'}>`;
+            const rangeEl = row.querySelector(`#${id}`);
+            const valEl   = row.querySelector(`#${id}-val`);
+            let debounce = null;
+            rangeEl.addEventListener('input', () => {
+                valEl.textContent = rangeEl.value;
+                clearTimeout(debounce);
+                debounce = setTimeout(async () => {
+                    if (!isBleConnected()) return;
+                    try { await bleManager.writeValue(auxServoKey(slot, key), parseInt(rangeEl.value)); }
+                    catch (e) { toast.error('Save failed: ' + e.message); }
+                }, 400);
+            });
+            return row;
+        }
+
+        function auxToggleRow(ns, key, label, currentVal) {
+            const slot = auxNsToSlot(ns);
+            const id = `aux-${ns}-${key}-toggle`;
+            const row = document.createElement('div');
+            row.className = 'mb-2 d-flex justify-content-between align-items-center';
+            row.innerHTML = `
+                <small class="text-muted">${label}</small>
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" id="${id}" ${currentVal ? 'checked' : ''} ${isBleConnected() ? '' : 'disabled'}>
+                </div>`;
+            row.querySelector(`#${id}`).addEventListener('change', async function () {
+                if (!isBleConnected()) return;
+                try { await bleManager.writeValue(auxServoKey(slot, key), this.checked ? 1 : 0); }
+                catch (e) { toast.error('Save failed: ' + e.message); }
+            });
+            return row;
+        }
+
+        function auxContinuousButtons(ns) {
+            const div = document.createElement('div');
+            div.className = 'd-flex gap-2 mt-2';
+
+            const makeBtn = (label, icon, speedFn) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-sm btn-gold flex-fill';
+                btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">${icon}</span> ${label}`;
+                const sendSpeed = async (spd) => {
+                    if (!isBleConnected()) return;
+                    try { await bleManager.sendSystemCommand('aux_run', { namespace: ns, speed: spd }); }
+                    catch (e) { /* silent */ }
+                };
+                btn.addEventListener('pointerdown', () => sendSpeed(speedFn()));
+                btn.addEventListener('pointerup',   () => sendSpeed(0));
+                btn.addEventListener('pointerleave',() => sendSpeed(0));
+                return btn;
+            };
+
+            // Read current aux from registry for speed values
+            const getAux = () => servoRegistry?.aux_servos?.find(a => a.ns === ns);
+            div.appendChild(makeBtn('Fwd',  'arrow_forward', () =>  (getAux()?.spd_fwd ?? 50)));
+            div.appendChild(makeBtn('Stop', 'stop',          () =>  0));
+            div.appendChild(makeBtn('Rev',  'arrow_back',    () => -(getAux()?.spd_rev ?? 50)));
+            return div;
+        }
+
+        function auxDirectionButtons(ns) {
+            const div = document.createElement('div');
+            div.className = 'd-flex gap-2 mt-2';
+            const aux = servoRegistry?.aux_servos?.find(a => a.ns === ns) || {};
+            const center = aux.trim ?? 1500;
+            const minUs  = aux.min  ?? 1000;
+            const maxUs  = aux.max  ?? 2000;
+            const slot   = auxNsToSlot(ns);
+
+            const makeBtn = (icon, val) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-sm btn-gold flex-fill';
+                btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">${icon}</span>`;
+                btn.addEventListener('click', async () => {
+                    if (!isBleConnected()) return;
+                    try { await bleManager.writeValue(auxServoKey(slot, 'trim'), val); }
+                    catch (e) { toast.error('Failed: ' + e.message); }
+                });
+                return btn;
+            };
+
+            div.appendChild(makeBtn('chevron_left', minUs));
+            div.appendChild(makeBtn('home',         center));
+            div.appendChild(makeBtn('chevron_right', maxUs));
+            return div;
+        }
+
+        function auxRelayTypeRow(ns, isMomentary) {
+            const slot = auxNsToSlot(ns);
+            const id = `aux-${ns}-momentary`;
+            const row = document.createElement('div');
+            row.className = 'mb-2 d-flex justify-content-between align-items-center';
+            row.innerHTML = `
+                <small class="text-muted">Momentary (hold to activate)</small>
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" id="${id}" ${isMomentary ? 'checked' : ''} ${isBleConnected() ? '' : 'disabled'}>
+                </div>`;
+            row.querySelector(`#${id}`).addEventListener('change', async function () {
+                if (!isBleConnected()) return;
+                try {
+                    await bleManager.writeValue(auxServoKey(slot, 'momentary'), this.checked ? 1 : 0);
+                    // Re-render relay control area
+                    const cfg = await bleManager.readConfig();
+                    if (cfg.servo_registry) {
+                        servoRegistry = cfg.servo_registry;
+                        renderAuxServoRegistry(servoRegistry);
+                    }
+                } catch (e) { toast.error('Save failed: ' + e.message); }
+            });
+            return row;
+        }
+
+        function auxRelayControl(ns, currentState, isMomentary) {
+            const div = document.createElement('div');
+            div.className = 'mt-2';
+
+            if (isMomentary) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-gold w-100';
+                btn.style.cssText = 'font-size:1rem;padding:14px;';
+                btn.textContent = 'Hold to Activate';
+                btn.disabled = !isBleConnected();
+                const send = async (v) => {
+                    if (!isBleConnected()) return;
+                    try { await bleManager.sendSystemCommand('aux_relay', { namespace: ns, state: v }); }
+                    catch (e) { /* silent */ }
+                };
+                btn.addEventListener('pointerdown', () => send(1));
+                btn.addEventListener('pointerup',   () => send(0));
+                btn.addEventListener('pointerleave',() => send(0));
+                div.appendChild(btn);
+            } else {
+                const slot = auxNsToSlot(ns);
+                const isOn = currentState === 1;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `btn w-100 ${isOn ? 'btn-danger' : 'btn-secondary'}`;
+                btn.style.cssText = 'font-size:1rem;padding:14px;';
+                btn.innerHTML = `<span class="material-symbols-outlined" style="vertical-align:middle;">${isOn ? 'power' : 'power_off'}</span> ${isOn ? 'ON — Tap to turn OFF' : 'OFF — Tap to turn ON'}`;
+                btn.disabled = !isBleConnected();
+                btn.addEventListener('click', async () => {
+                    if (!isBleConnected()) return;
+                    const newState = isOn ? 0 : 1;
+                    try {
+                        await bleManager.writeValue(auxServoKey(slot, 'state'), newState);
+                        const cfg = await bleManager.readConfig();
+                        if (cfg.servo_registry) {
+                            servoRegistry = cfg.servo_registry;
+                            renderAuxServoRegistry(servoRegistry);
+                        }
+                    } catch (e) { toast.error('Failed: ' + e.message); }
+                });
+                div.appendChild(btn);
+            }
+            return div;
+        }
+
+        async function addAuxServoFlow() {
+            if (!isBleConnected()) { toast.warning('Connect via Bluetooth to add aux servos'); return; }
+            if (servoRegistry && servoRegistry.aux_count >= MAX_AUX_SERVOS) {
+                toast.error('Maximum of 10 aux servos reached.');
+                return;
+            }
+
+            // Step 1: get label + type via dialog
+            const result = await showAddAuxServoDialog();
+            if (!result) return;
+
+            try {
+                await bleManager.sendSystemCommand('add_aux_servo', {
+                    type:  result.type,
+                    label: result.label
+                });
+                // Re-fetch config to get the new servo in the registry
+                const cfg = await bleManager.readConfig();
+                bleManager.lastKnownSavedState = cfg;
+                if (cfg.servo_registry) {
+                    servoRegistry = cfg.servo_registry;
+                    renderAuxServoRegistry(servoRegistry);
+                }
+                toast.success(`Aux servo "${result.label}" added`);
+            } catch (e) {
+                toast.error('Failed to add aux servo: ' + e.message);
+            }
+        }
+
+        function showAddAuxServoDialog() {
+            return new Promise(resolve => {
+                const existing = document.getElementById('add-aux-overlay');
+                if (existing) existing.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'add-aux-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                overlay.innerHTML = `
+                  <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+                    <h5 style="margin:0 0 16px;">Add Aux Servo</h5>
+                    <div class="mb-3">
+                      <label style="font-size:0.875rem;color:#aaa;display:block;margin-bottom:6px;">Label (max 20 chars)</label>
+                      <input id="aas-label" type="text" maxlength="20" placeholder="e.g. Winch"
+                             style="width:100%;padding:10px;border-radius:8px;border:1px solid #555;background:#2a2a2a;color:#fff;box-sizing:border-box;">
+                    </div>
+                    <div class="mb-4">
+                      <label style="font-size:0.875rem;color:#aaa;display:block;margin-bottom:6px;">Type</label>
+                      <select id="aas-type" style="width:100%;padding:10px;border-radius:8px;border:1px solid #555;background:#2a2a2a;color:#fff;box-sizing:border-box;">
+                        <option value="positional">Positional (angle & hold)</option>
+                        <option value="continuous">Continuous (motor / winch)</option>
+                        <option value="pan">Pan (camera / arm)</option>
+                        <option value="relay">Relay (digital on/off)</option>
+                      </select>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                      <button id="aas-add"    style="flex:1;padding:10px;border:none;border-radius:8px;background:#c8a800;color:#000;font-weight:600;cursor:pointer;">Add</button>
+                      <button id="aas-cancel" style="flex:1;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
+                    </div>
+                  </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelector('#aas-add').onclick = () => {
+                    const label = overlay.querySelector('#aas-label').value.trim().substring(0, 20);
+                    const type  = overlay.querySelector('#aas-type').value;
+                    overlay.remove();
+                    resolve({ label: label || 'Aux Servo', type });
+                };
+                overlay.querySelector('#aas-cancel').onclick = () => { overlay.remove(); resolve(null); };
+                overlay.querySelector('#aas-label').addEventListener('keydown', e => {
+                    if (e.key === 'Enter') overlay.querySelector('#aas-add').click();
+                    if (e.key === 'Escape') overlay.querySelector('#aas-cancel').click();
+                });
+                overlay.querySelector('#aas-label').focus();
+            });
+        }
+
+        async function confirmRemoveAuxServo(ns) {
+            if (!isBleConnected()) { toast.warning('Connect via Bluetooth to remove aux servos'); return; }
+            const aux = servoRegistry?.aux_servos?.find(a => a.ns === ns);
+            const name = aux ? aux.label : ns;
+
+            const confirmed = await new Promise(resolve => {
+                const existing = document.getElementById('remove-aux-overlay');
+                if (existing) existing.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'remove-aux-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                overlay.innerHTML = `
+                  <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+                    <h5 style="margin:0 0 12px;">Remove Aux Servo</h5>
+                    <p style="color:#aaa;font-size:0.9rem;margin:0 0 20px;">Remove <strong style="color:#fff;">${escapeHtml(name)}</strong> (${escapeHtml(ns)})?<br>This cannot be undone.</p>
+                    <div style="display:flex;gap:8px;">
+                      <button id="ra-confirm" style="flex:1;padding:10px;border:none;border-radius:8px;background:#c0392b;color:#fff;font-weight:600;cursor:pointer;">Remove</button>
+                      <button id="ra-cancel"  style="flex:1;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
+                    </div>
+                  </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelector('#ra-confirm').onclick = () => { overlay.remove(); resolve(true); };
+                overlay.querySelector('#ra-cancel').onclick  = () => { overlay.remove(); resolve(false); };
+            });
+
+            if (!confirmed) return;
+
+            try {
+                await bleManager.sendSystemCommand('remove_aux_servo', { namespace: ns });
+                const cfg = await bleManager.readConfig();
+                bleManager.lastKnownSavedState = cfg;
+                if (cfg.servo_registry) {
+                    servoRegistry = cfg.servo_registry;
+                    renderAuxServoRegistry(servoRegistry);
+                }
+                toast.success('Aux servo removed');
+            } catch (e) {
+                toast.error('Failed to remove aux servo: ' + e.message);
+            }
+        }
+
+        // Expose for HTML onclick
+        window.addAuxServoFlow        = addAuxServoFlow;
+        window.confirmRemoveAuxServo  = confirmRemoveAuxServo;
+
+        // ==================== Phase 3: Driving Profiles ====================
+
+        function updateDashboardActiveProfile() {
+            const el = document.getElementById('activeDrivingProfileDisplay');
+            if (!el) return;
+            if (!isBleConnected()) {
+                el.textContent = '--';
+                return;
+            }
+            const p = drivingProfiles.find(x => x.index === activeDrivingProfileIndex);
+            el.textContent = p ? p.name : '--';
+        }
+
+        function populateDrivingProfileSelector(profiles, activeIndex) {
+            const container = document.getElementById('drvProfileList');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const kvReady = !!(bleManager && bleManager.supportsKvUpdates);
+            if (!kvReady) {
+                const msg = document.createElement('div');
+                msg.className = 'text-muted text-center py-2';
+                msg.style.fontSize = '0.875rem';
+                msg.textContent = 'Driving profiles require firmware 2.0.0 or newer';
+                container.appendChild(msg);
+                const saveBtnLegacy = document.getElementById('saveNewProfileBtn');
+                if (saveBtnLegacy) saveBtnLegacy.disabled = true;
+                return;
+            }
+
+            if (!profiles || profiles.length === 0) {
+                const msg = document.createElement('div');
+                msg.className = 'text-muted text-center py-2';
+                msg.style.fontSize = '0.875rem';
+                msg.textContent = 'No profiles saved yet';
+                container.appendChild(msg);
+                return;
+            }
+
+            profiles.forEach(p => {
+                const row = document.createElement('div');
+                row.className = 'drv-profile-item d-flex align-items-center justify-content-between px-2 py-1';
+                row.dataset.profileIndex = p.index;
+                if (p.index === activeIndex) {
+                    row.style.cssText = 'background:rgba(200,168,0,0.15);border-radius:6px;border:1px solid #c8a800;';
+                }
+
+                const nameBtn = document.createElement('button');
+                nameBtn.type = 'button';
+                nameBtn.className = 'btn btn-link p-0 text-start text-decoration-none flex-grow-1';
+                nameBtn.style.cssText = 'color:' + (p.index === activeIndex ? '#c8a800' : '#fff') + ';font-size:0.9rem;';
+                nameBtn.textContent = p.name;
+                nameBtn.addEventListener('click', () => selectDrivingProfile(p.index));
+
+                const delBtn = document.createElement('button');
+                delBtn.type = 'button';
+                delBtn.className = 'btn btn-link p-0 ms-2';
+                delBtn.style.cssText = 'color:#888;font-size:1rem;';
+                delBtn.title = 'Delete profile';
+                delBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem;vertical-align:middle;">delete</span>';
+                delBtn.addEventListener('click', () => confirmDeleteDrivingProfile(p.index));
+
+                row.appendChild(nameBtn);
+                row.appendChild(delBtn);
+                container.appendChild(row);
+            });
+
+            // Enable/disable "Save as New" button
+            const saveBtn = document.getElementById('saveNewProfileBtn');
+            if (saveBtn) saveBtn.disabled = !isBleConnected();
+        }
+
+        async function selectDrivingProfile(index) {
+            if (!(bleManager && bleManager.supportsKvUpdates)) {
+                toast.warning('Driving profiles require firmware 2.0.0 or newer');
+                return;
+            }
+            if (!isBleConnected()) {
+                toast.warning('Connect via Bluetooth to switch profiles');
+                return;
+            }
+            try {
+                await bleManager.sendSystemCommand('load_drv_profile', { index });
+                activeDrivingProfileIndex = index;
+                // Re-fetch config from device so all UI reflects the loaded profile
+                const config = await bleManager.readConfig();
+                bleManager.lastKnownSavedState = config;
+                isLoadingTuningConfig = true;
+                updateTuningSliders(config);
+                updateServoSliders(config);
+                isLoadingTuningConfig = false;
+                clearPageDirty('tuning');
+                clearPageDirty('servo');
+                clearPageDirty('system');
+                populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+                updateDashboardActiveProfile();
+                toast.success('Profile loaded');
+            } catch (e) {
+                toast.error('Failed to load profile: ' + e.message);
+            }
+        }
+
+        function showProfileNameDialog(existingName = '') {
+            return new Promise(resolve => {
+                const existing = document.getElementById('profile-name-overlay');
+                if (existing) existing.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'profile-name-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                overlay.innerHTML = `
+                  <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+                    <h5 style="margin:0 0 12px;color:#fff;">Save Driving Profile</h5>
+                    <p style="margin:0 0 12px;color:#aaa;font-size:0.875rem;">Enter a name for this profile (max 20 characters).</p>
+                    <input id="pnd-name" type="text" maxlength="20" placeholder="e.g. Rock Crawl"
+                           style="width:100%;padding:10px;border-radius:8px;border:1px solid #555;background:#2a2a2a;color:#fff;margin-bottom:16px;box-sizing:border-box;"
+                           value="${existingName.replace(/"/g, '&quot;')}">
+                    <div style="display:flex;gap:8px;">
+                      <button id="pnd-save"   style="flex:1;padding:10px;border:none;border-radius:8px;background:#c8a800;color:#000;font-weight:600;cursor:pointer;">Save</button>
+                      <button id="pnd-cancel" style="flex:1;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
+                    </div>
+                  </div>`;
+                document.body.appendChild(overlay);
+                const input = overlay.querySelector('#pnd-name');
+                input.focus();
+                const doSave = () => {
+                    const name = input.value.trim().substring(0, 20);
+                    overlay.remove();
+                    resolve(name || null);
+                };
+                overlay.querySelector('#pnd-save').onclick = doSave;
+                overlay.querySelector('#pnd-cancel').onclick = () => { overlay.remove(); resolve(null); };
+                input.addEventListener('keydown', e => { if (e.key === 'Enter') doSave(); if (e.key === 'Escape') { overlay.remove(); resolve(null); } });
+            });
+        }
+
+        function showProfileOverwriteDialog(profiles) {
+            return new Promise(resolve => {
+                const existing = document.getElementById('profile-overwrite-overlay');
+                if (existing) existing.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'profile-overwrite-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+                let listHtml = profiles.map(p =>
+                    `<button class="po-slot" data-idx="${p.index}" style="display:block;width:100%;text-align:left;padding:10px 12px;margin-bottom:6px;border:1px solid #444;border-radius:8px;background:#2a2a2a;color:#fff;cursor:pointer;">
+                       <strong>${p.name}</strong> <span style="color:#888;font-size:0.8rem;">(slot ${p.index})</span>
+                     </button>`
+                ).join('');
+
+                overlay.innerHTML = `
+                  <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:360px;width:100%;color:#fff;max-height:80vh;overflow-y:auto;">
+                    <h5 style="margin:0 0 8px;color:#fff;">All Profile Slots Full</h5>
+                    <p style="margin:0 0 16px;color:#aaa;font-size:0.875rem;">Choose an existing profile to overwrite:</p>
+                    ${listHtml}
+                    <button id="po-cancel" style="width:100%;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;margin-top:4px;">Cancel</button>
+                  </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelectorAll('.po-slot').forEach(btn => {
+                    btn.onclick = () => { overlay.remove(); resolve(parseInt(btn.dataset.idx)); };
+                });
+                overlay.querySelector('#po-cancel').onclick = () => { overlay.remove(); resolve(null); };
+            });
+        }
+
+        async function saveAsNewDrivingProfile() {
+            if (!(bleManager && bleManager.supportsKvUpdates)) {
+                toast.warning('Driving profiles require firmware 2.0.0 or newer');
+                return;
+            }
+            if (!isBleConnected()) {
+                toast.warning('Connect via Bluetooth to save profiles');
+                return;
+            }
+
+            let targetSlot;
+            let profileName;
+
+            if (drivingProfiles.length >= MAX_DRIVING_PROFILES) {
+                // All 10 slots full — ask user to pick one to overwrite
+                targetSlot = await showProfileOverwriteDialog(drivingProfiles);
+                if (targetSlot == null) return;
+                const existing = drivingProfiles.find(p => p.index === targetSlot);
+                profileName = await showProfileNameDialog(existing ? existing.name : '');
+            } else {
+                profileName = await showProfileNameDialog();
+                if (!profileName) return;
+                // Find next free slot
+                const usedSlots = new Set(drivingProfiles.map(p => p.index));
+                targetSlot = 0;
+                while (usedSlots.has(targetSlot) && targetSlot < MAX_DRIVING_PROFILES) targetSlot++;
+            }
+
+            if (!profileName) return;
+
+            try {
+                await bleManager.sendSystemCommand('save_drv_profile', { index: targetSlot, name: profileName });
+                activeDrivingProfileIndex = targetSlot;
+                // Update local profiles list
+                const existingIdx = drivingProfiles.findIndex(p => p.index === targetSlot);
+                if (existingIdx >= 0) {
+                    drivingProfiles[existingIdx].name = profileName;
+                } else {
+                    drivingProfiles.push({ index: targetSlot, name: profileName });
+                    drivingProfiles.sort((a, b) => a.index - b.index);
+                }
+                populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+                updateDashboardActiveProfile();
+                toast.success('Profile "' + profileName + '" saved');
+            } catch (e) {
+                toast.error('Failed to save profile: ' + e.message);
+            }
+        }
+
+        async function confirmDeleteDrivingProfile(index) {
+            if (!(bleManager && bleManager.supportsKvUpdates)) {
+                toast.warning('Driving profiles require firmware 2.0.0 or newer');
+                return;
+            }
+            const profile = drivingProfiles.find(p => p.index === index);
+            if (!profile) return;
+
+            if (drivingProfiles.length <= 1) {
+                toast.warning('Cannot delete the last remaining profile.');
+                return;
+            }
+
+            if (!isBleConnected()) {
+                toast.warning('Connect via Bluetooth to delete profiles');
+                return;
+            }
+
+            // Confirm dialog
+            const confirmed = await new Promise(resolve => {
+                const existing = document.getElementById('profile-delete-overlay');
+                if (existing) existing.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'profile-delete-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                overlay.innerHTML = `
+                  <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+                    <h5 style="margin:0 0 12px;color:#fff;">Delete Profile</h5>
+                    <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">Delete profile <strong style="color:#fff;">${profile.name.replace(/</g, '&lt;')}</strong>?<br>This cannot be undone.</p>
+                    <div style="display:flex;gap:8px;">
+                      <button id="pd-delete" style="flex:1;padding:10px;border:none;border-radius:8px;background:#c0392b;color:#fff;font-weight:600;cursor:pointer;">Delete</button>
+                      <button id="pd-cancel" style="flex:1;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
+                    </div>
+                  </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelector('#pd-delete').onclick = () => { overlay.remove(); resolve(true); };
+                overlay.querySelector('#pd-cancel').onclick = () => { overlay.remove(); resolve(false); };
+            });
+
+            if (!confirmed) return;
+
+            try {
+                await bleManager.sendSystemCommand('delete_drv_profile', { index });
+                drivingProfiles = drivingProfiles.filter(p => p.index !== index);
+                if (activeDrivingProfileIndex === index && drivingProfiles.length > 0) {
+                    activeDrivingProfileIndex = drivingProfiles[0].index;
+                }
+                populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+                updateDashboardActiveProfile();
+                toast.success('Profile deleted');
+            } catch (e) {
+                toast.error('Failed to delete profile: ' + e.message);
+            }
+        }
+
+        // Expose profile functions for HTML onclick / dev console
+        window.selectDrivingProfile   = selectDrivingProfile;
+        window.saveAsNewDrivingProfile = saveAsNewDrivingProfile;
+        window.confirmDeleteDrivingProfile = confirmDeleteDrivingProfile;
+
+        const MAX_DRIVING_PROFILES = 10;
+
         // ==================== Config Fetching ====================
         let hasShownInitialConfigToast = false;
 
@@ -3379,6 +5197,35 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
                 // Update servo sliders from config data
                 updateServoSliders(data);
+
+                // Phase 3: Update driving profile selector
+                if (Array.isArray(data.drv_profiles)) {
+                    drivingProfiles = data.drv_profiles;
+                    activeDrivingProfileIndex = (data.act_drv_prof != null) ? data.act_drv_prof : 0;
+                    populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+                    updateDashboardActiveProfile();
+                }
+
+                // Phase 4: Update servo registry
+                if (data.servo_registry) {
+                    servoRegistry = data.servo_registry;
+                    renderReservedServoLabels(data);
+                    renderAuxServoRegistry(servoRegistry);
+                    const addBtn = document.getElementById('addAuxServoBtn');
+                    if (addBtn) addBtn.disabled = (servoRegistry.aux_count >= MAX_AUX_SERVOS) || !isBleConnected();
+                }
+
+                // Phase 5: Lighting profile list + active profile hydration
+                if (Array.isArray(data.lt_profiles)) {
+                    lightingProfiles = data.lt_profiles;
+                }
+                if (data.act_lt_prof != null) {
+                    activeLightingProfileIndex = Number(data.act_lt_prof);
+                }
+                if (data.active_lt_profile) {
+                    hydrateLightGroupsFromActiveProfile(data.active_lt_profile);
+                }
+                populateLightingProfileSelector();
 
                 if (data.warnings && data.warnings.servoTrimReset) {
                     const warningMessage = data.warnings.message
@@ -3411,13 +5258,45 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (showToast) {
                     toast.warning('Connect via Bluetooth LE to load configuration');
                 }
+                // Keep cards usable while disconnected: only the initial load should be masked.
+                finishInitialCardLoading('ble-not-connected');
                 return;
             }
 
             try {
                 communicationMode = 'ble';
+                const previousSavedState = bleManager?.lastKnownSavedState
+                    ? JSON.parse(JSON.stringify(bleManager.lastKnownSavedState))
+                    : null;
                 const bleData = await bleManager.readConfig();
-                applyLoadedConfig(bleData);
+                let shouldClearDirtyOnSuccess = true;
+
+                const dirtyAndDifferent = hasAnyDirtyPages()
+                    && previousSavedState
+                    && !configsEqual(bleData, previousSavedState);
+
+                if (dirtyAndDifferent) {
+                    const shouldReapply = confirm('The truck rebooted. Re-apply unsaved changes?');
+                    if (shouldReapply) {
+                        await reapplyDirtyPagesToDevice();
+                        const refreshed = await bleManager.readConfig();
+                        applyLoadedConfig(refreshed);
+                        bleManager.lastKnownSavedState = refreshed;
+                        shouldClearDirtyOnSuccess = false;
+                    } else {
+                        applyLoadedConfig(bleData);
+                        clearAllDirtyPages();
+                        bleManager.lastKnownSavedState = bleData;
+                    }
+                } else {
+                    applyLoadedConfig(bleData);
+                    bleManager.lastKnownSavedState = bleData;
+                }
+                if (shouldClearDirtyOnSuccess) {
+                    clearAllDirtyPages();
+                }
+                applyFeatureAvailabilityGate();
+                updateDashboardVehicleName(getGarageVehicleNameById(bleManager?.deviceId));
             } catch (error) {
                 console.error('Failed to fetch config:', error);
                 const configData = document.getElementById('configData');
@@ -3666,6 +5545,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (thumb) thumb.textContent = decimals > 0 ? value.toFixed(decimals) : Math.round(value);
             }
 
+            // Phase 2: helper to emit a single KV write for a tuning param (v2+) or fall back to legacy save
+            function tuningKvWrite(key, value, sliderName, legacyVal) {
+                const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                if (canUseKv) {
+                    bleManager.writeValue(key, value).catch(e => console.error('KV write failed (' + sliderName + '):', e));
+                } else {
+                    saveTuningSliderValue(sliderName, legacyVal);
+                }
+            }
+
             // Initialize Ride Height - Horizontal slider (0-100%)
             let rideHeightElement = document.querySelector('#sliderRideHeight');
             const rideHeightInstance = rangeSlider(rideHeightElement, {
@@ -3679,12 +5568,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const val = Math.round(value[1]);
                     tuningSliderValues.rideHeightOffset = val;
                     updateTuningThumbLabel('sliderRideHeight', val, 0);
-                    
                     if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
                         clearTimeout(tuningSliderSaveTimers.rideHeight);
                         tuningSliderSaveTimers.rideHeight = setTimeout(() => {
-                            saveTuningSliderValue('rideHeight', tuningSliderValues.rideHeightOffset);
-                        }, 800);
+                            const k = window.RCDCC_KEYS;
+                            const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                            if (canUseKv) {
+                                bleManager.writeValue(k.SERVO_FL_RIDE_HT, val).catch(e => console.error('KV write rideHeight FL:', e));
+                                bleManager.writeValue(k.SERVO_FR_RIDE_HT, val).catch(e => console.error('KV write rideHeight FR:', e));
+                                bleManager.writeValue(k.SERVO_RL_RIDE_HT, val).catch(e => console.error('KV write rideHeight RL:', e));
+                                bleManager.writeValue(k.SERVO_RR_RIDE_HT, val).catch(e => console.error('KV write rideHeight RR:', e));
+                            } else {
+                                saveTuningSliderValue('rideHeight', tuningSliderValues.rideHeightOffset);
+                            }
+                        }, 175);
                     }
                 }
             });
@@ -3701,17 +5599,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
-                    console.log('🎚️ dampingInstance.onInput fired - value:', value, 'userInteraction:', userInteraction);
                     tuningSliderValues.damping = value[1];
                     updateTuningThumbLabel('sliderDamping', value[1], 1);
-                    
-                    // Save on user interaction (but not during config load)
                     if (!isLoadingTuningConfig) {
-                        console.log('Damping input - scheduling save:', value[1]);
+                        markPageDirty('tuning');
                         clearTimeout(tuningSliderSaveTimers.damping);
                         tuningSliderSaveTimers.damping = setTimeout(() => {
-                            saveTuningSliderValue('damping', tuningSliderValues.damping);
-                        }, 800);
+                            tuningKvWrite(window.RCDCC_KEYS.SUSPENSION_DAMPING, Math.round((tuningSliderValues.damping || 0) * 100), 'damping', tuningSliderValues.damping);
+                        }, 175);
                     }
                 }
             });
@@ -3730,12 +5625,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.stiffness = value[1];
                     updateTuningThumbLabel('sliderStiffness', value[1], 1);
-                    
                     if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
                         clearTimeout(tuningSliderSaveTimers.stiffness);
                         tuningSliderSaveTimers.stiffness = setTimeout(() => {
-                            saveTuningSliderValue('stiffness', tuningSliderValues.stiffness);
-                        }, 800);
+                            tuningKvWrite(window.RCDCC_KEYS.SUSPENSION_STIFFNESS, Math.round((tuningSliderValues.stiffness || 0) * 50), 'stiffness', tuningSliderValues.stiffness);
+                        }, 175);
                     }
                 }
             });
@@ -3754,12 +5649,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.reactionSpeed = value[1];
                     updateTuningThumbLabel('sliderReactionSpeed', value[1], 1);
-                    
                     if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
                         clearTimeout(tuningSliderSaveTimers.reactionSpeed);
                         tuningSliderSaveTimers.reactionSpeed = setTimeout(() => {
-                            saveTuningSliderValue('reactionSpeed', tuningSliderValues.reactionSpeed);
-                        }, 800);
+                            tuningKvWrite(window.RCDCC_KEYS.SUSPENSION_REACT_SPD, Math.round((tuningSliderValues.reactionSpeed || 0) * 50), 'reactionSpeed', tuningSliderValues.reactionSpeed);
+                        }, 175);
                     }
                 }
             });
@@ -3778,12 +5673,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.frontRearBalance = Math.round(value[1]);
                     updateTuningThumbLabel('sliderBalance', tuningSliderValues.frontRearBalance, 0);
-                    
                     if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
                         clearTimeout(tuningSliderSaveTimers.balance);
                         tuningSliderSaveTimers.balance = setTimeout(() => {
-                            saveTuningSliderValue('balance', tuningSliderValues.frontRearBalance);
-                        }, 800);
+                            const mapped = Math.round(((tuningSliderValues.frontRearBalance || 0) / 100) * 200 - 100);
+                            tuningKvWrite(window.RCDCC_KEYS.SUSPENSION_FR_BAL, mapped, 'balance', tuningSliderValues.frontRearBalance);
+                        }, 175);
                     }
                 }
             });
@@ -3791,6 +5687,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             updateTuningThumbLabel('sliderBalance', 50, 0);
 
             // Initialize Sensor Refresh Rate - Horizontal slider (5-50 Hz)
+            // Note: sampleRate has no RCDCC_KEY; always uses legacy path on connected devices.
             let sensorElement = document.querySelector('#sliderSensorRate');
             const sensorInstance = rangeSlider(sensorElement, {
                 value: [5, 25],
@@ -3802,12 +5699,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.sampleRate = Math.round(value[1]);
                     updateTuningThumbLabel('sliderSensorRate', tuningSliderValues.sampleRate, 0);
-                    
                     if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
                         clearTimeout(tuningSliderSaveTimers.sensorRate);
                         tuningSliderSaveTimers.sensorRate = setTimeout(() => {
                             saveTuningSliderValue('sensorRate', tuningSliderValues.sampleRate);
-                        }, 800);
+                        }, 175);
                     }
                 }
             });
@@ -3868,6 +5765,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (thumb) thumb.textContent = Math.round(value);
             }
 
+            // Degree → microsecond conversions (matching pushConfigPayload Phase 1 logic)
+            const degToUs     = (d) => 1000 + Math.round((Number(d) || 0) / 180 * 1000);
+            const trimDegToUs = (d) => 1500 + Math.round((Number(d) || 0) * (1000 / 180));
+
+            // Phase 2: KV write helper for servo params with firmware gate
+            function servoKvWrite(kvKey, kvValue, legacyServoName, legacyParam, legacyValue) {
+                const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                if (canUseKv) {
+                    markPageDirty('servo');
+                    bleManager.writeValue(kvKey, kvValue).catch(e => console.error('KV write servo failed:', e));
+                } else {
+                    saveServoParameter(legacyServoName, legacyParam, legacyValue);
+                }
+            }
+
             // Servo PWM units: 0-180 degrees (standard servo range)
             // Safe defaults: min=10, max=170 to prevent mechanical damage
             const defaultMin = 10;
@@ -3883,23 +5795,27 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     step: 2,
                     onInput: function(value) {
                         updateThumbLabels('sliderFrontLeft', value);
-                        
-                        // Save with 800ms debounce - only save values that changed
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
                             clearTimeout(servoSliderSaveTimers.frontLeft.range);
                             servoSliderSaveTimers.frontLeft.range = setTimeout(() => {
                                 const lastValue = servoSliderInstances.frontLeft.lastRangeValue;
                                 if (value[0] !== lastValue[0] || value[1] !== lastValue[1]) {
-                                    saveServoRange('frontLeft', value[0], value[1]);
+                                    const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                                    if (canUseKv) {
+                                        markPageDirty('servo');
+                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_FL_MIN, degToUs(value[0])).catch(e => console.error('KV FL_MIN:', e));
+                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_FL_MAX, degToUs(value[1])).catch(e => console.error('KV FL_MAX:', e));
+                                    } else {
+                                        saveServoRange('frontLeft', value[0], value[1]);
+                                    }
                                 }
                                 servoSliderInstances.frontLeft.lastRangeValue = [value[0], value[1]];
-                            }, 1500);
+                            }, 175);
                         }
                     }
                 });
                 servoSliderInstances.frontLeft.rangeElement = frontLeftElement;
                 servoSliderInstances.frontLeft.rangeInstance = frontLeftInstance;
-                // Set initial display values on thumbs
                 updateThumbLabels('sliderFrontLeft', [defaultMin, defaultMax]);
             }
 
@@ -3915,19 +5831,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderFrontLeftTrim', value[1]);
-                        
-                        // Save with 800ms debounce
                         if (!isLoadingTuningConfig && !servoTrimLocked) {
                             clearTimeout(servoSliderSaveTimers.frontLeft.trim);
                             servoSliderSaveTimers.frontLeft.trim = setTimeout(() => {
-                                saveServoParameter('frontLeft', 'trim', value[1]);
-                            }, 800);
+                                servoKvWrite(window.RCDCC_KEYS.SERVO_FL_TRIM, trimDegToUs(value[1]), 'frontLeft', 'trim', value[1]);
+                            }, 175);
                         }
                     }
                 });
                 servoSliderInstances.frontLeft.trimElement = frontLeftTrimElement;
                 servoSliderInstances.frontLeft.trimInstance = frontLeftTrimInstance;
-                // Set initial display value on thumb
                 updateTrimThumbLabel('sliderFrontLeftTrim', 0);
             }
 
@@ -3941,23 +5854,27 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     step: 2,
                     onInput: function(value) {
                         updateThumbLabels('sliderFrontRight', value);
-                        
-                        // Save with 800ms debounce - only save values that changed
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
                             clearTimeout(servoSliderSaveTimers.frontRight.range);
                             servoSliderSaveTimers.frontRight.range = setTimeout(() => {
                                 const lastValue = servoSliderInstances.frontRight.lastRangeValue;
                                 if (value[0] !== lastValue[0] || value[1] !== lastValue[1]) {
-                                    saveServoRange('frontRight', value[0], value[1]);
+                                    const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                                    if (canUseKv) {
+                                        markPageDirty('servo');
+                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_FR_MIN, degToUs(value[0])).catch(e => console.error('KV FR_MIN:', e));
+                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_FR_MAX, degToUs(value[1])).catch(e => console.error('KV FR_MAX:', e));
+                                    } else {
+                                        saveServoRange('frontRight', value[0], value[1]);
+                                    }
                                 }
                                 servoSliderInstances.frontRight.lastRangeValue = [value[0], value[1]];
-                            }, 800);
+                            }, 175);
                         }
                     }
                 });
                 servoSliderInstances.frontRight.rangeElement = frontRightElement;
                 servoSliderInstances.frontRight.rangeInstance = frontRightInstance;
-                // Set initial display values on thumbs
                 updateThumbLabels('sliderFrontRight', [defaultMin, defaultMax]);
             }
 
@@ -3973,19 +5890,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderFrontRightTrim', value[1]);
-                        
-                        // Save with 800ms debounce
                         if (!isLoadingTuningConfig && !servoTrimLocked) {
                             clearTimeout(servoSliderSaveTimers.frontRight.trim);
                             servoSliderSaveTimers.frontRight.trim = setTimeout(() => {
-                                saveServoParameter('frontRight', 'trim', value[1]);
-                            }, 800);
+                                servoKvWrite(window.RCDCC_KEYS.SERVO_FR_TRIM, trimDegToUs(value[1]), 'frontRight', 'trim', value[1]);
+                            }, 175);
                         }
                     }
                 });
                 servoSliderInstances.frontRight.trimElement = frontRightTrimElement;
                 servoSliderInstances.frontRight.trimInstance = frontRightTrimInstance;
-                // Set initial display value on thumb
                 updateTrimThumbLabel('sliderFrontRightTrim', 0);
             }
 
@@ -3999,23 +5913,27 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     step: 2,
                     onInput: function(value) {
                         updateThumbLabels('sliderRearLeft', value);
-                        
-                        // Save with 800ms debounce - only save values that changed
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
                             clearTimeout(servoSliderSaveTimers.rearLeft.range);
                             servoSliderSaveTimers.rearLeft.range = setTimeout(() => {
                                 const lastValue = servoSliderInstances.rearLeft.lastRangeValue;
                                 if (value[0] !== lastValue[0] || value[1] !== lastValue[1]) {
-                                    saveServoRange('rearLeft', value[0], value[1]);
+                                    const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                                    if (canUseKv) {
+                                        markPageDirty('servo');
+                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_RL_MIN, degToUs(value[0])).catch(e => console.error('KV RL_MIN:', e));
+                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_RL_MAX, degToUs(value[1])).catch(e => console.error('KV RL_MAX:', e));
+                                    } else {
+                                        saveServoRange('rearLeft', value[0], value[1]);
+                                    }
                                 }
                                 servoSliderInstances.rearLeft.lastRangeValue = [value[0], value[1]];
-                            }, 800);
+                            }, 175);
                         }
                     }
                 });
                 servoSliderInstances.rearLeft.rangeElement = rearLeftElement;
                 servoSliderInstances.rearLeft.rangeInstance = rearLeftInstance;
-                // Set initial display values on thumbs
                 updateThumbLabels('sliderRearLeft', [defaultMin, defaultMax]);
             }
 
@@ -4031,19 +5949,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderRearLeftTrim', value[1]);
-                        
-                        // Save with 800ms debounce
                         if (!isLoadingTuningConfig && !servoTrimLocked) {
                             clearTimeout(servoSliderSaveTimers.rearLeft.trim);
                             servoSliderSaveTimers.rearLeft.trim = setTimeout(() => {
-                                saveServoParameter('rearLeft', 'trim', value[1]);
-                            }, 800);
+                                servoKvWrite(window.RCDCC_KEYS.SERVO_RL_TRIM, trimDegToUs(value[1]), 'rearLeft', 'trim', value[1]);
+                            }, 175);
                         }
                     }
                 });
                 servoSliderInstances.rearLeft.trimElement = rearLeftTrimElement;
                 servoSliderInstances.rearLeft.trimInstance = rearLeftTrimInstance;
-                // Set initial display value on thumb
                 updateTrimThumbLabel('sliderRearLeftTrim', 0);
             }
 
@@ -4057,23 +5972,27 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     step: 2,
                     onInput: function(value) {
                         updateThumbLabels('sliderRearRight', value);
-                        
-                        // Save with 800ms debounce - only save values that changed
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
                             clearTimeout(servoSliderSaveTimers.rearRight.range);
                             servoSliderSaveTimers.rearRight.range = setTimeout(() => {
                                 const lastValue = servoSliderInstances.rearRight.lastRangeValue;
                                 if (value[0] !== lastValue[0] || value[1] !== lastValue[1]) {
-                                    saveServoRange('rearRight', value[0], value[1]);
+                                    const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                                    if (canUseKv) {
+                                        markPageDirty('servo');
+                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_RR_MIN, degToUs(value[0])).catch(e => console.error('KV RR_MIN:', e));
+                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_RR_MAX, degToUs(value[1])).catch(e => console.error('KV RR_MAX:', e));
+                                    } else {
+                                        saveServoRange('rearRight', value[0], value[1]);
+                                    }
                                 }
                                 servoSliderInstances.rearRight.lastRangeValue = [value[0], value[1]];
-                            }, 800);
+                            }, 175);
                         }
                     }
                 });
                 servoSliderInstances.rearRight.rangeElement = rearRightElement;
                 servoSliderInstances.rearRight.rangeInstance = rearRightInstance;
-                // Set initial display values on thumbs
                 updateThumbLabels('sliderRearRight', [defaultMin, defaultMax]);
             }
 
@@ -4089,19 +6008,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderRearRightTrim', value[1]);
-                        
-                        // Save with 800ms debounce
                         if (!isLoadingTuningConfig && !servoTrimLocked) {
                             clearTimeout(servoSliderSaveTimers.rearRight.trim);
                             servoSliderSaveTimers.rearRight.trim = setTimeout(() => {
-                                saveServoParameter('rearRight', 'trim', value[1]);
-                            }, 800);
+                                servoKvWrite(window.RCDCC_KEYS.SERVO_RR_TRIM, trimDegToUs(value[1]), 'rearRight', 'trim', value[1]);
+                            }, 175);
                         }
                     }
                 });
                 servoSliderInstances.rearRight.trimElement = rearRightTrimElement;
                 servoSliderInstances.rearRight.trimInstance = rearRightTrimInstance;
-                // Set initial display value on thumb
                 updateTrimThumbLabel('sliderRearRightTrim', 0);
             }
 
@@ -4354,6 +6270,25 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 localStorage.setItem('formulasCardCollapsed', 'true');
             }
         }
+
+        function toggleLightsGuideCard() {
+            const cardBody = document.getElementById('lightsGuideCardBody');
+            const chevron = document.getElementById('lightsGuideChevron');
+
+            if (!cardBody || !chevron) return;
+
+            const isCollapsed = cardBody.style.display === 'none';
+
+            if (isCollapsed) {
+                cardBody.style.display = 'block';
+                chevron.textContent = 'keyboard_arrow_down';
+                localStorage.setItem('lightsGuideCardCollapsed', 'false');
+            } else {
+                cardBody.style.display = 'none';
+                chevron.textContent = 'keyboard_arrow_right';
+                localStorage.setItem('lightsGuideCardCollapsed', 'true');
+            }
+        }
         
         function toggleServoRangeLock(iconElement) {
             // Play click sound
@@ -4394,16 +6329,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             localStorage.setItem('servoTrimLocked', servoTrimLocked.toString());
             
             // Find the card container
-            const card = iconElement.closest('.card');
+            const card = document.getElementById('servoSettingsCard') || iconElement.closest('.card');
             
             if (servoTrimLocked) {
                 // Lock the sliders
-                card.classList.add('slider-locked');
+                card.classList.add('trim-locked');
                 iconElement.textContent = 'lock';
                 iconElement.style.color = 'var(--lime-green)'; // Lime green
             } else {
                 // Unlock the sliders
-                card.classList.remove('slider-locked');
+                card.classList.remove('trim-locked');
                 iconElement.textContent = 'lock_open_right';
                 iconElement.style.color = 'var(--high-impact-color)'; // Yellow
             }
@@ -4421,16 +6356,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             localStorage.setItem('servoRotationLocked', servoRotationLocked.toString());
             
             // Find the card container
-            const card = iconElement.closest('.card');
+            const card = document.getElementById('servoSettingsCard') || iconElement.closest('.card');
             
             if (servoRotationLocked) {
                 // Lock the badges
-                card.classList.add('slider-locked');
+                card.classList.add('rotation-locked');
                 iconElement.textContent = 'lock';
                 iconElement.style.color = 'var(--lime-green)'; // Lime green
             } else {
                 // Unlock the badges
-                card.classList.remove('slider-locked');
+                card.classList.remove('rotation-locked');
                 iconElement.textContent = 'lock_open_right';
                 iconElement.style.color = 'var(--high-impact-color)'; // Yellow
             }
@@ -4603,6 +6538,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // Update LED Color
         // Update gyro orientation
         function updateGyroOrientation(value) {
+            // Phase 2: use writeValue() for KV firmware, legacy path otherwise
+            const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+            if (canUseKv) {
+                markPageDirty('system');
+                bleManager.writeValue(window.RCDCC_KEYS.IMU_ORIENT, parseInt(value))
+                    .catch(e => {
+                        console.error('KV write IMU_ORIENT failed:', e);
+                        toast.error('Failed to update orientation');
+                        const select = document.getElementById('mpuOrientation');
+                        if (select && fullConfig) select.value = fullConfig.mpuOrientation;
+                    });
+                return;
+            }
+            // Legacy path (firmware < 2.0)
             const payload = {
                 mpuOrientation: parseInt(value)
             };
@@ -4670,6 +6619,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function initServoControls() {
             const servoKeys = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'];
             const servoAbbrev = ['FL', 'FR', 'RL', 'RR'];
+
+            function renderServoReverseBadge(badgeEl, isReversed) {
+                if (!badgeEl) return;
+                const abbrev = badgeEl.id.replace('servo', '').replace('RevBadge', '');
+                const cwBtn = document.getElementById(`servo${abbrev}CwBtn`);
+                const ccwBtn = document.getElementById(`servo${abbrev}CcwBtn`);
+
+                if (cwBtn && ccwBtn) {
+                    cwBtn.classList.toggle('is-active', !isReversed);
+                    ccwBtn.classList.toggle('is-active', isReversed);
+                    return;
+                }
+
+                // Fallback for legacy single-badge layout.
+                const icon = isReversed
+                    ? '<span class="material-symbols-outlined rotate-ccw">rotate_left</span>'
+                    : '<span class="material-symbols-outlined rotate-cw">rotate_right</span>';
+                const text = isReversed ? 'CCW' : 'CW';
+                badgeEl.innerHTML = icon + text;
+            }
             
             servoKeys.forEach((key, index) => {
                 const abbrev = servoAbbrev[index];
@@ -4734,7 +6703,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 
                 if (badge) {
                     console.log(`Attaching click handler to badge: servo${abbrev}RevBadge`);
-                    badge.addEventListener('click', function() {
+                    badge.addEventListener('click', function(event) {
                         console.log(`Badge clicked: ${abbrev}`);
                         // Don't allow clicks if servo rotation is locked
                         if (servoRotationLocked) {
@@ -4743,7 +6712,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         }
                         // Toggle the checkbox state
                         if (checkbox) {
-                            checkbox.checked = !checkbox.checked;
+                            const targetButton = event.target.closest('.servo-direction-btn');
+                            if (targetButton) {
+                                checkbox.checked = targetButton.getAttribute('data-dir') === 'ccw';
+                            } else {
+                                checkbox.checked = !checkbox.checked;
+                            }
                             console.log(`Checkbox toggled to: ${checkbox.checked}`);
                             // Trigger change event
                             checkbox.dispatchEvent(new Event('change', { bubbles: true }));
@@ -4756,16 +6730,33 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     checkbox.addEventListener('change', function() {
                         console.log(`Checkbox changed: ${abbrev} = ${this.checked}`);
                         // Update badge display
-                        // reversed=false (unchecked) = CW, reversed=true (checked) = CCW
-                        if (badge) {
-                            const icon = this.checked ? '<span class="material-symbols-outlined rotate-ccw">rotate_left</span>' : '<span class="material-symbols-outlined rotate-cw">rotate_right</span>';
-                            const text = this.checked ? 'CCW' : 'CW';
-                            badge.innerHTML = icon + text;
+                        renderServoReverseBadge(badge, this.checked);
+                        // Phase 2: use writeValue() for KV firmware, legacy path otherwise
+                        const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                        if (canUseKv) {
+                            markPageDirty('servo');
+                            bleManager.writeValue(window.RCDCC_KEYS[`SERVO_${abbrev}_REVERSE`], this.checked ? 1 : 0)
+                                .catch(e => console.error(`KV write ${abbrev}_REVERSE failed:`, e));
+                        } else {
+                            updateServoParam(key, 'reversed', this.checked);
                         }
-                        updateServoParam(key, 'reversed', this.checked);
                     });
+
+                    // Ensure correct icon/text are visible on initial render.
+                    renderServoReverseBadge(badge, checkbox.checked);
                 }
             });
+
+            const autoCalibrateBtn = document.getElementById('servoAutoCalibrateBtn');
+            if (autoCalibrateBtn && !autoCalibrateBtn.dataset.bound) {
+                autoCalibrateBtn.dataset.bound = '1';
+                autoCalibrateBtn.addEventListener('click', function() {
+                    const primaryAutoCalibrate = document.getElementById('autoLevelBtn');
+                    if (primaryAutoCalibrate) {
+                        primaryAutoCalibrate.click();
+                    }
+                });
+            }
         }
         
         // Helper function to save servo values
@@ -5068,14 +7059,37 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         
         // Initialize settings tabs
         function initSettingsTabs() {
+            function dirtyPageForTab(tabName) {
+                if (tabName === 'preferences' || tabName === 'debugging') return 'system';
+                return tabName;
+            }
+
             // Restore last active tab from localStorage
-            const savedTab = localStorage.getItem('settings_active_tab') || 'servo';
+            const savedTabCandidate = localStorage.getItem('settings_active_tab') || 'servo';
+            const savedTab = document.querySelector(`.settings-tab[data-tab="${savedTabCandidate}"]`)
+                ? savedTabCandidate
+                : 'servo';
             
             // Set up tab click handlers
             document.querySelectorAll('.settings-tab').forEach(tab => {
-                tab.addEventListener('click', function() {
+                tab.addEventListener('click', async function() {
                     const tabName = this.dataset.tab;
-                    
+                    const currentTab = localStorage.getItem('settings_active_tab') || 'servo';
+                    const currentDirtyPage = dirtyPageForTab(currentTab);
+                    const nextDirtyPage = dirtyPageForTab(tabName);
+
+                    // Dirty guard for tab switching
+                    if (currentTab !== tabName && isPageDirty(currentDirtyPage) && currentDirtyPage !== nextDirtyPage) {
+                        const choice = await showDirtyConfirmDialog();
+                        if (choice === 'cancel') return;
+                        if (choice === 'save') {
+                            await savePage(currentDirtyPage);
+                            if (isPageDirty(currentDirtyPage)) return; // save failed, abort
+                        } else if (choice === 'discard') {
+                            await discardPage(currentDirtyPage);
+                        }
+                    }
+
                     // Remove active class from all tabs and panes
                     document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
                     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));

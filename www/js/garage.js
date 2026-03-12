@@ -2,38 +2,120 @@
 // Garage Manager — Vehicle storage and BLE connection management
 // ====================================================================================
 // Vehicles are stored in localStorage as an array of:
-// { id: 'MAC', name: 'My TRX4', lastSeen: ISO string }
+// { id: 'MAC', bleName: 'RCDCC-ABC123', friendlyName: 'My TRX4', lastSeen: ISO string }
 // ====================================================================================
 
 const GarageManager = (() => {
     const STORAGE_KEY = 'rcdcc_garage_vehicles';
     let _selectedVehicleId = null;
 
+    function getSelectedVehicle() {
+        if (!_selectedVehicleId) return null;
+        return getVehicles().find(v => v.id === _selectedVehicleId) || null;
+    }
+
+    function renderSelectedVehicleDetails() {
+        const panel = document.getElementById('garageDetailPanel');
+        const nameEl = document.getElementById('garageDetailName');
+        const macEl = document.getElementById('garageDetailMac');
+        const lastSeenEl = document.getElementById('garageDetailLastSeen');
+        const renameInput = document.getElementById('garageDetailRenameInput');
+        const connectBtn = document.getElementById('garageDetailConnectBtn');
+        const saveBtn = document.getElementById('garageDetailSaveBtn');
+        const deleteBtn = document.getElementById('garageDetailDeleteBtn');
+
+        const selected = getSelectedVehicle();
+        const visible = !!selected;
+
+        if (panel) panel.style.display = visible ? '' : 'none';
+        if (!visible) {
+            if (connectBtn) connectBtn.disabled = true;
+            if (saveBtn) saveBtn.disabled = true;
+            if (deleteBtn) deleteBtn.disabled = true;
+            return;
+        }
+
+        if (nameEl) nameEl.textContent = selected.friendlyName;
+        if (macEl) macEl.textContent = selected.id;
+        if (lastSeenEl) lastSeenEl.textContent = `Last connected: ${formatLastSeen(selected.lastSeen)}`;
+        if (renameInput) renameInput.value = selected.friendlyName;
+
+        const connected = !!(window.bleManager && window.bleManager.deviceId === selected.id && window.bleManager.isConnected);
+        if (connectBtn) {
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = connected
+                ? '<span class="material-symbols-outlined">link_off</span> Disconnect'
+                : '<span class="material-symbols-outlined">link</span> Connect';
+        }
+        if (saveBtn) saveBtn.disabled = false;
+        if (deleteBtn) deleteBtn.disabled = false;
+    }
+
     // -------------------------------------------------------------------------
     // Storage helpers
     // -------------------------------------------------------------------------
     function getVehicles() {
         try {
-            return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+            const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+            return raw
+                .filter(v => v && v.id)
+                .map(v => {
+                    const bleName = String(v.bleName || v.deviceName || v.id || '').trim() || v.id;
+                    const friendlyName = String(v.friendlyName || v.name || bleName || v.id || '').trim() || bleName;
+                    return {
+                        id: v.id,
+                        bleName,
+                        friendlyName,
+                        // Keep legacy "name" in sync for backward compatibility.
+                        name: friendlyName,
+                        lastSeen: v.lastSeen || null
+                    };
+                });
         } catch {
             return [];
         }
     }
 
     function saveVehicles(vehicles) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(vehicles));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(vehicles.map(v => ({
+            id: v.id,
+            bleName: v.bleName || v.id,
+            friendlyName: v.friendlyName || v.bleName || v.id,
+            // Keep legacy "name" key populated for older readers.
+            name: v.friendlyName || v.bleName || v.id,
+            lastSeen: v.lastSeen || null
+        }))));
     }
 
-    function upsertVehicle(deviceId, name) {
+    const MAX_GARAGE_VEHICLES = 20;
+
+    function upsertVehicle(deviceId, bleName) {
         const vehicles = getVehicles();
         const existing = vehicles.find(v => v.id === deviceId);
+        const normalizedBleName = String(bleName || deviceId || '').trim() || deviceId;
+
+        if (!existing && vehicles.length >= MAX_GARAGE_VEHICLES) {
+            if (window.toast) toast.error(`Garage is full (${MAX_GARAGE_VEHICLES} vehicles max). Remove one to add another.`);
+            return;
+        }
+
         if (existing) {
+            const previousBleName = existing.bleName || existing.id;
+            const hadCustomFriendly = !!existing.friendlyName && existing.friendlyName !== previousBleName;
+
+            existing.bleName = normalizedBleName;
+            // Only auto-sync friendly name if the user has not customized it.
+            if (!hadCustomFriendly) {
+                existing.friendlyName = normalizedBleName;
+            }
+            existing.name = existing.friendlyName;
             existing.lastSeen = new Date().toISOString();
-            if (name && name !== existing.name) existing.name = name;
         } else {
             vehicles.push({
                 id: deviceId,
-                name: name || deviceId,
+                bleName: normalizedBleName,
+                friendlyName: normalizedBleName,
+                name: normalizedBleName,
                 lastSeen: new Date().toISOString()
             });
         }
@@ -50,7 +132,10 @@ const GarageManager = (() => {
     function renameVehicle(deviceId, newName) {
         const vehicles = getVehicles();
         const v = vehicles.find(v => v.id === deviceId);
-        if (v) v.name = newName;
+        if (v) {
+            v.friendlyName = newName;
+            v.name = newName;
+        }
         saveVehicles(vehicles);
         renderGarage();
     }
@@ -97,6 +182,8 @@ const GarageManager = (() => {
         if (vehicles.length === 0) {
             list.innerHTML = '';
             if (empty) empty.style.display = 'block';
+            _selectedVehicleId = null;
+            renderSelectedVehicleDetails();
             return;
         }
 
@@ -107,16 +194,17 @@ const GarageManager = (() => {
 
         list.innerHTML = vehicles.map(v => {
             const isConnected = window.bleManager && window.bleManager.deviceId === v.id && window.bleManager.isConnected;
+            const isSelected = _selectedVehicleId === v.id;
             const connectedBadge = isConnected
                 ? `<span class="badge" style="background-color: var(--lime-green); color: #000;">Connected</span>`
                 : '';
             return `
-            <div class="garage-card" data-vehicle-id="${v.id}" onclick="GarageManager.openDetail('${v.id}')">
+            <div class="garage-card ${isSelected ? 'selected' : ''}" data-vehicle-id="${v.id}" onclick="GarageManager.openDetail('${v.id}')">
                 <div class="garage-card-icon">
                     <span class="material-symbols-outlined">directions_car</span>
                 </div>
                 <div class="garage-card-info">
-                    <div class="garage-card-name">${v.name} ${connectedBadge}</div>
+                    <div class="garage-card-name">${v.friendlyName} ${connectedBadge}</div>
                     <div class="garage-card-mac">${v.id}</div>
                     <div class="garage-card-last">Last connected: ${formatLastSeen(v.lastSeen)}</div>
                 </div>
@@ -125,25 +213,19 @@ const GarageManager = (() => {
                 </div>
             </div>`;
         }).join('');
+
+        if (!_selectedVehicleId || !vehicles.find(v => v.id === _selectedVehicleId)) {
+            _selectedVehicleId = vehicles[0].id;
+        }
+        renderSelectedVehicleDetails();
     }
 
     // -------------------------------------------------------------------------
-    // Open vehicle detail modal
+    // Select a vehicle on the Garage page
     // -------------------------------------------------------------------------
     function openDetail(deviceId) {
-        const vehicles = getVehicles();
-        const v = vehicles.find(v => v.id === deviceId);
-        if (!v) return;
-
         _selectedVehicleId = deviceId;
-
-        document.getElementById('garageDetailName').textContent = v.name;
-        document.getElementById('garageDetailMac').textContent = v.id;
-        document.getElementById('garageDetailLastSeen').textContent = formatLastSeen(v.lastSeen);
-        document.getElementById('garageDetailRenameInput').value = v.name;
-
-        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('garageDetailModal'));
-        modal.show();
+        renderGarage();
     }
 
     // -------------------------------------------------------------------------
@@ -186,23 +268,22 @@ const GarageManager = (() => {
     async function connectToVehicle(deviceId) {
         if (!window.bleManager) return;
 
-        // Store as preferred so connectToKnownDevice picks it up
-        localStorage.setItem('rcdccBlePreferredDeviceId', deviceId);
-        window.bleManager.preferredDeviceId = deviceId;
-
-        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('garageDetailModal'));
-        modal.hide();
-
         // Navigate to dashboard
-        if (window.navigateToSection) navigateToSection('dashboard');
+        if (window.navigateToSection) window.navigateToSection('dashboard');
 
-        // Attempt connection
-        const connected = await window.bleManager.connectToKnownDevice();
+        const vehicles = getVehicles();
+        const vehicle = vehicles.find(v => v.id === deviceId);
+
+        // Attempt connection via app orchestration so full Phase 7 flow runs.
+        const connected = window.connectBLEToVehicle
+            ? await window.connectBLEToVehicle(deviceId, vehicle?.friendlyName || null)
+            : await window.bleManager.connectToKnownDevice();
+
         if (connected) {
             updateLastSeen(deviceId);
-            if (window.toast) toast.success('Vehicle connected');
             if (window.updateConnectionStatus) updateConnectionStatus(true);
             if (window.updateConnectionMethodDisplay) updateConnectionMethodDisplay();
+            renderSelectedVehicleDetails();
         } else {
             if (window.toast) toast.error('Could not connect — make sure vehicle is powered on');
         }
@@ -216,41 +297,52 @@ const GarageManager = (() => {
         const scanBtn = document.getElementById('garageScanBtn');
         if (scanBtn) scanBtn.addEventListener('click', scanAndConnect);
 
-        // Detail modal — Save (rename)
+        // Detail panel — Save (rename)
         const saveBtn = document.getElementById('garageDetailSaveBtn');
         if (saveBtn) {
             saveBtn.addEventListener('click', () => {
+                if (!_selectedVehicleId) return;
                 const newName = document.getElementById('garageDetailRenameInput').value.trim();
                 if (!newName) return;
                 renameVehicle(_selectedVehicleId, newName);
-                document.getElementById('garageDetailName').textContent = newName;
+                renderSelectedVehicleDetails();
                 if (window.toast) toast.success('Vehicle renamed');
             });
         }
 
-        // Detail modal — Delete
+        // Detail panel — Delete
         const deleteBtn = document.getElementById('garageDetailDeleteBtn');
         if (deleteBtn) {
             deleteBtn.addEventListener('click', () => {
+                if (!_selectedVehicleId) return;
                 if (!confirm('Remove this vehicle from your garage?')) return;
+                const removedId = _selectedVehicleId;
                 deleteVehicle(_selectedVehicleId);
-                const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('garageDetailModal'));
-                modal.hide();
-                _selectedVehicleId = null;
+                const remaining = getVehicles();
+                _selectedVehicleId = remaining.length ? remaining.find(v => v.id !== removedId)?.id || remaining[0].id : null;
+                renderGarage();
             });
         }
 
-        // Detail modal — Connect
+        // Detail panel — Connect / Disconnect
         const connectBtn = document.getElementById('garageDetailConnectBtn');
         if (connectBtn) {
-            connectBtn.addEventListener('click', () => {
-                if (_selectedVehicleId) connectToVehicle(_selectedVehicleId);
+            connectBtn.addEventListener('click', async () => {
+                if (!_selectedVehicleId) return;
+                const alreadyConnected = !!(window.bleManager && window.bleManager.deviceId === _selectedVehicleId && window.bleManager.isConnected);
+                if (alreadyConnected) {
+                    if (window.disconnectBLE) await window.disconnectBLE(true);
+                    // Stay on Garage — no navigation. Re-render is handled inside disconnectBLE.
+                } else {
+                    connectToVehicle(_selectedVehicleId);
+                }
             });
         }
 
         // Auto-add vehicle after successful BLE connect (hook into disconnect callback)
         // This is called from app.js after a successful connectBLE()
         renderGarage();
+        renderSelectedVehicleDetails();
     }
 
     // Public API

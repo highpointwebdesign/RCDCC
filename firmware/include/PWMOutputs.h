@@ -74,6 +74,52 @@ public:
     
     ledcWrite(channel, pwmValue);
   }
+
+  // ==================== Aux Servo Outputs (Phase 4) ====================
+  // Aux slots 0-9 use LEDC channels 4-13 on AUX_SERVO_PINS[].
+  // Call initAux() once from setup() after init().
+
+  void initAux() {
+    for (int i = 0; i < MAX_AUX_SERVOS; i++) {
+      uint8_t pin = AUX_SERVO_PINS[i];
+      int ch = 4 + i;
+      ledcSetup(ch, PWM_BASE_FREQ, SUSPENSION_PWM_RESOLUTION);
+      ledcAttachPin(pin, ch);
+      ledcWrite(ch, 128);  // center / stop (1.5 ms)
+    }
+    Serial.println("Aux PWM outputs initialized");
+  }
+
+  // Positional or pan servo: drive to microsecond position (900-2100 µs)
+  void setAuxPositional(uint8_t slot, int32_t microseconds) {
+    if (slot >= MAX_AUX_SERVOS) return;
+    microseconds = constrain(microseconds, (int32_t)900, (int32_t)2100);
+    uint8_t pwmValue = (uint8_t)(((microseconds - 1000) / 78.125f) + 51.0f);
+    ledcWrite(4 + slot, pwmValue);
+  }
+
+  // Continuous servo: speed -100..100 (0 = stop, maps to 1000-2000 µs)
+  void setAuxContinuous(uint8_t slot, int32_t speedPct) {
+    if (slot >= MAX_AUX_SERVOS) return;
+    speedPct = constrain(speedPct, (int32_t)-100, (int32_t)100);
+    int32_t us = 1500L + (speedPct * 5L);  // -100→1000 µs, 0→1500 µs, +100→2000 µs
+    uint8_t pwmValue = (uint8_t)(((us - 1000) / 78.125f) + 51.0f);
+    ledcWrite(4 + slot, pwmValue);
+  }
+
+  // Relay: full-duty HIGH (on) or zero LOW (off)
+  // Both relay and PWM types use LEDC so the pin stays configured; duty 0/255
+  // gives a clean digital signal at 50 Hz that any relay module accepts.
+  void setAuxRelay(uint8_t slot, bool on) {
+    if (slot >= MAX_AUX_SERVOS) return;
+    ledcWrite(4 + slot, on ? 255 : 0);
+  }
+
+  // Stop a single aux slot (center / stop for any type)
+  void stopAux(uint8_t slot) {
+    if (slot >= MAX_AUX_SERVOS) return;
+    ledcWrite(4 + slot, 128);
+  }
 };
 
 #endif

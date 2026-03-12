@@ -14,6 +14,7 @@
 // Configuration Characteristics
 #define CONFIG_READ_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define CONFIG_WRITE_UUID   "1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e"
+#define KV_WRITE_UUID       "7c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e"
 
 // Telemetry Characteristics (real-time sensor data)
 #define TELEMETRY_UUID      "d8de624e-140f-4a22-8594-e2216b84a5f2"
@@ -31,6 +32,7 @@ private:
     // Characteristics
     BLECharacteristic* pConfigReadChar;
     BLECharacteristic* pConfigWriteChar;
+    BLECharacteristic* pKvWriteChar;
     BLECharacteristic* pTelemetryChar;
     BLECharacteristic* pServoCommandChar;
     BLECharacteristic* pLightsCommandChar;
@@ -39,6 +41,7 @@ private:
     StorageManager* storage;
     bool deviceConnected;
     std::function<bool(const String&)> configWriteHandler;
+    std::function<bool(const String&)> kvWriteHandler;
     std::function<bool(const String&)> servoWriteHandler;
     std::function<bool(const String&)> lightsWriteHandler;
     std::function<bool(const String&)> systemWriteHandler;
@@ -53,6 +56,7 @@ public:
     void sendTelemetry(float roll, float pitch, float accelX, float accelY, float accelZ);
 
     void setConfigWriteHandler(std::function<bool(const String&)> handler) { configWriteHandler = handler; }
+    void setKVWriteHandler(std::function<bool(const String&)> handler) { kvWriteHandler = handler; }
     void setServoWriteHandler(std::function<bool(const String&)> handler) { servoWriteHandler = handler; }
     void setLightsWriteHandler(std::function<bool(const String&)> handler) { lightsWriteHandler = handler; }
     void setSystemWriteHandler(std::function<bool(const String&)> handler) { systemWriteHandler = handler; }
@@ -64,6 +68,7 @@ public:
     class ServerCallbacks;
     class ConfigReadCallbacks;
     class ConfigWriteCallbacks;
+    class KVWriteCallbacks;
     class ServoCommandCallbacks;
     class LightsCommandCallbacks;
     class SystemCommandCallbacks;
@@ -118,6 +123,25 @@ public:
 
             bool ok = service->configWriteHandler ? service->configWriteHandler(jsonStr) : false;
             Serial.println(ok ? "BLE: Config saved successfully" : "BLE: Config write handler failed");
+        }
+    }
+};
+
+// Key-value write callbacks
+class BluetoothService::KVWriteCallbacks : public BLECharacteristicCallbacks {
+private:
+    BluetoothService* service;
+public:
+    KVWriteCallbacks(BluetoothService* bleService) : service(bleService) {}
+
+    void onWrite(BLECharacteristic* pCharacteristic) {
+        std::string value = pCharacteristic->getValue();
+        if (value.length() > 0) {
+            String jsonStr = String(value.c_str());
+            bool ok = service->kvWriteHandler ? service->kvWriteHandler(jsonStr) : false;
+            if (!ok) {
+                Serial.println("BLE: KV write handler failed");
+            }
         }
     }
 };
@@ -217,6 +241,13 @@ void BluetoothService::begin(const char* deviceName) {
         BLECharacteristic::PROPERTY_WRITE
     );
     pConfigWriteChar->setCallbacks(new ConfigWriteCallbacks(this));
+
+    // Create Key-Value Write Characteristic
+    pKvWriteChar = pService->createCharacteristic(
+        KV_WRITE_UUID,
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    pKvWriteChar->setCallbacks(new KVWriteCallbacks(this));
     
     // Create Telemetry Characteristic (with notifications)
     pTelemetryChar = pService->createCharacteristic(

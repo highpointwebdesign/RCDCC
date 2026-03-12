@@ -4,11 +4,58 @@
 // CAPACITOR NATIVE VERSION - All BLE calls use named object parameters
 // ====================================================================================
 
+const RCDCC_KEYS = {
+    SERVO_FL_TRIM:        'srv_fl.trim',
+    SERVO_FL_MIN:         'srv_fl.min',
+    SERVO_FL_MAX:         'srv_fl.max',
+    SERVO_FL_REVERSE:     'srv_fl.reverse',
+    SERVO_FL_RIDE_HT:     'srv_fl.ride_ht',
+    SERVO_FL_LABEL:       'srv_fl.label',
+    SERVO_FR_TRIM:        'srv_fr.trim',
+    SERVO_FR_MIN:         'srv_fr.min',
+    SERVO_FR_MAX:         'srv_fr.max',
+    SERVO_FR_REVERSE:     'srv_fr.reverse',
+    SERVO_FR_RIDE_HT:     'srv_fr.ride_ht',
+    SERVO_FR_LABEL:       'srv_fr.label',
+    SERVO_RL_TRIM:        'srv_rl.trim',
+    SERVO_RL_MIN:         'srv_rl.min',
+    SERVO_RL_MAX:         'srv_rl.max',
+    SERVO_RL_REVERSE:     'srv_rl.reverse',
+    SERVO_RL_RIDE_HT:     'srv_rl.ride_ht',
+    SERVO_RL_LABEL:       'srv_rl.label',
+    SERVO_RR_TRIM:        'srv_rr.trim',
+    SERVO_RR_MIN:         'srv_rr.min',
+    SERVO_RR_MAX:         'srv_rr.max',
+    SERVO_RR_REVERSE:     'srv_rr.reverse',
+    SERVO_RR_RIDE_HT:     'srv_rr.ride_ht',
+    SERVO_RR_LABEL:       'srv_rr.label',
+    SUSPENSION_DAMPING:   'suspension.damping',
+    SUSPENSION_STIFFNESS: 'suspension.stiffness',
+    SUSPENSION_REACT_SPD: 'suspension.react_spd',
+    SUSPENSION_FR_BAL:    'suspension.fr_balance',
+    IMU_ORIENT:           'imu.orient',
+    IMU_ROLL_TRIM:        'imu.roll_trim',
+    IMU_PITCH_TRIM:       'imu.pitch_trim',
+    SYSTEM_DEVICE_NM:     'system.device_nm',
+};
+
+/**
+ * Build a dotted NVS key for an aux servo slot.
+ * @param {number} index  0-9
+ * @param {string} key    e.g. 'label', 'trim', 'state'
+ * @returns {string}      e.g. 'srv_aux_00.label'
+ * Phase 4
+ */
+function auxServoKey(index, key) {
+    return `srv_aux_${index.toString().padStart(2, '0')}.${key}`;
+}
+
 class BluetoothManager {
     constructor() {
         this.SERVICE_UUID      = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
         this.CHAR_CONFIG_READ  = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
         this.CHAR_CONFIG_WRITE = '1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e';
+        this.CHAR_KV_WRITE     = '7c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e';
         this.CHAR_TELEMETRY    = 'd8de624e-140f-4a22-8594-e2216b84a5f2';
         this.CHAR_SERVO_CMD    = 'e8a3c5f2-4b9d-11ec-81d3-0242ac130003';
         this.CHAR_LIGHTS_CMD   = 'f2b4d6e8-4b9d-11ec-81d3-0242ac130003';
@@ -19,12 +66,59 @@ class BluetoothManager {
         this.deviceName = null;
         this.isConnected  = false;
         this.isConnecting = false;
+        this.connectPromise = null;
         this.preferredDeviceId = localStorage.getItem(this.PREFERRED_DEVICE_ID_KEY) || null;
         this.gattOperationChain = Promise.resolve();
         this.telemetryCallback = null;
         this.onDisconnect = null;
         this.stats = { bytesReceived: 0, bytesSent: 0, telemetryPackets: 0, lastLatency: 0 };
+        this.lastKnownSavedState = null;
+        this.firmwareVersion = null;
+        this.supportsKvUpdates = false;
+        this.isLegacyPath = true;
+        this.writeFailureCallback = null;
         this._ble = null;
+    }
+
+    _compareSemver(a, b) {
+        const parse = (v) => String(v || '0.0.0').split('.').map(n => parseInt(n, 10) || 0);
+        const va = parse(a);
+        const vb = parse(b);
+        for (let i = 0; i < Math.max(va.length, vb.length); i++) {
+            const da = va[i] || 0;
+            const db = vb[i] || 0;
+            if (da > db) return 1;
+            if (da < db) return -1;
+        }
+        return 0;
+    }
+
+    _ensureLegacyBanner() {
+        let banner = document.getElementById('legacyFirmwareBanner');
+        if (banner) return banner;
+
+        banner = document.createElement('div');
+        banner.id = 'legacyFirmwareBanner';
+        banner.style.cssText = 'display:none;position:sticky;top:0;z-index:9998;padding:10px 14px;background:#3b2f00;color:#ffe08a;border-bottom:1px solid #8a6f00;font-size:0.875rem;font-weight:600;text-align:center;';
+        banner.textContent = 'Firmware update recommended for best performance.';
+        document.body.prepend(banner);
+        return banner;
+    }
+
+    _setLegacyBannerVisible(visible) {
+        const banner = this._ensureLegacyBanner();
+        banner.style.display = visible ? 'block' : 'none';
+    }
+
+    _updateFirmwareCapabilities(config) {
+        this.firmwareVersion = config && (config.fw_version || (config.system && config.system.fw_version))
+            ? (config.fw_version || config.system.fw_version)
+            : null;
+        this.supportsKvUpdates = this.firmwareVersion
+            ? this._compareSemver(this.firmwareVersion, '2.0.0') >= 0
+            : false;
+        this.isLegacyPath = !this.supportsKvUpdates;
+        this._setLegacyBannerVisible(this.isLegacyPath);
     }
 
     async _getBle() {
@@ -101,14 +195,32 @@ class BluetoothManager {
 
     getConnectionStatus() { return this.isConnected; }
 
+    _isRcdccDeviceName(name) {
+        return String(name || '').toUpperCase().startsWith('RCDCC');
+    }
+
     async connect() {
-        if (this.isConnecting) throw new Error('Connection already in progress');
+        if (this.isConnecting) {
+            return this.connectPromise || false;
+        }
         if (this.isConnected) return true;
         this.isConnecting = true;
+        this.connectPromise = (async () => {
         try {
             const ble = await this._getBle();
-            const device = await ble.requestDevice({ services: [this.SERVICE_UUID] });
+            // Requirement: only discover RCDCC-prefixed ESP32 devices
+            // (e.g., RCDCCA1B2C3 where suffix is last 6 of MAC address).
+            const device = await ble.requestDevice({
+                namePrefix: 'RCDCC',
+                optionalServices: [this.SERVICE_UUID]
+            });
             if (!device) throw new Error('No device selected');
+
+            // Extra safety in case a platform picker ignores the prefix filter.
+            if (!this._isRcdccDeviceName(device.name)) {
+                throw new Error('Selected device is not an RCDCC unit');
+            }
+
             await this._connectToDeviceId(ble, device.deviceId, device.name || 'RCDCC');
             return true;
         } catch (error) {
@@ -117,14 +229,21 @@ class BluetoothManager {
             throw error;
         } finally {
             this.isConnecting = false;
+            this.connectPromise = null;
         }
+        })();
+
+        return this.connectPromise;
     }
 
     async connectToKnownDevice() {
         if (this.isConnected) return true;
-        if (this.isConnecting) return false;
+        if (this.isConnecting) {
+            return this.connectPromise || false;
+        }
         if (!this.preferredDeviceId) return false;
         this.isConnecting = true;
+        this.connectPromise = (async () => {
         try {
             const ble = await this._getBle();
             await this._connectToDeviceId(ble, this.preferredDeviceId, null);
@@ -135,7 +254,11 @@ class BluetoothManager {
             return false;
         } finally {
             this.isConnecting = false;
+            this.connectPromise = null;
         }
+        })();
+
+        return this.connectPromise;
     }
 
     async _connectToDeviceId(ble, deviceId, deviceName) {
@@ -171,6 +294,16 @@ class BluetoothManager {
         }
         
         await this._subscribeTelemetry(ble);
+
+        // Phase 1 connect flow: negotiate MTU first (already done above), then read full config once.
+        try {
+            const config = await this.readConfig();
+            this.lastKnownSavedState = config;
+            this._updateFirmwareCapabilities(config);
+        } catch (e) {
+            console.warn('Initial config sync after BLE connect failed:', e.message || e);
+        }
+
         console.log('BLE connection successful:', deviceId);
     }
 
@@ -260,6 +393,30 @@ class BluetoothManager {
         console.log('Config sent via BLE (' + latency.toFixed(1) + 'ms)');
     }
 
+    async writeValue(key, value) {
+        if (!this.isConnected) throw new Error('Not connected to BLE device');
+        const ble = await this._getBle();
+        const payload = this._encodeJson({ key, value });
+
+        try {
+            await this.enqueueGattOperation('write-kv', () =>
+                ble.write({
+                    deviceId: this.deviceId,
+                    service: this.SERVICE_UUID,
+                    characteristic: this.CHAR_KV_WRITE,
+                    value: payload
+                })
+            );
+        } catch (error) {
+            if (typeof this.writeFailureCallback === 'function') {
+                this.writeFailureCallback({ type: 'kv', key, value, error });
+            }
+            throw error;
+        }
+
+        this.stats.bytesSent += payload.length;
+    }
+
     async sendServoCommand(servoConfig) {
         if (!this.isConnected) throw new Error('Not connected to BLE device');
         const ble = await this._getBle();
@@ -303,6 +460,13 @@ class BluetoothManager {
             })
         );
         this.stats.bytesSent += data.byteLength;
+    }
+
+    async sendSaveCommandWithTimeout(timeoutMs = 3000) {
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Save timed out')), timeoutMs);
+        });
+        return Promise.race([this.sendSystemCommand('save'), timeoutPromise]);
     }
 
     async _subscribeTelemetry(ble) {
@@ -353,6 +517,7 @@ class BluetoothManager {
 
     setTelemetryCallback(callback) { this.telemetryCallback = callback; }
     setDisconnectCallback(callback) { this.onDisconnect = callback; }
+    setWriteFailureCallback(callback) { this.writeFailureCallback = callback; }
 
     getStats() {
         return { ...this.stats, isConnected: this.isConnected, deviceName: this.deviceName, deviceId: this.deviceId };
@@ -374,3 +539,4 @@ class BluetoothManager {
 }
 
 window.BluetoothManager = BluetoothManager;
+window.RCDCC_KEYS = RCDCC_KEYS;

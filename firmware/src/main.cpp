@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <MPU6050.h>
@@ -25,6 +24,11 @@ BluetoothService* bluetoothService = nullptr;  // Initialize in setup()
 #define LED_PIN 2
 unsigned long ledBlinkEndTime = 0;
 
+// Continuous-servo BLE watchdog: stops all continuous servos if no BLE
+// command is received within this window (phone disconnection safety net).
+static uint32_t lastBleCommandMs = 0;
+static constexpr uint32_t CONTINUOUS_WATCHDOG_MS = 500;
+
 // Addressable LED (NeoPixel) - kept for backward compatibility
 Adafruit_NeoPixel statusLED(STATUS_LED_COUNT, STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
 uint32_t currentLEDColor = 0;
@@ -48,6 +52,94 @@ EmergencyLightPattern currentPattern = {};
 uint8_t currentPatternStep = 0;
 unsigned long patternStepStartTime = 0;
 unsigned long emergencyLightLastUpdate = 0;
+
+// ==================== Phase 6: Dance Mode ====================
+DanceMode gDanceMode = { false, 0.0f, 0.0f };
+volatile bool gFlashCancelRequested = false;
+
+static float clampNorm(float value) {
+  if (value < -1.0f) return -1.0f;
+  if (value > 1.0f) return 1.0f;
+  return value;
+}
+
+static int32_t clampI32Safe(int32_t value, int32_t minValue, int32_t maxValue) {
+  if (value < minValue) return minValue;
+  if (value > maxValue) return maxValue;
+  return value;
+}
+
+static int32_t mapNormToServoUs(float norm, const RCDCCServoState& servo) {
+  const int32_t servoMin = min(servo.minUs, servo.maxUs);
+  const int32_t servoMax = max(servo.minUs, servo.maxUs);
+  const int32_t safeMin = clampI32Safe(servoMin, 900, 2100);
+  const int32_t safeMax = clampI32Safe(servoMax, safeMin + 1, 2100);
+  const int32_t safeTrim = clampI32Safe(servo.trimUs, safeMin, safeMax);
+
+  float mapped = static_cast<float>(safeTrim);
+  if (norm >= 0.0f) {
+    mapped = static_cast<float>(safeTrim) + (norm * static_cast<float>(safeMax - safeTrim));
+  } else {
+    mapped = static_cast<float>(safeTrim) + (norm * static_cast<float>(safeTrim - safeMin));
+  }
+
+  // Final firmware-side safety net: never command beyond configured limits.
+  return clampI32Safe(static_cast<int32_t>(lroundf(mapped)), safeMin, safeMax);
+}
+
+static String buildBleAdvertisedName() {
+  // Use the unique device-specific half of the base MAC as a stable 6-hex suffix.
+  // ESP.getEfuseMac() exposes the MAC in an order where the lower 24 bits map to the
+  // vendor/OUI bytes on this platform, which can collide across multiple devices.
+  // Shift to the upper 24 bits so the advertised suffix matches the unique bytes that
+  // differ per ESP32 unit (for example: xx:xx:xx:6A:92:46 -> 6A9246).
+  const uint64_t chipMac = ESP.getEfuseMac();
+  const uint32_t suffix = static_cast<uint32_t>((chipMac >> 24) & 0xFFFFFFULL);
+  char nameBuf[24] = {0};
+  snprintf(nameBuf, sizeof(nameBuf), "%s-%06X", DEFAULT_DEVICE_NAME, suffix);
+  return String(nameBuf);
+}
+
+static void writeTrimToAllSuspensionServos() {
+  const RCDCCConfigState& state = storageManager.getCurrentState();
+
+  const int32_t flTrim = clampI32Safe(state.servoFL.trimUs, min(state.servoFL.minUs, state.servoFL.maxUs), max(state.servoFL.minUs, state.servoFL.maxUs));
+  const int32_t frTrim = clampI32Safe(state.servoFR.trimUs, min(state.servoFR.minUs, state.servoFR.maxUs), max(state.servoFR.minUs, state.servoFR.maxUs));
+  const int32_t rlTrim = clampI32Safe(state.servoRL.trimUs, min(state.servoRL.minUs, state.servoRL.maxUs), max(state.servoRL.minUs, state.servoRL.maxUs));
+  const int32_t rrTrim = clampI32Safe(state.servoRR.trimUs, min(state.servoRR.minUs, state.servoRR.maxUs), max(state.servoRR.minUs, state.servoRR.maxUs));
+
+  pwmOutputs.setChannelMicroseconds(0, static_cast<uint16_t>(flTrim));
+  pwmOutputs.setChannelMicroseconds(1, static_cast<uint16_t>(frTrim));
+  pwmOutputs.setChannelMicroseconds(2, static_cast<uint16_t>(rlTrim));
+  pwmOutputs.setChannelMicroseconds(3, static_cast<uint16_t>(rrTrim));
+}
+
+static void applyDanceModeTilt(float rollNorm, float pitchNorm) {
+  const RCDCCConfigState& state = storageManager.getCurrentState();
+
+  float flNorm = clampNorm(rollNorm + pitchNorm);
+  float frNorm = clampNorm(-rollNorm + pitchNorm);
+  float rlNorm = clampNorm(rollNorm - pitchNorm);
+  float rrNorm = clampNorm(-rollNorm - pitchNorm);
+
+  if (state.servoFL.reverse != 0) flNorm = -flNorm;
+  if (state.servoFR.reverse != 0) frNorm = -frNorm;
+  if (state.servoRL.reverse != 0) rlNorm = -rlNorm;
+  if (state.servoRR.reverse != 0) rrNorm = -rrNorm;
+
+  const int32_t flUs = mapNormToServoUs(flNorm, state.servoFL);
+  const int32_t frUs = mapNormToServoUs(frNorm, state.servoFR);
+  const int32_t rlUs = mapNormToServoUs(rlNorm, state.servoRL);
+  const int32_t rrUs = mapNormToServoUs(rrNorm, state.servoRR);
+
+  pwmOutputs.setChannelMicroseconds(0, static_cast<uint16_t>(flUs));
+  pwmOutputs.setChannelMicroseconds(1, static_cast<uint16_t>(frUs));
+  pwmOutputs.setChannelMicroseconds(2, static_cast<uint16_t>(rlUs));
+  pwmOutputs.setChannelMicroseconds(3, static_cast<uint16_t>(rrUs));
+
+  gDanceMode.last_roll = rollNorm;
+  gDanceMode.last_pitch = pitchNorm;
+}
 
 // Function to get RGB values from LED color enum
 void getLEDColorRGB(LEDColor color, uint8_t& r, uint8_t& g, uint8_t& b) {
@@ -203,6 +295,36 @@ bool applyConfigUpdatePayload(const String& payload) {
   return true;
 }
 
+bool applyKVWritePayload(const String& payload) {
+  lastBleCommandMs = millis();  // Reset continuous-servo watchdog
+  DynamicJsonDocument doc(512);
+  DeserializationError error = deserializeJson(doc, payload);
+  if (error) {
+    Serial.printf("BLE KV JSON parse error: %s\n", error.c_str());
+    return false;
+  }
+
+  if (!(doc.containsKey("key") && doc.containsKey("value"))) {
+    Serial.println("BLE KV payload missing key/value");
+    return false;
+  }
+
+  const String key = doc["key"].as<String>();
+  const JsonVariantConst value = doc["value"].as<JsonVariantConst>();
+
+  if (!storageManager.setValue(key, value)) {
+    Serial.printf("BLE KV ignored unknown key: %s\n", key.c_str());
+    return true;
+  }
+
+  if (key == "imu.orient") {
+    sensorFusion.setOrientation(storageManager.getConfig().mpuOrientation);
+  }
+
+  startLedBlink();
+  return true;
+}
+
 bool applyServoConfigPayload(const String& payload) {
   DynamicJsonDocument doc(1024);
   DeserializationError error = deserializeJson(doc, payload);
@@ -349,6 +471,336 @@ bool applySystemCommandPayload(const String& payload) {
     return true;
   }
 
+  if (command == "save") {
+    storageManager.saveAll();
+    Serial.println("{\"status\":\"saved\"}");
+    return true;
+  }
+
+  if (command == "flash") {
+    String color = doc["color"] | String("white");
+    color.toLowerCase();
+    int count = doc["count"] | 1;
+    count = constrain(count, 1, 10);
+
+    uint32_t rgb = 0xFFFFFF;
+    if (color == "red") rgb = 0xFF0000;
+    else if (color == "green") rgb = 0x00FF00;
+    else if (color == "blue") rgb = 0x0000FF;
+
+    if (lightsEngine) {
+      // 200ms on / 200ms off per Phase 7 flash confirmation contract.
+      gFlashCancelRequested = false;
+      lightsEngine->flashAllBlocking(rgb, static_cast<uint8_t>(count), 200, 200, &gFlashCancelRequested);
+      gFlashCancelRequested = false;
+    }
+    return true;
+  }
+
+  // ==================== Phase 6: Dance Mode ====================
+
+  if (command == "dance_mode") {
+    const bool enabled = doc["enabled"] | false;
+    gDanceMode.enabled = enabled;
+
+    if (!enabled) {
+      gDanceMode.last_roll = 0.0f;
+      gDanceMode.last_pitch = 0.0f;
+      writeTrimToAllSuspensionServos();
+    }
+
+    Serial.printf("{\"status\":\"dance_mode\",\"enabled\":%s}\n", enabled ? "true" : "false");
+    return true;
+  }
+
+  if (command == "servo_tilt") {
+    if (!gDanceMode.enabled) {
+      // High-rate command: intentionally ignored when Dance Mode is off.
+      return true;
+    }
+
+    float rollNorm = doc["roll"] | 0.0f;
+    float pitchNorm = doc["pitch"] | 0.0f;
+    rollNorm = clampNorm(rollNorm);
+    pitchNorm = clampNorm(pitchNorm);
+
+    // Immediate direct control (no easing/reaction-speed in Dance Mode).
+    applyDanceModeTilt(rollNorm, pitchNorm);
+    return true;
+  }
+
+  // ==================== Driving Profile Commands (Phase 3) ====================
+
+  if (command == "load_drv_profile") {
+    int32_t idx = doc["index"] | -1;
+    if (idx < 0 || idx >= MAX_DRIVING_PROFILES) {
+      Serial.println("{\"status\":\"error\",\"reason\":\"invalid_index\"}");
+      return false;
+    }
+    if (!storageManager.loadDrivingProfile(static_cast<int>(idx))) {
+      Serial.println("{\"status\":\"error\",\"reason\":\"not_found\"}");
+      return false;
+    }
+    SuspensionConfig newCfg = storageManager.getConfig();
+    ServoConfig newSrvCfg = storageManager.getServoConfig();
+    suspensionSimulator.init(newCfg, newSrvCfg);
+    sensorFusion.setOrientation(newCfg.mpuOrientation);
+    startLedBlink();
+    Serial.printf("{\"status\":\"ok\",\"profile\":%d}\n", static_cast<int>(idx));
+    return true;
+  }
+
+  if (command == "save_drv_profile") {
+    int32_t idx = doc["index"] | -1;
+    String name = doc["name"] | "";
+    if (idx < 0 || idx >= MAX_DRIVING_PROFILES) {
+      Serial.println("{\"status\":\"error\",\"reason\":\"invalid_index\"}");
+      return false;
+    }
+    if (name.length() == 0) { name = String("Profile ") + String(static_cast<int>(idx)); }
+    if (name.length() > 20) { name = name.substring(0, 20); }
+    storageManager.saveDrivingProfile(static_cast<int>(idx), name);
+    startLedBlink();
+    Serial.printf("{\"status\":\"saved\",\"profile\":%d}\n", static_cast<int>(idx));
+    return true;
+  }
+
+  if (command == "delete_drv_profile") {
+    int32_t idx = doc["index"] | -1;
+    if (idx < 0 || idx >= MAX_DRIVING_PROFILES) {
+      Serial.println("{\"status\":\"error\",\"reason\":\"invalid_index\"}");
+      return false;
+    }
+    int newActive = -1;
+    if (!storageManager.deleteDrivingProfile(static_cast<int>(idx), newActive)) {
+      Serial.println("{\"status\":\"error\",\"reason\":\"last_profile\"}");
+      return false;
+    }
+    startLedBlink();
+    Serial.printf("{\"status\":\"deleted\",\"profile\":%d,\"new_active\":%d}\n",
+                  static_cast<int>(idx), newActive);
+    return true;
+  }
+
+  // ==================== Servo Registry Commands (Phase 4) ====================
+
+  if (command == "add_aux_servo") {
+    String type  = doc["type"]  | String(AUX_TYPE_POSITIONAL);
+    String label = doc["label"] | String("");
+    type.toLowerCase();
+    // Validate type
+    if (type != AUX_TYPE_POSITIONAL && type != AUX_TYPE_CONTINUOUS &&
+        type != AUX_TYPE_PAN        && type != AUX_TYPE_RELAY) {
+      type = AUX_TYPE_POSITIONAL;
+    }
+    String outNs;
+    if (!storageManager.addAuxServo(type, label, outNs)) {
+      Serial.println("{\"status\":\"error\",\"reason\":\"max_reached\"}");
+      return false;
+    }
+    lastBleCommandMs = millis();
+    startLedBlink();
+    Serial.printf("{\"status\":\"added\",\"namespace\":\"%s\"}\n", outNs.c_str());
+    return true;
+  }
+
+  if (command == "remove_aux_servo") {
+    String ns = doc["namespace"] | String("");
+    if (ns.length() == 0 || !storageManager.removeAuxServo(ns)) {
+      Serial.println("{\"status\":\"error\",\"reason\":\"not_found\"}");
+      return false;
+    }
+    lastBleCommandMs = millis();
+    startLedBlink();
+    Serial.printf("{\"status\":\"removed\",\"namespace\":\"%s\"}\n", ns.c_str());
+    return true;
+  }
+
+  // aux_run: set a continuous servo speed (-100..100, 0=stop)
+  if (command == "aux_run") {
+    String  ns    = doc["namespace"] | String("");
+    int32_t speed = doc["speed"]     | 0;
+    speed = constrain(speed, -100, 100);
+    storageManager.setAuxServoSpeed(ns, speed);
+    lastBleCommandMs = millis();
+    return true;
+  }
+
+  // aux_relay: set a relay servo state (0=off, 1=on)
+  if (command == "aux_relay") {
+    String  ns  = doc["namespace"] | String("");
+    int32_t val = (doc["state"] | 0) ? 1 : 0;
+    DynamicJsonDocument vDoc(32);
+    vDoc["v"] = val;
+    storageManager.setValue(ns + ".state", vDoc["v"].as<JsonVariantConst>());
+    lastBleCommandMs = millis();
+    return true;
+  }
+
+  // ==================== Phase 5: Lighting Profile Commands ====================
+  
+  // load_lt_profile: Load a lighting profile from LittleFS
+  if (command == "load_lt_profile") {
+    int index = doc["index"] | 0;
+    if (index < 0 || index >= MAX_LIGHTING_PROFILES) {
+      DynamicJsonDocument resp(128);
+      resp["status"] = "error";
+      resp["reason"] = "invalid_index";
+      String out;
+      serializeJson(resp, out);
+      Serial.println(out);
+      Serial.printf("[BLE] Lighting profile load error: invalid index %d\n", index);
+      return true;
+    }
+
+    LightingProfile profile = {};
+    if (!storageManager.loadLightingProfile(index, profile)) {
+      DynamicJsonDocument resp(128);
+      resp["status"] = "error";
+      resp["reason"] = "not_found";
+      String out;
+      serializeJson(resp, out);
+      Serial.println(out);
+      Serial.printf("[BLE] Lighting profile %d not found\n", index);
+      return true;
+    }
+
+    // Update active profile index in NVS
+    Preferences pref;
+    if (pref.begin("system", false)) {
+      pref.putInt("act_lt_prof", index);
+      pref.end();
+    }
+
+    // Load profile into LightsEngine
+    if (lightsEngine) {
+      lightsEngine->loadProfile(profile);
+    }
+
+    DynamicJsonDocument resp(128);
+    resp["status"] = "ok";
+    resp["profile"] = index;
+    String out;
+    serializeJson(resp, out);
+    Serial.println(out);
+    Serial.printf("[BLE] Loaded lighting profile %d: %s\n", index, profile.name);
+    return true;
+  }
+
+  // save_lt_profile: Save current lighting state to a profile
+  if (command == "save_lt_profile") {
+    int index = doc["index"] | 0;
+    String name = doc["name"] | String("Unnamed Profile");
+    
+    if (index < 0 || index >= MAX_LIGHTING_PROFILES) {
+      DynamicJsonDocument resp(128);
+      resp["status"] = "error";
+      resp["reason"] = "invalid_index";
+      String out;
+      serializeJson(resp, out);
+      Serial.println(out);
+      return true;
+    }
+
+    // Get current profile from LightsEngine and save to LittleFS
+    if (lightsEngine) {
+      LightingProfile* current = lightsEngine->getProfile();
+      if (current) {
+        strncpy(current->name, name.c_str(), sizeof(current->name) - 1);
+        if (storageManager.saveLightingProfile(index, *current)) {
+          // Update active profile index in NVS
+          Preferences pref;
+          if (pref.begin("system", false)) {
+            pref.putInt("act_lt_prof", index);
+            pref.end();
+          }
+          
+          DynamicJsonDocument resp(128);
+          resp["status"] = "saved";
+          resp["profile"] = index;
+          String out;
+          serializeJson(resp, out);
+          Serial.println(out);
+          Serial.printf("[BLE] Saved lighting profile %d: %s\n", index, name.c_str());
+          return true;
+        }
+      }
+    }
+
+    DynamicJsonDocument resp(128);
+    resp["status"] = "error";
+    resp["reason"] = "save_failed";
+    String out;
+    serializeJson(resp, out);
+    Serial.println(out);
+    return true;
+  }
+
+  // delete_lt_profile: Delete a lighting profile
+  if (command == "delete_lt_profile") {
+    int index = doc["index"] | 0;
+    
+    if (index < 0 || index >= MAX_LIGHTING_PROFILES) {
+      DynamicJsonDocument resp(128);
+      resp["status"] = "error";
+      resp["reason"] = "invalid_index";
+      String out;
+      serializeJson(resp, out);
+      Serial.println(out);
+      return true;
+    }
+
+    // Check if this is the last remaining profile
+    int profileCount = storageManager.getLightingProfileCount();
+    if (profileCount <= 1) {
+      DynamicJsonDocument resp(128);
+      resp["status"] = "error";
+      resp["reason"] = "last_profile";
+      String out;
+      serializeJson(resp, out);
+      Serial.println(out);
+      Serial.println("[BLE] Cannot delete last remaining lighting profile");
+      return true;
+    }
+
+    // Delete the profile
+    if (storageManager.deleteLightingProfile(index)) {
+      // If the deleted profile was active, switch to profile 0
+      Preferences pref;
+      if (pref.begin("system", false)) {
+        int active = pref.getInt("act_lt_prof", 0);
+        if (active == index) {
+          // Find the lowest available profile
+          for (int i = 0; i < MAX_LIGHTING_PROFILES; i++) {
+            if (i != index && LittleFS.exists(String("/lt_p") + i + ".json")) {
+              pref.putInt("act_lt_prof", i);
+              Serial.printf("[BLE] Switched active profile from %d to %d\n", index, i);
+              break;
+            }
+          }
+        }
+        pref.end();
+      }
+      
+      DynamicJsonDocument resp(128);
+      resp["status"] = "deleted";
+      resp["profile"] = index;
+      String out;
+      serializeJson(resp, out);
+      Serial.println(out);
+      Serial.printf("[BLE] Deleted lighting profile %d\n", index);
+      return true;
+    }
+
+    DynamicJsonDocument resp(128);
+    resp["status"] = "error";
+    resp["reason"] = "delete_failed";
+    String out;
+    serializeJson(resp, out);
+    Serial.println(out);
+    return true;
+  }
+
   return false;
 }
 
@@ -357,15 +809,8 @@ void setup() {
   delay(500);
   
   Serial.println("\n\nESP32 Active Suspension Simulator - Starting...");
-  
-  // Initialize SPIFFS
-  if (!SPIFFS.begin(true)) {
-    Serial.println("SPIFFS Mount Failed");
-    return;
-  }
-  Serial.println("SPIFFS initialized");
-  
-  // Initialize LightsEngine (after SPIFFS, before other systems)
+
+  // Initialize LightsEngine (after storage init, before other systems)
   lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
   Serial.printf("LightsEngine initialized: %d LED capacity\n", STATUS_LED_COUNT);
   
@@ -373,13 +818,7 @@ void setup() {
   storageManager.init();
   storageManager.loadConfig();
   storageManager.loadLights();
-  if (lightsEngine) {
-    NewLightsConfig* persistedLights = storageManager.getNewLightsConfig();
-    if (persistedLights) {
-      lightsEngine->updateFromPayload(*persistedLights);
-      Serial.printf("Applied persisted lights config on boot (%d groups)\n", persistedLights->groupCount);
-    }
-  }
+  // Note: Phase 5 loads lighting profiles from LittleFS, not from legacy lights config
   SuspensionConfig config = storageManager.getConfig();
   ServoConfig servoConfig = storageManager.getServoConfig();
   
@@ -452,19 +891,66 @@ void setup() {
   
   // Initialize PWM outputs
   pwmOutputs.init();
+  pwmOutputs.initAux();
+
+  // ==================== Phase 5: Lighting Profiles ====================
+  
+  // Create default lighting profiles on first boot
+  storageManager.createDefaultLightingProfiles();
+  
+  // Load active lighting profile
+  {
+    Preferences pref;
+    int activeLtProf = 0;
+    if (pref.begin("system", false)) {
+      activeLtProf = pref.getInt("act_lt_prof", 0);
+      pref.end();
+    }
+
+    static LightingProfile profile = {};
+    if (storageManager.loadLightingProfile(activeLtProf, profile)) {
+      if (lightsEngine) {
+        lightsEngine->loadProfile(profile);
+        Serial.printf("Loaded active lighting profile %d: %s\n", activeLtProf, profile.name);
+      }
+    } else {
+      Serial.printf("Warning: Could not load lighting profile %d\n", activeLtProf);
+    }
+  }
+
+  // Start LED effects FreeRTOS task (pinned to Core 0 for isolation from BLE on Core 1)
+  xTaskCreatePinnedToCore(
+    [](void* parameter) {
+      // LED effects task running on Core 0
+      TickType_t xLastWakeTime = xTaskGetTickCount();
+      const TickType_t xFrequency = pdMS_TO_TICKS(50);  // 50ms update rate (20 FPS)
+      
+      while (true) {
+        if (lightsEngine) {
+          lightsEngine->update();
+        }
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+      }
+    },
+    "LEDEffects",     // Task name
+    4096,             // Stack size (bytes)
+    NULL,             // Parameters
+    1,                // Priority
+    NULL,             // Task handle
+    0                 // Core 0 (isolated from BLE on Core 1)
+  );
+  Serial.println("LED effects task started (Core 0)");
   
   // Initialize Bluetooth Low Energy service
   bluetoothService = new BluetoothService(&storageManager);
   bluetoothService->setConfigWriteHandler(applyConfigUpdatePayload);
+  bluetoothService->setKVWriteHandler(applyKVWritePayload);
   bluetoothService->setServoWriteHandler(applyServoConfigPayload);
   bluetoothService->setLightsWriteHandler(applyLightsPayload);
   bluetoothService->setSystemWriteHandler(applySystemCommandPayload);
-  const char* bleDeviceName = storageManager.getDeviceName();
-  if (bleDeviceName == nullptr || bleDeviceName[0] == '\0') {
-    bleDeviceName = DEFAULT_DEVICE_NAME;
-  }
-  Serial.printf("Starting BLE advertising as: %s\n", bleDeviceName);
-  bluetoothService->begin(bleDeviceName);
+  const String bleDeviceName = buildBleAdvertisedName();
+  Serial.printf("Starting BLE advertising as: %s\n", bleDeviceName.c_str());
+  bluetoothService->begin(bleDeviceName.c_str());
   Serial.println("Bluetooth service started");
   
   Serial.println("Setup complete!");
@@ -498,14 +984,51 @@ void loop() {
     statusLED.show();
     ledBlinkEndTime = 0;
   }
+
+  // Auto-disable Dance Mode on BLE disconnect and force all suspension servos to trim.
+  static bool previousBleConnected = false;
+  const bool bleConnected = (bluetoothService && bluetoothService->isConnected());
+  if (previousBleConnected && !bleConnected && gDanceMode.enabled) {
+    gDanceMode.enabled = false;
+    gDanceMode.last_roll = 0.0f;
+    gDanceMode.last_pitch = 0.0f;
+    writeTrimToAllSuspensionServos();
+    Serial.println("[DanceMode] Auto-disabled due to BLE disconnect");
+  }
+  if (previousBleConnected && !bleConnected) {
+    gFlashCancelRequested = true;
+  }
+  previousBleConnected = bleConnected;
+
+  // Continuous-servo BLE watchdog: stop all continuous servos if BLE goes silent
+  if (lastBleCommandMs > 0 &&
+      (uint32_t)(currentTime - lastBleCommandMs) > CONTINUOUS_WATCHDOG_MS) {
+    const ServoRegistry& reg = storageManager.getServoRegistry();
+    bool anyRunning = false;
+    for (int i = 0; i < reg.auxCount; i++) {
+      if (strcmp(reg.auxServos[i].type, AUX_TYPE_CONTINUOUS) == 0 &&
+          reg.auxServos[i].currentSpeed != 0) {
+        anyRunning = true;
+        break;
+      }
+    }
+    if (anyRunning) {
+      storageManager.stopAllContinuousServos();
+      // Update PWM outputs to stop
+      for (int i = 0; i < reg.auxCount; i++) {
+        if (strcmp(reg.auxServos[i].type, AUX_TYPE_CONTINUOUS) == 0) {
+          pwmOutputs.setAuxContinuous(i, 0);
+        }
+      }
+      lastBleCommandMs = 0;  // Arm only again when next command arrives
+      Serial.println("[Watchdog] Stopped continuous servos (BLE silent)");
+    }
+  }
   
   // Update emergency light patterns (non-blocking)
   updateEmergencyLights();
   
-  // Update dynamic light groups (patterns, animations, etc.)
-  if (lightsEngine) {
-    lightsEngine->update();
-  }
+  // Dynamic light groups are updated in the dedicated LEDEffects task.
   
   // Read MPU6050 sensor data at specified rate
   // Skip I2C read if sensor not connected to avoid 5s timeout blocking
@@ -582,41 +1105,61 @@ void loop() {
   // Run suspension simulation
   if (currentTime - lastSimulationTime >= (1000 / SUSPENSION_SAMPLE_RATE_HZ)) {
     unsigned long simulationBlockStart = millis();
-    
+
     // Get current orientation and acceleration from sensor fusion
     float roll = sensorFusion.getRoll();
     float pitch = sensorFusion.getPitch();
     float yaw = sensorFusion.getYaw();
     float verticalAccel = sensorFusion.getVerticalAcceleration();
-    
-    // CHECKPOINT: Suspension update
-    unsigned long beforeSuspUpdate = millis();
-    suspensionSimulator.update(roll, pitch, verticalAccel);
-    unsigned long suspUpdateTime = millis() - beforeSuspUpdate;
-    if (suspUpdateTime > 50) {
-      Serial.printf("⚠️  SLOW SUSPENSION UPDATE: %lums\n", suspUpdateTime);
-    }
-    
-    // Get suspension outputs (0-180 degrees for servos)
-    float fl = suspensionSimulator.getFrontLeftOutput();
-    float fr = suspensionSimulator.getFrontRightOutput();
-    float rl = suspensionSimulator.getRearLeftOutput();
-    float rr = suspensionSimulator.getRearRightOutput();
-    
-    // CHECKPOINT: Servo config load (SPIFFS read - can be slow)
-    unsigned long beforeServoConfig = millis();
-    ServoConfig servoConfig = storageManager.getServoConfig();
-    unsigned long servoConfigTime = millis() - beforeServoConfig;
-    if (servoConfigTime > 100) {
-      Serial.printf("⚠️  SLOW SERVO CONFIG LOAD: %lums (SPIFFS read)\n", servoConfigTime);
-    }
-    
+
     // CHECKPOINT: PWM writes
     unsigned long beforePWM = millis();
-    pwmOutputs.setChannel(0, fl, servoConfig.frontLeft);
-    pwmOutputs.setChannel(1, fr, servoConfig.frontRight);
-    pwmOutputs.setChannel(2, rl, servoConfig.rearLeft);
-    pwmOutputs.setChannel(3, rr, servoConfig.rearRight);
+
+    if (!gDanceMode.enabled) {
+      // Normal suspension loop runs only while Dance Mode is off.
+      unsigned long beforeSuspUpdate = millis();
+      suspensionSimulator.update(roll, pitch, verticalAccel);
+      unsigned long suspUpdateTime = millis() - beforeSuspUpdate;
+      if (suspUpdateTime > 50) {
+        Serial.printf("⚠️  SLOW SUSPENSION UPDATE: %lums\n", suspUpdateTime);
+      }
+
+      // Get suspension outputs (0-180 degrees for servos)
+      float fl = suspensionSimulator.getFrontLeftOutput();
+      float fr = suspensionSimulator.getFrontRightOutput();
+      float rl = suspensionSimulator.getRearLeftOutput();
+      float rr = suspensionSimulator.getRearRightOutput();
+
+      // CHECKPOINT: Servo config load (SPIFFS read - can be slow)
+      unsigned long beforeServoConfig = millis();
+      ServoConfig servoConfig = storageManager.getServoConfig();
+      unsigned long servoConfigTime = millis() - beforeServoConfig;
+      if (servoConfigTime > 100) {
+        Serial.printf("⚠️  SLOW SERVO CONFIG LOAD: %lums (SPIFFS read)\n", servoConfigTime);
+      }
+
+      pwmOutputs.setChannel(0, fl, servoConfig.frontLeft);
+      pwmOutputs.setChannel(1, fr, servoConfig.frontRight);
+      pwmOutputs.setChannel(2, rl, servoConfig.rearLeft);
+      pwmOutputs.setChannel(3, rr, servoConfig.rearRight);
+    }
+
+    // Update aux servo PWM outputs
+    {
+      const ServoRegistry& reg = storageManager.getServoRegistry();
+      for (int i = 0; i < reg.auxCount; i++) {
+        const AuxServoConfig& aux = reg.auxServos[i];
+        if (!aux.enabled) continue;
+        const char* t = aux.type;
+        if (strcmp(t, AUX_TYPE_POSITIONAL) == 0 || strcmp(t, AUX_TYPE_PAN) == 0) {
+          pwmOutputs.setAuxPositional(i, aux.trimUs);
+        } else if (strcmp(t, AUX_TYPE_CONTINUOUS) == 0) {
+          pwmOutputs.setAuxContinuous(i, aux.currentSpeed);
+        } else if (strcmp(t, AUX_TYPE_RELAY) == 0) {
+          pwmOutputs.setAuxRelay(i, aux.state != 0);
+        }
+      }
+    }
     unsigned long pwmTime = millis() - beforePWM;
     if (pwmTime > 50) {
       Serial.printf("⚠️  SLOW PWM WRITES: %lums\n", pwmTime);

@@ -1,13 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// ==================== Version Configuration ====================
-// Update this version when releasing new firmware builds
-// For automated versioning from git, add to platformio.ini build_flags:
-//   -DFIRMWARE_VERSION=\"$(git describe --tags --always)\"
-// Or use a pre-build script to generate this from version.txt or package.json
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "1.0.0"
+#define FIRMWARE_VERSION "2.0.0"
 #endif
 
 // Sensor configuration
@@ -31,21 +26,44 @@
 #define STATUS_LED_COUNT 100      // Total number of LEDs in the strip (adjust to your hardware)
 #define LED_BRIGHTNESS_MAX 255    // Maximum brightness value
 
-// Default suspension parameters
+// Phase 1 default values (NVS-backed schema)
+#define DEFAULT_DEVICE_NAME "RCDCC"
+#define DEFAULT_SERVO_LABEL_FL "Front Left"
+#define DEFAULT_SERVO_LABEL_FR "Front Right"
+#define DEFAULT_SERVO_LABEL_RL "Rear Left"
+#define DEFAULT_SERVO_LABEL_RR "Rear Right"
+#define DEFAULT_SERVO_TYPE "positional"
+#define DEFAULT_SERVO_ENABLED 1
+#define DEFAULT_SERVO_TRIM_US 1500
+#define DEFAULT_SERVO_MIN_US 1000
+#define DEFAULT_SERVO_MAX_US 2000
+#define DEFAULT_SERVO_REVERSE 0
+#define DEFAULT_SERVO_RIDE_HT 50
+
+#define DEFAULT_SUSP_DAMPING 50
+#define DEFAULT_SUSP_STIFFNESS 50
+#define DEFAULT_SUSP_REACT_SPD 50
+#define DEFAULT_SUSP_FR_BALANCE 0
+
+#define DEFAULT_IMU_ORIENT 0
+#define DEFAULT_IMU_ROLL_TRIM 0.0f
+#define DEFAULT_IMU_PITCH_TRIM 0.0f
+
+#define DEFAULT_ACTIVE_DRIVING_PROFILE 0
+#define DEFAULT_ACTIVE_LIGHTING_PROFILE 0
+
+// Legacy runtime defaults retained for simulator compatibility.
 #define DEFAULT_REACTION_SPEED 1.0f
-#define DEFAULT_RIDE_HEIGHT 90.0f
+#define DEFAULT_RIDE_HEIGHT 50.0f
 #define DEFAULT_RANGE_LIMIT 60.0f
-#define DEFAULT_DAMPING 0.8f
+#define DEFAULT_DAMPING 0.5f
 #define DEFAULT_FRONT_REAR_BALANCE 0.5f
 #define DEFAULT_STIFFNESS 1.0f
-#define DEFAULT_FPV_AUTO_MODE false // FPV auto mode default
-#define DEFAULT_DEVICE_NAME "SAVAGE-CAT-TEST" // Device hostname on network
-
-// Default servo calibration parameters
-#define DEFAULT_SERVO_TRIM 0         // No trim offset (degrees)
-#define DEFAULT_SERVO_MIN 15         // Minimum angle (degrees)
-#define DEFAULT_SERVO_MAX 165        // Maximum angle (degrees)
-#define DEFAULT_SERVO_REVERSED false // Standard rotation direction
+#define DEFAULT_FPV_AUTO_MODE false
+#define DEFAULT_SERVO_TRIM 0
+#define DEFAULT_SERVO_MIN 0
+#define DEFAULT_SERVO_MAX 180
+#define DEFAULT_SERVO_REVERSED false
 
 // WiFi configuration - Home network (STA mode)
 #define HOME_WIFI_SSID "CAMELOT"  // Change this to your WiFi name
@@ -60,7 +78,6 @@
 #define WIFI_AP_SUBNET 255, 255, 255, 0
 
 // Storage configuration
-#define CONFIG_SPIFFS_PATH "/config.json"
 #define LIGHTS_SPIFFS_PATH "/lights.json"
 
 // MPU6050 Orientation Options
@@ -88,6 +105,57 @@ struct SuspensionConfig {
   uint8_t mpuOrientation;  // MPU6050 mounting orientation
   bool fpvAutoMode;        // FPV auto mode persistent setting
   char deviceName[64];     // Device hostname for network (e.g., "esp32-frontleft")
+};
+
+// Phase 1 key-value config contract (RAM mirror of NVS values)
+struct RCDCCServoState {
+  char label[21];
+  char type[16];
+  uint8_t enabled;
+  int32_t trimUs;
+  int32_t minUs;
+  int32_t maxUs;
+  uint8_t reverse;
+  int32_t rideHeight;
+};
+
+struct RCDCCSuspensionState {
+  int32_t damping;
+  int32_t stiffness;
+  int32_t reactSpeed;
+  int32_t frontRearBalance;
+};
+
+struct RCDCCImuState {
+  int32_t orient;
+  float rollTrim;
+  float pitchTrim;
+};
+
+struct RCDCCSystemState {
+  char deviceName[64];
+  char firmwareVersion[16];
+  int32_t activeDrivingProfile;
+  int32_t activeLightingProfile;
+};
+
+// Phase 6 runtime-only Dance Mode state.
+// Values are normalized and not persisted to storage.
+struct DanceMode {
+  bool enabled;
+  float last_roll;
+  float last_pitch;
+};
+
+struct RCDCCConfigState {
+  RCDCCServoState servoFL;
+  RCDCCServoState servoFR;
+  RCDCCServoState servoRL;
+  RCDCCServoState servoRR;
+  RCDCCSuspensionState suspension;
+  RCDCCImuState imu;
+  RCDCCSystemState system;
+  DanceMode danceMode;
 };
 
 // Per-servo calibration settings
@@ -183,5 +251,155 @@ struct NewLightsConfig {
 #define DEFAULT_EMERGENCY_LIGHTS_BRIGHTNESS 100
 #define DEFAULT_EMERGENCY_LIGHTS_MODE LIGHT_MODE_OFF
 #define DEFAULT_EMERGENCY_LIGHTS_BLINK_RATE 500
+
+// ==================== Aux Servo Architecture (Phase 4) ====================
+#define MAX_AUX_SERVOS    10
+#define MAX_SERVO_REGISTRY 14  // 4 reserved + 10 aux
+
+// Aux servo output GPIO pins (slots 0-9).
+// These use ESP32 LEDC channels 4-13 for PWM (positional/continuous/pan).
+// All listed pins also support relay (digital HIGH/LOW) output.
+// Note: GPIO 34-39 are input-only on ESP32 and cannot be used here.
+static constexpr uint8_t AUX_SERVO_PINS[MAX_AUX_SERVOS] = {
+  17, 18, 19, 23, 25, 26, 5, 27, 32, 33
+};
+
+// Aux servo type identifiers
+#define AUX_TYPE_POSITIONAL "positional"
+#define AUX_TYPE_CONTINUOUS "continuous"
+#define AUX_TYPE_PAN        "pan"
+#define AUX_TYPE_RELAY      "relay"
+
+// Aux servo NVS defaults
+#define DEFAULT_AUX_ENABLED   1
+#define DEFAULT_AUX_TRIM_US   1500
+#define DEFAULT_AUX_MIN_US    1000
+#define DEFAULT_AUX_MAX_US    2000
+#define DEFAULT_AUX_REVERSE   0
+#define DEFAULT_AUX_RIDE_HT   50
+#define DEFAULT_AUX_SPD_FWD   50
+#define DEFAULT_AUX_SPD_REV   50
+#define DEFAULT_AUX_SPD       50
+#define DEFAULT_AUX_STATE     0
+#define DEFAULT_AUX_MOMENTARY 0
+
+// Single aux servo entry
+struct AuxServoConfig {
+  bool    populated;
+  char    ns[16];       // e.g. "srv_aux_00"
+  char    label[21];    // user-defined name, max 20 chars
+  char    type[16];     // "positional" | "continuous" | "pan" | "relay"
+  uint8_t enabled;
+  // positional + pan
+  int32_t trimUs;
+  int32_t minUs;
+  int32_t maxUs;
+  uint8_t reverse;
+  // positional only
+  int32_t rideHeight;   // 0-100 %
+  // continuous only
+  int32_t spdFwd;       // 0-100
+  int32_t spdRev;       // 0-100
+  // pan only
+  int32_t spd;          // 0-100
+  // relay only
+  uint8_t state;        // 0=off 1=on
+  uint8_t momentary;    // 0=latching 1=momentary
+  // runtime — NOT persisted to NVS
+  int32_t currentSpeed; // -100..100 (continuous watchdog)
+};
+
+// Servo registry: all dynamic aux slots
+struct ServoRegistry {
+  int            auxCount;                         // 0-10
+  AuxServoConfig auxServos[MAX_AUX_SERVOS];
+};
+
+// ==================== Driving Profile Schema ====================
+#define MAX_DRIVING_PROFILES 10
+#define DEFAULT_DRIVING_PROFILE_NAME "Default"
+
+// A driving profile captures all mechanical tuning for a specific scenario.
+// Stored in NVS namespaces "drv_p0" through "drv_p9".
+struct DrivingProfile {
+  bool populated;   // false = empty slot
+  char name[21];    // user-defined name, max 20 chars + null terminator
+
+  // Servo parameters stored as µs values (same scale as RCDCCServoState)
+  int32_t srvFlTrim; int32_t srvFlMin; int32_t srvFlMax; int32_t srvFlRht; uint8_t srvFlRev;
+  int32_t srvFrTrim; int32_t srvFrMin; int32_t srvFrMax; int32_t srvFrRht; uint8_t srvFrRev;
+  int32_t srvRlTrim; int32_t srvRlMin; int32_t srvRlMax; int32_t srvRlRht; uint8_t srvRlRev;
+  int32_t srvRrTrim; int32_t srvRrMin; int32_t srvRrMax; int32_t srvRrRht; uint8_t srvRrRev;
+
+  // Suspension (same scale as RCDCCSuspensionState)
+  int32_t damping;
+  int32_t stiffness;
+  int32_t reactSpd;
+  int32_t frBalance;
+
+  // IMU orientation index
+  int32_t imuOrient;
+};
+
+// ==================== Lighting Profile Schema (Phase 5) ====================
+// Lighting profiles are completely independent from driving profiles.
+// Profiles are stored as JSON files in LittleFS (lt_p0.json through lt_p9.json).
+// Only the active profile index (system.act_lt_prof) is stored in NVS.
+// LED indices are ZERO-BASED throughout — LED 0 is the first LED on the strip.
+
+#define MAX_LIGHTING_PROFILES 10
+#define MAX_GROUP_LEDS 100  // Max individual LED indices per group
+#define MAX_GROUPS_PER_PROFILE 32
+
+// Effect names (string identifiers for JSON serialization)
+#define EFFECT_SOLID           "solid"
+#define EFFECT_BLINK           "blink"
+#define EFFECT_STROBE          "strobe"
+#define EFFECT_BREATHE         "breathe"
+#define EFFECT_FADE            "fade"
+#define EFFECT_TWINKLE         "twinkle"
+#define EFFECT_SPARKLE         "sparkle"
+#define EFFECT_FLASH_SPARKLE   "flash_sparkle"
+#define EFFECT_GLITTER         "glitter"
+#define EFFECT_RUNNING         "running"
+#define EFFECT_LARSON          "larson"
+#define EFFECT_FLICKER         "flicker"
+#define EFFECT_HEARTBEAT       "heartbeat"
+#define EFFECT_ALTERNATE       "alternate"
+
+// Default effect for new groups
+#define DEFAULT_EFFECT EFFECT_SOLID
+#define DEFAULT_BRIGHTNESS 100
+#define DEFAULT_EFFECT_SPEED 50
+#define DEFAULT_EFFECT_INTENSITY 100
+
+// Single light group within a lighting profile.
+// A group is a named collection of individual LED indices (not a range).
+// The same LED index can appear in multiple groups — overlapping is allowed.
+// When two groups both write to the same LED, the last group processed wins.
+struct LightingGroup {
+  uint8_t  id;                  // 0-31, group identifier
+  char     name[64];            // Group name (e.g., "Headlights")
+  uint16_t leds[MAX_GROUP_LEDS]; // Array of zero-based LED indices (LED 0 = first LED)
+  uint16_t ledCount;            // How many LEDs in this group (0 = disabled)
+  
+  bool     enabled;             // Whether this group is active
+  char     effect[32];          // Effect name: solid, blink, strobe, etc.
+  char     colorPrimary[8];     // Hex color #RRGGBB (e.g., "#FFFFFF")
+  char     colorSecondary[8];   // Hex color #RRGGBB (e.g., "#FF0000")
+  uint8_t  brightness;          // 0-100 % brightness
+  uint8_t  effectSpeed;         // 0-100 effect speed/rate
+  uint8_t  effectIntensity;     // 0-100 effect intensity
+};
+
+// Complete lighting profile.
+// Profiles are serialized to JSON in LittleFS with filename lt_pN.json (0-9).
+struct LightingProfile {
+  char       name[64];          // Profile name (e.g., "Night Mode")
+  bool       master;            // Master enable/disable
+  uint16_t   totalLeds;         // Total LEDs on the strip (e.g., 100)
+  uint8_t    groupCount;        // Number of groups (0-32)
+  LightingGroup groups[MAX_GROUPS_PER_PROFILE];
+};
 
 #endif
