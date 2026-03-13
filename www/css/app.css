@@ -326,62 +326,6 @@
             align-items: center;
         }
 
-        /* Global loading skeleton: keep card headers visible, mask card bodies until config load. */
-        @keyframes cardBodyShimmer {
-            0% {
-                background-position: -220% 0;
-            }
-            100% {
-                background-position: 220% 0;
-            }
-        }
-
-        .card-body {
-            position: relative;
-        }
-
-        .card-body.is-loading {
-            pointer-events: none;
-            user-select: none;
-        }
-
-        .card-body.is-loading > * {
-            visibility: hidden;
-        }
-
-        .card-body.is-loading::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: 0.375rem;
-            background:
-                linear-gradient(110deg,
-                    rgba(17, 24, 39, 0.08) 8%,
-                    rgba(17, 24, 39, 0.18) 18%,
-                    rgba(17, 24, 39, 0.08) 33%),
-                linear-gradient(0deg, #f3f4f6, #f3f4f6);
-            background-size: 220% 100%, 100% 100%;
-            animation: cardBodyShimmer 2.2s linear infinite;
-            z-index: 2;
-        }
-
-        .card-body.is-loading::after {
-            content: '';
-            position: absolute;
-            inset: 0.65rem;
-            border-radius: 0.25rem;
-            background:
-                linear-gradient(#e5e7eb, #e5e7eb) 0 0 / 65% 12px no-repeat,
-                linear-gradient(#e5e7eb, #e5e7eb) 0 28px / 92% 10px no-repeat,
-                linear-gradient(#e5e7eb, #e5e7eb) 0 50px / 84% 10px no-repeat,
-                linear-gradient(#e5e7eb, #e5e7eb) 0 72px / 76% 10px no-repeat,
-                linear-gradient(#d1d5db, #d1d5db) 0 102px / 100% 18px no-repeat,
-                linear-gradient(#e5e7eb, #e5e7eb) 0 132px / 88% 10px no-repeat,
-                linear-gradient(#e5e7eb, #e5e7eb) 0 154px / 72% 10px no-repeat;
-            opacity: 0.95;
-            z-index: 3;
-        }
-        
         /* Help icon */
         .help-icon {
             cursor: pointer;
@@ -411,81 +355,270 @@
 
         }
 
+        .garage-vehicle-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.7rem;
+        }
+
+        .garage-header-add-btn {
+            width: 2.1rem;
+            height: 2.1rem;
+            border-radius: 999px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+                background-color: #000;
+                border-color: #000;
+                color: var(--high-impact-color);
+            }
+
+            .garage-header-add-btn:hover,
+            .garage-header-add-btn:focus,
+            .garage-header-add-btn:active {
+                background-color: #111;
+                border-color: #111;
+                color: var(--high-impact-color);
+        }
+
+        .garage-header-add-btn .material-symbols-outlined {
+            font-size: 1.2rem;
+        }
+
+        .garage-add-icon-combo {
+            position: relative;
+              width: 1.6rem;
+              height: 1.45rem;
+            display: inline-block;
+        }
+
+        .garage-add-icon-car {
+            position: absolute;
+            left: 0;
+              top: 0.12rem;
+              font-size: 1.35rem !important;
+            line-height: 1;
+              color: var(--high-impact-color);
+        }
+
+        .garage-add-icon-plus {
+            position: absolute;
+                  right: calc(-0.18rem - 3px);
+                  top: calc(-0.18rem - 3px);
+              font-size: 0.95rem !important;
+            line-height: 1;
+            color: var(--high-impact-color);
+              font-variation-settings: 'FILL' 1;
+        }
+
+        .garage-rename-modal-dialog {
+            margin: calc(var(--sat, 0px) + 1rem) auto 1rem;
+        }
+
+        .garage-rename-device-id {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+        }
+
         .garage-card {
             display: flex;
-            align-items: center;
-            gap: 0.75rem;
+            flex-direction: column;
+            gap: 0.55rem;
             border: 1px solid #e5e7eb;
-            border-radius: 0.5rem;
-            padding: 0.75rem;
-            margin-bottom: 0.55rem;
+            border-radius: 0.9rem;
+            padding: 0.65rem;
+            background: linear-gradient(180deg, #ffffff 0%, #fafaf9 100%);
+            transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+            min-width: 0;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
             cursor: pointer;
-            background: #fff;
-            transition: border-color 0.15s ease, background-color 0.15s ease;
+            position: relative;
+            --garage-disconnect-hold-ms: 650ms;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+        }
+
+        @keyframes garageDisconnectHoldSweep {
+            from {
+                background: conic-gradient(var(--bluetooth-blue) 0deg, rgba(30, 144, 255, 0.15) 0deg);
+            }
+            to {
+                background: conic-gradient(var(--bluetooth-blue) 360deg, rgba(30, 144, 255, 0.15) 360deg);
+            }
+        }
+
+        .garage-card.disconnect-pressing::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            padding: 2px;
+            background: conic-gradient(var(--bluetooth-blue) 0deg, rgba(30, 144, 255, 0.15) 0deg);
+            animation: garageDisconnectHoldSweep var(--garage-disconnect-hold-ms) linear forwards;
+            pointer-events: none;
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+        }
+
+        @keyframes garageConnectPulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(30, 144, 255, 0.24), 0 8px 18px rgba(15, 23, 42, 0.06);
+            }
+            70% {
+                box-shadow: 0 0 0 12px rgba(30, 144, 255, 0), 0 10px 24px rgba(15, 23, 42, 0.1);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(30, 144, 255, 0), 0 8px 18px rgba(15, 23, 42, 0.06);
+            }
         }
 
         .garage-card:hover {
             border-color: #c8a800;
             background-color: #fffdf5;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
         }
 
-        .garage-card.selected {
-            border-color: #c8a800;
-            background-color: #fff6cf;
+        .garage-card:focus-visible {
+            outline: 2px solid rgba(30, 144, 255, 0.35);
+            outline-offset: 2px;
+        }
+
+        .garage-card:active {
+            transform: translateY(1px);
+        }
+
+        .garage-card.connecting {
+            border-color: var(--bluetooth-blue);
+            animation: garageConnectPulse 1.15s ease-out infinite;
+        }
+
+        .garage-card.connected {
+              border-color: var(--bluetooth-blue);
+        }
+
+        .garage-card.connect-error {
+            border-color: var(--danger);
+            box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18), 0 8px 18px rgba(15, 23, 42, 0.06);
+        }
+
+        .garage-card-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.35rem;
         }
 
         .garage-card-icon {
-            width: 2rem;
-            height: 2rem;
-            border-radius: 0.45rem;
+            width: 2.3rem;
+            height: 2.3rem;
+            border-radius: 0.8rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #111827;
-            color: #fbbf24;
+            background: #e5e7eb;
+            color: #6b7280;
             flex-shrink: 0;
         }
 
+        .garage-card-icon .material-symbols-outlined {
+            font-size: 1.25rem;
+        }
+
+        .garage-card.connected .garage-card-icon {
+              background: var(--bluetooth-blue);
+            color: #ffffff;
+        }
+
         .garage-card-info {
-            flex: 1;
             min-width: 0;
         }
 
         .garage-card-name {
-            font-weight: 600;
+            font-weight: 700;
             color: #111827;
-            display: flex;
-            gap: 0.45rem;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .garage-card-mac,
-        .garage-card-last {
-            color: #6b7280;
-            font-size: 0.8rem;
-            white-space: nowrap;
+            font-size: 0.95rem;
+            line-height: 1.15;
+            display: -webkit-box;
+            line-clamp: 2;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            text-overflow: ellipsis;
+            word-break: break-word;
+            min-height: 2rem;
         }
 
-        .garage-card-arrow {
+        .garage-card-hint {
+            margin-top: 0.2rem;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            line-height: 1.2;
+        }
+
+        .garage-card-status {
+            color: #6b7280;
+            font-size: 0.74rem;
+            font-weight: 600;
+            margin-top: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .garage-card-overflow {
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .garage-card-overflow-btn {
+            border: none;
+            background: transparent;
             color: #9ca3af;
+            padding: 0.15rem;
+            width: 2rem;
+            height: 2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
         }
 
-        .garage-detail-actions {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 0.5rem;
+        .garage-card-overflow-btn::after {
+            display: none;
         }
 
-        .garage-detail-actions .btn {
-            width: 100%;
-            min-width: 0;
+        .garage-card-overflow-btn:hover,
+        .garage-card-overflow-btn:focus {
+            color: #111827;
+            background: #f3f4f6;
         }
 
-        @media (max-width: 480px) {
-            .garage-detail-actions {
+        .garage-card-menu {
+            min-width: 9rem;
+            border-radius: 0.75rem;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+            padding: 0.35rem;
+        }
+
+        .garage-card-menu .dropdown-item {
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            padding: 0.55rem 0.7rem;
+        }
+
+        .garage-card-menu .dropdown-item.text-danger {
+            color: #dc2626;
+        }
+
+        @media (max-width: 359px) {
+            .garage-vehicle-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -528,6 +661,49 @@
         .btn-gold:hover {
             background-color: var(--high-impact-color);
             color:#000
+        }
+
+        .lights-master-toggle-btn {
+            border: 1px solid #d1d5db;
+            background: #ffffff;
+            color: #111827;
+            border-radius: 0.9rem;
+            width: 100%;
+            min-height: 3.35rem;
+            padding: 0.8rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.55rem;
+            font-weight: 700;
+            font-size: 1rem;
+            line-height: 1.1;
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .lights-master-toggle-btn .material-symbols-outlined {
+            font-size: 1.3rem;
+        }
+
+        .lights-master-toggle-btn:hover {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+        }
+
+        .lights-master-toggle-btn.is-active {
+            background: var(--high-impact-color);
+            border-color: var(--high-impact-color);
+            color: #000;
+        }
+
+        .lights-master-toggle-text {
+            letter-spacing: 0.01em;
+        }
+
+        .lights-master-toggle-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
         }
 
         /* Favorite color target toggle: active matches Save Group, inactive is inverted */
@@ -814,123 +990,199 @@
         /* Light Groups Styling */
         .light-group-item {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem;
+            align-items: flex-start;
+            gap: 0.65rem;
+            padding: 0.75rem;
             border: 1px solid #e5e7eb;
-            border-radius: 0.375rem;
+            border-radius: 0.75rem;
             margin-bottom: 0.75rem;
             background-color: #f9fafb;
-            transition: all 0.2s ease;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
         }
 
         .light-group-item:hover {
             background-color: #f3f4f6;
             border-color: var(--primary);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
         }
 
         .light-group-info {
             flex: 1;
+            min-width: 0;
+        }
+
+        .light-group-name-row {
+            display: flex;
+            align-items: center;
+            min-height: 1.5rem;
         }
 
         .light-group-name {
             font-weight: 600;
             color: #000;
-            margin-bottom: 0.25rem;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .light-group-range {
-            font-size: 0.875rem;
-            color: #666;
-        }
-
-        .light-group-actions {
-            display: flex;
-            gap: 0.5rem;
-            margin-left: 1rem;
-        }
-
-        .light-group-actions button {
-            padding: 0.4rem 0.8rem;
-            font-size: 0.875rem;
-            border-radius: 0.25rem;
-            border: 1px solid #d1d5db;
-            background-color: #fff;
-            color: #000;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .light-group-actions button:hover {
-            background-color: #f3f4f6;
-            border-color: #999;
-        }
-
-        .light-group-actions .btn-delete:hover {
-            background-color: #fee2e2;
-            border-color: #ef4444;
-            color: #dc2626;
-        }
-
-        /* Light Group Status Indicators */
-        .light-group-status-icon {
-            display: inline-block;
-            margin-left: 8px;
-            font-size: 1.1rem;
-            vertical-align: middle;
-        }
-
-        .light-group-status-icon.configured {
-            color: #10b981;
-        }
-
-        .light-group-status-icon.not-configured {
-            color: #f59e0b;
-        }
-        
-        /* Drag and Drop Styles */
-        .light-group-drag-handle {
-            cursor: grab;
-            color: #9ca3af;
-            display: flex;
-            align-items: center;
-            margin-right: 0.75rem;
-            transition: color 0.2s ease;
-        }
-        
-        .light-group-drag-handle:hover {
-            color: #4b5563;
-        }
-        
-        .light-group-drag-handle:active {
-            cursor: grabbing;
-        }
-        
-        .light-group-priority {
-            display: flex;
+        .light-group-warning-btn {
+            border: none;
+            background: transparent;
+            padding: 0;
+            margin-left: 0.25rem;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 32px;
-            height: 32px;
-            padding: 0.25rem 0.5rem;
-            margin-right: 0.75rem;
-            background-color: var(--high-impact-color);
-            color: #000;
-            font-weight: 700;
-            font-size: 0.875rem;
-            border-radius: 50%;
-            border: 2px solid #d1d5db;
+            line-height: 1;
+            vertical-align: text-bottom;
         }
-        
-        .light-group-item.dragging {
-            opacity: 0.5;
-            cursor: grabbing;
+
+        .light-group-warning-icon {
+            color: var(--high-impact-color);
+            font-size: 1rem;
         }
-        
-        .light-group-item.drag-over {
-            border-color: var(--high-impact-color);
-            border-width: 2px;
-            background-color: #fffbeb;
+
+        .light-group-meta-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 0.5rem;
+            margin-top: 0.28rem;
+        }
+
+        .light-group-swatch-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .light-group-swatch {
+            width: 0.95rem;
+            height: 0.95rem;
+            border-radius: 999px;
+            border: 1px solid rgba(17, 24, 39, 0.15);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+        }
+
+        .light-group-details {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.28rem;
+            font-size: 0.76rem;
+            color: #6b7280;
+            transition: max-height 0.25s ease, opacity 0.22s ease, margin-top 0.22s ease;
+        }
+
+        .light-group-details.expanded {
+            max-height: 8rem;
+            opacity: 1;
+            margin-top: 0.45rem;
+        }
+
+        .light-group-detail-line {
+            line-height: 1.3;
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .light-group-controls {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.25rem;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        .light-group-leading-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            flex-shrink: 0;
+            margin-top: 0.1rem;
+        }
+
+        .light-group-order-btn,
+        .light-group-details-toggle {
+            width: 2rem;
+            height: 2rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            background: #ffffff;
+            color: #374151;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }
+
+        .light-group-order-btn .material-symbols-outlined,
+        .light-group-details-toggle .material-symbols-outlined {
+            font-size: 1.2rem;
+        }
+
+        .light-group-order-btn:hover:not(:disabled),
+        .light-group-details-toggle:hover {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+            color: #111827;
+        }
+
+        .light-group-order-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .light-group-item .garage-card-overflow-btn {
+            width: 2rem;
+            height: 2rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            background: #fff;
+            color: #374151;
+            padding: 0;
+        }
+
+        .light-group-item .garage-card-overflow-btn:hover,
+        .light-group-item .garage-card-overflow-btn:focus {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+            color: #111827;
+        }
+
+        @media (max-width: 440px) {
+            .light-group-item {
+                gap: 0.5rem;
+                padding: 0.65rem;
+            }
+
+            .light-group-order-btn,
+            .light-group-details-toggle,
+            .light-group-item .garage-card-overflow-btn {
+                width: 1.9rem;
+                height: 1.9rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .light-group-editor-dialog {
+                margin: 0;
+                display: flex;
+                align-items: flex-end;
+                min-height: 100%;
+            }
+
+            .light-group-editor-dialog .modal-content {
+                border-radius: 1rem 1rem 0 0;
+                border-bottom: none;
+                max-height: 88vh;
+                overflow-y: auto;
+            }
         }
 
         /* LED Grid Selector */

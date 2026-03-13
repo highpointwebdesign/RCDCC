@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = "C:\Users\Savage Cat Racing\Documents\projects\ai-active-suspension-3"
 Set-Location $projectRoot
 
+node .\build-version.js
 npx cap sync android
 
 Set-Location (Join-Path $projectRoot 'android')

@@ -1,13 +1,13 @@
 {
   "name": "rcdcc-app",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "R/C Dynamic Chassis Control - Native Android App",
   "main": "index.js",
   "scripts": {
-    "build": "echo 'No build step needed - static HTML app'",
-    "sync": "npx cap sync android",
+    "build": "node build-version.js",
+    "sync": "node build-version.js && npx cap sync android",
     "open": "npx cap open android",
-    "run:android": "npx cap run android"
+    "run:android": "node build-version.js && npx cap run android"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^7.0.0",

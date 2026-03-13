@@ -55,21 +55,23 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                          (window.location.hostname.startsWith('192.168.') ? window.location.hostname : '192.168.4.1');
         
         // ==================== Version Configuration ====================
-        // Update this version number when releasing new app versions
-        // For automated versioning, this could be replaced by a build script that:
-        // - Reads from package.json
-        // - Uses git tags: $(git describe --tags --always)
-        // - Generates from CI/CD pipeline build number
-        const APP_VERSION = '6f3e740';
-        const BUILD_DATE = '2026-03-04'; // Can be auto-generated: new Date().toISOString().split('T')[0]
+        // Keep this value human-readable for the About screen.
+        // `node build-version.js` refreshes these constants from package.json before builds.
+        const APP_VERSION = '1.1.0';
+        const BUILD_DATE = '2026-03-13';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
         window.bleManager = bleManager;
         let communicationMode = 'ble';
-        const AUTO_RECONNECT_INTERVAL_MS = 5000;
-        let autoReconnectTimer = null;
+        const AUTO_RECONNECT_WINDOW_MS = 120000;
+        const AUTO_RECONNECT_BASE_DELAY_MS = 2000;
+        const AUTO_RECONNECT_MAX_DELAY_MS = 90000;
+        const AUTO_RECONNECT_JITTER_RATIO = 0.2;
+        let autoReconnectTimeout = null;
         let autoReconnectInFlight = false;
+        let autoReconnectStartedAtMs = 0;
+        let autoReconnectAttemptCount = 0;
         let manualBleDisconnect = false;
         let hasEverBleConnection = false;
         const GARAGE_STORAGE_KEY = 'rcdcc_garage_vehicles';
@@ -108,28 +110,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
         }
 
-        function ensureDashboardVehicleRow() {
-            const existing = document.getElementById('activeVehicleDisplay');
-            if (existing) return;
-            const drivingRow = document.getElementById('activeDrivingProfileDisplay')?.closest('.d-flex');
-            if (!drivingRow || !drivingRow.parentElement) return;
-
-            const row = document.createElement('div');
-            row.className = 'd-flex align-items-center justify-content-between mt-2';
-            row.innerHTML = '<span>Vehicle</span><span id="activeVehicleDisplay" class="badge" style="background-color:#6f7d8d;color:#fff;font-size:0.75rem;">--</span>';
-            drivingRow.parentElement.insertBefore(row, drivingRow);
-        }
-
         function updateDashboardVehicleName(name = null) {
-            ensureDashboardVehicleRow();
             const el = document.getElementById('activeVehicleDisplay');
             if (!el) return;
             if (!isBleConnected()) {
                 el.textContent = '--';
                 return;
             }
-            const fallbackName = bleManager?.deviceName || 'RCDCC Truck';
-            el.textContent = (name && String(name).trim()) || fallbackName;
+            // Always prefer the garage custom label, fall back to passed name then BLE device name.
+            const garageLabel = getGarageVehicleNameById(bleManager?.deviceId);
+            el.textContent = garageLabel || (name && String(name).trim()) || bleManager?.deviceName || 'RCDCC Truck';
         }
 
         function clearDashboardActiveStatus() {
@@ -169,7 +159,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             const idsToDisable = [
                 'saveNewProfileBtn',
-                'loadLightingProfileBtn',
                 'saveLightingProfileBtn',
                 'deleteLightingProfileBtn',
                 'lightingProfileSelect',
@@ -678,24 +667,69 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return false;
         }
 
+        function getAutoReconnectDelayMs(attemptNumber) {
+            const exponent = Math.max(0, attemptNumber - 1);
+            const baseDelay = Math.min(AUTO_RECONNECT_BASE_DELAY_MS * Math.pow(2, exponent), AUTO_RECONNECT_MAX_DELAY_MS);
+            const jitterFactor = 1 + ((Math.random() * 2 - 1) * AUTO_RECONNECT_JITTER_RATIO);
+            return Math.max(1000, Math.round(baseDelay * jitterFactor));
+        }
+
+        function scheduleAutoReconnectAttempt(delayMs, source = 'backoff') {
+            if (autoReconnectTimeout) {
+                clearTimeout(autoReconnectTimeout);
+                autoReconnectTimeout = null;
+            }
+
+            autoReconnectTimeout = setTimeout(async () => {
+                autoReconnectTimeout = null;
+
+                if (manualBleDisconnect) {
+                    stopAutoReconnect();
+                    return;
+                }
+
+                const elapsed = Date.now() - autoReconnectStartedAtMs;
+                if (elapsed >= AUTO_RECONNECT_WINDOW_MS) {
+                    stopAutoReconnect();
+                    console.log('BLE auto reconnect window expired');
+                    return;
+                }
+
+                const didReconnect = await attemptAutoReconnect(source);
+                if (didReconnect) {
+                    stopAutoReconnect();
+                    return;
+                }
+
+                autoReconnectAttemptCount += 1;
+                const nextDelay = getAutoReconnectDelayMs(autoReconnectAttemptCount);
+                const remainingWindow = AUTO_RECONNECT_WINDOW_MS - (Date.now() - autoReconnectStartedAtMs);
+                if (remainingWindow <= 0) {
+                    stopAutoReconnect();
+                    return;
+                }
+
+                scheduleAutoReconnectAttempt(Math.min(nextDelay, remainingWindow), 'backoff');
+            }, Math.max(0, delayMs));
+        }
+
         function startAutoReconnect(reason = 'disconnect') {
             if (!bleManager || manualBleDisconnect) return;
             if (!hasEverBleConnection) return;
-            if (autoReconnectTimer) return;
+            if (autoReconnectTimeout || autoReconnectInFlight) return;
 
-            // Try immediately, then continue in the background.
-            attemptAutoReconnect(reason);
-
-            autoReconnectTimer = setInterval(() => {
-                attemptAutoReconnect('interval');
-            }, AUTO_RECONNECT_INTERVAL_MS);
+            autoReconnectStartedAtMs = Date.now();
+            autoReconnectAttemptCount = 1;
+            scheduleAutoReconnectAttempt(0, reason);
         }
 
         function stopAutoReconnect() {
-            if (autoReconnectTimer) {
-                clearInterval(autoReconnectTimer);
-                autoReconnectTimer = null;
+            if (autoReconnectTimeout) {
+                clearTimeout(autoReconnectTimeout);
+                autoReconnectTimeout = null;
             }
+            autoReconnectStartedAtMs = 0;
+            autoReconnectAttemptCount = 0;
         }
 
         // Expose manual control for quick testing from browser console.
@@ -924,12 +958,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const rSliderInitState = new Set();
 
         function setCardBodiesLoading(isLoading) {
-            const cardBodies = document.querySelectorAll('.card-body');
+            const cardBodies = document.querySelectorAll('.card-body.is-loading');
             cardBodies.forEach((cardBody) => {
-                cardBody.classList.toggle('is-loading', isLoading);
-                cardBody.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+                cardBody.classList.remove('is-loading');
+                cardBody.setAttribute('aria-busy', 'false');
             });
-            document.body.classList.toggle('app-config-loading', isLoading);
+            document.body.classList.remove('app-config-loading');
         }
 
         function finishInitialCardLoading(reason = 'config-loaded') {
@@ -2278,8 +2312,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         document.addEventListener('DOMContentLoaded', function() {
             setCardBodiesLoading(true);
-
-            ensureDashboardVehicleRow();
             clearDashboardActiveStatus();
             applyFeatureAvailabilityGate();
 
@@ -2299,6 +2331,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateConnectionMethodDisplay();
                     clearDashboardActiveStatus();
                     applyFeatureAvailabilityGate();
+                    if (window.GarageManager && typeof window.GarageManager.renderGarage === 'function') {
+                        window.GarageManager.renderGarage();
+                    }
                     if (!manualBleDisconnect) {
                         startAutoReconnect('disconnect-callback');
                     }
@@ -2962,6 +2997,18 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let lightGroupsStateBeforeModal = null;
         let masterStateBeforeModal = false;
         let lightGroupModalSaved = false;
+        const expandedLightGroupIds = new Set();
+
+        function createLightGroupId() {
+            return `lg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        }
+
+        function ensureLightGroupIds() {
+            lightGroups = lightGroups.map(group => ({
+                ...group,
+                id: group.id || createLightGroupId()
+            }));
+        }
 
         // Load color presets from localStorage or use defaults
         function loadColorPresets() {
@@ -3086,6 +3133,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 enabled: !!group.enabled
             }));
 
+            ensureLightGroupIds();
+
             saveLightGroups(false);
             renderLightGroupsList();
             renderLightsHierarchyControls();
@@ -3128,6 +3177,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             const groups = Array.isArray(profileData.groups) ? profileData.groups : [];
             lightGroups = groups.map(g => ({
+                id: createLightGroupId(),
                 name: g.name || `Group ${g.id}`,
                 indices: Array.isArray(g.leds) ? g.leds.map(v => Number(v)).filter(v => Number.isFinite(v) && v >= 0) : [],
                 brightness: Math.round((Number(g.brightness ?? 100) * 255) / 100),
@@ -3232,6 +3282,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function saveLightGroups(pushToHardware = true) {
+            ensureLightGroupIds();
             localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(lightGroups));
             renderLightGroupsList();
             renderLightsHierarchyControls();
@@ -3257,17 +3308,27 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function syncMasterLightSwitches(isEnabled) {
             const masterToggle = document.getElementById('lightsToggle');
             const dashboardToggle = document.getElementById('lightsToggleDashboard');
-            if (masterToggle) masterToggle.checked = isEnabled;
-            if (dashboardToggle) dashboardToggle.checked = isEnabled;
+            [masterToggle, dashboardToggle].forEach(toggleBtn => {
+                if (!toggleBtn) return;
+                toggleBtn.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+                toggleBtn.classList.toggle('is-active', isEnabled);
+                toggleBtn.setAttribute('aria-label', isEnabled ? 'Master Light Switch on' : 'Master Light Switch off');
+                toggleBtn.title = isEnabled ? 'Master lights on' : 'Master lights off';
+
+                const icon = toggleBtn.querySelector('.lights-master-toggle-icon');
+                if (icon) {
+                    icon.textContent = isEnabled ? 'lightbulb' : 'light_off';
+                }
+            });
         }
 
         function bindMasterLightSwitch(toggleElement) {
             if (!toggleElement || toggleElement.dataset.bound === 'true') return;
 
             toggleElement.dataset.bound = 'true';
-            toggleElement.checked = getMasterLightsEnabled();
-            toggleElement.addEventListener('change', function() {
-                setMasterLightsEnabled(this.checked, true);
+            syncMasterLightSwitches(getMasterLightsEnabled());
+            toggleElement.addEventListener('click', function() {
+                setMasterLightsEnabled(!getMasterLightsEnabled(), true);
             });
         }
 
@@ -3470,11 +3531,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 lightGroups.forEach((group, index) => {
                     const item = document.createElement('div');
                     item.className = 'light-group-item';
-                    item.setAttribute('draggable', 'true');
+                    item.setAttribute('data-group-id', group.id || '');
                     item.setAttribute('data-index', index);
                     
-                    const ledDisplay = formatLedRanges(group.indices);
-                    const brightnessPercent = group.brightness !== undefined ? 
+                    const ledCount = group.indices?.length || 0;
+                    const ledDisplay = ledCount > 0 ? formatLedRanges(group.indices) : 'No LEDs assigned';
+                    const brightnessPercent = group.brightness !== undefined ?
                         Math.round(group.brightness * 100 / 255) : 100;
                     const color = group.color || '#ff0000';
                     const color2 = group.color2 || '#000000';
@@ -3482,98 +3544,135 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const patternDisplay = (pattern === 'Cycle' || pattern === 'Cycle Favorites')
                         ? `${pattern} (${LIGHT_GROUP_CYCLE_INTERVAL_SECONDS}s)`
                         : pattern;
-                    
-                    // Show both colors if second color is not black/off
-                    const colorDisplay = color2 !== '#000000' && color2 !== '#00000000'
-                        ? `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 4px;"></span><span style="display: inline-block; width: 16px; height: 16px; background-color: ${color2}; border: 2px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 8px;"></span>`
-                        : `<span style="display: inline-block; width: 16px; height: 16px; background-color: ${color}; border: 2px solid #ddd; border-radius: 50%; vertical-align: middle; margin-right: 8px;"></span>`;
-                    
-                    const colorText = color2 !== '#000000' && color2 !== '#00000000'
-                        ? `${color.toUpperCase()} / ${color2.toUpperCase()}`
-                        : color.toUpperCase();
-                    
-                    // Determine configuration status
                     const isConfigured = group.indices && group.indices.length > 0;
-                    const statusIcon = isConfigured
-                        ? '<span class="material-symbols-outlined light-group-status-icon configured" title="Configured - LEDs assigned">check_circle</span>'
-                        : '<span class="material-symbols-outlined light-group-status-icon not-configured" title="Setup Required - No LEDs assigned">warning</span>';
+                    const detailsExpanded = expandedLightGroupIds.has(group.id);
+                    const hasSecondaryColor = color2 !== '#000000' && color2 !== '#00000000';
+                    const warningIcon = !isConfigured
+                        ? '<button type="button" class="light-group-warning-btn" aria-label="No LEDs assigned" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top" data-bs-content="No LED lights assigned in this group."><span class="material-symbols-outlined light-group-warning-icon" aria-hidden="true">warning</span></button>'
+                        : '';
                     
                     item.innerHTML = `
-                        <div class="light-group-drag-handle" title="Drag to reorder">
-                            <span class="material-symbols-outlined">drag_indicator</span>
+                        <div class="light-group-leading-controls" aria-label="Reorder group">
+                            <button type="button" class="light-group-order-btn" aria-label="Move group up" title="Move up" onclick="moveLightGroup(${index}, -1)" ${index === 0 ? 'disabled' : ''}>
+                                <span class="material-symbols-outlined">keyboard_arrow_up</span>
+                            </button>
+                            <button type="button" class="light-group-order-btn" aria-label="Move group down" title="Move down" onclick="moveLightGroup(${index}, 1)" ${index === lightGroups.length - 1 ? 'disabled' : ''}>
+                                <span class="material-symbols-outlined">keyboard_arrow_down</span>
+                            </button>
                         </div>
-                        <div class="light-group-priority" title="Priority (top = higher)">${index + 1}</div>
                         <div class="light-group-info">
-                            <div class="light-group-name">
-                                ${colorDisplay}
-                                ${group.name}
-                                ${statusIcon}
+                            <div class="light-group-name-row">
+                                <div class="light-group-name">${group.name}${warningIcon}</div>
                             </div>
-                            <div class="light-group-range">LEDs: ${ledDisplay} • Brightness: ${brightnessPercent}% • Color: ${colorText} • Pattern: ${patternDisplay}</div>
+                            <div class="light-group-meta-row">
+                                <div class="light-group-swatch-row" aria-label="Group colors">
+                                    <span class="light-group-swatch" style="background-color: ${color};" title="Primary color"></span>
+                                    ${hasSecondaryColor ? `<span class="light-group-swatch" style="background-color: ${color2};" title="Secondary color"></span>` : ''}
+                                </div>
+                            </div>
+                            <div class="light-group-details ${detailsExpanded ? 'expanded' : ''}">
+                                <div class="light-group-detail-line">LED Assignment: ${ledDisplay}</div>
+                                <div class="light-group-detail-line">Pattern: ${patternDisplay}</div>
+                                <div class="light-group-detail-line">Brightness: ${brightnessPercent}%</div>
+                            </div>
                         </div>
-                        <div class="light-group-actions">
-                            <button onclick="editLightGroup(${index})" title="Edit this group">Edit</button>
-                            <button onclick="deleteLightGroup(${index})" class="btn-delete" title="Delete this group">Delete</button>
+                        <div class="light-group-controls">
+                            <button type="button" class="light-group-details-toggle" aria-label="${detailsExpanded ? 'Collapse details' : 'Expand details'}" title="${detailsExpanded ? 'Collapse details' : 'Expand details'}" onclick="toggleLightGroupDetails('${group.id}')">
+                                <span class="material-symbols-outlined">${detailsExpanded ? 'expand_less' : 'expand_more'}</span>
+                            </button>
+                            <div class="garage-card-overflow dropdown" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                <button type="button" class="garage-card-overflow-btn dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Light group options" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end garage-card-menu" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                    <li>
+                                        <button type="button" class="dropdown-item" onclick="event.stopPropagation(); editLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Edit</button>
+                                    </li>
+                                    <li>
+                                        <button type="button" class="dropdown-item text-danger" onclick="event.stopPropagation(); deleteLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Delete</button>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     `;
-                    
-                    // Add drag event listeners
-                    item.addEventListener('dragstart', handleDragStart);
-                    item.addEventListener('dragover', handleDragOver);
-                    item.addEventListener('drop', handleDrop);
-                    item.addEventListener('dragend', handleDragEnd);
-                    
+
                     listContainer.appendChild(item);
                 });
+
+                initLightGroupWarningPopovers(listContainer);
             }
         }
-        
-        // Drag and drop state
-        let draggedItemIndex = null;
-        
-        function handleDragStart(e) {
-            draggedItemIndex = parseInt(e.currentTarget.getAttribute('data-index'));
-            e.currentTarget.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        }
-        
-        function handleDragOver(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            const dragOverItem = e.currentTarget;
-            if (dragOverItem.classList.contains('light-group-item') && !dragOverItem.classList.contains('dragging')) {
-                dragOverItem.classList.add('drag-over');
-            }
-        }
-        
-        function handleDrop(e) {
-            e.preventDefault();
-            const dropIndex = parseInt(e.currentTarget.getAttribute('data-index'));
-            
-            if (draggedItemIndex !== null && draggedItemIndex !== dropIndex) {
-                // Reorder the array
-                const draggedItem = lightGroups[draggedItemIndex];
-                lightGroups.splice(draggedItemIndex, 1);
-                lightGroups.splice(dropIndex, 0, draggedItem);
-                
-                // Save and re-render
-                saveLightGroups(false); // Don't push to hardware yet
-                renderLightGroupsList();
-                renderLightsHierarchyControls();
-                
-                // Now push to hardware with updated order
-                applyLightsHierarchyToHardware();
-            }
-            
-            e.currentTarget.classList.remove('drag-over');
-        }
-        
-        function handleDragEnd(e) {
-            e.currentTarget.classList.remove('dragging');
-            document.querySelectorAll('.light-group-item').forEach(item => {
-                item.classList.remove('drag-over');
+
+        function initLightGroupWarningPopovers(scopeElement = document) {
+            if (!(window.bootstrap && bootstrap.Popover)) return;
+
+            const triggers = scopeElement.querySelectorAll('.light-group-warning-btn[data-bs-toggle="popover"]');
+            triggers.forEach(trigger => {
+                const existing = bootstrap.Popover.getInstance(trigger);
+                if (existing) existing.dispose();
+                new bootstrap.Popover(trigger, {
+                    container: 'body',
+                    trigger: 'click',
+                    placement: 'top'
+                });
             });
-            draggedItemIndex = null;
+        }
+
+        function captureLightGroupPositions() {
+            const map = new Map();
+            const items = document.querySelectorAll('#lightGroupsList .light-group-item[data-group-id]');
+            items.forEach(item => {
+                map.set(item.dataset.groupId, item.getBoundingClientRect());
+            });
+            return map;
+        }
+
+        function animateLightGroupReorder(previousPositions) {
+            if (!previousPositions || previousPositions.size === 0) return;
+
+            const items = document.querySelectorAll('#lightGroupsList .light-group-item[data-group-id]');
+            items.forEach(item => {
+                const previousRect = previousPositions.get(item.dataset.groupId);
+                if (!previousRect) return;
+
+                const currentRect = item.getBoundingClientRect();
+                const deltaY = previousRect.top - currentRect.top;
+                if (Math.abs(deltaY) < 1) return;
+
+                item.animate(
+                    [
+                        { transform: `translateY(${deltaY}px)` },
+                        { transform: 'translateY(0)' }
+                    ],
+                    {
+                        duration: 300,
+                        easing: 'cubic-bezier(0.2, 0, 0, 1)'
+                    }
+                );
+            });
+        }
+
+        function moveLightGroup(index, delta) {
+            const targetIndex = index + delta;
+            if (index < 0 || index >= lightGroups.length) return;
+            if (targetIndex < 0 || targetIndex >= lightGroups.length) return;
+
+            const previousPositions = captureLightGroupPositions();
+            const [movedGroup] = lightGroups.splice(index, 1);
+            lightGroups.splice(targetIndex, 0, movedGroup);
+
+            saveLightGroups();
+            requestAnimationFrame(() => animateLightGroupReorder(previousPositions));
+        }
+
+        function toggleLightGroupDetails(groupId) {
+            if (!groupId) return;
+            if (expandedLightGroupIds.has(groupId)) {
+                expandedLightGroupIds.delete(groupId);
+            } else {
+                expandedLightGroupIds.add(groupId);
+            }
+            renderLightGroupsList();
         }
 
         // Store current editing context
@@ -3972,7 +4071,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (currentEditingGroupIndex !== null) {
                 // Update existing group while preserving enabled state.
                 const wasEnabled = !!lightGroups[currentEditingGroupIndex]?.enabled;
+                const existingId = lightGroups[currentEditingGroupIndex]?.id || createLightGroupId();
                 lightGroups[currentEditingGroupIndex] = {
+                    id: existingId,
                     name: name,
                     indices: indices,
                     brightness: brightness255,
@@ -3987,6 +4088,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             } else {
                 // Create new group disabled by default so save does not force it on.
                 lightGroups.push({
+                    id: createLightGroupId(),
                     name: name,
                     indices: indices,
                     brightness: brightness255,
@@ -4053,6 +4155,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             // Delete the group
             lightGroups.splice(index, 1);
+            if (group.id) {
+                expandedLightGroupIds.delete(group.id);
+            }
             saveLightGroups();
             
             // Failover: If deleted group was used for notifications, switch to "All LEDs"
@@ -4099,16 +4204,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             const ltSelect = document.getElementById('lightingProfileSelect');
-            const ltLoadBtn = document.getElementById('loadLightingProfileBtn');
             const ltSaveBtn = document.getElementById('saveLightingProfileBtn');
             const ltDeleteBtn = document.getElementById('deleteLightingProfileBtn');
-            if (ltLoadBtn && ltSelect) {
-                ltLoadBtn.addEventListener('click', () => loadLightingProfileFlow(Number(ltSelect.value || 0)));
-            }
             if (ltSelect) {
-                ltSelect.addEventListener('change', () => {
-                    activeLightingProfileIndex = Number(ltSelect.value || 0);
+                ltSelect.addEventListener('change', async () => {
+                    const selectedIndex = Number(ltSelect.value || 0);
+                    activeLightingProfileIndex = selectedIndex;
                     updateDashboardActiveLightingProfile();
+
+                    if (!isBleConnected()) return;
+                    await loadLightingProfileFlow(selectedIndex);
                 });
             }
             if (ltSaveBtn) ltSaveBtn.addEventListener('click', saveLightingProfileFlow);
@@ -4280,20 +4385,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 return;
             }
 
-            if (connected) {
-                icon.classList.remove('connecting', 'disconnected');
-                icon.textContent = 'bluetooth_disabled';
-                icon.style.color = 'var(--bluetooth-blue)';
-                const status = document.getElementById('telemetryStatus');
-                if (status) status.textContent = 'Live';
-            } else {
-                icon.classList.remove('connecting');
-                icon.classList.add('disconnected');
-                icon.textContent = 'bluetooth_disabled';
-                icon.style.color = 'var(--text-muted)';
-                const status = document.getElementById('telemetryStatus');
-                if (status) status.textContent = 'Inactive';
-            }
+            // BLE is disconnected, show muted icon
+            icon.classList.remove('connecting');
+            icon.classList.add('disconnected');
+            icon.textContent = 'bluetooth_disabled';
+            icon.style.color = 'var(--text-muted)';
+            const status = document.getElementById('telemetryStatus');
+            if (status) status.textContent = 'Inactive';
         }
 
         const activeAjaxControllers = new Set();
@@ -5256,7 +5354,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const tuningConfigData = document.getElementById('tuningConfigData');
                 if (tuningConfigData) tuningConfigData.textContent = 'Bluetooth LE not connected';
                 if (showToast) {
-                    toast.warning('Connect via Bluetooth LE to load configuration');
+                    toast.warning('Select a vehicle to begin.');
                 }
                 // Keep cards usable while disconnected: only the initial load should be masked.
                 finishInitialCardLoading('ble-not-connected');

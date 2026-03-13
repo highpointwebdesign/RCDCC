@@ -141,6 +141,10 @@
                             <span id="frontRearBalanceDisplay">--</span>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Vehicle</span>
+                            <span id="activeVehicleDisplay" class="badge" style="background-color:#6f7d8d;color:#fff;font-size:0.75rem;">--</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Driving Profile</span>
                             <span id="activeDrivingProfileDisplay" class="badge" style="background-color:var(--high-impact-color);color:#000;font-size:0.75rem;">--</span>
                         </div>
@@ -200,14 +204,10 @@
                         </div>
                     </div>
                     <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <label class="form-check-label mb-0" for="lightsToggleDashboard">
-                                    <strong>Master Switch</strong>
-                                </label>
-                                <div class="form-check form-switch m-0">
-                                    <input class="form-check-input" type="checkbox" id="lightsToggleDashboard">
-                                </div>
-                            </div>
+                            <button type="button" class="lights-master-toggle-btn mb-3" id="lightsToggleDashboard" aria-pressed="false" aria-label="Master Light Switch off" title="Master lights off">
+                                <span class="material-symbols-outlined lights-master-toggle-icon" aria-hidden="true">light_off</span>
+                                <span class="lights-master-toggle-text">Master Light Switch</span>
+                            </button>
                             <div class="form-text mb-3">
                                 <small>When Master is off, all lights are off. When Master is on, only enabled groups run.</small>
                             </div>
@@ -926,7 +926,7 @@
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center card-header-dark" onclick="toggleFormulasCard()">
                             <div>
-                                <span class="material-symbols-outlined" style="color: var(--danger);">function</span> Help Guide: Formulas
+                                <span class="material-symbols-outlined" style="color: var(--danger);">function</span> Help: Formulas
                             </div>
                             <span class="material-symbols-outlined" id="formulasChevron"  style="color: var(--high-impact-color);">keyboard_arrow_right</span>
                         </div>
@@ -1044,7 +1044,7 @@
 
         <!-- Lights Section -->
         <section id="lights" class="page-section">
-            <h2 class="section-title">Light Control</h2>
+            <h2 class="section-title">Lights</h2>
             <div class="row g-3">
                 <!-- Master Light Switch Card -->
                 <div class="col-12">
@@ -1056,25 +1056,28 @@
                         <div class="card-body">
                             <div class="mb-3 pb-3" style="border-bottom: 1px solid #e5e7eb;">
                                 <label for="lightingProfileSelect" class="form-label"><strong>Lighting Profile</strong></label>
-                                <div class="d-flex gap-2 mb-2">
+                                <div class="mb-2">
                                     <select id="lightingProfileSelect" class="form-select form-select-sm"></select>
-                                    <button type="button" id="loadLightingProfileBtn" class="btn btn-sm btn-gold">Load</button>
                                 </div>
                                 <div class="d-flex gap-2">
-                                    <button type="button" id="saveLightingProfileBtn" class="btn btn-sm btn-gold flex-fill">Save as New Profile</button>
+                                    <button type="button" id="saveLightingProfileBtn" class="btn btn-sm btn-gold flex-fill">Save as New</button>
                                     <button type="button" id="deleteLightingProfileBtn" class="btn btn-sm btn-outline-danger">Delete</button>
                                 </div>
-                                <div class="form-text mt-2"><small>Profiles are stored on the ESP32 (slots 0-9).</small></div>
+                                <div class="form-text mt-2"><small>Up to 3 profiles per truck.</small></div>
                             </div>
 
-                            <div class="d-flex justify-content-between align-items-center mb-3 border rounded px-2 py-2">
-                                <label class="form-check-label mb-0" for="lightsToggle">
-                                    <strong>Master Switch</strong>
-                                </label>
-                                <div class="form-check form-switch m-0">
-                                    <input class="form-check-input" type="checkbox" id="lightsToggle">
+                            <div class="mb-4 pb-3" style="border-bottom: 1px solid #e5e7eb;">
+                                <label for="totalLEDCount" class="form-label"><strong>Total LEDs in your strip:</strong></label>
+                                <input type="number" class="form-control" id="totalLEDCount" min="1" max="300" value="100" placeholder="100">
+                                <div class="form-text">
+                                    <small>If you add more addressable LEDs to your strip, update this number. Minimum: 1, Maximum: 300</small>
                                 </div>
                             </div>
+
+                            <button type="button" class="lights-master-toggle-btn mb-3" id="lightsToggle" aria-pressed="false" aria-label="Master Light Switch off" title="Master lights off">
+                                <span class="material-symbols-outlined lights-master-toggle-icon" aria-hidden="true">light_off</span>
+                                <span class="lights-master-toggle-text">Master Light Switch</span>
+                            </button>
                             <div class="form-text mb-3">
                                 <small>When Master is off, all lights are off. When Master is on, only enabled groups run.</small>
                             </div>
@@ -1093,18 +1096,9 @@
                             Manage Light Groups
                         </div>
                         <div class="card-body">
-                            <!-- Total LED Count Configuration -->
-                            <div class="mb-4 pb-3" style="border-bottom: 1px solid #e5e7eb;">
-                                <label for="totalLEDCount" class="form-label"><strong>Total LEDs in your strip:</strong></label>
-                                <input type="number" class="form-control" id="totalLEDCount" min="1" max="300" value="100" placeholder="100">
-                                <div class="form-text">
-                                    <small>If you add more addressable LEDs to your strip, update this number. Minimum: 1, Maximum: 300</small>
-                                </div>
-                            </div>
-
                             <!-- Light Groups List -->
                             <div class="mb-3">
-                                <label class="form-label"><strong>Your Light Groups</strong></label>
+                                <label class="form-label"><strong>Light Groups</strong></label>
                                 <div id="lightGroupsList" style="margin-bottom: 1rem;">
                                     <!-- Groups will be populated here by JavaScript -->
                                 </div>
@@ -1143,7 +1137,7 @@
                                 <li><strong>Assign LEDs to Groups:</strong> In the group editor, select which LED positions belong to this group (e.g., LEDs 1-20 for front lights, 21-40 for underglow).</li>
                                 <li><strong>Set Brightness:</strong> Adjust the brightness slider for each group independently. Setting at 80% will help ensure LED longevity.</li>
                                 <li><strong>Configure Patterns:</strong> Choose a pattern (solid, blink, pulse, etc.). Patterns marked with * use both primary and secondary colors.</li>
-                                <li><strong>Organize Priority:</strong> Drag groups up/down to set priority order (top = highest priority = will override LED conflicts).</li>
+                                <li><strong>Organize Priority:</strong> Use up/down arrows in each group card to set priority order (top = highest priority = will override LED conflicts).</li>
                                 <li><strong>Toggle Master Switch:</strong> On the "Lighting Control" card above, toggle the Master Switch to enable/disable all lights.</li>
                                 <li><strong>Enable Individual Groups:</strong> Use the group toggles in "Lighting Control" to enable/disable specific groups while driving.</li>
                             </ol>
@@ -1159,17 +1153,20 @@
             <div class="row g-3">
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">garage_home</span>
-                            Garage
+                        <div class="card-header d-flex align-items-center justify-content-between" style="background-color: black; color: white;">
+                            <div>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">garage_home</span>
+                                Garage
+                            </div>
+                            <button type="button" class="btn btn-sm garage-header-add-btn" id="garageScanBtn" aria-label="Scan and connect vehicle" title="Scan and connect vehicle">
+                                <span class="garage-add-icon-combo" aria-hidden="true">
+                                    <span class="material-symbols-outlined garage-add-icon-car">directions_car</span>
+                                        <span class="material-symbols-outlined garage-add-icon-plus">add</span>
+                                </span>
+                            </button>
                         </div>
                         <div class="card-body">
-                            <button type="button" class="btn w-100 btn-gold mb-3" id="garageScanBtn">
-                                <span class="material-symbols-outlined">bluetooth_searching</span>
-                                Scan &amp; Connect to Vehicle
-                            </button>
-
-                            <div id="garageVehicleList"></div>
+                            <div id="garageVehicleList" class="garage-vehicle-grid"></div>
 
                             <div id="garageEmptyState" class="text-center" style="display:none; color:#777; padding: 1rem 0;">
                                 <span class="material-symbols-outlined" style="font-size:2rem; display:block; margin-bottom:0.35rem;">garage_home</span>
@@ -1179,33 +1176,27 @@
                     </div>
                 </div>
 
-                <div class="col-12">
-                    <div class="card" id="garageDetailPanel" style="display:none;">
-                        <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">directions_car</span>
-                            Vehicle Details
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-2"><strong id="garageDetailName">--</strong></div>
-                            <div class="text-muted mb-1" id="garageDetailMac">--</div>
-                            <div class="text-muted mb-3" id="garageDetailLastSeen">Last connected: --</div>
-
-                            <label for="garageDetailRenameInput" class="form-label"><strong>Rename</strong></label>
-                            <input type="text" class="form-control mb-3" id="garageDetailRenameInput" maxlength="40" placeholder="Vehicle name">
-
-                            <div class="garage-detail-actions">
-                                <button type="button" class="btn btn-gold flex-fill" id="garageDetailConnectBtn">
-                                    <span class="material-symbols-outlined">link</span>
-                                    Connect
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary flex-fill" id="garageDetailSaveBtn">
-                                    <span class="material-symbols-outlined">save</span>
-                                    Save Name
-                                </button>
-                                <button type="button" class="btn btn-outline-danger flex-fill" id="garageDetailDeleteBtn">
-                                    <span class="material-symbols-outlined">delete</span>
-                                    Remove
-                                </button>
+                <div class="modal fade" id="garageRenameModal" tabindex="-1" aria-labelledby="garageRenameModalTitle" aria-hidden="true">
+                        <div class="modal-dialog garage-rename-modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header" style="background-color: black; color: white;">
+                                <h5 class="modal-title" id="garageRenameModalTitle">
+                                    <span class="material-symbols-outlined" style="color: var(--danger); vertical-align: middle;">edit</span>
+                                    Edit Vehicle Name
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body" style="color: #000;">
+                                <div class="mb-2"><strong>Current Name</strong></div>
+                                <div class="text-muted mb-3" id="garageRenameCurrentName">--</div>
+                                <div class="garage-rename-device-id mb-3" id="garageRenameDeviceId">MAC ID: --</div>
+                                <label for="garageRenameInput" class="form-label"><strong>New Name</strong></label>
+                                <input type="text" class="form-control" id="garageRenameInput" maxlength="12" placeholder="Vehicle name">
+                                <div class="form-text"><small>Up to 12 characters.</small></div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-gold" id="garageRenameSaveBtn">Save</button>
                             </div>
                         </div>
                     </div>
@@ -1336,7 +1327,7 @@
 
     <!-- Light Group Editor Modal -->
     <div class="modal fade" id="lightGroupEditorModal" tabindex="-1" aria-labelledby="lightGroupEditorTitle" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-dialog modal-lg modal-dialog-centered light-group-editor-dialog">
             <div class="modal-content">
                 <div class="modal-header" style="background-color: black; color: white;">
                     <h5 class="modal-title" id="lightGroupEditorTitle">
