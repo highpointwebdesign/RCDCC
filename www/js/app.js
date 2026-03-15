@@ -57,8 +57,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.0';
-        const BUILD_DATE = '2026-03-13';
+        const APP_VERSION = '1.1.42';
+        const BUILD_DATE = '2026-03-15';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -75,6 +75,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let manualBleDisconnect = false;
         let hasEverBleConnection = false;
         const GARAGE_STORAGE_KEY = 'rcdcc_garage_vehicles';
+        const VEHICLE_QUICK_SECTIONS = ['tuning', 'lights', 'fpv'];
+        const VEHICLE_CONNECTION_REQUIRED_SECTIONS = ['tuning', 'lights', 'fpv'];
 
         // ==================== Phase 6: Dance Mode ====================
         const DANCE_TILT_INTERVAL_MS = 50; // ~20Hz
@@ -115,17 +117,61 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!el) return;
             if (!isBleConnected()) {
                 el.textContent = '--';
+                updateVehicleQuickNav();
                 return;
             }
             // Always prefer the garage custom label, fall back to passed name then BLE device name.
             const garageLabel = getGarageVehicleNameById(bleManager?.deviceId);
             el.textContent = garageLabel || (name && String(name).trim()) || bleManager?.deviceName || 'RCDCC Truck';
+            updateVehicleQuickNav();
+        }
+
+        function updateVehicleQuickNav(sectionId = null) {
+            const nav = document.getElementById('vehicleQuickNav');
+            if (!nav) return;
+
+            const activeSection = sectionId || localStorage.getItem('currentPage') || 'dashboard';
+            const connected = isBleConnected();
+            const shouldShow = connected && VEHICLE_QUICK_SECTIONS.includes(activeSection);
+            nav.hidden = !shouldShow;
+            if (!shouldShow) return;
+
+            const activeSectionEl = document.getElementById(activeSection);
+            if (activeSectionEl) {
+                const sectionTitleRow = activeSectionEl.querySelector(':scope > .section-title-row');
+                const sectionTitle = activeSectionEl.querySelector(':scope > .section-title');
+                if (sectionTitleRow) {
+                    sectionTitleRow.insertAdjacentElement('afterend', nav);
+                } else if (sectionTitle) {
+                    sectionTitle.insertAdjacentElement('afterend', nav);
+                }
+            }
+
+            nav.querySelectorAll('.vehicle-quick-nav-btn').forEach(btn => {
+                const isActive = btn.dataset.target === activeSection;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
         }
 
         function clearDashboardActiveStatus() {
             const driving = document.getElementById('activeDrivingProfileDisplay');
             const lighting = document.getElementById('activeLightingProfileDisplay');
             if (driving) driving.textContent = '--';
+
+        function getPreferredReconnectDeviceId() {
+            if (bleManager?.preferredDeviceId) return bleManager.preferredDeviceId;
+            const persisted = localStorage.getItem('rcdccBlePreferredDeviceId');
+            if (persisted) return persisted;
+            if (bleManager?.deviceId) return bleManager.deviceId;
+            return null;
+        }
+
+        function syncGarageReconnectPulse(active, delayMs = 0) {
+            if (!window.GarageManager || typeof window.GarageManager.setAutoReconnectState !== 'function') return;
+            const targetDeviceId = getPreferredReconnectDeviceId();
+            window.GarageManager.setAutoReconnectState(!!active, targetDeviceId, delayMs);
+        }
             if (lighting) lighting.textContent = '--';
             updateDashboardVehicleName(null);
         }
@@ -197,6 +243,34 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             } catch (_) {
                 return false;
             }
+        }
+
+        function mergeConfigSnapshots(base, patch) {
+            if (!patch || typeof patch !== 'object') {
+                return (base && typeof base === 'object') ? JSON.parse(JSON.stringify(base)) : patch;
+            }
+            if (!base || typeof base !== 'object') {
+                return JSON.parse(JSON.stringify(patch));
+            }
+
+            const result = Array.isArray(base)
+                ? base.slice()
+                : JSON.parse(JSON.stringify(base));
+
+            Object.entries(patch).forEach(([key, value]) => {
+                if (value && typeof value === 'object' && !Array.isArray(value)) {
+                    const existing = (result && typeof result[key] === 'object' && !Array.isArray(result[key]))
+                        ? result[key]
+                        : {};
+                    result[key] = mergeConfigSnapshots(existing, value);
+                } else if (Array.isArray(value)) {
+                    result[key] = JSON.parse(JSON.stringify(value));
+                } else {
+                    result[key] = value;
+                }
+            });
+
+            return result;
         }
 
         async function reapplyDirtyPagesToDevice() {
@@ -446,7 +520,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 clearPageDirty(pageKey);
                 // Snapshot the current config as the new saved state
                 try {
-                    bleManager.lastKnownSavedState = await bleManager.readConfig();
+                    const latestBootstrap = await bleManager.readConfig();
+                    bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, latestBootstrap);
                 } catch (_) { /* best effort */ }
                 toast.success('Settings saved');
             } catch (e) {
@@ -540,7 +615,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             updateConnectionStatus(true);
             updateConnectionMethodDisplay();
 
-            await fetchConfigFromESP32(false);
+            resetSectionDataState();
+            await fetchConfigFromESP32(false, { scope: 'bootstrap' });
+            if (bleManager && bleManager.schemaCompatible === false) {
+                toast.error('Connected, but this truck firmware is not compatible with this app build.');
+                return;
+            }
             applyFeatureAvailabilityGate();
 
             const vehicleName = connectionLabel
@@ -554,7 +634,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             try {
                 await bleManager.sendSystemCommand('flash', { color: 'green', count: 2 });
             } catch (error) {
-                console.warn('Post-connect green flash command failed:', error?.message || error);
+                const message = String(error?.message || error || '').toLowerCase();
+                if (!message.includes('incompatible firmware ble schema')) {
+                    console.warn('Post-connect green flash command failed:', error?.message || error);
+                }
             }
 
             if (showToast) {
@@ -574,13 +657,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (bleManager.isConnected) {
                     await bleManager.disconnect();
                 }
+                setHeaderSearching(true);
                 await bleManager.connect();
                 await runPostConnectFlow();
                 return true;
             } catch (error) {
                 const message = error?.message || '';
                 communicationMode = 'ble';
-                updateConnectionStatus(false);
+                setHeaderSearching(false);
                 clearDashboardActiveStatus();
                 if (/cancel/i.test(message)) {
                     return false;
@@ -610,9 +694,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 localStorage.setItem('rcdccBlePreferredDeviceId', deviceId);
                 bleManager.preferredDeviceId = deviceId;
 
+                setHeaderSearching(true);
                 const connected = await bleManager.connectToKnownDevice();
                 if (!connected) {
                     toast.error('Could not connect - make sure vehicle is powered on');
+                    setHeaderSearching(false);
                     return false;
                 }
 
@@ -621,6 +707,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             } catch (error) {
                 console.error('connectBLEToVehicle failed:', error);
                 toast.error('Could not connect - make sure vehicle is powered on');
+                setHeaderSearching(false);
                 return false;
             }
         }
@@ -634,9 +721,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             hasLoadedConfigFromDevice = false;
             startHeartbeat();
             updateConnectionStatus(false);
+            fetchFirmwareVersion();
             updateConnectionMethodDisplay();
             clearDashboardActiveStatus();
             applyFeatureAvailabilityGate();
+            resetSectionDataState();
             // Refresh garage UI so Connected badges and button labels update.
             if (window.GarageManager && typeof window.GarageManager.renderGarage === 'function') {
                 window.GarageManager.renderGarage();
@@ -718,6 +807,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!hasEverBleConnection) return;
             if (autoReconnectTimeout || autoReconnectInFlight) return;
 
+            // setHeaderSearching also updates the garage card via setAutoReconnectState.
+            setHeaderSearching(true);
             autoReconnectStartedAtMs = Date.now();
             autoReconnectAttemptCount = 1;
             scheduleAutoReconnectAttempt(0, reason);
@@ -730,6 +821,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             autoReconnectStartedAtMs = 0;
             autoReconnectAttemptCount = 0;
+            // setHeaderSearching(false) clears both the header icon and garage card state.
+            setHeaderSearching(false);
         }
 
         // Expose manual control for quick testing from browser console.
@@ -739,6 +832,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function refreshConfigAfterConnection(reason = 'ble-connect') {
             if (!isBleConnected()) return;
+            if (bleManager && bleManager.schemaCompatible === false) return;
             if (configRefreshInFlight) return;
 
             configRefreshInFlight = fetchConfigFromESP32(false)
@@ -749,6 +843,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     configRefreshInFlight = null;
                 });
         }
+
+            // Allow other modules (e.g. Garage card selection) to request a safe, de-duped refresh.
+            window.refreshConfigAfterConnection = refreshConfigAfterConnection;
         
         // ==================== LED Pattern Definitions ====================
         // Hex colors in RGB format (will be converted to GRB for ESP32)
@@ -946,6 +1043,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let hasLoadedConfigFromDevice = false;
         let configRefreshInFlight = null;
         let hasAppliedInitialDeviceConfig = false;
+        const SECTION_LOAD_KEYS = ['tuning', 'lights', 'settings'];
+        const sectionDataLoaded = { tuning: false, lights: false, settings: false };
+        const sectionLoadPromises = { tuning: null, lights: null, settings: null };
 
         // Phase 3: Driving profile state
         let drivingProfiles = [];       // [{index, name}, ...]
@@ -971,6 +1071,58 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             hasAppliedInitialDeviceConfig = true;
             setCardBodiesLoading(false);
             console.log(`Initial card loading finished: ${reason}`);
+        }
+
+        function resetSectionDataState() {
+            SECTION_LOAD_KEYS.forEach((sectionId) => {
+                sectionDataLoaded[sectionId] = false;
+                sectionLoadPromises[sectionId] = null;
+                setSectionLoading(sectionId, false);
+            });
+        }
+
+        function ensureSectionLoadingOverlay(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (!section) return null;
+
+            let overlay = section.querySelector('.section-loading-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.className = 'section-loading-overlay';
+                overlay.innerHTML = '<div class="section-loading-spinner" aria-hidden="true"></div><div class="section-loading-text">Loading…</div>';
+                section.appendChild(overlay);
+            }
+            return overlay;
+        }
+
+        function setSectionLoading(sectionId, isLoading, message = 'Loading…') {
+            const overlay = ensureSectionLoadingOverlay(sectionId);
+            if (!overlay) return;
+            const label = overlay.querySelector('.section-loading-text');
+            if (label) label.textContent = message;
+            overlay.style.display = isLoading ? 'flex' : 'none';
+            overlay.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
+        }
+
+        async function ensureSectionDataLoaded(sectionId, force = false) {
+            if (!SECTION_LOAD_KEYS.includes(sectionId)) return;
+            if (!isBleConnected()) return;
+            if (!force && sectionDataLoaded[sectionId]) return;
+            if (sectionLoadPromises[sectionId]) return sectionLoadPromises[sectionId];
+
+            setSectionLoading(sectionId, true, `Loading ${sectionId}…`);
+
+            sectionLoadPromises[sectionId] = (async () => {
+                try {
+                    await fetchConfigFromESP32(false, { scope: sectionId });
+                    sectionDataLoaded[sectionId] = true;
+                } finally {
+                    setSectionLoading(sectionId, false);
+                    sectionLoadPromises[sectionId] = null;
+                }
+            })();
+
+            return sectionLoadPromises[sectionId];
         }
 
 
@@ -2012,17 +2164,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
         }
         
-        async function handleAutoLevel() {
-            console.log('handleAutoLevel called');
-            const button = document.getElementById('autoLevelBtn');
-            console.log('Button found:', button);
-            console.log('Button disabled:', button ? button.disabled : 'N/A');
-            console.log('Button has active class:', button ? button.classList.contains('active') : 'N/A');
-            
-            if (!button) {
-                console.error('Auto Level button not found!');
-                return;
-            }
+        async function handleAutoLevel(buttonElement = null) {
+            const button = buttonElement
+                || document.getElementById('autoLevelBtn')
+                || document.getElementById('servoAutoCalibrateBtn');
+
+            if (!button) return;
             
             if (button.disabled) {
                 console.warn('Auto Level button is disabled');
@@ -2042,12 +2189,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             
             // Start auto-level immediately (no modal)
-            executeAutoLevel(false);
+            executeAutoLevel(false, button);
         }
 
-        async function executeAutoLevel(resetTrims = false) {
-            const button = document.getElementById('autoLevelBtn');
+        async function executeAutoLevel(resetTrims = false, sourceButton = null) {
+            const button = sourceButton
+                || document.getElementById('autoLevelBtn')
+                || document.getElementById('servoAutoCalibrateBtn');
             const setLevelBtn = document.getElementById('setLevelBtn');
+
+            if (!button) {
+                toast.error('Auto-level control is unavailable');
+                return;
+            }
             
             // Open bubble level container to show progress
             openBubbleLevelContainer();
@@ -2114,7 +2268,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     
                     // Fetch latest config from RCDCCC module to confirm all values were saved
                     ensureBleConnectedOrThrow();
-                    const updatedConfig = await bleManager.readConfig();
+                    const updatedConfig = await bleManager.readConfigScoped('tuning');
                     if (updatedConfig) {
                         if (updatedConfig && updatedConfig.servos) {
                             fullConfig = updatedConfig;
@@ -2331,6 +2485,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateConnectionMethodDisplay();
                     clearDashboardActiveStatus();
                     applyFeatureAvailabilityGate();
+                    resetSectionDataState();
                     if (window.GarageManager && typeof window.GarageManager.renderGarage === 'function') {
                         window.GarageManager.renderGarage();
                     }
@@ -2462,6 +2617,28 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             initNetworkSettings();
             initSettingsTabs();
 
+            // Initialize truck notifications toggle
+            const enableTruckNotificationsCheckbox = document.getElementById('enableTruckNotifications');
+            const ledNotificationsContent = document.getElementById('ledNotificationsContent');
+            const applyTruckNotificationsVisibility = (enabled) => {
+                if (ledNotificationsContent) {
+                    ledNotificationsContent.style.display = enabled ? '' : 'none';
+                }
+            };
+            if (enableTruckNotificationsCheckbox) {
+                const truckNotificationsEnabled = localStorage.getItem('truckNotificationsEnabled') !== 'false';
+                enableTruckNotificationsCheckbox.checked = truckNotificationsEnabled;
+                applyTruckNotificationsVisibility(truckNotificationsEnabled);
+                enableTruckNotificationsCheckbox.addEventListener('change', function() {
+                    const enabled = this.checked;
+                    localStorage.setItem('truckNotificationsEnabled', enabled);
+                    applyTruckNotificationsVisibility(enabled);
+                    toast.success('Truck notifications ' + (enabled ? 'enabled' : 'disabled'));
+                });
+            } else {
+                applyTruckNotificationsVisibility(true);
+            }
+
             // Initialize notification sounds toggle
             const enableSoundsCheckbox = document.getElementById('enableNotificationSounds');
             if (enableSoundsCheckbox) {
@@ -2532,29 +2709,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 servoRangeLockIcon.style.color = servoRangeLocked ? 'var(--lime-green)' : 'var(--high-impact-color)'; // Lime green if locked, yellow if unlocked
             }
             
-            // Restore servo trim lock state from localStorage
-            servoTrimLocked = localStorage.getItem('servoTrimLocked') === 'true';
-            const servoTrimLockIcon = document.getElementById('servoTrimLockIcon');
-            const servoSettingsCard = document.getElementById('servoSettingsCard');
-            if (servoTrimLockIcon && servoSettingsCard) {
-                servoSettingsCard.classList.toggle('trim-locked', servoTrimLocked);
-                servoTrimLockIcon.textContent = servoTrimLocked ? 'lock' : 'lock_open_right';
-                servoTrimLockIcon.style.color = servoTrimLocked ? 'var(--lime-green)' : 'var(--high-impact-color)'; // Lime green if locked, yellow if unlocked
-            }
-            
-            // Restore servo rotation lock state from localStorage
-            servoRotationLocked = localStorage.getItem('servoRotationLocked') === 'true';
-            const servoRotationLockIcon = document.getElementById('servoRotationLockIcon');
-            const servoRotationCard = document.getElementById('servoSettingsCard');
-            if (servoRotationLockIcon && servoRotationCard) {
-                servoRotationCard.classList.toggle('rotation-locked', servoRotationLocked);
-                servoRotationLockIcon.textContent = servoRotationLocked ? 'lock' : 'lock_open_right';
-                servoRotationLockIcon.style.color = servoRotationLocked ? 'var(--lime-green)' : 'var(--high-impact-color)'; // Lime green if locked, yellow if unlocked
-            }
+            // Restore servo settings lock state from localStorage.
+            // Older builds stored trim and direction separately; the UI now uses one combined lock.
+            const savedServoTrimLock = localStorage.getItem('servoTrimLocked') === 'true';
+            const savedServoRotationLock = localStorage.getItem('servoRotationLocked') === 'true';
+            const servoSettingsLocked = savedServoTrimLock || savedServoRotationLock;
+            servoTrimLocked = servoSettingsLocked;
+            servoRotationLocked = servoSettingsLocked;
+            localStorage.setItem('servoTrimLocked', servoSettingsLocked.toString());
+            localStorage.setItem('servoRotationLocked', servoSettingsLocked.toString());
+            syncServoSettingsLockUI();
 
             // Header scroll shrink effect
             const dashboardHeader = document.querySelector('.dashboard-header');
             const brandTitles = document.querySelectorAll('.brand-title');
+            const compactHeaderPageLabels = {
+                garage: 'Garage',
+                tuning: 'Suspension',
+                lights: 'Lights',
+                fpv: 'FPV'
+            };
             
             function updateHeaderScroll() {
                 const scrollPosition = window.scrollY;
@@ -2573,7 +2747,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         const activeSection = document.querySelector('.page-section.active');
                         if (activeSection) {
                             const sectionTitle = activeSection.querySelector('.section-title');
-                            if (sectionTitle) {
+                            const sectionId = activeSection.id;
+
+                            if (compactHeaderPageLabels[sectionId]) {
+                                const dashboardVehicleLabel = document.getElementById('activeVehicleDisplay')?.textContent?.trim();
+                                const preferredVehicleId = localStorage.getItem('rcdccBlePreferredDeviceId');
+                                const vehicleName = ((dashboardVehicleLabel && dashboardVehicleLabel !== '--') ? dashboardVehicleLabel : null)
+                                    || getGarageVehicleNameById(preferredVehicleId)
+                                    || getGarageVehicleNameById(bleManager?.deviceId)
+                                    || bleManager?.deviceName
+                                    || 'Truck';
+                                h1.textContent = `${vehicleName} - ${compactHeaderPageLabels[sectionId]}`;
+                                h1.style.display = 'block';
+                            } else if (sectionTitle) {
                                 h1.textContent = sectionTitle.textContent;
                                 h1.style.display = 'block';
                             }
@@ -2602,6 +2788,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     }
                 });
             });
+
+            document.querySelectorAll('#vehicleQuickNav .vehicle-quick-nav-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const target = this.dataset.target;
+                    if (target) {
+                        await navigateToSection(target);
+                    }
+                });
+            });
             
             // Set as Level button
             const setLevelBtn = document.getElementById('setLevelBtn');
@@ -2611,19 +2806,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             // Auto Level button
             const autoLevelBtn = document.getElementById('autoLevelBtn');
-            console.log('Auto Level button element:', autoLevelBtn);
             if (autoLevelBtn) {
                 autoLevelBtn.addEventListener('click', handleAutoLevel);
-                console.log('Auto Level button click listener attached');
-                
-                // Check if button is visible
-                console.log('Button parent tab-pane:', autoLevelBtn.closest('.tab-pane'));
-                console.log('Tab-pane is active:', autoLevelBtn.closest('.tab-pane')?.classList.contains('active'));
-                console.log('Button computed style display:', window.getComputedStyle(autoLevelBtn).display);
-                console.log('Button computed style visibility:', window.getComputedStyle(autoLevelBtn).visibility);
-                console.log('Button computed style pointer-events:', window.getComputedStyle(autoLevelBtn).pointerEvents);
-            } else {
-                console.error('Auto Level button not found during initialization!');
             }
 
             // Auto Level Start button
@@ -2776,9 +2960,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         // Helper function to navigate to a section
         async function navigateToSection(sectionId) {
+            const requestedSection = String(sectionId || 'dashboard');
+            const requiresBle = VEHICLE_CONNECTION_REQUIRED_SECTIONS.includes(requestedSection);
+            const targetSection = (requiresBle && !isBleConnected()) ? 'garage' : requestedSection;
+
             // Dirty guard: check page being navigated away from
             const currentSection = localStorage.getItem('currentPage') || 'dashboard';
-            if (currentSection !== sectionId) {
+            if (currentSection !== targetSection) {
                 let dirtyKeys = [];
                 if (currentSection === 'tuning') dirtyKeys = ['tuning'];
                 else if (currentSection === 'settings') dirtyKeys = ['servo', 'system'];
@@ -2796,15 +2984,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             document.querySelectorAll('.footer-nav button').forEach(b => b.classList.remove('active'));
-            const navBtn = document.querySelector(`.footer-nav button[data-target="${sectionId}"]`);
+            const navBtn = document.querySelector(`.footer-nav button[data-target="${targetSection}"]`);
             if (navBtn) navBtn.classList.add('active');
             
             document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
-            const section = document.getElementById(sectionId);
+            const section = document.getElementById(targetSection);
             if (section) section.classList.add('active');
             
             // Save current page to localStorage
-            localStorage.setItem('currentPage', sectionId);
+            localStorage.setItem('currentPage', targetSection);
             
             // Trigger header scroll update for title change
             const scrollEvent = new Event('scroll');
@@ -2812,9 +3000,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             window.scrollTo(0, 0);
 
-            if (sectionId === 'settings') {
+            if (targetSection === 'settings') {
                 setTimeout(refreshServoSliderRender, 50);
             }
+
+            if (SECTION_LOAD_KEYS.includes(targetSection)) {
+                ensureSectionDataLoaded(targetSection).catch((error) => {
+                    console.warn(`Lazy load failed for ${targetSection}:`, error?.message || error);
+                });
+            }
+
+            updateVehicleQuickNav(targetSection);
         }
 
         window.navigateToSection = navigateToSection;
@@ -3204,7 +3400,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             try {
                 await bleManager.sendSystemCommand('load_lt_profile', { index: Number(index) });
-                const cfg = await bleManager.readConfig();
+                const cfg = await bleManager.readConfigScoped('lights');
                 if (cfg.lt_profiles) lightingProfiles = cfg.lt_profiles;
                 activeLightingProfileIndex = Number(cfg.act_lt_prof ?? index ?? 0);
                 if (cfg.active_lt_profile) hydrateLightGroupsFromActiveProfile(cfg.active_lt_profile);
@@ -3242,7 +3438,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             try {
                 await bleManager.sendSystemCommand('save_lt_profile', { index: slot, name });
-                const cfg = await bleManager.readConfig();
+                const cfg = await bleManager.readConfigScoped('lights');
                 if (cfg.lt_profiles) lightingProfiles = cfg.lt_profiles;
                 activeLightingProfileIndex = Number(cfg.act_lt_prof ?? slot);
                 populateLightingProfileSelector();
@@ -3270,7 +3466,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!confirm(`Delete lighting profile slot ${idx}? This cannot be undone.`)) return;
             try {
                 await bleManager.sendSystemCommand('delete_lt_profile', { index: idx });
-                const cfg = await bleManager.readConfig();
+                const cfg = await bleManager.readConfigScoped('lights');
                 if (cfg.lt_profiles) lightingProfiles = cfg.lt_profiles;
                 activeLightingProfileIndex = Number(cfg.act_lt_prof ?? 0);
                 if (cfg.active_lt_profile) hydrateLightGroupsFromActiveProfile(cfg.active_lt_profile);
@@ -4351,10 +4547,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!firmwareVersionEl) return;
 
             if (isBleConnected()) {
-                bleManager.readConfig()
+                firmwareVersionEl.textContent = 'Loading...';
+                bleManager.readConfigScoped('bootstrap')
                     .then(data => {
-                        if (data?.version || data?.firmwareVersion) {
-                            firmwareVersionEl.textContent = data.version || data.firmwareVersion;
+                        const fw = data?.fw_version
+                            || data?.firmwareVersion
+                            || data?.version
+                            || data?.system?.fw_version
+                            || data?.system?.firmwareVersion
+                            || data?.system?.version;
+                        if (fw) {
+                            firmwareVersionEl.textContent = fw;
                         } else {
                             firmwareVersionEl.textContent = 'Not available';
                         }
@@ -4378,10 +4581,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // BLE state has priority for this header icon.
             if (bleConnected) {
                 icon.classList.remove('connecting', 'disconnected');
-                icon.textContent = 'bluetooth';
+                icon.textContent = 'bluetooth_connected';
                 icon.style.color = 'var(--bluetooth-blue)';
                 const status = document.getElementById('telemetryStatus');
                 if (status) status.textContent = 'Live';
+                // Sync the garage card to connected state immediately.
+                if (window.GarageManager && typeof window.GarageManager.renderGarage === 'function') {
+                    window.GarageManager.renderGarage();
+                }
+                updateDashboardVehicleName(null);
+                updateVehicleQuickNav();
                 return;
             }
 
@@ -4392,6 +4601,31 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             icon.style.color = 'var(--text-muted)';
             const status = document.getElementById('telemetryStatus');
             if (status) status.textContent = 'Inactive';
+            updateDashboardVehicleName(null);
+            updateVehicleQuickNav();
+        }
+
+        function setHeaderSearching(active) {
+            // Always sync the garage card state regardless of BLE connection status.
+            if (window.GarageManager && typeof window.GarageManager.setAutoReconnectState === 'function') {
+                const targetId = active ? getPreferredReconnectDeviceId() : null;
+                window.GarageManager.setAutoReconnectState(!!active, targetId, 0);
+            }
+
+            // Only update the header icon when not already fully connected.
+            const icon = document.getElementById('wifiIcon');
+            if (!icon || isBleConnected()) return;
+            if (active) {
+                icon.classList.remove('disconnected');
+                icon.classList.add('connecting');
+                icon.textContent = 'bluetooth_searching';
+                icon.style.color = 'var(--text-muted)';
+            } else {
+                icon.classList.remove('connecting');
+                icon.classList.add('disconnected');
+                icon.textContent = 'bluetooth_disabled';
+                icon.style.color = 'var(--text-muted)';
+            }
         }
 
         const activeAjaxControllers = new Set();
@@ -4657,8 +4891,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 try {
                     await bleManager.writeValue(auxServoKey(auxNsToSlot(aux.ns), 'type'), typeSelect.value);
                     // Re-fetch config to get updated controls
-                    const cfg = await bleManager.readConfig();
-                    bleManager.lastKnownSavedState = cfg;
+                    const cfg = await bleManager.readConfigScoped('settings');
+                    bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, cfg);
                     if (cfg.servo_registry) {
                         servoRegistry = cfg.servo_registry;
                         renderAuxServoRegistry(servoRegistry);
@@ -4826,7 +5060,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 try {
                     await bleManager.writeValue(auxServoKey(slot, 'momentary'), this.checked ? 1 : 0);
                     // Re-render relay control area
-                    const cfg = await bleManager.readConfig();
+                    const cfg = await bleManager.readConfigScoped('settings');
                     if (cfg.servo_registry) {
                         servoRegistry = cfg.servo_registry;
                         renderAuxServoRegistry(servoRegistry);
@@ -4870,7 +5104,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const newState = isOn ? 0 : 1;
                     try {
                         await bleManager.writeValue(auxServoKey(slot, 'state'), newState);
-                        const cfg = await bleManager.readConfig();
+                        const cfg = await bleManager.readConfigScoped('settings');
                         if (cfg.servo_registry) {
                             servoRegistry = cfg.servo_registry;
                             renderAuxServoRegistry(servoRegistry);
@@ -4899,8 +5133,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     label: result.label
                 });
                 // Re-fetch config to get the new servo in the registry
-                const cfg = await bleManager.readConfig();
-                bleManager.lastKnownSavedState = cfg;
+                const cfg = await bleManager.readConfigScoped('settings');
+                bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, cfg);
                 if (cfg.servo_registry) {
                     servoRegistry = cfg.servo_registry;
                     renderAuxServoRegistry(servoRegistry);
@@ -4985,8 +5219,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             try {
                 await bleManager.sendSystemCommand('remove_aux_servo', { namespace: ns });
-                const cfg = await bleManager.readConfig();
-                bleManager.lastKnownSavedState = cfg;
+                const cfg = await bleManager.readConfigScoped('settings');
+                bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, cfg);
                 if (cfg.servo_registry) {
                     servoRegistry = cfg.servo_registry;
                     renderAuxServoRegistry(servoRegistry);
@@ -5086,8 +5320,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 await bleManager.sendSystemCommand('load_drv_profile', { index });
                 activeDrivingProfileIndex = index;
                 // Re-fetch config from device so all UI reflects the loaded profile
-                const config = await bleManager.readConfig();
-                bleManager.lastKnownSavedState = config;
+                const config = await bleManager.readConfigScoped('tuning');
+                bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, config);
                 isLoadingTuningConfig = true;
                 updateTuningSliders(config);
                 updateServoSliders(config);
@@ -5279,9 +5513,41 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Config Fetching ====================
         let hasShownInitialConfigToast = false;
 
-        async function fetchConfigFromESP32(showToast = true) {
+        async function fetchConfigFromESP32(showToast = true, options = {}) {
+            if (typeof showToast === 'object' && showToast !== null) {
+                options = showToast;
+                showToast = true;
+            }
+
+            const scope = options.scope || 'all';
+            const applyNoVehiclePlaceholders = () => {
+                hasLoadedConfigFromDevice = false;
+                fullConfig = null;
+
+                const placeholderMap = {
+                    reactionSpeedBadge: '--',
+                    rideHeightDisplay: '--',
+                    dampingDisplay: '--',
+                    stiffnessDisplay: '--',
+                    frontRearBalanceDisplay: '--',
+                    activeVehicleDisplay: '--',
+                    activeDrivingProfileDisplay: '--',
+                    activeLightingProfileDisplay: '--'
+                };
+
+                Object.entries(placeholderMap).forEach(([id, value]) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = value;
+                });
+
+                ['servoFLTrimDisplay', 'servoFRTrimDisplay', 'servoRLTrimDisplay', 'servoRRTrimDisplay'].forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = '--';
+                });
+            };
+
             const applyLoadedConfig = (data) => {
-                fullConfig = data;
+                fullConfig = mergeConfigSnapshots(fullConfig, data);
                 hasLoadedConfigFromDevice = true;
 
                 // Update suspension settings display
@@ -5339,7 +5605,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const tuningConfigData = document.getElementById('tuningConfigData');
                 if (tuningConfigData) tuningConfigData.textContent = JSON.stringify(data, null, 2);
 
-                if (showToast && !hasShownInitialConfigToast) {
+                if (scope === 'bootstrap') {
+                    // Defer full tab hydration until the user opens a section.
+                    if (data.act_drv_prof != null) {
+                        activeDrivingProfileIndex = data.act_drv_prof;
+                        updateDashboardActiveProfile();
+                    }
+                    if (data.act_lt_prof != null) {
+                        activeLightingProfileIndex = Number(data.act_lt_prof);
+                        updateDashboardActiveLightingProfile();
+                    }
+                }
+
+                if (showToast && !hasShownInitialConfigToast && scope === 'bootstrap') {
                     toast.success('Configuration loaded from RCDCC module (Bluetooth LE)');
                     hasShownInitialConfigToast = true;
                 }
@@ -5348,7 +5626,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             };
 
             if (!isBleConnected()) {
-                hasLoadedConfigFromDevice = false;
+                applyNoVehiclePlaceholders();
                 const configData = document.getElementById('configData');
                 if (configData) configData.textContent = 'Bluetooth LE not connected';
                 const tuningConfigData = document.getElementById('tuningConfigData');
@@ -5366,10 +5644,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const previousSavedState = bleManager?.lastKnownSavedState
                     ? JSON.parse(JSON.stringify(bleManager.lastKnownSavedState))
                     : null;
-                const bleData = await bleManager.readConfig();
+                const scopeMap = {
+                    bootstrap: 'bootstrap',
+                    tuning: 'tuning',
+                    lights: 'lights',
+                    settings: 'settings'
+                };
+                const requestedScope = scopeMap[scope] || 'bootstrap';
+                const bleData = (typeof bleManager.readConfigScoped === 'function')
+                    ? await bleManager.readConfigScoped(requestedScope)
+                    : await bleManager.readConfig();
                 let shouldClearDirtyOnSuccess = true;
 
-                const dirtyAndDifferent = hasAnyDirtyPages()
+                const canEvaluateDirtyState = requestedScope === 'bootstrap';
+                const dirtyAndDifferent = canEvaluateDirtyState
+                    && hasAnyDirtyPages()
                     && previousSavedState
                     && !configsEqual(bleData, previousSavedState);
 
@@ -5377,18 +5666,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const shouldReapply = confirm('The truck rebooted. Re-apply unsaved changes?');
                     if (shouldReapply) {
                         await reapplyDirtyPagesToDevice();
-                        const refreshed = await bleManager.readConfig();
+                        const refreshed = (typeof bleManager.readConfigScoped === 'function')
+                            ? await bleManager.readConfigScoped(requestedScope)
+                            : await bleManager.readConfig();
                         applyLoadedConfig(refreshed);
-                        bleManager.lastKnownSavedState = refreshed;
+                        bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, refreshed);
                         shouldClearDirtyOnSuccess = false;
                     } else {
                         applyLoadedConfig(bleData);
                         clearAllDirtyPages();
-                        bleManager.lastKnownSavedState = bleData;
+                        bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, bleData);
                     }
                 } else {
                     applyLoadedConfig(bleData);
-                    bleManager.lastKnownSavedState = bleData;
+                    bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, bleData);
                 }
                 if (shouldClearDirtyOnSuccess) {
                     clearAllDirtyPages();
@@ -5522,13 +5813,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             pushConfigPayload(payload, controller.signal)
             .then(data => {
                 console.log('Tuning slider saved:', sliderName, value);
-                
-                // Show toasty alert with status (accept both 'success' and 'ok')
-                if (data.status === 'success' || data.status === 'ok') {
-                    toast.success('Tuning updated');
-                } else if (data.status === 'error') {
-                    toast.error('Failed to save tuning');
-                }
 
                 // Keep dashboard/tuning cards in sync with the latest user-applied values.
                 updateSuspensionSettings(payload);
@@ -5554,7 +5838,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateConnectionMethodDisplay();
                 }
                 console.error('Failed to save tuning slider:', error);
-                toast.error(getSaveErrorMessage(`Saving ${sliderName}`, error), { duration: 5000 });
             })
             .finally(() => {
                 clearTimeout(timeout);
@@ -5653,6 +5936,90 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 }
             }
 
+            const tuningSliderPendingSave = {
+                rideHeight: false,
+                damping: false,
+                stiffness: false,
+                reactionSpeed: false,
+                balance: false,
+                sensorRate: false
+            };
+
+            function commitTuningSliderSave(sliderKey) {
+                if (!tuningSliderPendingSave[sliderKey]) return;
+                tuningSliderPendingSave[sliderKey] = false;
+
+                if (tuningSliderLocks[sliderKey]) return;
+
+                const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                const k = window.RCDCC_KEYS;
+
+                if (sliderKey === 'rideHeight') {
+                    const val = Math.round(tuningSliderValues.rideHeightOffset || 0);
+                    if (canUseKv) {
+                        bleManager.writeValue(k.SERVO_FL_RIDE_HT, val).catch(e => console.error('KV write rideHeight FL:', e));
+                        bleManager.writeValue(k.SERVO_FR_RIDE_HT, val).catch(e => console.error('KV write rideHeight FR:', e));
+                        bleManager.writeValue(k.SERVO_RL_RIDE_HT, val).catch(e => console.error('KV write rideHeight RL:', e));
+                        bleManager.writeValue(k.SERVO_RR_RIDE_HT, val).catch(e => console.error('KV write rideHeight RR:', e));
+                    } else {
+                        saveTuningSliderValue('rideHeight', tuningSliderValues.rideHeightOffset);
+                    }
+                    return;
+                }
+
+                if (sliderKey === 'damping') {
+                    tuningKvWrite(k.SUSPENSION_DAMPING, Math.round((tuningSliderValues.damping || 0) * 100), 'damping', tuningSliderValues.damping);
+                    return;
+                }
+
+                if (sliderKey === 'stiffness') {
+                    tuningKvWrite(k.SUSPENSION_STIFFNESS, Math.round((tuningSliderValues.stiffness || 0) * 50), 'stiffness', tuningSliderValues.stiffness);
+                    return;
+                }
+
+                if (sliderKey === 'reactionSpeed') {
+                    tuningKvWrite(k.SUSPENSION_REACT_SPD, Math.round((tuningSliderValues.reactionSpeed || 0) * 50), 'reactionSpeed', tuningSliderValues.reactionSpeed);
+                    return;
+                }
+
+                if (sliderKey === 'balance') {
+                    const mapped = Math.round(((tuningSliderValues.frontRearBalance || 0) / 100) * 200 - 100);
+                    tuningKvWrite(k.SUSPENSION_FR_BAL, mapped, 'balance', tuningSliderValues.frontRearBalance);
+                    return;
+                }
+
+                if (sliderKey === 'sensorRate') {
+                    saveTuningSliderValue('sensorRate', tuningSliderValues.sampleRate);
+                }
+            }
+
+            function attachReleaseSaveHandler(sliderElement, sliderKey) {
+                if (!sliderElement || sliderElement.dataset.saveOnReleaseBound === 'true') return;
+                sliderElement.dataset.saveOnReleaseBound = 'true';
+
+                const onRelease = () => commitTuningSliderSave(sliderKey);
+                sliderElement.addEventListener('pointerup', onRelease);
+                sliderElement.addEventListener('pointercancel', onRelease);
+                sliderElement.addEventListener('touchend', onRelease);
+                sliderElement.addEventListener('mouseup', onRelease);
+                sliderElement.addEventListener('keyup', onRelease);
+            }
+
+            function flushPendingTuningSaves() {
+                Object.keys(tuningSliderPendingSave).forEach(commitTuningSliderSave);
+            }
+
+            if (!window.__tuningReleaseFlushBound) {
+                window.__tuningReleaseFlushBound = true;
+                ['pointerup', 'pointercancel', 'touchend', 'mouseup', 'keyup'].forEach((eventName) => {
+                    document.addEventListener(eventName, flushPendingTuningSaves, true);
+                });
+                window.addEventListener('pagehide', flushPendingTuningSaves);
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) flushPendingTuningSaves();
+                });
+            }
+
             // Initialize Ride Height - Horizontal slider (0-100%)
             let rideHeightElement = document.querySelector('#sliderRideHeight');
             const rideHeightInstance = rangeSlider(rideHeightElement, {
@@ -5668,24 +6035,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateTuningThumbLabel('sliderRideHeight', val, 0);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
-                        clearTimeout(tuningSliderSaveTimers.rideHeight);
-                        tuningSliderSaveTimers.rideHeight = setTimeout(() => {
-                            const k = window.RCDCC_KEYS;
-                            const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
-                            if (canUseKv) {
-                                bleManager.writeValue(k.SERVO_FL_RIDE_HT, val).catch(e => console.error('KV write rideHeight FL:', e));
-                                bleManager.writeValue(k.SERVO_FR_RIDE_HT, val).catch(e => console.error('KV write rideHeight FR:', e));
-                                bleManager.writeValue(k.SERVO_RL_RIDE_HT, val).catch(e => console.error('KV write rideHeight RL:', e));
-                                bleManager.writeValue(k.SERVO_RR_RIDE_HT, val).catch(e => console.error('KV write rideHeight RR:', e));
-                            } else {
-                                saveTuningSliderValue('rideHeight', tuningSliderValues.rideHeightOffset);
-                            }
-                        }, 175);
+                        tuningSliderPendingSave.rideHeight = true;
                     }
                 }
             });
             tuningSliderInstances.rideHeight = { element: rideHeightElement, instance: rideHeightInstance };
             updateTuningThumbLabel('sliderRideHeight', 50, 0);
+            attachReleaseSaveHandler(rideHeightElement, 'rideHeight');
 
             // Initialize Damping - Horizontal slider (0.1-2.0)
             let dampingElement = document.querySelector('#sliderDamping');
@@ -5701,15 +6057,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateTuningThumbLabel('sliderDamping', value[1], 1);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
-                        clearTimeout(tuningSliderSaveTimers.damping);
-                        tuningSliderSaveTimers.damping = setTimeout(() => {
-                            tuningKvWrite(window.RCDCC_KEYS.SUSPENSION_DAMPING, Math.round((tuningSliderValues.damping || 0) * 100), 'damping', tuningSliderValues.damping);
-                        }, 175);
+                        tuningSliderPendingSave.damping = true;
                     }
                 }
             });
             tuningSliderInstances.damping = { element: dampingElement, instance: dampingInstance };
             updateTuningThumbLabel('sliderDamping', 0.8, 1);
+            attachReleaseSaveHandler(dampingElement, 'damping');
 
             // Initialize Stiffness - Horizontal slider (0.5-3.0)
             let stiffnessElement = document.querySelector('#sliderStiffness');
@@ -5725,15 +6079,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateTuningThumbLabel('sliderStiffness', value[1], 1);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
-                        clearTimeout(tuningSliderSaveTimers.stiffness);
-                        tuningSliderSaveTimers.stiffness = setTimeout(() => {
-                            tuningKvWrite(window.RCDCC_KEYS.SUSPENSION_STIFFNESS, Math.round((tuningSliderValues.stiffness || 0) * 50), 'stiffness', tuningSliderValues.stiffness);
-                        }, 175);
+                        tuningSliderPendingSave.stiffness = true;
                     }
                 }
             });
             tuningSliderInstances.stiffness = { element: stiffnessElement, instance: stiffnessInstance };
             updateTuningThumbLabel('sliderStiffness', 1.0, 1);
+            attachReleaseSaveHandler(stiffnessElement, 'stiffness');
 
             // Initialize Reaction Speed - Horizontal slider (0.1-5.0)
             let reactionElement = document.querySelector('#sliderReactionSpeed');
@@ -5749,15 +6101,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateTuningThumbLabel('sliderReactionSpeed', value[1], 1);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
-                        clearTimeout(tuningSliderSaveTimers.reactionSpeed);
-                        tuningSliderSaveTimers.reactionSpeed = setTimeout(() => {
-                            tuningKvWrite(window.RCDCC_KEYS.SUSPENSION_REACT_SPD, Math.round((tuningSliderValues.reactionSpeed || 0) * 50), 'reactionSpeed', tuningSliderValues.reactionSpeed);
-                        }, 175);
+                        tuningSliderPendingSave.reactionSpeed = true;
                     }
                 }
             });
             tuningSliderInstances.reactionSpeed = { element: reactionElement, instance: reactionInstance };
             updateTuningThumbLabel('sliderReactionSpeed', 1.0, 1);
+            attachReleaseSaveHandler(reactionElement, 'reactionSpeed');
 
             // Initialize Balance - Horizontal slider (0-100%)
             let balanceElement = document.querySelector('#sliderBalance');
@@ -5773,16 +6123,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateTuningThumbLabel('sliderBalance', tuningSliderValues.frontRearBalance, 0);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
-                        clearTimeout(tuningSliderSaveTimers.balance);
-                        tuningSliderSaveTimers.balance = setTimeout(() => {
-                            const mapped = Math.round(((tuningSliderValues.frontRearBalance || 0) / 100) * 200 - 100);
-                            tuningKvWrite(window.RCDCC_KEYS.SUSPENSION_FR_BAL, mapped, 'balance', tuningSliderValues.frontRearBalance);
-                        }, 175);
+                        tuningSliderPendingSave.balance = true;
                     }
                 }
             });
             tuningSliderInstances.balance = { element: balanceElement, instance: balanceInstance };
             updateTuningThumbLabel('sliderBalance', 50, 0);
+            attachReleaseSaveHandler(balanceElement, 'balance');
 
             // Initialize Sensor Refresh Rate - Horizontal slider (5-50 Hz)
             // Note: sampleRate has no RCDCC_KEY; always uses legacy path on connected devices.
@@ -5799,15 +6146,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateTuningThumbLabel('sliderSensorRate', tuningSliderValues.sampleRate, 0);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
-                        clearTimeout(tuningSliderSaveTimers.sensorRate);
-                        tuningSliderSaveTimers.sensorRate = setTimeout(() => {
-                            saveTuningSliderValue('sensorRate', tuningSliderValues.sampleRate);
-                        }, 175);
+                        tuningSliderPendingSave.sensorRate = true;
                     }
                 }
             });
             tuningSliderInstances.sensorRate = { element: sensorElement, instance: sensorInstance };
             updateTuningThumbLabel('sliderSensorRate', 25, 0);
+            attachReleaseSaveHandler(sensorElement, 'sensorRate');
         }
 
         // Track locked state for each slider
@@ -5830,10 +6175,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         // Store servo slider instances for later updates
         const servoSliderInstances = {
-            frontLeft: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170] },
-            frontRight: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170] },
-            rearLeft: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170] },
-            rearRight: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170] }
+            frontLeft: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170], lastTrimValue: 0 },
+            frontRight: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170], lastTrimValue: 0 },
+            rearLeft: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170], lastTrimValue: 0 },
+            rearRight: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170], lastTrimValue: 0 }
         };
 
         // Debounce timers for servo parameter saves
@@ -5878,6 +6223,92 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 }
             }
 
+            const servoPendingSave = {
+                frontLeft: { range: false, trim: false },
+                frontRight: { range: false, trim: false },
+                rearLeft: { range: false, trim: false },
+                rearRight: { range: false, trim: false }
+            };
+
+            function commitServoSliderSave(servoName, sliderType) {
+                if (!servoPendingSave[servoName] || !servoPendingSave[servoName][sliderType]) return;
+                servoPendingSave[servoName][sliderType] = false;
+
+                if (sliderType === 'range' && servoRangeLocked) return;
+                if (sliderType === 'trim' && servoTrimLocked) return;
+
+                const sliderData = servoSliderInstances[servoName];
+                const values = servoSliderValues[servoName];
+                if (!sliderData || !values) return;
+
+                if (sliderType === 'range') {
+                    const nextRange = [Math.round(values.min), Math.round(values.max)];
+                    const lastRange = sliderData.lastRangeValue || [10, 170];
+                    if (nextRange[0] === lastRange[0] && nextRange[1] === lastRange[1]) return;
+
+                    const keyMap = {
+                        frontLeft: [window.RCDCC_KEYS.SERVO_FL_MIN, window.RCDCC_KEYS.SERVO_FL_MAX],
+                        frontRight: [window.RCDCC_KEYS.SERVO_FR_MIN, window.RCDCC_KEYS.SERVO_FR_MAX],
+                        rearLeft: [window.RCDCC_KEYS.SERVO_RL_MIN, window.RCDCC_KEYS.SERVO_RL_MAX],
+                        rearRight: [window.RCDCC_KEYS.SERVO_RR_MIN, window.RCDCC_KEYS.SERVO_RR_MAX]
+                    };
+                    const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                    if (canUseKv) {
+                        markPageDirty('servo');
+                        bleManager.writeValue(keyMap[servoName][0], degToUs(nextRange[0])).catch(e => console.error(`KV ${servoName} min:`, e));
+                        bleManager.writeValue(keyMap[servoName][1], degToUs(nextRange[1])).catch(e => console.error(`KV ${servoName} max:`, e));
+                    } else {
+                        saveServoRange(servoName, nextRange[0], nextRange[1]);
+                    }
+                    sliderData.lastRangeValue = nextRange;
+                    return;
+                }
+
+                const trimValue = Math.round(values.trim);
+                if (trimValue === sliderData.lastTrimValue) return;
+
+                const trimKeyMap = {
+                    frontLeft: window.RCDCC_KEYS.SERVO_FL_TRIM,
+                    frontRight: window.RCDCC_KEYS.SERVO_FR_TRIM,
+                    rearLeft: window.RCDCC_KEYS.SERVO_RL_TRIM,
+                    rearRight: window.RCDCC_KEYS.SERVO_RR_TRIM
+                };
+                servoKvWrite(trimKeyMap[servoName], trimDegToUs(trimValue), servoName, 'trim', trimValue);
+                sliderData.lastTrimValue = trimValue;
+            }
+
+            function attachServoReleaseSaveHandler(sliderElement, servoName, sliderType) {
+                if (!sliderElement) return;
+                const flag = `saveOnRelease${servoName}${sliderType}`;
+                if (sliderElement.dataset[flag] === 'true') return;
+                sliderElement.dataset[flag] = 'true';
+
+                const onRelease = () => commitServoSliderSave(servoName, sliderType);
+                sliderElement.addEventListener('pointerup', onRelease);
+                sliderElement.addEventListener('pointercancel', onRelease);
+                sliderElement.addEventListener('touchend', onRelease);
+                sliderElement.addEventListener('mouseup', onRelease);
+                sliderElement.addEventListener('keyup', onRelease);
+            }
+
+            function flushPendingServoSaves() {
+                Object.entries(servoPendingSave).forEach(([servoName, pending]) => {
+                    if (pending.range) commitServoSliderSave(servoName, 'range');
+                    if (pending.trim) commitServoSliderSave(servoName, 'trim');
+                });
+            }
+
+            if (!window.__servoReleaseFlushBound) {
+                window.__servoReleaseFlushBound = true;
+                ['pointerup', 'pointercancel', 'touchend', 'mouseup', 'keyup'].forEach((eventName) => {
+                    document.addEventListener(eventName, flushPendingServoSaves, true);
+                });
+                window.addEventListener('pagehide', flushPendingServoSaves);
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) flushPendingServoSaves();
+                });
+            }
+
             // Servo PWM units: 0-180 degrees (standard servo range)
             // Safe defaults: min=10, max=170 to prevent mechanical damage
             const defaultMin = 10;
@@ -5894,27 +6325,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     onInput: function(value) {
                         updateThumbLabels('sliderFrontLeft', value);
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
-                            clearTimeout(servoSliderSaveTimers.frontLeft.range);
-                            servoSliderSaveTimers.frontLeft.range = setTimeout(() => {
-                                const lastValue = servoSliderInstances.frontLeft.lastRangeValue;
-                                if (value[0] !== lastValue[0] || value[1] !== lastValue[1]) {
-                                    const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
-                                    if (canUseKv) {
-                                        markPageDirty('servo');
-                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_FL_MIN, degToUs(value[0])).catch(e => console.error('KV FL_MIN:', e));
-                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_FL_MAX, degToUs(value[1])).catch(e => console.error('KV FL_MAX:', e));
-                                    } else {
-                                        saveServoRange('frontLeft', value[0], value[1]);
-                                    }
-                                }
-                                servoSliderInstances.frontLeft.lastRangeValue = [value[0], value[1]];
-                            }, 175);
+                            servoSliderValues.frontLeft.min = Math.round(value[0]);
+                            servoSliderValues.frontLeft.max = Math.round(value[1]);
+                            markPageDirty('servo');
+                            servoPendingSave.frontLeft.range = true;
                         }
                     }
                 });
                 servoSliderInstances.frontLeft.rangeElement = frontLeftElement;
                 servoSliderInstances.frontLeft.rangeInstance = frontLeftInstance;
                 updateThumbLabels('sliderFrontLeft', [defaultMin, defaultMax]);
+                attachServoReleaseSaveHandler(frontLeftElement, 'frontLeft', 'range');
             }
 
             // Front Left Servo Trim
@@ -5930,16 +6351,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderFrontLeftTrim', value[1]);
                         if (!isLoadingTuningConfig && !servoTrimLocked) {
-                            clearTimeout(servoSliderSaveTimers.frontLeft.trim);
-                            servoSliderSaveTimers.frontLeft.trim = setTimeout(() => {
-                                servoKvWrite(window.RCDCC_KEYS.SERVO_FL_TRIM, trimDegToUs(value[1]), 'frontLeft', 'trim', value[1]);
-                            }, 175);
+                            servoSliderValues.frontLeft.trim = Math.round(value[1]);
+                            markPageDirty('servo');
+                            servoPendingSave.frontLeft.trim = true;
                         }
                     }
                 });
                 servoSliderInstances.frontLeft.trimElement = frontLeftTrimElement;
                 servoSliderInstances.frontLeft.trimInstance = frontLeftTrimInstance;
                 updateTrimThumbLabel('sliderFrontLeftTrim', 0);
+                attachServoReleaseSaveHandler(frontLeftTrimElement, 'frontLeft', 'trim');
             }
 
             // Front Right Servo
@@ -5953,27 +6374,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     onInput: function(value) {
                         updateThumbLabels('sliderFrontRight', value);
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
-                            clearTimeout(servoSliderSaveTimers.frontRight.range);
-                            servoSliderSaveTimers.frontRight.range = setTimeout(() => {
-                                const lastValue = servoSliderInstances.frontRight.lastRangeValue;
-                                if (value[0] !== lastValue[0] || value[1] !== lastValue[1]) {
-                                    const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
-                                    if (canUseKv) {
-                                        markPageDirty('servo');
-                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_FR_MIN, degToUs(value[0])).catch(e => console.error('KV FR_MIN:', e));
-                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_FR_MAX, degToUs(value[1])).catch(e => console.error('KV FR_MAX:', e));
-                                    } else {
-                                        saveServoRange('frontRight', value[0], value[1]);
-                                    }
-                                }
-                                servoSliderInstances.frontRight.lastRangeValue = [value[0], value[1]];
-                            }, 175);
+                            servoSliderValues.frontRight.min = Math.round(value[0]);
+                            servoSliderValues.frontRight.max = Math.round(value[1]);
+                            markPageDirty('servo');
+                            servoPendingSave.frontRight.range = true;
                         }
                     }
                 });
                 servoSliderInstances.frontRight.rangeElement = frontRightElement;
                 servoSliderInstances.frontRight.rangeInstance = frontRightInstance;
                 updateThumbLabels('sliderFrontRight', [defaultMin, defaultMax]);
+                attachServoReleaseSaveHandler(frontRightElement, 'frontRight', 'range');
             }
 
             // Front Right Servo Trim
@@ -5989,16 +6400,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderFrontRightTrim', value[1]);
                         if (!isLoadingTuningConfig && !servoTrimLocked) {
-                            clearTimeout(servoSliderSaveTimers.frontRight.trim);
-                            servoSliderSaveTimers.frontRight.trim = setTimeout(() => {
-                                servoKvWrite(window.RCDCC_KEYS.SERVO_FR_TRIM, trimDegToUs(value[1]), 'frontRight', 'trim', value[1]);
-                            }, 175);
+                            servoSliderValues.frontRight.trim = Math.round(value[1]);
+                            markPageDirty('servo');
+                            servoPendingSave.frontRight.trim = true;
                         }
                     }
                 });
                 servoSliderInstances.frontRight.trimElement = frontRightTrimElement;
                 servoSliderInstances.frontRight.trimInstance = frontRightTrimInstance;
                 updateTrimThumbLabel('sliderFrontRightTrim', 0);
+                attachServoReleaseSaveHandler(frontRightTrimElement, 'frontRight', 'trim');
             }
 
             // Rear Left Servo
@@ -6012,27 +6423,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     onInput: function(value) {
                         updateThumbLabels('sliderRearLeft', value);
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
-                            clearTimeout(servoSliderSaveTimers.rearLeft.range);
-                            servoSliderSaveTimers.rearLeft.range = setTimeout(() => {
-                                const lastValue = servoSliderInstances.rearLeft.lastRangeValue;
-                                if (value[0] !== lastValue[0] || value[1] !== lastValue[1]) {
-                                    const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
-                                    if (canUseKv) {
-                                        markPageDirty('servo');
-                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_RL_MIN, degToUs(value[0])).catch(e => console.error('KV RL_MIN:', e));
-                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_RL_MAX, degToUs(value[1])).catch(e => console.error('KV RL_MAX:', e));
-                                    } else {
-                                        saveServoRange('rearLeft', value[0], value[1]);
-                                    }
-                                }
-                                servoSliderInstances.rearLeft.lastRangeValue = [value[0], value[1]];
-                            }, 175);
+                            servoSliderValues.rearLeft.min = Math.round(value[0]);
+                            servoSliderValues.rearLeft.max = Math.round(value[1]);
+                            markPageDirty('servo');
+                            servoPendingSave.rearLeft.range = true;
                         }
                     }
                 });
                 servoSliderInstances.rearLeft.rangeElement = rearLeftElement;
                 servoSliderInstances.rearLeft.rangeInstance = rearLeftInstance;
                 updateThumbLabels('sliderRearLeft', [defaultMin, defaultMax]);
+                attachServoReleaseSaveHandler(rearLeftElement, 'rearLeft', 'range');
             }
 
             // Rear Left Servo Trim
@@ -6048,16 +6449,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderRearLeftTrim', value[1]);
                         if (!isLoadingTuningConfig && !servoTrimLocked) {
-                            clearTimeout(servoSliderSaveTimers.rearLeft.trim);
-                            servoSliderSaveTimers.rearLeft.trim = setTimeout(() => {
-                                servoKvWrite(window.RCDCC_KEYS.SERVO_RL_TRIM, trimDegToUs(value[1]), 'rearLeft', 'trim', value[1]);
-                            }, 175);
+                            servoSliderValues.rearLeft.trim = Math.round(value[1]);
+                            markPageDirty('servo');
+                            servoPendingSave.rearLeft.trim = true;
                         }
                     }
                 });
                 servoSliderInstances.rearLeft.trimElement = rearLeftTrimElement;
                 servoSliderInstances.rearLeft.trimInstance = rearLeftTrimInstance;
                 updateTrimThumbLabel('sliderRearLeftTrim', 0);
+                attachServoReleaseSaveHandler(rearLeftTrimElement, 'rearLeft', 'trim');
             }
 
             // Rear Right Servo
@@ -6071,27 +6472,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     onInput: function(value) {
                         updateThumbLabels('sliderRearRight', value);
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
-                            clearTimeout(servoSliderSaveTimers.rearRight.range);
-                            servoSliderSaveTimers.rearRight.range = setTimeout(() => {
-                                const lastValue = servoSliderInstances.rearRight.lastRangeValue;
-                                if (value[0] !== lastValue[0] || value[1] !== lastValue[1]) {
-                                    const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
-                                    if (canUseKv) {
-                                        markPageDirty('servo');
-                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_RR_MIN, degToUs(value[0])).catch(e => console.error('KV RR_MIN:', e));
-                                        bleManager.writeValue(window.RCDCC_KEYS.SERVO_RR_MAX, degToUs(value[1])).catch(e => console.error('KV RR_MAX:', e));
-                                    } else {
-                                        saveServoRange('rearRight', value[0], value[1]);
-                                    }
-                                }
-                                servoSliderInstances.rearRight.lastRangeValue = [value[0], value[1]];
-                            }, 175);
+                            servoSliderValues.rearRight.min = Math.round(value[0]);
+                            servoSliderValues.rearRight.max = Math.round(value[1]);
+                            markPageDirty('servo');
+                            servoPendingSave.rearRight.range = true;
                         }
                     }
                 });
                 servoSliderInstances.rearRight.rangeElement = rearRightElement;
                 servoSliderInstances.rearRight.rangeInstance = rearRightInstance;
                 updateThumbLabels('sliderRearRight', [defaultMin, defaultMax]);
+                attachServoReleaseSaveHandler(rearRightElement, 'rearRight', 'range');
             }
 
             // Rear Right Servo Trim
@@ -6107,16 +6498,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     onInput: function(value) {
                         updateTrimThumbLabel('sliderRearRightTrim', value[1]);
                         if (!isLoadingTuningConfig && !servoTrimLocked) {
-                            clearTimeout(servoSliderSaveTimers.rearRight.trim);
-                            servoSliderSaveTimers.rearRight.trim = setTimeout(() => {
-                                servoKvWrite(window.RCDCC_KEYS.SERVO_RR_TRIM, trimDegToUs(value[1]), 'rearRight', 'trim', value[1]);
-                            }, 175);
+                            servoSliderValues.rearRight.trim = Math.round(value[1]);
+                            markPageDirty('servo');
+                            servoPendingSave.rearRight.trim = true;
                         }
                     }
                 });
                 servoSliderInstances.rearRight.trimElement = rearRightTrimElement;
                 servoSliderInstances.rearRight.trimInstance = rearRightTrimInstance;
                 updateTrimThumbLabel('sliderRearRightTrim', 0);
+                attachServoReleaseSaveHandler(rearRightTrimElement, 'rearRight', 'trim');
             }
 
             // Force layout recalculation to render slider colors correctly
@@ -6295,6 +6686,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     console.log(`Setting ${servoName} trim to ${trimValue}`);
                     // Trim slider has fixed min:-20, max:20 range with right thumb as trim value
                     sliderData.trimInstance.value([-20, trimValue]);
+                    sliderData.lastTrimValue = Math.round(trimValue);
                     
                     // Update thumb label
                     if (sliderData.trimElement) {
@@ -6426,20 +6818,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Save to localStorage
             localStorage.setItem('servoTrimLocked', servoTrimLocked.toString());
             
-            // Find the card container
-            const card = document.getElementById('servoSettingsCard') || iconElement.closest('.card');
-            
-            if (servoTrimLocked) {
-                // Lock the sliders
-                card.classList.add('trim-locked');
-                iconElement.textContent = 'lock';
-                iconElement.style.color = 'var(--lime-green)'; // Lime green
-            } else {
-                // Unlock the sliders
-                card.classList.remove('trim-locked');
-                iconElement.textContent = 'lock_open_right';
-                iconElement.style.color = 'var(--high-impact-color)'; // Yellow
-            }
+            syncServoSettingsLockUI(iconElement);
         }
         
         function toggleServoRotationLock(iconElement) {
@@ -6453,20 +6832,35 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Save to localStorage
             localStorage.setItem('servoRotationLocked', servoRotationLocked.toString());
             
-            // Find the card container
-            const card = document.getElementById('servoSettingsCard') || iconElement.closest('.card');
-            
-            if (servoRotationLocked) {
-                // Lock the badges
-                card.classList.add('rotation-locked');
-                iconElement.textContent = 'lock';
-                iconElement.style.color = 'var(--lime-green)'; // Lime green
-            } else {
-                // Unlock the badges
-                card.classList.remove('rotation-locked');
-                iconElement.textContent = 'lock_open_right';
-                iconElement.style.color = 'var(--high-impact-color)'; // Yellow
+            syncServoSettingsLockUI(iconElement);
+        }
+
+        function syncServoSettingsLockUI(iconElement = null) {
+            const card = document.getElementById('servoSettingsCard');
+            const lockIcon = iconElement || document.getElementById('servoSettingsLockIcon');
+            if (card) {
+                card.classList.toggle('trim-locked', servoTrimLocked);
+                card.classList.toggle('rotation-locked', servoRotationLocked);
             }
+            if (lockIcon) {
+                const allLocked = servoTrimLocked && servoRotationLocked;
+                lockIcon.textContent = allLocked ? 'lock' : 'lock_open_right';
+                lockIcon.style.color = allLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
+                lockIcon.title = allLocked ? 'Unlock trim and direction controls' : 'Lock trim and direction controls';
+            }
+        }
+
+        function toggleServoSettingsLock(iconElement) {
+            // Play click sound
+            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
+            clickSound.play().catch(e => console.log('Sound play failed:', e));
+
+            const nextState = !(servoTrimLocked && servoRotationLocked);
+            servoTrimLocked = nextState;
+            servoRotationLocked = nextState;
+            localStorage.setItem('servoTrimLocked', nextState.toString());
+            localStorage.setItem('servoRotationLocked', nextState.toString());
+            syncServoSettingsLockUI(iconElement);
         }
         
         function initLightControls() {
@@ -6532,7 +6926,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 // Always update reversed checkbox and badge (independent of rSliders)
                 const checkbox = document.getElementById(`servo${abbrev}Reversed`);
                 const badge = document.getElementById(`servo${abbrev}RevBadge`);
-                const isReversed = servo.reversed || false;
+                const isReversed = !!(servo && servo.reversed);
                 if (checkbox) checkbox.checked = isReversed;
                 if (badge) {
                     const icon = isReversed ? '<span class="material-symbols-outlined rotate-ccw">rotate_left</span>' : '<span class="material-symbols-outlined rotate-cw">rotate_right</span>';
@@ -6849,10 +7243,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (autoCalibrateBtn && !autoCalibrateBtn.dataset.bound) {
                 autoCalibrateBtn.dataset.bound = '1';
                 autoCalibrateBtn.addEventListener('click', function() {
-                    const primaryAutoCalibrate = document.getElementById('autoLevelBtn');
-                    if (primaryAutoCalibrate) {
-                        primaryAutoCalibrate.click();
-                    }
+                    handleAutoLevel(autoCalibrateBtn);
                 });
             }
         }
@@ -7163,16 +7554,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             // Restore last active tab from localStorage
-            const savedTabCandidate = localStorage.getItem('settings_active_tab') || 'servo';
+            const savedTabCandidate = localStorage.getItem('settings_active_tab') || 'preferences';
             const savedTab = document.querySelector(`.settings-tab[data-tab="${savedTabCandidate}"]`)
                 ? savedTabCandidate
-                : 'servo';
+                : 'preferences';
             
             // Set up tab click handlers
             document.querySelectorAll('.settings-tab').forEach(tab => {
                 tab.addEventListener('click', async function() {
                     const tabName = this.dataset.tab;
-                    const currentTab = localStorage.getItem('settings_active_tab') || 'servo';
+                    const currentTab = localStorage.getItem('settings_active_tab') || 'preferences';
                     const currentDirtyPage = dirtyPageForTab(currentTab);
                     const nextDirtyPage = dirtyPageForTab(tabName);
 
@@ -7201,10 +7592,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     
                     // Save active tab to localStorage
                     localStorage.setItem('settings_active_tab', tabName);
-
-                    if (tabName === 'servo') {
-                        setTimeout(refreshServoSliderRender, 50);
-                    }
                 });
             });
             

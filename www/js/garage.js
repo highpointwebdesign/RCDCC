@@ -11,6 +11,8 @@ const GarageManager = (() => {
     let _connectingVehicleId = null;
     let _connectErrorVehicleId = null;
     let _connectErrorTimer = null;
+    let _autoReconnectVehicleId = null;
+    let _autoReconnectPulseTimer = null;
     let _disconnectLongPressTimer = null;
     let _disconnectLongPressVehicleId = null;
     let _longPressTriggeredVehicleId = null;
@@ -18,6 +20,39 @@ const GarageManager = (() => {
     let _pressingVehicleId = null;
     const LONG_PRESS_DISCONNECT_MS = 650;
     const MAX_LABEL_LENGTH = 12;
+
+    function normalizeDeviceId(deviceId) {
+        return String(deviceId || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+    }
+
+    function deviceIdsEqual(a, b) {
+        const left = normalizeDeviceId(a);
+        const right = normalizeDeviceId(b);
+        return !!left && !!right && left === right;
+    }
+
+    function timeAgo(isoString) {
+        if (!isoString) return null;
+        const past = new Date(isoString);
+        if (isNaN(past)) return null;
+        const diffMs = Date.now() - past.getTime();
+        if (diffMs < 0) return null;
+        const sec  = Math.floor(diffMs / 1000);
+        const min  = Math.floor(sec  / 60);
+        const hr   = Math.floor(min  / 60);
+        const day  = Math.floor(hr   / 24);
+        const mo   = Math.floor(day  / 30);
+        const yr   = Math.floor(day  / 365);
+        if (sec  <  60)  return `${sec}s ago`;
+        if (min  <  60)  return `${min}m ago`;
+        if (hr   <  24)  return `${hr}h ago`;
+        if (day  <  30)  return `${day}d ago`;
+        if (mo   <  12)  return `${mo}mo ago`;
+        return `${yr}y ago`;
+    }
 
     function sanitizeVehicleLabel(name, fallback = 'Vehicle') {
         const trimmed = String(name || '').trim();
@@ -110,6 +145,11 @@ const GarageManager = (() => {
         const vehicles = getVehicles().filter(v => v.id !== deviceId);
         saveVehicles(vehicles);
         renderGarage();
+
+        const hasActiveBleConnection = !!(window.bleManager && window.bleManager.isConnected);
+        if (vehicles.length === 0 && !hasActiveBleConnection && typeof window.updateConnectionStatus === 'function') {
+            window.updateConnectionStatus(false);
+        }
     }
 
     function renameVehicle(deviceId, newName) {
@@ -122,6 +162,12 @@ const GarageManager = (() => {
         }
         saveVehicles(vehicles);
         renderGarage();
+
+        // If the renamed truck is currently connected, refresh the dashboard badge immediately.
+        if (v && window.bleManager && window.bleManager.isConnected && deviceIdsEqual(window.bleManager.deviceId, deviceId)
+            && typeof window.updateDashboardVehicleName === 'function') {
+            window.updateDashboardVehicleName(v.friendlyName);
+        }
     }
 
     function updateLastSeen(deviceId) {
@@ -152,23 +198,36 @@ const GarageManager = (() => {
 
         if (empty) empty.style.display = 'none';
 
-        // Sort by lastSeen descending
-        vehicles.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
+        const hasAnyActiveConnection = !!(window.bleManager && window.bleManager.isConnected);
+        const activeDeviceId = hasAnyActiveConnection ? window.bleManager.deviceId : null;
+        if (activeDeviceId && _connectingVehicleId && deviceIdsEqual(_connectingVehicleId, activeDeviceId)) {
+            _connectingVehicleId = null;
+        }
+
+        // Sort alphabetically by friendly name (case-insensitive)
+        vehicles.sort((a, b) => a.friendlyName.localeCompare(b.friendlyName, undefined, { sensitivity: 'base' }));
 
         list.innerHTML = vehicles.map(v => {
-            const isConnected = window.bleManager && window.bleManager.deviceId === v.id && window.bleManager.isConnected;
-            const isConnecting = _connectingVehicleId === v.id;
-            const isError = _connectErrorVehicleId === v.id;
+            const isConnected = !!(window.bleManager && window.bleManager.isConnected && deviceIdsEqual(window.bleManager.deviceId, v.id));
+            const hasPendingConnectionForCard = deviceIdsEqual(_connectingVehicleId, v.id) || deviceIdsEqual(_autoReconnectVehicleId, v.id);
+            const isConnecting = !hasAnyActiveConnection && !isConnected && hasPendingConnectionForCard;
+            const isError = deviceIdsEqual(_connectErrorVehicleId, v.id);
             const safeLabel = escapeHtml(v.friendlyName);
             const interactionHint = isConnected ? 'Long press to disconnect' : 'Tap to connect';
             const accessibilityLabel = isConnected
                 ? `Disconnect ${safeLabel}`
                 : `Connect ${safeLabel}`;
+            const cardIcon = isConnecting ? 'modeling' : 'bluetooth_drive';
+            const iconClass = isConnecting ? 'material-symbols-outlined pulsating' : 'material-symbols-outlined';
+            const lastConnectedStr = isConnected ? null : timeAgo(v.lastSeen);
             return `
             <div class="garage-card ${isConnected ? 'connected' : ''} ${isConnecting ? 'connecting' : ''} ${isError ? 'connect-error' : ''}" data-vehicle-id="${v.id}" role="button" tabindex="0" aria-label="${accessibilityLabel}" onclick="GarageManager.handleCardTap('${v.id}')" onkeydown="GarageManager.handleCardKeydown(event, '${v.id}')" onpointerdown="GarageManager.handleCardPointerDown(event, '${v.id}')" onpointerup="GarageManager.handleCardPointerUp(event)" onpointerleave="GarageManager.handleCardPointerCancel()" onpointercancel="GarageManager.handleCardPointerCancel()">
                 <div class="garage-card-top">
-                    <div class="garage-card-icon" aria-hidden="true">
-                        <span class="material-symbols-outlined">directions_car</span>
+                    <div class="garage-card-main">
+                        <div class="garage-card-icon" aria-hidden="true">
+                            <span class="${iconClass}">${cardIcon}</span>
+                        </div>
+                        <div class="garage-card-name" title="${safeLabel}">${safeLabel}</div>
                     </div>
                     <div class="garage-card-overflow dropdown" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                         <button type="button" class="garage-card-overflow-btn dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Vehicle options" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
@@ -176,8 +235,30 @@ const GarageManager = (() => {
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end garage-card-menu" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                             <li>
+                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'tuning')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                    Suspension
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'lights')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                    Lights
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'fpv')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                    FPV
+                                </button>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
                                 <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openRenameModal('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     Rename
+                                </button>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleAbout('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                    About
                                 </button>
                             </li>
                             <li>
@@ -188,16 +269,16 @@ const GarageManager = (() => {
                         </ul>
                     </div>
                 </div>
-                <div class="garage-card-info">
-                    <div class="garage-card-name" title="${safeLabel}">${safeLabel}</div>
+                <div class="garage-card-meta">
                     <div class="garage-card-hint">${interactionHint}</div>
+                    ${lastConnectedStr ? `<div class="garage-card-last-seen">Last connected: ${lastConnectedStr}</div>` : ''}
                 </div>
             </div>`;
         }).join('');
     }
 
     function isVehicleConnected(deviceId) {
-        return !!(window.bleManager && window.bleManager.deviceId === deviceId && window.bleManager.isConnected);
+        return !!(window.bleManager && window.bleManager.isConnected && deviceIdsEqual(window.bleManager.deviceId, deviceId));
     }
 
     function clearDisconnectLongPressState() {
@@ -207,6 +288,38 @@ const GarageManager = (() => {
         }
         _disconnectLongPressVehicleId = null;
         setCardPressingState(null);
+    }
+
+    function clearAutoReconnectPulseTimer() {
+        if (_autoReconnectPulseTimer) {
+            clearTimeout(_autoReconnectPulseTimer);
+            _autoReconnectPulseTimer = null;
+        }
+    }
+
+    function setAutoReconnectState(active, deviceId = null, delayMs = 0) {
+        clearAutoReconnectPulseTimer();
+
+        if (!active || !deviceId) {
+            _autoReconnectVehicleId = null;
+            renderGarage();
+            return;
+        }
+
+        const pulseDelay = Math.max(0, Number(delayMs) || 0);
+        if (pulseDelay === 0) {
+            _autoReconnectVehicleId = deviceId;
+            renderGarage();
+            return;
+        }
+
+        _autoReconnectVehicleId = null;
+        renderGarage();
+        _autoReconnectPulseTimer = setTimeout(() => {
+            _autoReconnectPulseTimer = null;
+            _autoReconnectVehicleId = deviceId;
+            renderGarage();
+        }, pulseDelay);
     }
 
     function setCardPressingState(deviceId) {
@@ -314,6 +427,8 @@ const GarageManager = (() => {
     async function connectToVehicle(deviceId) {
         if (!window.bleManager) return;
 
+        setAutoReconnectState(false);
+
         const vehicles = getVehicles();
         const vehicle = vehicles.find(v => v.id === deviceId);
 
@@ -323,9 +438,23 @@ const GarageManager = (() => {
             : await window.bleManager.connectToKnownDevice();
 
         if (connected) {
+            if (deviceIdsEqual(_connectingVehicleId, deviceId)) {
+                _connectingVehicleId = null;
+            }
+
             updateLastSeen(deviceId);
             if (window.updateConnectionStatus) updateConnectionStatus(true);
             if (window.updateConnectionMethodDisplay) updateConnectionMethodDisplay();
+
+            // Run a follow-up refresh once the connection settles so tuning/servo UI hydrates reliably.
+            if (typeof window.refreshConfigAfterConnection === 'function') {
+                setTimeout(() => {
+                    if (isVehicleConnected(deviceId)) {
+                        window.refreshConfigAfterConnection('garage-card-select');
+                    }
+                }, 450);
+            }
+
             renderGarage();
             return true;
         } else {
@@ -406,7 +535,7 @@ const GarageManager = (() => {
     }
 
     async function toggleVehicleConnection(deviceId) {
-        const alreadyConnected = !!(window.bleManager && window.bleManager.deviceId === deviceId && window.bleManager.isConnected);
+        const alreadyConnected = !!(window.bleManager && window.bleManager.isConnected && deviceIdsEqual(window.bleManager.deviceId, deviceId));
         if (alreadyConnected) {
             if (window.disconnectBLE) {
                 await window.disconnectBLE(true);
@@ -414,6 +543,8 @@ const GarageManager = (() => {
             }
             return;
         }
+
+        setAutoReconnectState(false);
 
         _connectErrorVehicleId = null;
         if (_connectErrorTimer) {
@@ -446,6 +577,53 @@ const GarageManager = (() => {
         deleteVehicle(deviceId);
     }
 
+    async function openVehicleSection(deviceId, sectionId) {
+        if (!['tuning', 'lights', 'fpv'].includes(sectionId)) return;
+
+        const connected = isVehicleConnected(deviceId) || await connectToVehicle(deviceId);
+        if (!connected) return;
+
+        if (typeof window.navigateToSection === 'function') {
+            await window.navigateToSection(sectionId);
+        }
+    }
+
+    async function openVehicleAbout(deviceId) {
+        const vehicles = getVehicles();
+        const vehicle = vehicles.find(v => v.id === deviceId);
+        if (!vehicle) return;
+
+        const connected = isVehicleConnected(deviceId) || await connectToVehicle(deviceId);
+        if (!connected) return;
+
+        const nameEl = document.getElementById('garageVehicleAboutName');
+        const macEl = document.getElementById('garageVehicleAboutMac');
+        const fwEl = document.getElementById('garageVehicleAboutFirmware');
+        const titleTextEl = document.getElementById('garageVehicleAboutTitleText');
+        const modalEl = document.getElementById('garageVehicleAboutModal');
+        if (!modalEl) return;
+
+        const vehicleName = vehicle.friendlyName || vehicle.bleName || 'Vehicle';
+        if (nameEl) nameEl.textContent = vehicleName;
+        if (titleTextEl) titleTextEl.textContent = `About ${vehicleName}`;
+        if (macEl) macEl.textContent = deviceId;
+        if (fwEl) fwEl.textContent = 'Loading...';
+
+        try {
+            const data = await window.bleManager.readConfigScoped('bootstrap');
+            const fw = data?.fw_version || data?.version || data?.firmwareVersion || data?.system?.fw_version || 'Not available';
+            if (fwEl) fwEl.textContent = fw;
+        } catch (error) {
+            if (fwEl) fwEl.textContent = 'Connection error';
+            console.warn('Vehicle about firmware fetch failed:', error?.message || error);
+        }
+
+        if (window.bootstrap && window.bootstrap.Modal) {
+            const modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Init — wire up buttons
     // -------------------------------------------------------------------------
@@ -462,7 +640,7 @@ const GarageManager = (() => {
     }
 
     // Public API
-    return { init, renderGarage, upsertVehicle, updateLastSeen, scanAndConnect, openRenameModal, toggleVehicleConnection, confirmDeleteVehicle, handleCardKeydown, handleCardTap, handleCardPointerDown, handleCardPointerUp, handleCardPointerCancel };
+    return { init, renderGarage, upsertVehicle, updateLastSeen, scanAndConnect, openRenameModal, toggleVehicleConnection, confirmDeleteVehicle, openVehicleSection, openVehicleAbout, handleCardKeydown, handleCardTap, handleCardPointerDown, handleCardPointerUp, handleCardPointerCancel, setAutoReconnectState };
 })();
 
 // Initialize on DOM ready

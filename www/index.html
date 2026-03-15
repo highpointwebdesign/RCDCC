@@ -62,6 +62,15 @@
                 <span class="material-symbols-outlined" id="wifiIcon" role="button" tabindex="0" style="cursor: pointer; font-size: 1.5rem; padding-left: 5px; display: inline-flex; align-items: center; justify-content: center;">bluetooth_disabled</span>
             </div>
         </div>
+
+        <div id="vehicleQuickNav" class="vehicle-quick-nav" hidden>
+            <div class="vehicle-quick-nav-tabs" role="tablist" aria-label="Vehicle feature navigation">
+                <button type="button" class="vehicle-quick-nav-btn" data-target="garage" role="tab" aria-selected="false"><span class="material-symbols-outlined">chevron_left</span>Garage</button>
+                <button type="button" class="vehicle-quick-nav-btn" data-target="tuning" role="tab" aria-selected="false">Suspension</button>
+                <button type="button" class="vehicle-quick-nav-btn" data-target="lights" role="tab" aria-selected="false">Lights</button>
+                <button type="button" class="vehicle-quick-nav-btn" data-target="fpv" role="tab" aria-selected="false">FPV</button>
+            </div>
+        </div>
         
         <!-- Dashboard Section -->
         <section id="dashboard" class="page-section active">
@@ -117,7 +126,7 @@
                             <span class="material-symbols-outlined icon-danger">tune</span>
                             Current Settings
                         </div>
-                        <span class="material-symbols-outlined icon-action" id="suspensionSettingsGear" title="Modify suspension tuning parameters.">settings</span>
+                        <span class="material-symbols-outlined icon-action" id="suspensionSettingsGear" title="Modify suspension parameters.">settings</span>
                     </div>
                     <div class="card-body">
                         <div class="d-flex align-items-center justify-content-between">
@@ -224,20 +233,12 @@
             <h2 class="section-title">Settings</h2>
             <!-- Settings Tabs Navigation -->
             <div class="settings-tabs">
-                <button class="settings-tab active" data-tab="servo">
-                    <span class="material-symbols-outlined">
-                    design_services
-                    </span>
-                    <span class="tab-label-full">Servo Configuration</span>
-                    <span class="tab-label-short">Servo</span>
-                    <span id="servo-dirty-dot" style="display:none;color:#c8a800;">•</span>
-                </button>
-                <button class="settings-tab" data-tab="preferences">
+                <button class="settings-tab active" data-tab="preferences">
                     <span class="material-symbols-outlined">
                     tune
                     </span>
                     <span class="tab-label-full">Preferences</span>
-                    <span class="tab-label-short">Prefs</span>
+                    <span class="tab-label-short">Preferences</span>
                     <span id="system-dirty-dot" style="display:none;color:#c8a800;">•</span>
                 </button>
                 <button class="settings-tab" data-tab="system">
@@ -264,86 +265,6 @@
                 
             </div>
 
-            <!-- Tab Content: Servo Configuration -->
-            <div class="tab-pane active" id="tab-servo">
-                <div id="servo-dirty-banner" style="display:none;" class="row g-0 mb-2">
-                    <div class="col-12">
-                        <div class="alert alert-warning d-flex justify-content-between align-items-center py-2 mb-0" role="alert">
-                            <span>Unsaved changes — tap Save to keep these settings</span>
-                            <button type="button" class="btn-close btn-close-sm" aria-label="Dismiss" onclick="document.getElementById('servo-dirty-banner').style.display='none'"></button>
-                        </div>
-                    </div>
-                </div>
-                <div class="row g-3">
-                    <div class="col-12">
-                        <button type="button" class="btn w-100 mt-2 btn-gold" id="autoLevelBtn">
-                            <span class="material-symbols-outlined">wand_stars</span>
-                            Initiate Auto Level
-                        </button>
-                    </div>
-
-                    <!-- Dance Mode Card -->
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
-                                <div>
-                                    <span class="material-symbols-outlined icon-danger">music_note</span>
-                                    Dance Mode
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <label class="form-check-label mb-0" for="danceModeToggle">
-                                        <strong>Enable Dance Mode</strong>
-                                    </label>
-                                    <div class="form-check form-switch m-0">
-                                        <input class="form-check-input" type="checkbox" id="danceModeToggle">
-                                    </div>
-                                </div>
-                                <div class="form-text mt-2">
-                                    <small>Tilt your phone to control the TRX4's suspension in real time. Front/back tilt controls fore/aft balance; left/right tilt controls side-to-side lean.</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Auto Level Progress Container -->
-                    <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="bubble-level-card">
-                                    <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
-                                    <div class="bubble-level-face" id="bubbleLevelFace">
-                                        <div class="bubble-level-crosshair horizontal"></div>
-                                        <div class="bubble-level-crosshair vertical"></div>
-                                        <div class="bubble-level-target"></div>
-                                        <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
-                                        <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
-                                    </div>
-                                    <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-12">
-                        <div class="alert alert-info" style="font-size: 0.875rem;">
-                            <strong>Servo Tips:</strong><br>
-                            • This page is for ONE-TIME setup and static leveling<br>
-                            • For dynamic ride height during driving, use Suspension Tuning page<br>
-                            • Changes are automatically saved<br>
-                            • If your chassis doesn't respond as expected, double-check servo connections and orientations<br>
-                            • <a href="test-gps.html">test GPS</a>
-                        </div>
-                    </div>
-                    <div class="col-12">
-                        <button id="servo-save-btn" class="btn btn-secondary w-100" disabled onclick="savePage('servo')">
-                            Save Settings
-                        </button>
-                    </div>
-                </div>
-            </div>
-
             <!-- Tab Content: System -->
             <div class="tab-pane" id="tab-system">
                 <div class="row g-3">
@@ -361,10 +282,6 @@
                                     <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">App Version</div>
                                     <div style="color: #666; font-size: 0.875rem;" id="appVersion">Loading...</div>
                                 </div>
-                                <div style="margin-bottom: 1rem;">
-                                    <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">Firmware Version</div>
-                                    <div style="color: #666; font-size: 0.875rem;" id="firmwareVersion">Loading...</div>
-                                </div>
                                 <div>
                                     <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">Build Date</div>
                                     <div style="color: #666; font-size: 0.875rem;" id="buildDate">Loading...</div>
@@ -376,7 +293,7 @@
             </div>
 
             <!-- Tab Content: Preferences -->
-            <div class="tab-pane" id="tab-preferences">
+            <div class="tab-pane active" id="tab-preferences">
                 <div id="system-dirty-banner" style="display:none;" class="row g-0 mb-2">
                     <div class="col-12">
                         <div class="alert alert-warning d-flex justify-content-between align-items-center py-2 mb-0" role="alert">
@@ -397,9 +314,9 @@
                                     Notifications
                                 </div>
                             </div>
-                            <div class="card-body">
-                                 <!-- Sound Notifications Section -->
-                                <div  class="mb-4 pb-2" style="border-bottom: 1px solid var(--bs-border-color-translucent);">
+                            <div class="card-body d-flex flex-column gap-3">
+                                <!-- Sound Notifications Section -->
+                                <div class="notification-group-box">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <label class="form-check-label mb-0" for="enableNotificationSounds">
                                             <strong>Enable Sounds</strong>
@@ -411,10 +328,17 @@
                                 </div>
 
                                 <!-- LED Notifications Section -->
-                                <div>
-                                    <h6 class="mb-3" style="font-weight: 600; color: var(--text-primary);">
-                                        LED Notifications
-                                    </h6>
+                                <div id="ledNotificationsSection" class="notification-group-box">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0" style="font-weight: 600; color: var(--text-primary);">
+                                            LED Notifications
+                                        </h6>
+                                        <div class="form-check form-switch m-0">
+                                            <input class="form-check-input" type="checkbox" id="enableTruckNotifications">
+                                        </div>
+                                    </div>
+                                    <div class="form-text mt-1 mb-3"><small>Enable or disable LED truck notifications.</small></div>
+                                    <div id="ledNotificationsContent">
                                     <div class="mb-3">
                                         <label for="notificationGroupSelect" class="form-label">
                                             Light Group for LED Notifications
@@ -444,10 +368,37 @@
                                             <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">info</span> Test Info
                                         </button>
                                     </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Dance Mode Card -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                                <div>
+                                    <span class="material-symbols-outlined icon-danger">music_note</span>
+                                    Dance Mode
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label mb-0" for="danceModeToggle">
+                                        <strong>Enable Dance Mode</strong>
+                                    </label>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" id="danceModeToggle">
+                                    </div>
+                                </div>
+                                <div class="form-text mt-2">
+                                    <small>Tilt your phone to control the TRX4's suspension in real time. Front/back tilt controls fore/aft balance; left/right tilt controls side-to-side lean.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-12">
                         <button id="system-save-btn" class="btn btn-secondary w-100" disabled onclick="savePage('system')">
                             Save Settings
@@ -583,15 +534,8 @@
 
         <!-- Tuning Section -->
         <section id="tuning" class="page-section">
-            <h2 class="section-title">Suspension Tuning <span id="tuning-dirty-dot" style="display:none;color:#c8a800;font-size:1rem;vertical-align:middle;">•</span></h2>
-            <!-- Phase 2: Dirty state banner -->
-            <div id="tuning-dirty-banner" style="display:none;" class="row g-0 mb-2">
-                <div class="col-12">
-                    <div class="alert alert-warning d-flex justify-content-between align-items-center mb-0 py-2" style="border-radius:8px;font-size:0.875rem;">
-                        <span><span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">warning</span> Unsaved changes — tap Save to keep these settings</span>
-                        <button type="button" class="btn-close btn-close-dark btn-sm ms-2" onclick="document.getElementById('tuning-dirty-banner').style.display='none'" aria-label="Dismiss"></button>
-                    </div>
-                </div>
+            <div class="section-title-row">
+                <h2 class="section-title">Suspension</h2>
             </div>
             <div class="row g-3">
                 <!-- Driving Profiles Card -->
@@ -620,77 +564,89 @@
                     <div class="card" id="tuningParametersCard">
                         <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                             <div>
-                                <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Suspension Settings
+                                <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Suspension
                             </div>
                             <span class="material-symbols-outlined icon-action" id="tuningLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleTuningLock(this)">lock</span>
                         </div>
                         <div class="card-body">
                             <!-- Ride Height -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger); transform: rotate(90deg);">
-                                arrows_outward
-                                </span>
-                            Ride Height</h6>
-                            <div style="margin: 20px 0;">
-                                <div id="sliderRideHeight"></div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Min</span>
-                                    <span>Mid</span>
-                                    <span>Max</span>
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger); transform: rotate(90deg);">
+                                    arrows_outward
+                                    </span>
+                                Ride Height</h6>
+                                <div class="slider-section">
+                                    <div id="sliderRideHeight"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Min</span>
+                                        <span>Mid</span>
+                                        <span>Max</span>
+                                    </div>
                                 </div>
                             </div>
 
                             <!-- Damping -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">airwave</span> Damping</h6>
-                            <div class="slider-section">
-                                <div id="sliderDamping"></div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Soft</span>
-                                    <span>Normal</span>
-                                    <span>Stiff</span>
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">airwave</span> Damping</h6>
+                                <div class="slider-section">
+                                    <div id="sliderDamping"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Soft</span>
+                                        <span>Normal</span>
+                                        <span>Stiff</span>
+                                    </div>
                                 </div>
                             </div>
 
                             <!-- Stiffness -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">compress</span> Stiffness</h6>
-                            <div class="slider-section">
-                                <div id="sliderStiffness"></div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Soft</span>
-                                    <span>Normal</span>
-                                    <span>Stiff</span>
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">compress</span> Stiffness</h6>
+                                <div class="slider-section">
+                                    <div id="sliderStiffness"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Soft</span>
+                                        <span>Normal</span>
+                                        <span>Stiff</span>
+                                    </div>
                                 </div>
                             </div>
 
                             <!-- Reaction Speed -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">speed</span> Reaction Speed</h6>
-                            <div class="slider-section">
-                                <div id="sliderReactionSpeed"></div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Slow</span>
-                                    <span>Balanced</span>
-                                    <span>Fast</span>
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">speed</span> Reaction Speed</h6>
+                                <div class="slider-section">
+                                    <div id="sliderReactionSpeed"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Slow</span>
+                                        <span>Balanced</span>
+                                        <span>Fast</span>
+                                    </div>
                                 </div>
                             </div>
 
                             <!-- Balance (Rear/Front) -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">weight</span> Balance (Rear/Front)</h6>
-                            <div class="slider-section">
-                                <div id="sliderBalance"></div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Rear</span>
-                                    <span>Balanced</span>
-                                    <span>Front</span>
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">balance</span> Balance (Rear/Front)</h6>
+                                <div class="slider-section">
+                                    <div id="sliderBalance"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Rear</span>
+                                        <span>Balanced</span>
+                                        <span>Front</span>
+                                    </div>
                                 </div>
                             </div>
 
                             <!-- Sensor Refresh Rate -->
-                            <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">memory</span> Sensor Refresh Rate</h6>
-                            <div class="slider-section">
-                                <div id="sliderSensorRate"></div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Low</span>
-                                    <span>Balanced</span>
-                                    <span>High</span>
+                            <div class="tuning-slider-group mb-0">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">memory</span> Sensor Refresh Rate</h6>
+                                <div class="slider-section">
+                                    <div id="sliderSensorRate"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Low</span>
+                                        <span>Balanced</span>
+                                        <span>High</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -710,43 +666,54 @@
                             <span class="material-symbols-outlined icon-action" id="servoRangeLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoRangeLock(this)">lock</span>
                         </div>
                         <div class="card-body">
-                            <h6 class="mb-3">
-                                <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span>
-                                Front Left</h6>
-                            <div style="margin: 20px 0;">
-                                <div id="sliderFrontLeft"></div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Min</span>
-                                    <span>Max</span>
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3">
+                                    <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span>
+                                    Front Left
+                                </h6>
+                                <div class="slider-section">
+                                    <div id="sliderFrontLeft"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Min</span>
+                                        <span>Max</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span> Front Right</h6>
-                            <div style="margin: 20px 0;">
-                                <div id="sliderFrontRight"></div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Min</span>
-                                    <span>Max</span>
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span> Front Right</h6>
+                                <div class="slider-section">
+                                    <div id="sliderFrontRight"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Min</span>
+                                        <span>Max</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <h6 class="mb-3">
-                                <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span> Rear Left</h6>
-                            <div style="margin: 20px 0;">
-                                <div id="sliderRearLeft"></div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Min</span>
-                                    <span>Max</span>
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3">
+                                    <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span> Rear Left
+                                </h6>
+                                <div class="slider-section">
+                                    <div id="sliderRearLeft"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Min</span>
+                                        <span>Max</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <h6 class="mb-3">
-                                <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span> Rear Right</h6>
-                            <div style="margin: 20px 0;">
-                                <div id="sliderRearRight"></div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Min</span>
-                                    <span>Max</span>
+                            <div class="tuning-slider-group mb-0">
+                                <h6 class="mb-3">
+                                    <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span> Rear Right
+                                </h6>
+                                <div class="slider-section">
+                                    <div id="sliderRearRight"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Min</span>
+                                        <span>Max</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -759,22 +726,21 @@
                         <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                             <div>
                                 <span class="material-symbols-outlined icon-danger">tune</span>
-                                Servo Settings
+                                Servo Trim & Rotation
                             </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="material-symbols-outlined icon-action" id="servoSettingsLockIcon" title="Lock servo settings" onclick="toggleServoSettingsLock(this)">lock</span>
+                            <div class="d-flex align-items-center gap-2 servo-settings-header-actions">
+                                <span class="material-symbols-outlined icon-action" id="servoSettingsLockIcon" title="Lock trim and rotation controls" onclick="toggleServoSettingsLock(this)">lock_open_right</span>
                             </div>
                         </div>
                         <div class="card-body" id="servoSettingsCardBody">
                             <div class="servo-settings-block">
-                                    <div class="servo-settings-section">
+                                    <div class="servo-settings-section tuning-slider-group">
                                         <div class="servo-settings-title">
                                             <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span>
-                                            <span>Front Left</span>
+                                            <span>Front Left Trim</span>
                                         </div>
                                         <div class="servo-settings-slider-labels">
-                                            <span>Trim</span>
-                                            <span id="servoFLTrimDisplay">0°</span>
+                                            <span id="servoFLTrimDisplay"></span>
                                         </div>
                                         <div id="sliderFrontLeftTrim"></div>
                                         <div class="servo-settings-value-labels">
@@ -782,7 +748,7 @@
                                             <span>Center</span>
                                             <span>Right</span>
                                         </div>
-                                        <div class="btn-group w-100 mt-2" role="group" aria-label="Front Left direction" id="servoFLRevBadge">
+                                        <div class="btn-group servo-direction-toggle w-100 mt-2" role="group" aria-label="Front Left direction" id="servoFLRevBadge">
                                             <button type="button" class="btn servo-direction-btn" id="servoFLCwBtn" data-dir="cw">
                                                 <span class="material-symbols-outlined rotate-cw">rotate_right</span>
                                                 CW
@@ -795,14 +761,13 @@
                                         <input class="form-check-input" type="checkbox" id="servoFLReversed" style="display: none;">
                                     </div>
 
-                                    <div class="servo-settings-section">
+                                    <div class="servo-settings-section tuning-slider-group">
                                         <div class="servo-settings-title">
                                             <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
-                                            <span>Front Right</span>
+                                            <span>Front Right Trim</span>
                                         </div>
                                         <div class="servo-settings-slider-labels">
-                                            <span>Trim</span>
-                                            <span id="servoFRTrimDisplay">0°</span>
+                                            <span id="servoFRTrimDisplay"></span>
                                         </div>
                                         <div id="sliderFrontRightTrim"></div>
                                         <div class="servo-settings-value-labels">
@@ -810,7 +775,7 @@
                                             <span>Center</span>
                                             <span>Right</span>
                                         </div>
-                                        <div class="btn-group w-100 mt-2" role="group" aria-label="Front Right direction" id="servoFRRevBadge">
+                                        <div class="btn-group servo-direction-toggle w-100 mt-2" role="group" aria-label="Front Right direction" id="servoFRRevBadge">
                                             <button type="button" class="btn servo-direction-btn" id="servoFRCwBtn" data-dir="cw">
                                                 <span class="material-symbols-outlined rotate-cw">rotate_right</span>
                                                 CW
@@ -823,14 +788,13 @@
                                         <input class="form-check-input" type="checkbox" id="servoFRReversed" style="display: none;">
                                     </div>
 
-                                    <div class="servo-settings-section">
+                                    <div class="servo-settings-section tuning-slider-group">
                                         <div class="servo-settings-title">
                                             <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span>
-                                            <span>Rear Left</span>
+                                            <span>Rear Left Trim</span>
                                         </div>
                                         <div class="servo-settings-slider-labels">
-                                            <span>Trim</span>
-                                            <span id="servoRLTrimDisplay">0°</span>
+                                            <span id="servoRLTrimDisplay"></span>
                                         </div>
                                         <div id="sliderRearLeftTrim"></div>
                                         <div class="servo-settings-value-labels">
@@ -838,7 +802,7 @@
                                             <span>Center</span>
                                             <span>Right</span>
                                         </div>
-                                        <div class="btn-group w-100 mt-2" role="group" aria-label="Rear Left direction" id="servoRLRevBadge">
+                                        <div class="btn-group servo-direction-toggle w-100 mt-2" role="group" aria-label="Rear Left direction" id="servoRLRevBadge">
                                             <button type="button" class="btn servo-direction-btn" id="servoRLCwBtn" data-dir="cw">
                                                 <span class="material-symbols-outlined rotate-cw">rotate_right</span>
                                                 CW
@@ -851,14 +815,13 @@
                                         <input class="form-check-input" type="checkbox" id="servoRLReversed" style="display: none;">
                                     </div>
 
-                                    <div class="servo-settings-section">
+                                    <div class="servo-settings-section tuning-slider-group">
                                         <div class="servo-settings-title">
                                             <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span>
-                                            <span>Rear Right</span>
+                                            <span>Rear Right Trim</span>
                                         </div>
                                         <div class="servo-settings-slider-labels">
-                                            <span>Trim</span>
-                                            <span id="servoRRTrimDisplay">0°</span>
+                                            <span id="servoRRTrimDisplay"></span>
                                         </div>
                                         <div id="sliderRearRightTrim"></div>
                                         <div class="servo-settings-value-labels">
@@ -866,7 +829,7 @@
                                             <span>Center</span>
                                             <span>Right</span>
                                         </div>
-                                        <div class="btn-group w-100 mt-2" role="group" aria-label="Rear Right direction" id="servoRRRevBadge">
+                                        <div class="btn-group servo-direction-toggle w-100 mt-2" role="group" aria-label="Rear Right direction" id="servoRRRevBadge">
                                             <button type="button" class="btn servo-direction-btn" id="servoRRCwBtn" data-dir="cw">
                                                 <span class="material-symbols-outlined rotate-cw">rotate_right</span>
                                                 CW
@@ -879,10 +842,31 @@
                                         <input class="form-check-input" type="checkbox" id="servoRRReversed" style="display: none;">
                                     </div>
 
-                                    <button type="button" class="btn btn-gold w-100 mt-3" id="servoAutoCalibrateBtn">
-                                        <span class="material-symbols-outlined">wand_stars</span>
-                                        Auto Calibrate
-                                    </button>
+                                    <div class="servo-settings-footer">
+                                        <button type="button" class="btn btn-gold w-100" id="servoAutoCalibrateBtn">
+                                            <span class="material-symbols-outlined">wand_stars</span>
+                                            Auto Calibrate
+                                        </button>
+                                    </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Auto Level Progress Container -->
+                <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="bubble-level-card">
+                                <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
+                                <div class="bubble-level-face" id="bubbleLevelFace">
+                                    <div class="bubble-level-crosshair horizontal"></div>
+                                    <div class="bubble-level-crosshair vertical"></div>
+                                    <div class="bubble-level-target"></div>
+                                    <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
+                                    <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
+                                </div>
+                                <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
                             </div>
                         </div>
                     </div>
@@ -907,9 +891,6 @@
                                 <option value="4">Arrow Right, Chip Up</option>
                                 <option value="5">Arrow Left, Chip Up</option>
                             </select>
-                            <div class="form-text">
-                                <small>Select how your DCC is physically mounted. The arrow is printed on the box. Correct orientation is critical for accurate roll/pitch readings.</small>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -921,17 +902,41 @@
                 </button>
             </div>
 
-            <!-- Formulas Card -->
+            <!-- Help Card -->
                 <div class="col-12 col-md-6 col-lg-4">
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center card-header-dark" onclick="toggleFormulasCard()">
                             <div>
-                                <span class="material-symbols-outlined" style="color: var(--danger);">function</span> Help: Formulas
+                                <span class="material-symbols-outlined" style="color: var(--danger);">function</span> Help: Tuning
                             </div>
                             <span class="material-symbols-outlined" id="formulasChevron"  style="color: var(--high-impact-color);">keyboard_arrow_right</span>
                         </div>
                         <div class="card-body" id="formulasCardBody" style="display: none;">
                             <div class="row">
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">lock</span> Servo Lock
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div>Use the padlock in Servo Trim &amp; Direction to freeze both the trim sliders and the CW or CCW direction buttons before a test drive.</div>
+                                            <div style="margin-top: 5px;">Its purpose is to prevent accidental edits while scrolling, reviewing values, or handing the phone to someone else.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrows_input</span> RCDCC Mounting
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div>Select how your DCC is physically mounted. The arrow is printed on the box.</div>
+                                            <div style="margin-top: 5px;">Correct orientation is critical for accurate roll and pitch readings, so change this any time the controller is re-mounted.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Ride Height Formula -->
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
@@ -988,7 +993,7 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">swap_driving_apps_wheel</span>
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">speed</span>
                                             Reaction Speed
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
@@ -1006,7 +1011,7 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">weight</span> Balance (Rear/Front)
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">balance</span> Balance (Rear/Front)
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Formula:</strong> frontFactor = balance, rearFactor = 1.0 - balance</div>
@@ -1044,7 +1049,9 @@
 
         <!-- Lights Section -->
         <section id="lights" class="page-section">
-            <h2 class="section-title">Lights</h2>
+            <div class="section-title-row">
+                <h2 class="section-title">Lights</h2>
+            </div>
             <div class="row g-3">
                 <!-- Master Light Switch Card -->
                 <div class="col-12">
@@ -1149,7 +1156,9 @@
 
         <!-- Garage Section -->
         <section id="garage" class="page-section">
-            <h2 class="section-title">Garage</h2>
+            <div class="section-title-row">
+                <h2 class="section-title">Garage</h2>
+            </div>
             <div class="row g-3">
                 <div class="col-12">
                     <div class="card">
@@ -1191,8 +1200,8 @@
                                 <div class="text-muted mb-3" id="garageRenameCurrentName">--</div>
                                 <div class="garage-rename-device-id mb-3" id="garageRenameDeviceId">MAC ID: --</div>
                                 <label for="garageRenameInput" class="form-label"><strong>New Name</strong></label>
-                                <input type="text" class="form-control" id="garageRenameInput" maxlength="12" placeholder="Vehicle name">
-                                <div class="form-text"><small>Up to 12 characters.</small></div>
+                                <input type="text" class="form-control" id="garageRenameInput" maxlength="10" placeholder="Vehicle name">
+                                <div class="form-text"><small>Up to 10 characters.</small></div>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -1206,7 +1215,9 @@
 
         <!-- FPV Section -->
         <section id="fpv" class="page-section">
-            <h2 class="section-title">FPV Controls</h2>
+            <div class="section-title-row">
+                <h2 class="section-title">FPV Controls</h2>
+            </div>
             <div class="row g-3">
                 <!-- Features Card -->
                 <div class="col-12">
@@ -1234,30 +1245,47 @@
     <!-- Sticky Footer Navigation -->
     <nav class="footer-nav">
         <button class="active" id="nav-dashboard" data-target="dashboard">
-            <span class="material-symbols-outlined">home</span>
+            <span class="material-symbols-outlined">dashboard</span>
             <span>Dashboard</span>
         </button>
         <button id="nav-garage" data-target="garage">
             <span class="material-symbols-outlined">garage_home</span>
             <span>Garage</span>
         </button>
-        <button id="nav-tuning" data-target="tuning">
-            <span class="material-symbols-outlined">tune</span>
-            <span>Tuning</span>
-        </button>
-        <button id="nav-lights" data-target="lights">
-            <span class="material-symbols-outlined">lightbulb</span>
-            <span>Lights</span>
-        </button>
-        <button id="nav-fpv" data-target="fpv">
-            <span class="material-symbols-outlined">videocam</span>
-            <span>FPV</span>
-        </button>
         <button id="nav-settings" data-target="settings">
             <span class="material-symbols-outlined">settings</span>
             <span>Settings</span>
         </button>
     </nav>
+
+    <!-- Garage Vehicle About Modal -->
+    <div class="modal fade" id="garageVehicleAboutModal" tabindex="-1" aria-labelledby="garageVehicleAboutTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 16px 16px 12px 12px; overflow: hidden;">
+                <div class="modal-header" style="background:#000;color:#fff;">
+                    <h5 class="modal-title" id="garageVehicleAboutTitle">
+                        <span class="material-symbols-outlined" style="color: var(--danger); vertical-align: middle; margin-right: 0.35rem;">info</span>
+                        <span id="garageVehicleAboutTitleText">About Vehicle</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="padding: 1rem 1rem 1.2rem;">
+                    <div style="margin-bottom: 0.9rem;">
+                        <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">Vehicle</div>
+                        <div id="garageVehicleAboutName" style="color: #666; font-size: 0.92rem;">-</div>
+                    </div>
+                    <div style="margin-bottom: 0.9rem;">
+                        <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">MAC ID</div>
+                        <div id="garageVehicleAboutMac" style="color: #666; font-size: 0.85rem;">-</div>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">Firmware Version</div>
+                        <div id="garageVehicleAboutFirmware" style="color: #666; font-size: 0.92rem;">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
 
     
