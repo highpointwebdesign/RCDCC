@@ -10,6 +10,10 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+function writeJson(filePath, value) {
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2) + '\n', 'utf8');
+}
+
 function writeFileIfChanged(filePath, content) {
   const current = fs.readFileSync(filePath, 'utf8');
   if (current === content) {
@@ -31,6 +35,18 @@ function toVersionCode(version) {
   return major * 10000 + minor * 100 + patch;
 }
 
+function bumpPatch(version) {
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!match) {
+    throw new Error(`Version must use semantic format major.minor.patch. Received: ${version}`);
+  }
+
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]) + 1;
+  return `${major}.${minor}.${patch}`;
+}
+
 function replaceOrThrow(content, pattern, replacement, label) {
   if (!pattern.test(content)) {
     throw new Error(`Unable to update ${label}. Pattern not found.`);
@@ -39,7 +55,10 @@ function replaceOrThrow(content, pattern, replacement, label) {
 }
 
 const pkg = readJson(packageJsonPath);
-const appVersion = pkg.version;
+const previousVersion = pkg.version;
+const appVersion = bumpPatch(previousVersion);
+pkg.version = appVersion;
+writeJson(packageJsonPath, pkg);
 const buildDate = new Date().toISOString().split('T')[0];
 const versionCode = toVersionCode(appVersion);
 
@@ -73,5 +92,5 @@ buildGradle = replaceOrThrow(
 );
 writeFileIfChanged(androidGradlePath, buildGradle);
 
-console.log(`Updated app version to ${appVersion} (${buildDate})`);
+console.log(`Auto-incremented app version ${previousVersion} -> ${appVersion} (${buildDate})`);
 console.log(`Android versionCode set to ${versionCode}`);

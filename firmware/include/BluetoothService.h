@@ -1,6 +1,7 @@
 #ifndef BLUETOOTH_SERVICE_H
 #define BLUETOOTH_SERVICE_H
 
+#include <Arduino.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -39,12 +40,161 @@ private:
     BLECharacteristic* pSystemCommandChar;
     
     StorageManager* storage;
-    bool deviceConnected;
+    volatile bool deviceConnected;
+    std::function<void(bool)> connectionStateHandler;
     std::function<bool(const String&)> configWriteHandler;
     std::function<bool(const String&)> kvWriteHandler;
     std::function<bool(const String&)> servoWriteHandler;
     std::function<bool(const String&)> lightsWriteHandler;
     std::function<bool(const String&)> systemWriteHandler;
+
+    portMUX_TYPE queueMux = portMUX_INITIALIZER_UNLOCKED;
+    String cachedConfigJson;
+    volatile bool configCacheDirty = true;
+    String activeReadScope = "bootstrap";
+    int32_t activeReadChunk = 0;
+    String cachedScopePayload;
+    String cachedScopePayloadScope;
+    // Chunk size must fit inside one ATT Read Response: MTU(247) - 1(opcode) = 246 bytes
+    // Envelope overhead is ~88 bytes, leaving 158 bytes for payload -> use 150 for safety.
+    static constexpr size_t CONFIG_CHUNK_SIZE = 150;
+
+    String pendingConfigWrite;
+    String pendingKvWrite;
+    String pendingServoWrite;
+    String pendingLightsWrite;
+    static constexpr size_t SYSTEM_QUEUE_CAPACITY = 8;
+    String pendingSystemWrites[SYSTEM_QUEUE_CAPACITY];
+    size_t pendingSystemHead = 0;
+    size_t pendingSystemTail = 0;
+    size_t pendingSystemCount = 0;
+    volatile bool hasPendingConfigWrite = false;
+    volatile bool hasPendingKvWrite = false;
+    volatile bool hasPendingServoWrite = false;
+    volatile bool hasPendingLightsWrite = false;
+    volatile bool hasPendingSystemWrite = false;
+
+    void queuePayload(String& slot, volatile bool& hasPending, const String& payload) {
+        taskENTER_CRITICAL(&queueMux);
+        slot = payload;
+        hasPending = true;
+        taskEXIT_CRITICAL(&queueMux);
+    }
+
+    bool dequeuePayload(String& slot, volatile bool& hasPending, String& out) {
+        bool dequeued = false;
+        taskENTER_CRITICAL(&queueMux);
+        if (hasPending) {
+            out = slot;
+            slot = "";
+            hasPending = false;
+            dequeued = true;
+        }
+        taskEXIT_CRITICAL(&queueMux);
+        return dequeued;
+    }
+
+    bool queueSystemPayload(const String& payload) {
+        bool queued = false;
+        taskENTER_CRITICAL(&queueMux);
+        if (pendingSystemCount < SYSTEM_QUEUE_CAPACITY) {
+            pendingSystemWrites[pendingSystemTail] = payload;
+            pendingSystemTail = (pendingSystemTail + 1) % SYSTEM_QUEUE_CAPACITY;
+            pendingSystemCount++;
+            hasPendingSystemWrite = true;
+            queued = true;
+        }
+        taskEXIT_CRITICAL(&queueMux);
+        return queued;
+    }
+
+    bool dequeueSystemPayload(String& out) {
+        bool dequeued = false;
+        taskENTER_CRITICAL(&queueMux);
+        if (pendingSystemCount > 0) {
+            out = pendingSystemWrites[pendingSystemHead];
+            pendingSystemWrites[pendingSystemHead] = "";
+            pendingSystemHead = (pendingSystemHead + 1) % SYSTEM_QUEUE_CAPACITY;
+            pendingSystemCount--;
+            hasPendingSystemWrite = (pendingSystemCount > 0);
+            dequeued = true;
+        }
+        taskEXIT_CRITICAL(&queueMux);
+        return dequeued;
+    }
+
+    String getCachedConfigSnapshot() {
+        String snapshot;
+        taskENTER_CRITICAL(&queueMux);
+        snapshot = cachedConfigJson;
+        taskEXIT_CRITICAL(&queueMux);
+        if (snapshot.length() == 0) {
+            snapshot = "{\"status\":\"booting\"}";
+        }
+        return snapshot;
+    }
+
+    void markConfigDirty() {
+        taskENTER_CRITICAL(&queueMux);
+        configCacheDirty = true;
+        taskEXIT_CRITICAL(&queueMux);
+    }
+
+    void buildChunkedSnapshot() {
+        if (!storage) return;
+
+        String scope;
+        int32_t chunk = 0;
+        bool shouldRebuildPayload = false;
+        taskENTER_CRITICAL(&queueMux);
+        scope = activeReadScope;
+        chunk = activeReadChunk;
+        shouldRebuildPayload = configCacheDirty;
+        taskEXIT_CRITICAL(&queueMux);
+
+        if (scope.length() == 0) scope = "bootstrap";
+        if (chunk < 0) chunk = 0;
+
+        if (shouldRebuildPayload || cachedScopePayload.length() == 0 || cachedScopePayloadScope != scope) {
+            cachedScopePayload = storage->getScopedConfigJSON(scope);
+            cachedScopePayloadScope = scope;
+        }
+
+        const size_t totalBytes = cachedScopePayload.length();
+        const size_t totalChunks = totalBytes == 0 ? 1 : ((totalBytes + CONFIG_CHUNK_SIZE - 1) / CONFIG_CHUNK_SIZE);
+        const size_t chunkIndex = static_cast<size_t>(chunk) >= totalChunks ? (totalChunks - 1) : static_cast<size_t>(chunk);
+        const size_t start = chunkIndex * CONFIG_CHUNK_SIZE;
+        const String payloadChunk = cachedScopePayload.substring(start, start + CONFIG_CHUNK_SIZE);
+
+        Serial.printf("[BLE] cfg scope=%s chunk=%d/%d bytes=%d\n",
+                  scope.c_str(),
+                  static_cast<int>(chunkIndex + 1),
+                  static_cast<int>(totalChunks),
+                  static_cast<int>(totalBytes));
+
+        DynamicJsonDocument envelope(640);
+        envelope["mode"] = "chunked";
+        envelope["scope"] = scope;
+        envelope["chunk"] = static_cast<int32_t>(chunkIndex);
+        envelope["chunks"] = static_cast<int32_t>(totalChunks);
+        envelope["bytes"] = static_cast<int32_t>(totalBytes);
+        envelope["payload"] = payloadChunk;
+
+        String snapshot;
+        serializeJson(envelope, snapshot);
+
+        taskENTER_CRITICAL(&queueMux);
+        cachedConfigJson = snapshot;
+        configCacheDirty = false;
+        taskEXIT_CRITICAL(&queueMux);
+    }
+
+    friend class ConfigReadCallbacks;
+    friend class ConfigWriteCallbacks;
+    friend class KVWriteCallbacks;
+    friend class ServoCommandCallbacks;
+    friend class LightsCommandCallbacks;
+    friend class SystemCommandCallbacks;
     
 public:
     BluetoothService(StorageManager* storageManager);
@@ -60,6 +210,24 @@ public:
     void setServoWriteHandler(std::function<bool(const String&)> handler) { servoWriteHandler = handler; }
     void setLightsWriteHandler(std::function<bool(const String&)> handler) { lightsWriteHandler = handler; }
     void setSystemWriteHandler(std::function<bool(const String&)> handler) { systemWriteHandler = handler; }
+    void setConnectionStateHandler(std::function<void(bool)> handler) { connectionStateHandler = handler; }
+
+    void requestConfigScope(const String& scope) {
+        taskENTER_CRITICAL(&queueMux);
+        if (scope.length() > 0) {
+            activeReadScope = scope;
+            activeReadChunk = 0;
+        }
+        configCacheDirty = true;
+        taskEXIT_CRITICAL(&queueMux);
+    }
+
+    void requestConfigChunk(int32_t chunkIndex) {
+        taskENTER_CRITICAL(&queueMux);
+        activeReadChunk = chunkIndex < 0 ? 0 : chunkIndex;
+        configCacheDirty = true;
+        taskEXIT_CRITICAL(&queueMux);
+    }
     
     // Connection status
     bool isConnected() { return deviceConnected; }
@@ -83,11 +251,18 @@ public:
     
     void onConnect(BLEServer* pServer) {
         service->deviceConnected = true;
+        service->markConfigDirty();
+        if (service->connectionStateHandler) {
+            service->connectionStateHandler(true);
+        }
         Serial.println("BLE Client connected");
     }
     
     void onDisconnect(BLEServer* pServer) {
         service->deviceConnected = false;
+        if (service->connectionStateHandler) {
+            service->connectionStateHandler(false);
+        }
         Serial.println("BLE Client disconnected");
         // Restart advertising
         pServer->startAdvertising();
@@ -97,12 +272,12 @@ public:
 // Configuration read callbacks
 class BluetoothService::ConfigReadCallbacks : public BLECharacteristicCallbacks {
 private:
-    StorageManager* storage;
+    BluetoothService* service;
 public:
-    ConfigReadCallbacks(StorageManager* storageManager) : storage(storageManager) {}
+    ConfigReadCallbacks(BluetoothService* bleService) : service(bleService) {}
     
     void onRead(BLECharacteristic* pCharacteristic) {
-        String json = storage->getConfigJSON();
+        String json = service->getCachedConfigSnapshot();
         Serial.printf("BLE: Config read requested (%d bytes)\n", json.length());
         pCharacteristic->setValue(json.c_str());
     }
@@ -120,9 +295,7 @@ public:
         if (value.length() > 0) {
             Serial.println("BLE: Config write received");
             String jsonStr = String(value.c_str());
-
-            bool ok = service->configWriteHandler ? service->configWriteHandler(jsonStr) : false;
-            Serial.println(ok ? "BLE: Config saved successfully" : "BLE: Config write handler failed");
+            service->queuePayload(service->pendingConfigWrite, service->hasPendingConfigWrite, jsonStr);
         }
     }
 };
@@ -138,10 +311,7 @@ public:
         std::string value = pCharacteristic->getValue();
         if (value.length() > 0) {
             String jsonStr = String(value.c_str());
-            bool ok = service->kvWriteHandler ? service->kvWriteHandler(jsonStr) : false;
-            if (!ok) {
-                Serial.println("BLE: KV write handler failed");
-            }
+            service->queuePayload(service->pendingKvWrite, service->hasPendingKvWrite, jsonStr);
         }
     }
 };
@@ -158,9 +328,7 @@ public:
         if (value.length() > 0) {
             Serial.println("BLE: Servo command received");
             String jsonStr = String(value.c_str());
-
-            bool ok = service->servoWriteHandler ? service->servoWriteHandler(jsonStr) : false;
-            Serial.println(ok ? "BLE: Servo command processed" : "BLE: Servo command handler failed");
+            service->queuePayload(service->pendingServoWrite, service->hasPendingServoWrite, jsonStr);
         }
     }
 };
@@ -177,9 +345,7 @@ public:
         if (value.length() > 0) {
             Serial.println("BLE: Lights command received");
             String jsonStr = String(value.c_str());
-
-            bool ok = service->lightsWriteHandler ? service->lightsWriteHandler(jsonStr) : false;
-            Serial.println(ok ? "BLE: Lights command processed" : "BLE: Lights command handler failed");
+            service->queuePayload(service->pendingLightsWrite, service->hasPendingLightsWrite, jsonStr);
         }
     }
 };
@@ -196,9 +362,9 @@ public:
         if (value.length() > 0) {
             Serial.println("BLE: System command received");
             String jsonStr = String(value.c_str());
-
-            bool ok = service->systemWriteHandler ? service->systemWriteHandler(jsonStr) : false;
-            Serial.println(ok ? "BLE: System command processed" : "BLE: System command handler failed");
+            if (!service->queueSystemPayload(jsonStr)) {
+                Serial.println("BLE: System command queue full; dropping command");
+            }
         }
     }
 };
@@ -217,23 +383,29 @@ void BluetoothService::begin(const char* deviceName) {
     // Create BLE Device
     BLEDevice::init(deviceName);
     
-    // Set MTU to support larger data transfers (up to 517 bytes)
-    BLEDevice::setMTU(517);
-    Serial.println("BLE: MTU set to 517 bytes");
+    // MTU 247 is the safe limit for ESP32's default BTC_TASK stack (3072 bytes).
+    // Higher values (e.g. 517) cause BTC_TASK stack overflow on connect.
+    BLEDevice::setMTU(247);
+    Serial.println("BLE: MTU set to 247 bytes");
     
     // Create BLE Server
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new ServerCallbacks(this));
     
-    // Create BLE Service
-    pService = pServer->createService(RCDCC_SERVICE_UUID);
+    // Create BLE Service with enough attribute handles for all characteristics.
+    // Handle budget:
+    // 1 service
+    // 2 each for ConfigRead/ConfigWrite/KV/Servo/Lights/System = 12
+    // 3 for Telemetry (char + value + CCCD)
+    // Total = 16, so allocate some headroom.
+        pService = pServer->createService(BLEUUID(RCDCC_SERVICE_UUID), 20);
     
     // Create Configuration Read Characteristic
     pConfigReadChar = pService->createCharacteristic(
         CONFIG_READ_UUID,
         BLECharacteristic::PROPERTY_READ
     );
-    pConfigReadChar->setCallbacks(new ConfigReadCallbacks(storage));
+    pConfigReadChar->setCallbacks(new ConfigReadCallbacks(this));
     
     // Create Configuration Write Characteristic
     pConfigWriteChar = pService->createCharacteristic(
@@ -287,13 +459,56 @@ void BluetoothService::begin(const char* deviceName) {
     pAdvertising->setMinPreferred(0x06);  // iPhone connection optimization
     pAdvertising->setMinPreferred(0x12);
     BLEDevice::startAdvertising();
+
+    Serial.println("BLE self-test UUIDs:");
+    Serial.printf("  Service      : %s\n", RCDCC_SERVICE_UUID);
+    Serial.printf("  Config Read  : %s\n", CONFIG_READ_UUID);
+    Serial.printf("  Config Write : %s\n", CONFIG_WRITE_UUID);
+    Serial.printf("  KV Write     : %s\n", KV_WRITE_UUID);
+    Serial.printf("  Telemetry    : %s\n", TELEMETRY_UUID);
+    Serial.printf("  Servo Cmd    : %s\n", SERVO_CMD_UUID);
+    Serial.printf("  Lights Cmd   : %s\n", LIGHTS_CMD_UUID);
+    Serial.printf("  System Cmd   : %s\n", SYSTEM_CMD_UUID);
     
     Serial.println("BLE Service started. Waiting for connections...");
 }
 
 void BluetoothService::update() {
-    // Placeholder for any periodic BLE tasks
-    // Currently handled by callbacks
+    if (storage && (configCacheDirty || cachedConfigJson.length() == 0)) {
+        buildChunkedSnapshot();
+    }
+
+    String payload;
+
+    if (dequeuePayload(pendingConfigWrite, hasPendingConfigWrite, payload)) {
+        bool ok = configWriteHandler ? configWriteHandler(payload) : false;
+        Serial.println(ok ? "BLE: Config saved successfully" : "BLE: Config write handler failed");
+        if (ok) markConfigDirty();
+    }
+
+    if (dequeuePayload(pendingKvWrite, hasPendingKvWrite, payload)) {
+        bool ok = kvWriteHandler ? kvWriteHandler(payload) : false;
+        if (!ok) Serial.println("BLE: KV write handler failed");
+        if (ok) markConfigDirty();
+    }
+
+    if (dequeuePayload(pendingServoWrite, hasPendingServoWrite, payload)) {
+        bool ok = servoWriteHandler ? servoWriteHandler(payload) : false;
+        Serial.println(ok ? "BLE: Servo command processed" : "BLE: Servo command handler failed");
+        if (ok) markConfigDirty();
+    }
+
+    if (dequeuePayload(pendingLightsWrite, hasPendingLightsWrite, payload)) {
+        bool ok = lightsWriteHandler ? lightsWriteHandler(payload) : false;
+        Serial.println(ok ? "BLE: Lights command processed" : "BLE: Lights command handler failed");
+        if (ok) markConfigDirty();
+    }
+
+    if (dequeueSystemPayload(payload)) {
+        bool ok = systemWriteHandler ? systemWriteHandler(payload) : false;
+        Serial.println(ok ? "BLE: System command processed" : "BLE: System command handler failed");
+        if (ok) markConfigDirty();
+    }
 }
 
 void BluetoothService::sendTelemetry(float roll, float pitch, float accelX, float accelY, float accelZ) {

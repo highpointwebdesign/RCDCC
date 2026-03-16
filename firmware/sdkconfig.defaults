@@ -1,0 +1,3 @@
+# Increase BTC_TASK stack to prevent overflow during BLE MTU negotiation.
+# Default is 3072 bytes; MTU=517 requires larger stack for ATT PDU processing.
+CONFIG_BT_BTC_TASK_STACK_SIZE=8192

@@ -57,8 +57,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.42';
-        const BUILD_DATE = '2026-03-15';
+        const APP_VERSION = '1.1.119';
+        const BUILD_DATE = '2026-03-16';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -75,6 +75,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let manualBleDisconnect = false;
         let hasEverBleConnection = false;
         const GARAGE_STORAGE_KEY = 'rcdcc_garage_vehicles';
+        const DEBUG_MODE_STORAGE_KEY = 'settings_debug_mode_enabled';
         const VEHICLE_QUICK_SECTIONS = ['tuning', 'lights', 'fpv'];
         const VEHICLE_CONNECTION_REQUIRED_SECTIONS = ['tuning', 'lights', 'fpv'];
 
@@ -205,9 +206,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             const idsToDisable = [
                 'saveNewProfileBtn',
-                'saveLightingProfileBtn',
-                'deleteLightingProfileBtn',
-                'lightingProfileSelect',
+                'saveNewLightingProfileBtn',
+                'ltProfileUpdateBtn',
                 'addAuxServoBtn',
                 'danceModeToggle',
                 'addLightGroupBtn'
@@ -226,6 +226,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const dancePanel = document.getElementById('danceModePanel');
             if (dancePanel && disable) {
                 dancePanel.style.display = 'none';
+            }
+            updateDashboardBleUI(isBleConnected());
+        }
+
+        function updateDashboardBleUI(connected) {
+            const rollPitchBody = document.getElementById('rollPitchRollValue')?.closest('.card-body');
+            const settingsBody = document.getElementById('reactionSpeedBadge')?.closest('.card-body');
+            [rollPitchBody, settingsBody].forEach(body => {
+                if (!body) return;
+                body.classList.toggle('ble-data-off', !connected);
+            });
+            const masterBtn = document.getElementById('lightsToggleDashboard');
+            if (masterBtn) {
+                masterBtn.classList.toggle('ble-data-off', !connected);
+                masterBtn.setAttribute('aria-disabled', connected ? 'false' : 'true');
+            }
+            const masterBtnLg = document.getElementById('lightsToggleLightGroups');
+            if (masterBtnLg) {
+                masterBtnLg.classList.toggle('ble-data-off', !connected);
+                masterBtnLg.setAttribute('aria-disabled', connected ? 'false' : 'true');
             }
         }
 
@@ -478,6 +498,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const dotId = `${pageKey}-dirty-dot`;
             const dot = document.getElementById(dotId);
             if (dot) dot.style.display = dirty ? 'inline' : 'none';
+
+            if ((pageKey === 'tuning' || pageKey === 'servo') && typeof syncDrivingProfileActionButtons === 'function') {
+                syncDrivingProfileActionButtons();
+            }
         }
 
         function showDirtyConfirmDialog() {
@@ -503,6 +527,68 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 overlay.querySelector('#ddc-cancel').onclick  = () => { overlay.remove(); resolve('cancel'); };
             });
         }
+
+                function showSimpleNoticeDialog(title, message, okLabel = 'OK', overlayId = 'simple-notice-overlay') {
+                        return new Promise((resolve) => {
+                                const existing = document.getElementById(overlayId);
+                                if (existing) existing.remove();
+                                const overlay = document.createElement('div');
+                                overlay.id = overlayId;
+                                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                                overlay.innerHTML = `
+                                    <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+                                        <h5 style="margin:0 0 12px;color:#fff;">${String(title || 'Notice').replace(/</g, '&lt;')}</h5>
+                                        <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">${String(message || '').replace(/</g, '&lt;')}</p>
+                                        <button id="snd-ok" style="width:100%;padding:10px;border:none;border-radius:8px;background:#c8a800;color:#000;font-weight:600;cursor:pointer;">${String(okLabel || 'OK').replace(/</g, '&lt;')}</button>
+                                    </div>`;
+                                document.body.appendChild(overlay);
+                                overlay.querySelector('#snd-ok').onclick = () => { overlay.remove(); resolve(true); };
+                        });
+                }
+
+                function showActionConfirmDialog(title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', overlayId = 'action-confirm-overlay') {
+                        return new Promise((resolve) => {
+                                const existing = document.getElementById(overlayId);
+                                if (existing) existing.remove();
+                                const overlay = document.createElement('div');
+                                overlay.id = overlayId;
+                                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                                overlay.innerHTML = `
+                                    <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+                                        <h5 style="margin:0 0 12px;color:#fff;">${String(title || 'Confirm').replace(/</g, '&lt;')}</h5>
+                                        <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">${String(message || '').replace(/</g, '&lt;')}</p>
+                                        <div style="display:flex;gap:8px;">
+                                            <button id="acd-cancel" style="flex:1;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;">${String(cancelLabel || 'Cancel').replace(/</g, '&lt;')}</button>
+                                            <button id="acd-confirm" style="flex:1;padding:10px;border:none;border-radius:8px;background:#c0392b;color:#fff;font-weight:600;cursor:pointer;">${String(confirmLabel || 'Confirm').replace(/</g, '&lt;')}</button>
+                                        </div>
+                                    </div>`;
+                                document.body.appendChild(overlay);
+                                overlay.querySelector('#acd-cancel').onclick = () => { overlay.remove(); resolve(false); };
+                                overlay.querySelector('#acd-confirm').onclick = () => { overlay.remove(); resolve(true); };
+                        });
+                }
+
+                function isDebugModeEnabled() {
+                        return localStorage.getItem(DEBUG_MODE_STORAGE_KEY) === 'true';
+                }
+
+                function applyDebugModeVisibility() {
+                        const debugTabButton = document.querySelector('.settings-tab[data-tab="debugging"]');
+                        const debugPane = document.getElementById('tab-debugging');
+                        const debugEnabled = isDebugModeEnabled();
+
+                        if (debugTabButton) debugTabButton.style.display = debugEnabled ? '' : 'none';
+                        if (debugPane) debugPane.style.display = debugEnabled ? '' : 'none';
+
+                        if (!debugEnabled) {
+                                const activeTab = localStorage.getItem('settings_active_tab') || 'preferences';
+                                if (activeTab === 'debugging') {
+                                        localStorage.setItem('settings_active_tab', 'preferences');
+                                        const prefBtn = document.querySelector('.settings-tab[data-tab="preferences"]');
+                                        if (prefBtn) prefBtn.click();
+                                }
+                        }
+                }
 
         async function savePage(pageKey) {
             if (!isBleConnected()) {
@@ -1048,8 +1134,64 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const sectionLoadPromises = { tuning: null, lights: null, settings: null };
 
         // Phase 3: Driving profile state
-        let drivingProfiles = [];       // [{index, name}, ...]
-        let activeDrivingProfileIndex = 0;
+        // Profiles are stored locally in localStorage — no firmware round-trips needed.
+        // Each profile: { index, name, tuning: {...}, servos: { frontLeft, frontRight, rearLeft, rearRight } }
+        const DRIVING_PROFILES_STORAGE_KEY = 'rcdcc_driving_profiles_v2';
+
+        function loadLocalDrivingProfiles() {
+            try {
+                const raw = localStorage.getItem(DRIVING_PROFILES_STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed.profiles)) return parsed;
+                }
+            } catch (e) { /* corrupt storage — start fresh */ }
+            return { profiles: [], activeIndex: 0 };
+        }
+
+        function saveLocalDrivingProfiles() {
+            localStorage.setItem(DRIVING_PROFILES_STORAGE_KEY, JSON.stringify({
+                profiles: drivingProfiles,
+                activeIndex: activeDrivingProfileIndex
+            }));
+        }
+
+        function getActiveDrivingProfile() {
+            const active = drivingProfiles.find((profile) => Number(profile.index) === Number(activeDrivingProfileIndex));
+            if (active) return active;
+            if (!drivingProfiles.length) return null;
+
+            activeDrivingProfileIndex = Number(drivingProfiles[0].index);
+            saveLocalDrivingProfiles();
+            return drivingProfiles[0];
+        }
+
+        function captureCurrentSliderValues() {
+            return {
+                tuning: {
+                    rideHeightOffset: tuningSliderValues.rideHeightOffset ?? 50,
+                    damping: tuningSliderValues.damping ?? 0.8,
+                    stiffness: tuningSliderValues.stiffness ?? 1.0,
+                    reactionSpeed: tuningSliderValues.reactionSpeed ?? 1.0,
+                    frontRearBalance: tuningSliderValues.frontRearBalance ?? 50,
+                    sampleRate: tuningSliderValues.sampleRate ?? 25
+                },
+                servos: {
+                    frontLeft:  { ...servoSliderValues.frontLeft },
+                    frontRight: { ...servoSliderValues.frontRight },
+                    rearLeft:   { ...servoSliderValues.rearLeft },
+                    rearRight:  { ...servoSliderValues.rearRight }
+                }
+            };
+        }
+
+        // Bootstrap drivingProfiles from localStorage immediately
+        const _storedProfileData = loadLocalDrivingProfiles();
+        let drivingProfiles = _storedProfileData.profiles;
+        let activeDrivingProfileIndex = Number(_storedProfileData.activeIndex) || 0;
+        let drivingProfileBusy = false;
+        let drivingProfilesLocked = localStorage.getItem('drivingProfilesLocked') === 'true';
+        let drivingProfileLastLoadedAt = 0;
 
         // Phase 4: Servo registry state
         let servoRegistry = null;       // { count, aux_count, aux_servos: [...] }
@@ -1160,8 +1302,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 toastEl.className = `toast-box ${bgClass} toast-top tap-to-close`;
                 toastEl.innerHTML = `<div class="in"><div class="text">${message}</div></div>`;
 
-                if (type === 'error') {
-                    appendToSettingsConsoleCard(message, 'error');
+                if (type === 'error' || type === 'warning') {
+                    appendToSettingsConsoleCard(message, type === 'warning' ? 'warn' : 'error');
                 }
                 
                 // Add to body
@@ -1196,22 +1338,18 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             success(message, options) {
                 this.show(message, 'success', options);
-                flashNotificationLEDs('success');
             },
             
             error(message, options) {
                 this.show(message, 'error', options);
-                flashNotificationLEDs('error');
             },
             
             warning(message, options) {
                 this.show(message, 'warning', options);
-                flashNotificationLEDs('warning');
             },
             
             info(message, options) {
                 this.show(message, 'info', options);
-                flashNotificationLEDs('info');
             }
         };
     
@@ -1983,10 +2121,96 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         let autoLevelPhaseA = false; // Global flag to disable bubble snapping during Phase A
+        let autoLevelCancelRequested = false;
+
+        function requestAutoLevelCancel() {
+            autoLevelCancelRequested = true;
+            setBubbleLevelStatus('Canceling auto-calibrate...');
+        }
+
+        function ensureAutoLevelNotCancelled() {
+            if (autoLevelCancelRequested) {
+                const err = new Error('Auto calibrate canceled');
+                err.code = 'AUTOLEVEL_CANCELLED';
+                throw err;
+            }
+        }
+
+        async function autoLevelDelay(ms) {
+            const stepMs = 100;
+            let remaining = Math.max(0, Number(ms) || 0);
+            while (remaining > 0) {
+                ensureAutoLevelNotCancelled();
+                const chunk = Math.min(stepMs, remaining);
+                await delay(chunk);
+                remaining -= chunk;
+            }
+        }
+
+        function getServoReverseFromUi(servo) {
+            const servoAbbrevMap = {
+                frontLeft: 'FL',
+                frontRight: 'FR',
+                rearLeft: 'RL',
+                rearRight: 'RR'
+            };
+            const abbrev = servoAbbrevMap[servo];
+            if (!abbrev) return false;
+            return !!document.getElementById(`servo${abbrev}Reversed`)?.checked;
+        }
+
+        function buildAutoCalibrateServoConfigFromUi() {
+            return {
+                servos: {
+                    frontLeft: {
+                        min: Number(servoSliderValues?.frontLeft?.min) || 10,
+                        max: Number(servoSliderValues?.frontLeft?.max) || 170,
+                        trim: Number(servoSliderValues?.frontLeft?.trim) || 0,
+                        reversed: getServoReverseFromUi('frontLeft')
+                    },
+                    frontRight: {
+                        min: Number(servoSliderValues?.frontRight?.min) || 10,
+                        max: Number(servoSliderValues?.frontRight?.max) || 170,
+                        trim: Number(servoSliderValues?.frontRight?.trim) || 0,
+                        reversed: getServoReverseFromUi('frontRight')
+                    },
+                    rearLeft: {
+                        min: Number(servoSliderValues?.rearLeft?.min) || 10,
+                        max: Number(servoSliderValues?.rearLeft?.max) || 170,
+                        trim: Number(servoSliderValues?.rearLeft?.trim) || 0,
+                        reversed: getServoReverseFromUi('rearLeft')
+                    },
+                    rearRight: {
+                        min: Number(servoSliderValues?.rearRight?.min) || 10,
+                        max: Number(servoSliderValues?.rearRight?.max) || 170,
+                        trim: Number(servoSliderValues?.rearRight?.trim) || 0,
+                        reversed: getServoReverseFromUi('rearRight')
+                    }
+                }
+            };
+        }
         
         function initBubbleLevelContainer() {
             const containerElement = document.getElementById('autoLevelProgressContainer');
             if (!containerElement) return;
+
+            let cancelBtn = document.getElementById('autoLevelCancelBtn');
+            if (!cancelBtn) {
+                const bubbleCard = containerElement.querySelector('.bubble-level-card');
+                if (bubbleCard) {
+                    cancelBtn = document.createElement('button');
+                    cancelBtn.type = 'button';
+                    cancelBtn.id = 'autoLevelCancelBtn';
+                    cancelBtn.className = 'btn btn-outline-secondary btn-sm mt-2';
+                    cancelBtn.textContent = 'Abort Calibration';
+                    cancelBtn.style.display = 'none';
+                    bubbleCard.appendChild(cancelBtn);
+                }
+            }
+            if (cancelBtn && !cancelBtn.dataset.bound) {
+                cancelBtn.dataset.bound = '1';
+                cancelBtn.addEventListener('click', requestAutoLevelCancel);
+            }
 
             // Initialize the bubble level display when container is shown
             if (bubbleTelemetryUnsubscribe) {
@@ -2082,9 +2306,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 throw new Error(`Failed to update ${servo} trim`);
             }
             
-            // Update local config
-            if (fullConfig && fullConfig.servos && fullConfig.servos[servo]) {
-                fullConfig.servos[servo].trim = value;
+            if (!fullConfig || typeof fullConfig !== 'object') fullConfig = {};
+            if (!fullConfig.servos || typeof fullConfig.servos !== 'object') fullConfig.servos = {};
+            if (!fullConfig.servos[servo] || typeof fullConfig.servos[servo] !== 'object') fullConfig.servos[servo] = {};
+            fullConfig.servos[servo].trim = value;
+            if (servoSliderValues && servoSliderValues[servo]) {
+                servoSliderValues[servo].trim = Math.round(value);
             }
             
             // Update UI slider - use config values for calculation
@@ -2096,7 +2323,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             };
             const abbrev = servoAbbrevMap[servo];
             
-            if (abbrev && fullConfig && fullConfig.servos && fullConfig.servos[servo]) {
+            if (abbrev) {
                 const trimSliderId = `servo${abbrev}TrimSlider`;
                 const trimDisplay = document.getElementById(`servo${abbrev}TrimDisplay`);
                 
@@ -2143,10 +2370,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 throw new Error(`Failed to update ${servo} reversed`);
             }
             
-            // Update local config
-            if (fullConfig && fullConfig.servos && fullConfig.servos[servo]) {
-                fullConfig.servos[servo].reversed = value;
-            }
+            if (!fullConfig || typeof fullConfig !== 'object') fullConfig = {};
+            if (!fullConfig.servos || typeof fullConfig.servos !== 'object') fullConfig.servos = {};
+            if (!fullConfig.servos[servo] || typeof fullConfig.servos[servo] !== 'object') fullConfig.servos[servo] = {};
+            fullConfig.servos[servo].reversed = value;
             
             // Update UI checkbox
             const servoAbbrevMap = {
@@ -2160,6 +2387,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const checkbox = document.getElementById(`servo${abbrev}Reversed`);
                 if (checkbox) {
                     checkbox.checked = value;
+                }
+                const cwBtn = document.getElementById(`servo${abbrev}CwBtn`);
+                const ccwBtn = document.getElementById(`servo${abbrev}CcwBtn`);
+                if (cwBtn && ccwBtn) {
+                    cwBtn.classList.toggle('is-active', !value);
+                    ccwBtn.classList.toggle('is-active', !!value);
                 }
             }
         }
@@ -2181,11 +2414,37 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 return;
             }
 
-            // Check if config is loaded
-            if (!fullConfig || !fullConfig.servos) {
-                console.error('Configuration not loaded');
-                toast.error('Configuration not loaded');
+            if (!isBleConnected()) {
+                toast.warning('Connect to a vehicle before running Auto Calibrate');
                 return;
+            }
+
+            // Show UI immediately so the tap feels responsive
+            openBubbleLevelContainer();
+            setBubbleLevelStatus('Loading configuration...');
+
+            // Ensure servo config is available. If not already loaded, fetch tuning scope on demand.
+            if (!fullConfig || !fullConfig.servos) {
+                try {
+                    ensureBleConnectedOrThrow();
+                    let tuningConfig = null;
+                    if (bleManager && typeof bleManager.readConfigScoped === 'function') {
+                        tuningConfig = await bleManager.readConfigScoped('tuning');
+                    }
+                    if ((!tuningConfig || !tuningConfig.servos) && bleManager && typeof bleManager.readConfig === 'function') {
+                        tuningConfig = await bleManager.readConfig();
+                    }
+                    if (tuningConfig && tuningConfig.servos) {
+                        fullConfig = mergeConfigSnapshots(fullConfig, tuningConfig);
+                    }
+                } catch (error) {
+                    console.error('Failed to load config before auto calibrate:', error);
+                }
+            }
+
+            if (!fullConfig || !fullConfig.servos || !Object.keys(fullConfig.servos || {}).length) {
+                console.warn('Auto Calibrate proceeding with live UI servo state because vehicle config read was unavailable.');
+                fullConfig = mergeConfigSnapshots(fullConfig, buildAutoCalibrateServoConfigFromUi());
             }
             
             // Start auto-level immediately (no modal)
@@ -2206,6 +2465,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Open bubble level container to show progress
             openBubbleLevelContainer();
             setBubbleLevelStatus('Initializing auto-level...');
+            autoLevelCancelRequested = false;
+
+            const cancelBtn = document.getElementById('autoLevelCancelBtn');
+            if (cancelBtn) {
+                cancelBtn.disabled = false;
+                cancelBtn.style.display = '';
+            }
             
             // Set button to active/busy state
             button.classList.add('active');
@@ -2233,13 +2499,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             };
             const servoState = {};
             
-            // Initialize servo state from config
+            // Initialize servo state from config (fall back to neutral if missing)
             servos.forEach(servo => {
                 if (fullConfig.servos[servo]) {
                     const configuredTrim = fullConfig.servos[servo].trim;
                     servoState[servo] = {
                         trim: Number.isFinite(configuredTrim) ? configuredTrim : 0,
                         reversed: fullConfig.servos[servo].reversed || false
+                    };
+                } else {
+                    const uiTrim = Number(servoSliderValues?.[servo]?.trim);
+                    servoState[servo] = {
+                        trim: Number.isFinite(uiTrim) ? uiTrim : 0,
+                        reversed: false
                     };
                 }
             });
@@ -2251,6 +2523,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     setBubbleLevelStatus('Resetting trims to neutral...');
                     
                     for (const servo of servos) {
+                        ensureAutoLevelNotCancelled();
                         // Neutral trim offset is always 0
                         const center = 0;
                         console.log(`Phase 0: Resetting ${servo} to neutral (trim=${center})`);
@@ -2260,7 +2533,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         servoState[servo].trim = center;
                         
                         // Wait 1500ms total (servo movement 1000ms + SPIFFS save 500ms happen concurrently)
-                        await delay(1500);
+                        await autoLevelDelay(1500);
                     }
                     
                     console.log('Phase 0: Trim reset complete, fetching updated config from RCDCCC module...');
@@ -2282,14 +2555,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     }
                     
                     setBubbleLevelStatus('Neutral confirmed. Let chassis settle...');
-                    await delay(SENSOR_SETTLE_MS);
+                    await autoLevelDelay(SENSOR_SETTLE_MS);
                 }
                 
 
                 // ==================== Phase A: Servo Direction Verification (Pitch-Only) ====================
                 autoLevelPhaseA = true; // Enable smooth bubble animation
                 setBubbleLevelStatus('Verifying servo directions...');
-                await delay(SENSOR_SETTLE_MS);
+                await autoLevelDelay(SENSOR_SETTLE_MS);
                 
                 // Expected pitch change when moving +10° (front up = +pitch)
                 const servoExpectedPitch = {
@@ -2300,9 +2573,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 };
                 
                 const needsReversal = {};
+                let movementDetected = false;
                 
                 // FIRST PASS: Test all servos to detect which ones need reversal
                 for (const servo of servos) {
+                    ensureAutoLevelNotCancelled();
                     const servoLabel = servoLabelMap[servo] || servo;
                     setBubbleLevelStatus(`Testing ${servoLabel}...`);
                     
@@ -2321,6 +2596,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     
                     const movedSensor = await getSensorData();
                     const pitchChange = movedSensor.pitch - baselinePitch;
+                    if (Math.abs(pitchChange) >= 0.5) {
+                        movementDetected = true;
+                    }
                     
                     // Check if direction is correct (threshold avoids noise)
                     const expected = servoExpectedPitch[servo];
@@ -2333,11 +2611,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     // Return to neutral
                     await updateServoTrim(servo, initialTrim);
                     servoState[servo].trim = initialTrim;
-                    await delay(SENSOR_SETTLE_MS);
+                    await autoLevelDelay(SENSOR_SETTLE_MS);
+                }
+
+                if (!movementDetected) {
+                    throw new Error('No servo movement detected. Stopping for safety.');
                 }
                 
                 // SECOND PASS: Apply reversals and verify they work
                 for (const servo of servos) {
+                    ensureAutoLevelNotCancelled();
                     if (needsReversal[servo]) {
                         const servoLabel = servoLabelMap[servo] || servo;
                         const newReversedState = !servoState[servo].reversed;
@@ -2345,7 +2628,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         setBubbleLevelStatus(`Fixing ${servoLabel} direction...`);
                         await updateServoReversed(servo, newReversedState);
                         servoState[servo].reversed = newReversedState;
-                        await delay(500); // Let reversal setting take effect
+                        await autoLevelDelay(500); // Let reversal setting take effect
                         
                         // Verify the reversal fixed the direction
                         setBubbleLevelStatus(`Verifying ${servoLabel}...`);
@@ -2357,7 +2640,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         
                         await updateServoTrim(servo, testTrim);
                         servoState[servo].trim = testTrim;
-                        await delay(SENSOR_SETTLE_MS);
+                        await autoLevelDelay(SENSOR_SETTLE_MS);
                         
                         const movedSensor = await getSensorData();
                         const pitchChange = movedSensor.pitch - baselinePitch;
@@ -2375,7 +2658,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         // Return to neutral
                         await updateServoTrim(servo, initialTrim);
                         servoState[servo].trim = initialTrim;
-                        await delay(SENSOR_SETTLE_MS);
+                        await autoLevelDelay(SENSOR_SETTLE_MS);
                     }
                 }
                 
@@ -2383,11 +2666,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 
                 // ==================== Phase B: Iterative leveling ====================
                 setBubbleLevelStatus('Starting auto-level...');
-                await delay(SENSOR_SETTLE_MS);
+                await autoLevelDelay(SENSOR_SETTLE_MS);
                 
                 let levelAchieved = false;
                 
                 for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+                    ensureAutoLevelNotCancelled();
                     setBubbleLevelStatus(`Attempting to auto level... (${iteration}/${MAX_ITERATIONS})`);
                     
                     // Read current orientation
@@ -2399,7 +2683,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     if (Math.abs(roll) < LEVEL_TOLERANCE && Math.abs(pitch) < LEVEL_TOLERANCE) {
                         setBubbleLevelStatus('Level achieved!');
                         levelAchieved = true;
-                        await delay(2000);
+                        await autoLevelDelay(2000);
                         break;
                     }
                     
@@ -2417,6 +2701,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     
                     // Update trims (clamped to ±MAX_ADJUSTMENT)
                     for (const servo of servos) {
+                        ensureAutoLevelNotCancelled();
                         const currentTrim = servoState[servo].trim;
                         const newTrim = Math.max(-MAX_ADJUSTMENT, Math.min(MAX_ADJUSTMENT, currentTrim + deltas[servo]));
                         const roundedTrim = Math.round(newTrim);
@@ -2427,14 +2712,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         }
                     }
                     
-                    await delay(SENSOR_SETTLE_MS);
+                    await autoLevelDelay(SENSOR_SETTLE_MS);
                 }
                 
                 if (!levelAchieved) {
                     setBubbleLevelStatus('Vehicle is too unlevel for auto level to correct');
                     // Persistent failure toast - stays until clicked (duration: 0)
                     toast.error('Auto level failed - the vehicle is too unlevel for auto level to correct. Please ensure it is on a relatively flat surface and try again.', { duration: 0 });
-                    await delay(3000);
+                    await autoLevelDelay(3000);
+                } else {
+                    // Auto Calibrate values are foundational calibration values; persist immediately to NVS.
+                    setBubbleLevelStatus('Saving calibration to NVS...');
+                    if (!bleManager || typeof bleManager.sendSaveCommandWithTimeout !== 'function') {
+                        throw new Error('Save command unavailable; calibration was not persisted to NVS');
+                    }
+                    await bleManager.sendSaveCommandWithTimeout(5000);
                 }
                 
                 // Close bubble level
@@ -2442,21 +2734,32 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 
                 if (levelAchieved) {
                     // Show success toast (auto-dismisses after 4 seconds)
-                    toast.success('Vehicle leveled successfully! All trim adjustments have been applied and saved.', { duration: 4000 });
+                    toast.success('Vehicle leveled successfully and calibration was saved to NVS.', { duration: 4000 });
                 }
                 
             } catch (error) {
                 console.error('Auto-leveling failed:', error);
                 setBubbleLevelStatus('Error occurred.');
                 
-                // Close bubble level and show persistent error toast
+                // Close bubble level and show status toast
                 closeBubbleLevelContainer();
-                toast.error(`Auto-level error: ${error.message}`, { duration: 0 });
+                if (error && error.code === 'AUTOLEVEL_CANCELLED') {
+                    toast.info('Auto Calibrate canceled');
+                } else {
+                    toast.error(`Auto-level error: ${error.message}`, { duration: 0 });
+                }
             } finally {
                 // Restore button state
                 button.classList.remove('active');
                 button.disabled = false;
                 if (setLevelBtn) setLevelBtn.disabled = false;
+                autoLevelCancelRequested = false;
+
+                const cancelBtnFinal = document.getElementById('autoLevelCancelBtn');
+                if (cancelBtnFinal) {
+                    cancelBtnFinal.disabled = true;
+                    cancelBtnFinal.style.display = 'none';
+                }
                 
                 // Stop wand icon pulsating
                 const wandIcon = button.querySelector('.material-symbols-outlined');
@@ -2477,6 +2780,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 bleManager.setDisconnectCallback(() => {
                     if (danceModeState.enabled) {
                         disableDanceMode({ sendCommand: false, bleDisconnected: true });
+                    }
+                    if (typeof setDrivingProfileBusy === 'function') {
+                        setDrivingProfileBusy(false);
                     }
                     communicationMode = 'ble';
                     hasLoadedConfigFromDevice = false;
@@ -2617,26 +2923,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             initNetworkSettings();
             initSettingsTabs();
 
-            // Initialize truck notifications toggle
-            const enableTruckNotificationsCheckbox = document.getElementById('enableTruckNotifications');
-            const ledNotificationsContent = document.getElementById('ledNotificationsContent');
-            const applyTruckNotificationsVisibility = (enabled) => {
-                if (ledNotificationsContent) {
-                    ledNotificationsContent.style.display = enabled ? '' : 'none';
-                }
-            };
-            if (enableTruckNotificationsCheckbox) {
-                const truckNotificationsEnabled = localStorage.getItem('truckNotificationsEnabled') !== 'false';
-                enableTruckNotificationsCheckbox.checked = truckNotificationsEnabled;
-                applyTruckNotificationsVisibility(truckNotificationsEnabled);
-                enableTruckNotificationsCheckbox.addEventListener('change', function() {
-                    const enabled = this.checked;
-                    localStorage.setItem('truckNotificationsEnabled', enabled);
-                    applyTruckNotificationsVisibility(enabled);
-                    toast.success('Truck notifications ' + (enabled ? 'enabled' : 'disabled'));
+            const debugModeToggle = document.getElementById('enableDebugMode');
+            if (debugModeToggle) {
+                debugModeToggle.checked = isDebugModeEnabled();
+                applyDebugModeVisibility();
+                debugModeToggle.addEventListener('change', function() {
+                    localStorage.setItem(DEBUG_MODE_STORAGE_KEY, this.checked ? 'true' : 'false');
+                    applyDebugModeVisibility();
+                    toast.info(`Debug mode ${this.checked ? 'enabled' : 'disabled'}`);
                 });
-            } else {
-                applyTruckNotificationsVisibility(true);
             }
 
             // Initialize notification sounds toggle
@@ -2698,6 +2993,18 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 lightsGuideCardBody.style.display = lightsGuideCollapsed ? 'none' : 'block';
                 lightsGuideChevron.textContent = lightsGuideCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
             }
+
+            syncCardCollapseState('tuningParametersCard', 'tuningParametersChevron', 'tuningParametersCardCollapsed');
+            syncCardCollapseState('servoRangeCard', 'servoRangeChevron', 'servoRangeCardCollapsed');
+            syncCardCollapseState('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed');
+            syncCardCollapseState('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed');
+            syncCardCollapseState('manageLightGroupsCard', 'manageLightGroupsChevron', 'manageLightGroupsCardCollapsed');
+            syncCardCollapseState('lightStripConfigCard', 'lightStripConfigChevron', 'lightStripConfigCardCollapsed');
+
+            syncDrivingProfilesCardUI();
+            syncLightingProfilesCardUI();
+            syncManageLightGroupsLockUI();
+            syncLightStripConfigLockUI();
             
             // Restore servo range lock state from localStorage
             servoRangeLocked = localStorage.getItem('servoRangeLocked') === 'true';
@@ -2719,6 +3026,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             localStorage.setItem('servoTrimLocked', servoSettingsLocked.toString());
             localStorage.setItem('servoRotationLocked', servoSettingsLocked.toString());
             syncServoSettingsLockUI();
+
+            rcdccConfigurationLocked = localStorage.getItem('rcdccConfigurationLocked') === 'true';
+            syncRcdccConfigurationLockUI();
 
             // Header scroll shrink effect
             const dashboardHeader = document.querySelector('.dashboard-header');
@@ -2776,8 +3086,22 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     });
                 }
             }
+
+            const backToTopBtn = document.getElementById('backToTopBtn');
+            function updateBackToTopVisibility() {
+                if (!backToTopBtn) return;
+                backToTopBtn.style.display = window.scrollY > 320 ? 'flex' : 'none';
+            }
             
             window.addEventListener('scroll', updateHeaderScroll, { passive: true });
+            window.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
+            updateBackToTopVisibility();
+
+            if (backToTopBtn) {
+                backToTopBtn.addEventListener('click', () => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+            }
 
             // Page navigation - footer nav buttons
             document.querySelectorAll('.footer-nav button').forEach(btn => {
@@ -2838,9 +3162,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // ==================== Light Hierarchy Controls ====================
             const lightsToggle = document.getElementById('lightsToggle');
             const lightsToggleDashboard = document.getElementById('lightsToggleDashboard');
+            const lightsToggleLightGroups = document.getElementById('lightsToggleLightGroups');
 
             bindMasterLightSwitch(lightsToggle);
             bindMasterLightSwitch(lightsToggleDashboard);
+            bindMasterLightSwitch(lightsToggleLightGroups);
             syncMasterLightSwitches(getMasterLightsEnabled());
             
             // Suspension Settings gear click - navigate to Tuning
@@ -3004,9 +3330,24 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 setTimeout(refreshServoSliderRender, 50);
             }
 
+            if (targetSection === 'tuning' && isBleConnected()) {
+                const profileList = document.getElementById('drvProfileList');
+                const willLoadTuningSection = !sectionDataLoaded.tuning || !!sectionLoadPromises.tuning;
+                if (willLoadTuningSection && profileList && profileList.children.length <= 1 && drivingProfiles.length === 0) {
+                    profileList.innerHTML = '<div class="text-muted text-center py-2" style="font-size:0.875rem;">Loading profiles...</div>';
+                }
+                if (willLoadTuningSection && typeof setDrivingProfileStatus === 'function' && !drivingProfileBusy) {
+                    setDrivingProfileStatus('Status: loading profile data...', 'muted');
+                }
+            }
+
             if (SECTION_LOAD_KEYS.includes(targetSection)) {
                 ensureSectionDataLoaded(targetSection).catch((error) => {
                     console.warn(`Lazy load failed for ${targetSection}:`, error?.message || error);
+                    if (targetSection === 'tuning') {
+                        populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+                        setDrivingProfileStatus('Status: failed to load profile data', 'warn');
+                    }
                 });
             }
 
@@ -3014,140 +3355,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         window.navigateToSection = navigateToSection;
-
-        // ==================== System Notification LEDs ====================
-        const NOTIFICATION_GROUP_KEY = 'systemNotificationGroup';
-        
-        // Get the selected notification group name
-        function getNotificationGroup() {
-            return localStorage.getItem(NOTIFICATION_GROUP_KEY) || '__all__';
-        }
-        
-        // Save the selected notification group
-        function saveNotificationGroup() {
-            const select = document.getElementById('notificationGroupSelect');
-            if (!select) return;
-            
-            const value = select.value;
-            localStorage.setItem(NOTIFICATION_GROUP_KEY, value);
-            
-            if (value === '__none__') {
-                window.toast.success('LED notifications disabled');
-            } else if (value === '__all__') {
-                window.toast.success('All LEDs will flash for notifications');
-            } else {
-                window.toast.success(`"${value}" group will flash for notifications`);
-            }
-        }
-        
-        // Populate notification group dropdown with available light groups
-        function populateNotificationGroupSelect() {
-            const select = document.getElementById('notificationGroupSelect');
-            if (!select) return;
-            
-            const savedValue = getNotificationGroup();
-            
-            // Clear existing light group options (keep __none__ and __all__)
-            const staticOptions = Array.from(select.querySelectorAll('option[value^="__"]'));
-            select.innerHTML = '';
-            staticOptions.forEach(opt => select.appendChild(opt));
-            
-            // Add all light groups
-            lightGroups.forEach(group => {
-                const option = document.createElement('option');
-                option.value = group.name;
-                option.textContent = group.name;
-                select.appendChild(option);
-            });
-            
-            // Restore saved value (with fallback validation)
-            if (savedValue === '__none__' || savedValue === '__all__') {
-                select.value = savedValue;
-            } else {
-                // Check if saved group still exists
-                const groupExists = lightGroups.some(g => g.name === savedValue);
-                if (groupExists) {
-                    select.value = savedValue;
-                } else {
-                    // Failover: Group was deleted, switch to "All LEDs"
-                    select.value = '__all__';
-                    localStorage.setItem(NOTIFICATION_GROUP_KEY, '__all__');
-                }
-            }
-        }
-        
-        // Flash LEDs for system notifications
-        function flashNotificationLEDs(type) {
-            const groupName = getNotificationGroup();
-            
-            // Check if notifications are disabled
-            if (groupName === '__none__') {
-                return;
-            }
-            
-            // Determine color based on notification type
-            let color;
-            switch (type) {
-                case 'success':
-                    color = '#00ff00'; // Green
-                    break;
-                case 'error':
-                    color = '#ff0000'; // Red
-                    break;
-                case 'warning':
-                    color = '#ffa500'; // Amber
-                    break;
-                case 'info':
-                    color = '#0000ff'; // Blue
-                    break;
-                default:
-                    color = '#ffffff'; // White fallback
-            }
-            
-            // Get LED indices to flash
-            let indices = [];
-            if (groupName === '__all__') {
-                // Flash all LEDs
-                const totalCount = parseInt(localStorage.getItem(TOTAL_LED_COUNT_KEY)) || 100;
-                indices = Array.from({ length: totalCount }, (_, i) => i);
-            } else {
-                // Find the group and use its LEDs
-                const group = lightGroups.find(g => g.name === groupName);
-                if (group && group.indices && group.indices.length > 0) {
-                    indices = group.indices;
-                } else {
-                    // Failover: Group not found or has no LEDs, use all LEDs
-                    const totalCount = parseInt(localStorage.getItem(TOTAL_LED_COUNT_KEY)) || 100;
-                    indices = Array.from({ length: totalCount }, (_, i) => i);
-                }
-            }
-            
-            // TODO: Send flash command to ESP32
-            // For now, log the flash request
-            console.log(`Flash notification: type=${type}, color=${color}, LEDs=${indices.join(',')}`);
-            
-            // API call would look something like:
-            // fetch(getApiUrl('/api/notification-flash'), {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({ indices, color, duration: 300, flashes: 2 })
-            // });
-        }
-        
-        // Test notification flash
-        function testNotification(type) {
-            flashNotificationLEDs(type);
-            
-            // Show a toast as visual confirmation
-            const messages = {
-                success: 'Testing success notification',
-                error: 'Testing error notification',
-                warning: 'Testing warning notification',
-                info: 'Testing info notification'
-            };
-            
-            window.toast[type](messages[type] || 'Testing notification flash');
-        }
 
         // ==================== Light Groups Management ====================
         const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
@@ -3157,11 +3364,43 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
         const LIGHT_GROUP_DEFAULT_PATTERN = 'solid';
         const LIGHT_GROUP_CYCLE_INTERVAL_SECONDS = 30;
+        const MAX_LIGHT_GROUP_NAME_LENGTH = 12;
         const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'blink', 'strobe', 'breathe', 'fade', 'twinkle', 'sparkle', 'flash_sparkle', 'glitter', 'running', 'larson', 'flicker', 'heartbeat', 'alternate'];
 
-        // Phase 5: Lighting profiles are stored on ESP32 LittleFS (slots 0-9)
-        let lightingProfiles = []; // [{index, name}]
-        let activeLightingProfileIndex = 0;
+        function normalizeLightGroupName(name) {
+            return String(name || '').trim().slice(0, MAX_LIGHT_GROUP_NAME_LENGTH);
+        }
+
+        // Phase 5: Lighting profiles stored in localStorage (mirrors driving profile architecture)
+        // The ESP32 receives individual light group commands — it has no knowledge of profiles.
+        const LIGHTING_PROFILES_STORAGE_KEY = 'rcdcc_lighting_profiles_v1';
+        const MAX_LIGHTING_PROFILES = 10;
+
+        function loadLocalLightingProfiles() {
+            try {
+                const raw = localStorage.getItem(LIGHTING_PROFILES_STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed.profiles)) return parsed;
+                }
+            } catch (e) { /* ignore */ }
+            return { profiles: [], activeIndex: 0 };
+        }
+
+        function saveLocalLightingProfiles() {
+            localStorage.setItem(LIGHTING_PROFILES_STORAGE_KEY, JSON.stringify({
+                profiles: lightingProfiles,
+                activeIndex: activeLightingProfileIndex
+            }));
+        }
+
+        const _storedLightingData = loadLocalLightingProfiles();
+        let lightingProfiles = _storedLightingData.profiles;
+        let activeLightingProfileIndex = Number(_storedLightingData.activeIndex) || 0;
+        let lightingProfileBusy = false;
+        let lightingProfilesLocked = localStorage.getItem('lightingProfilesLocked') === 'true';
+        let manageLightGroupsLocked = localStorage.getItem('manageLightGroupsLocked') === 'true';
+        let lightStripConfigLocked = localStorage.getItem('lightStripConfigLocked') === 'true';
         
         // Predefined light groups (initialized on first load)
         const PREDEFINED_LIGHT_GROUPS = [
@@ -3193,6 +3432,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let lightGroupsStateBeforeModal = null;
         let masterStateBeforeModal = false;
         let lightGroupModalSaved = false;
+        let masterLightToggleInFlight = false;
         const expandedLightGroupIds = new Set();
 
         function createLightGroupId() {
@@ -3204,6 +3444,29 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 ...group,
                 id: group.id || createLightGroupId()
             }));
+        }
+
+        function normalizeLedIndices(indicesLike) {
+            if (!Array.isArray(indicesLike)) return [];
+
+            const normalized = indicesLike
+                .map(value => Number(value))
+                .filter(value => Number.isFinite(value) && value >= 0)
+                .map(value => Math.trunc(value));
+
+            return Array.from(new Set(normalized)).sort((a, b) => a - b);
+        }
+
+        function normalizeLightGroup(group) {
+            const source = group && typeof group === 'object' ? group : {};
+            const { leds, ...rest } = source;
+            const indexSource = Array.isArray(rest.indices) ? rest.indices : leds;
+
+            return {
+                ...rest,
+                indices: normalizeLedIndices(indexSource),
+                enabled: !!rest.enabled
+            };
         }
 
         // Load color presets from localStorage or use defaults
@@ -3276,8 +3539,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         // Reset presets to defaults
-        function resetColorPresets() {
-            if (confirm('Reset all favorite colors to defaults?')) {
+        async function resetColorPresets() {
+            const confirmed = await showActionConfirmDialog(
+                'Reset Favorite Colors',
+                'Reset all favorite colors to defaults?',
+                'Reset',
+                'Cancel',
+                'favorite-colors-reset-overlay'
+            );
+            if (confirmed) {
                 colorPresets = [...DEFAULT_COLOR_PRESETS];
                 saveColorPresets();
                 window.toast.success('Color presets reset to defaults!');
@@ -3324,43 +3594,215 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 lightGroups = stored ? JSON.parse(stored) : [];
             }
 
-            lightGroups = lightGroups.map(group => ({
-                ...group,
-                enabled: !!group.enabled
-            }));
+            lightGroups = lightGroups.map(normalizeLightGroup);
 
             ensureLightGroupIds();
 
             saveLightGroups(false);
             renderLightGroupsList();
-            renderLightsHierarchyControls();
         }
+
+        window.reloadLightGroupsFromStorage = async function() {
+            await loadLightGroups();
+            if (isBleConnected()) {
+                applyLightsHierarchyToHardware();
+            }
+        };
+
+        window.reloadLightingProfilesFromStorage = async function() {
+            const restored = loadLocalLightingProfiles();
+            lightingProfiles = Array.isArray(restored.profiles) ? restored.profiles : [];
+            activeLightingProfileIndex = Number(restored.activeIndex) || 0;
+            populateLightingProfileSelector();
+            updateDashboardActiveLightingProfile();
+            syncLightingProfileActionButtons();
+        };
 
         function updateDashboardActiveLightingProfile() {
             const el = document.getElementById('activeLightingProfileDisplay');
             if (!el) return;
-            if (!isBleConnected()) {
-                el.textContent = '--';
-                return;
-            }
             const hit = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
             el.textContent = hit ? (hit.name || `Profile ${hit.index}`) : '--';
         }
 
+        function setLightingProfileStatus(message, tone = 'muted') {
+            const el = document.getElementById('ltProfileStatus');
+            if (!el) return;
+            el.innerHTML = tone === 'busy'
+                ? `<small><span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${message}</small>`
+                : `<small>${message}</small>`;
+            el.style.color = tone === 'warn' ? '#f59e0b'
+                : tone === 'error' ? '#f87171'
+                : tone === 'ok' ? '#4ade80'
+                : '#aaa';
+        }
+
+        function syncLightingProfileActionButtons() {
+            const saveBtn = document.getElementById('saveNewLightingProfileBtn');
+            if (saveBtn) saveBtn.disabled = lightingProfileBusy || lightingProfilesLocked;
+            const updateBtn = document.getElementById('ltProfileUpdateBtn');
+            if (!updateBtn) return;
+            const activeProfile = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
+            updateBtn.style.display = !!activeProfile ? '' : 'none';
+            updateBtn.disabled = !activeProfile || lightingProfileBusy || lightingProfilesLocked;
+        }
+
+        function syncLightingProfilesCardUI() {
+            const card = document.getElementById('lightingProfilesCard');
+            const body = document.getElementById('lightingProfilesCardBody');
+            const lockIcon = document.getElementById('lightingProfilesLockIcon');
+            const chevron = document.getElementById('lightingProfilesChevron');
+            const isCollapsed = localStorage.getItem('lightingProfilesCardCollapsed') === 'true';
+
+            if (card) card.classList.toggle('profile-card-locked', lightingProfilesLocked);
+            if (body) body.style.display = isCollapsed ? 'none' : 'block';
+            if (chevron) {
+                chevron.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+                chevron.title = isCollapsed ? 'Expand lighting profiles' : 'Collapse lighting profiles';
+            }
+            if (lockIcon) {
+                lockIcon.textContent = lightingProfilesLocked ? 'lock' : 'lock_open_right';
+                lockIcon.style.color = lightingProfilesLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
+                lockIcon.title = lightingProfilesLocked ? 'Unlock lighting profiles' : 'Lock lighting profiles to prevent changes';
+            }
+        }
+
+        function toggleLightingProfilesLock() {
+            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
+            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            lightingProfilesLocked = !lightingProfilesLocked;
+            localStorage.setItem('lightingProfilesLocked', lightingProfilesLocked.toString());
+            syncLightingProfilesCardUI();
+            populateLightingProfileSelector();
+        }
+
+        function toggleLightingProfilesCard() {
+            const isCollapsed = localStorage.getItem('lightingProfilesCardCollapsed') === 'true';
+            localStorage.setItem('lightingProfilesCardCollapsed', isCollapsed ? 'false' : 'true');
+            syncLightingProfilesCardUI();
+        }
+
+        function syncManageLightGroupsLockUI() {
+            const card = document.getElementById('manageLightGroupsCard');
+            const lockIcon = document.getElementById('manageLightGroupsLockIcon');
+            const masterToggle = document.getElementById('lightsToggleLightGroups');
+            const addGroupBtn = document.getElementById('addLightGroupBtn');
+
+            if (card) card.classList.toggle('profile-card-locked', manageLightGroupsLocked);
+            if (lockIcon) {
+                lockIcon.textContent = manageLightGroupsLocked ? 'lock' : 'lock_open_right';
+                lockIcon.style.color = manageLightGroupsLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
+                lockIcon.title = manageLightGroupsLocked
+                    ? 'Unlock light group controls'
+                    : 'Lock light group controls';
+            }
+            if (masterToggle) {
+                masterToggle.disabled = manageLightGroupsLocked;
+                masterToggle.setAttribute('aria-disabled', manageLightGroupsLocked ? 'true' : 'false');
+            }
+            if (addGroupBtn) {
+                if (manageLightGroupsLocked) {
+                    addGroupBtn.disabled = true;
+                }
+                addGroupBtn.setAttribute('aria-disabled', manageLightGroupsLocked ? 'true' : 'false');
+            }
+        }
+
+        function toggleManageLightGroupsLock() {
+            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
+            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            manageLightGroupsLocked = !manageLightGroupsLocked;
+            localStorage.setItem('manageLightGroupsLocked', manageLightGroupsLocked.toString());
+            syncManageLightGroupsLockUI();
+            renderLightGroupsList();
+        }
+
+        function syncLightStripConfigLockUI() {
+            const card = document.getElementById('lightStripConfigCard');
+            const lockIcon = document.getElementById('lightStripConfigLockIcon');
+            const totalLedInput = document.getElementById('totalLEDCount');
+
+            if (card) card.classList.toggle('profile-card-locked', lightStripConfigLocked);
+            if (lockIcon) {
+                lockIcon.textContent = lightStripConfigLocked ? 'lock' : 'lock_open_right';
+                lockIcon.style.color = lightStripConfigLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
+                lockIcon.title = lightStripConfigLocked
+                    ? 'Unlock light strip configuration'
+                    : 'Lock light strip configuration';
+            }
+            if (totalLedInput) {
+                totalLedInput.disabled = lightStripConfigLocked;
+                totalLedInput.setAttribute('aria-disabled', lightStripConfigLocked ? 'true' : 'false');
+            }
+        }
+
+        function toggleLightStripConfigLock() {
+            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
+            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            lightStripConfigLocked = !lightStripConfigLocked;
+            localStorage.setItem('lightStripConfigLocked', lightStripConfigLocked.toString());
+            syncLightStripConfigLockUI();
+        }
+
         function populateLightingProfileSelector() {
-            const select = document.getElementById('lightingProfileSelect');
-            if (!select) return;
-            select.innerHTML = '';
-            lightingProfiles
-                .slice()
-                .sort((a, b) => Number(a.index) - Number(b.index))
-                .forEach(p => {
-                    const opt = document.createElement('option');
-                    opt.value = String(p.index);
-                    opt.textContent = `${p.index}: ${p.name || 'Unnamed'}`;
-                    if (Number(p.index) === Number(activeLightingProfileIndex)) opt.selected = true;
-                    select.appendChild(opt);
-                });
+            const container = document.getElementById('ltProfileList');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (!lightingProfiles || lightingProfiles.length === 0) {
+                const msg = document.createElement('div');
+                msg.className = 'text-muted text-center py-2';
+                msg.style.fontSize = '0.875rem';
+                msg.textContent = 'No profiles saved yet';
+                container.appendChild(msg);
+                setLightingProfileStatus('Status: no profiles found', 'warn');
+                syncLightingProfileActionButtons();
+                syncLightingProfilesCardUI();
+                return;
+            }
+
+            lightingProfiles.forEach(p => {
+                const row = document.createElement('div');
+                row.className = 'drv-profile-item d-flex align-items-center justify-content-between px-2 py-1';
+                row.dataset.profileIndex = p.index;
+                const isActive = Number(p.index) === Number(activeLightingProfileIndex);
+                if (isActive) {
+                    row.style.cssText = 'background:rgba(200,168,0,0.15);border-radius:6px;border:1px solid #c8a800;';
+                }
+                const nameBtn = document.createElement('button');
+                nameBtn.type = 'button';
+                nameBtn.className = 'btn btn-link p-0 text-start text-decoration-none flex-grow-1';
+                nameBtn.style.cssText = 'color:' + (isActive ? '#c8a800' : '#fff') + ';font-size:0.9rem;';
+                nameBtn.textContent = p.name;
+                nameBtn.disabled = lightingProfileBusy || lightingProfilesLocked;
+                nameBtn.addEventListener('click', () => selectLightingProfile(p.index));
+
+                const metaWrap = document.createElement('div');
+                metaWrap.className = 'd-flex align-items-center gap-2';
+                if (isActive) {
+                    const pill = document.createElement('span');
+                    pill.textContent = 'Active';
+                    pill.style.cssText = 'font-size:0.7rem;line-height:1;background:#c8a800;color:#000;border-radius:999px;padding:2px 8px;font-weight:700;';
+                    metaWrap.appendChild(pill);
+                }
+                const delBtn = document.createElement('button');
+                delBtn.type = 'button';
+                delBtn.className = 'btn btn-link p-0 ms-2';
+                delBtn.style.cssText = 'color:#888;font-size:1rem;';
+                delBtn.title = 'Delete profile';
+                delBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem;vertical-align:middle;">delete</span>';
+                delBtn.disabled = lightingProfileBusy || lightingProfilesLocked;
+                delBtn.addEventListener('click', () => confirmDeleteLightingProfile(p.index));
+
+                row.appendChild(nameBtn);
+                row.appendChild(metaWrap);
+                row.appendChild(delBtn);
+                container.appendChild(row);
+            });
+
+            setLightingProfileStatus('Status: ready', 'muted');
+            syncLightingProfileActionButtons();
+            syncLightingProfilesCardUI();
             updateDashboardActiveLightingProfile();
         }
 
@@ -3375,7 +3817,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             lightGroups = groups.map(g => ({
                 id: createLightGroupId(),
                 name: g.name || `Group ${g.id}`,
-                indices: Array.isArray(g.leds) ? g.leds.map(v => Number(v)).filter(v => Number.isFinite(v) && v >= 0) : [],
+                indices: normalizeLedIndices(Array.isArray(g.indices) ? g.indices : g.leds),
                 brightness: Math.round((Number(g.brightness ?? 100) * 255) / 100),
                 color: (g.color_primary || '#ffffff').toLowerCase(),
                 color2: (g.color_secondary || '#000000').toLowerCase(),
@@ -3389,100 +3831,153 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             applyLightsHierarchyToHardware();
         }
 
-        async function loadLightingProfileFlow(index) {
-            if (!(bleManager && bleManager.supportsKvUpdates)) {
-                toast.warning('Lighting profiles require firmware 2.0.0 or newer');
+        async function selectLightingProfile(index) {
+            if (lightingProfilesLocked) {
+                toast.warning('Lighting profiles are locked. Unlock to make changes.');
                 return;
             }
-            if (!isBleConnected()) {
-                toast.warning('Connect via Bluetooth to load lighting profiles');
+            const profile = lightingProfiles.find(p => Number(p.index) === Number(index));
+            if (!profile) { toast.warning('Lighting profile not found'); return; }
+            if (!profile.groups) {
+                toast.warning(`"${profile.name}" has no saved groups yet. Update the profile first.`);
                 return;
             }
-            try {
-                await bleManager.sendSystemCommand('load_lt_profile', { index: Number(index) });
-                const cfg = await bleManager.readConfigScoped('lights');
-                if (cfg.lt_profiles) lightingProfiles = cfg.lt_profiles;
-                activeLightingProfileIndex = Number(cfg.act_lt_prof ?? index ?? 0);
-                if (cfg.active_lt_profile) hydrateLightGroupsFromActiveProfile(cfg.active_lt_profile);
-                populateLightingProfileSelector();
-                toast.success('Lighting profile loaded');
-            } catch (e) {
-                toast.error('Failed to load lighting profile: ' + e.message);
-            }
-        }
-
-        async function saveLightingProfileFlow() {
-            if (!(bleManager && bleManager.supportsKvUpdates)) {
-                toast.warning('Lighting profiles require firmware 2.0.0 or newer');
-                return;
-            }
-            if (!isBleConnected()) {
-                toast.warning('Connect via Bluetooth to save profiles');
-                return;
-            }
-            const name = (prompt('Profile name (max 20 chars):', 'New Lighting Profile') || '').trim().substring(0, 20);
-            if (!name) return;
-            const used = new Set(lightingProfiles.map(p => Number(p.index)));
-            let slot = -1;
-            for (let i = 0; i < 10; i++) { if (!used.has(i)) { slot = i; break; } }
-            if (slot < 0) {
-                const replacementSlot = await showProfileOverwriteDialog(lightingProfiles);
-                if (replacementSlot == null) return;
-                const replacement = lightingProfiles.find(p => Number(p.index) === Number(replacementSlot));
-                const replaceName = replacement ? replacement.name : `slot ${replacementSlot}`;
-                const confirmed = confirm(`Overwrite lighting profile "${replaceName}"?`);
-                if (!confirmed) {
-                    return;
+            activeLightingProfileIndex = Number(index);
+            saveLocalLightingProfiles();
+            populateLightingProfileSelector();
+            updateDashboardActiveLightingProfile();
+            lightGroups = JSON.parse(JSON.stringify(profile.groups)).map(normalizeLightGroup);
+            ensureLightGroupIds();
+            saveLightGroups(false);
+            renderLightGroupsList();
+            if (profile.master !== undefined) setMasterLightsEnabled(!!profile.master, false);
+            if (isBleConnected()) {
+                try {
+                    await applyLightsHierarchyToHardware();
+                    toast.success(`Loaded lighting profile "${profile.name}"`);
+                    setLightingProfileStatus(`Status: applied "${profile.name}"`, 'ok');
+                } catch (e) {
+                    toast.warning(`Profile set locally. Push failed: ${e.message}`);
+                    setLightingProfileStatus('Status: push failed, groups applied locally', 'warn');
                 }
-                slot = Number(replacementSlot);
-            }
-            try {
-                await bleManager.sendSystemCommand('save_lt_profile', { index: slot, name });
-                const cfg = await bleManager.readConfigScoped('lights');
-                if (cfg.lt_profiles) lightingProfiles = cfg.lt_profiles;
-                activeLightingProfileIndex = Number(cfg.act_lt_prof ?? slot);
-                populateLightingProfileSelector();
-                toast.success(`Saved lighting profile "${name}" to slot ${slot}`);
-            } catch (e) {
-                toast.error('Failed to save lighting profile: ' + e.message);
+            } else {
+                toast.success(`Profile "${profile.name}" loaded. Connect to apply to truck.`);
+                setLightingProfileStatus(`Status: "${profile.name}" loaded (not connected)`, 'muted');
             }
         }
 
-        async function deleteLightingProfileFlow() {
-            if (!(bleManager && bleManager.supportsKvUpdates)) {
-                toast.warning('Lighting profiles require firmware 2.0.0 or newer');
+        async function saveAsNewLightingProfile() {
+            if (lightingProfilesLocked) {
+                toast.warning('Lighting profiles are locked. Unlock to make changes.');
                 return;
             }
-            if (!isBleConnected()) {
-                toast.warning('Connect via Bluetooth to delete profiles');
-                return;
+            let targetSlot, profileName;
+            if (lightingProfiles.length >= MAX_LIGHTING_PROFILES) {
+                targetSlot = await showProfileOverwriteDialog(lightingProfiles);
+                if (targetSlot == null) return;
+                const existing = lightingProfiles.find(p => Number(p.index) === Number(targetSlot));
+                profileName = await showProfileNameDialog(existing ? existing.name : '');
+            } else {
+                profileName = await showProfileNameDialog();
+                if (!profileName) return;
+                const usedSlots = new Set(lightingProfiles.map(p => Number(p.index)));
+                targetSlot = 0;
+                while (usedSlots.has(targetSlot) && targetSlot < MAX_LIGHTING_PROFILES) targetSlot++;
             }
-            if (lightingProfiles.length <= 1) {
-                toast.warning('Cannot delete the last remaining profile.');
-                return;
+            if (!profileName) return;
+            const masterBtn = document.getElementById('lightsToggleDashboard') || document.getElementById('lightsToggle');
+            const snapshot = {
+                index: Number(targetSlot),
+                name: profileName,
+                master: masterBtn ? masterBtn.getAttribute('aria-pressed') === 'true' : false,
+                groups: JSON.parse(JSON.stringify(lightGroups))
+            };
+            const existingIdx = lightingProfiles.findIndex(p => Number(p.index) === Number(targetSlot));
+            if (existingIdx >= 0) {
+                lightingProfiles[existingIdx] = snapshot;
+            } else {
+                lightingProfiles.push(snapshot);
+                lightingProfiles.sort((a, b) => Number(a.index) - Number(b.index));
             }
-            const select = document.getElementById('lightingProfileSelect');
-            const idx = Number(select?.value ?? activeLightingProfileIndex);
-            if (!confirm(`Delete lighting profile slot ${idx}? This cannot be undone.`)) return;
-            try {
-                await bleManager.sendSystemCommand('delete_lt_profile', { index: idx });
-                const cfg = await bleManager.readConfigScoped('lights');
-                if (cfg.lt_profiles) lightingProfiles = cfg.lt_profiles;
-                activeLightingProfileIndex = Number(cfg.act_lt_prof ?? 0);
-                if (cfg.active_lt_profile) hydrateLightGroupsFromActiveProfile(cfg.active_lt_profile);
-                populateLightingProfileSelector();
-                toast.success('Lighting profile deleted');
-            } catch (e) {
-                toast.error('Failed to delete lighting profile: ' + e.message);
-            }
+            activeLightingProfileIndex = Number(targetSlot);
+            saveLocalLightingProfiles();
+            populateLightingProfileSelector();
+            updateDashboardActiveLightingProfile();
+            toast.success(`Saved lighting profile "${profileName}"`);
+            setLightingProfileStatus(`Status: "${profileName}" saved`, 'ok');
         }
+
+        async function updateActiveLightingProfile() {
+            if (lightingProfilesLocked) {
+                toast.warning('Lighting profiles are locked. Unlock to make changes.');
+                return;
+            }
+            const active = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
+            if (!active) { toast.warning('No active lighting profile selected. Save a profile first.'); return; }
+            const masterBtn = document.getElementById('lightsToggleDashboard') || document.getElementById('lightsToggle');
+            const idx = lightingProfiles.findIndex(p => Number(p.index) === Number(activeLightingProfileIndex));
+            lightingProfiles[idx] = {
+                ...active,
+                master: masterBtn ? masterBtn.getAttribute('aria-pressed') === 'true' : false,
+                groups: JSON.parse(JSON.stringify(lightGroups))
+            };
+            saveLocalLightingProfiles();
+            toast.success(`Updated lighting profile "${active.name}"`);
+            setLightingProfileStatus(`Status: "${active.name}" updated`, 'ok');
+        }
+
+        async function confirmDeleteLightingProfile(index) {
+            if (lightingProfilesLocked) {
+                toast.warning('Lighting profiles are locked. Unlock to make changes.');
+                return;
+            }
+            const profile = lightingProfiles.find(p => Number(p.index) === Number(index));
+            if (!profile) return;
+            if (lightingProfiles.length <= 1) {
+                toast.warning('Cannot delete the last remaining lighting profile.');
+                return;
+            }
+            const confirmed = await new Promise(resolve => {
+                const existing = document.getElementById('lt-profile-delete-overlay');
+                if (existing) existing.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'lt-profile-delete-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                overlay.innerHTML = `
+                  <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+                    <h5 style="margin:0 0 12px;color:#fff;">Delete Lighting Profile</h5>
+                    <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">Delete <strong style="color:#fff;">${profile.name.replace(/</g, '&lt;')}</strong>? This cannot be undone.</p>
+                    <div style="display:flex;gap:8px;">
+                                            <button id="ltd-cancel" style="flex:1;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
+                                            <button id="ltd-delete" style="flex:1;padding:10px;border:none;border-radius:8px;background:#c0392b;color:#fff;font-weight:600;cursor:pointer;">Delete</button>
+                    </div>
+                  </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelector('#ltd-delete').onclick = () => { overlay.remove(); resolve(true); };
+                overlay.querySelector('#ltd-cancel').onclick = () => { overlay.remove(); resolve(false); };
+            });
+            if (!confirmed) return;
+            const wasActive = Number(activeLightingProfileIndex) === Number(index);
+            lightingProfiles = lightingProfiles.filter(p => Number(p.index) !== Number(index));
+            if (wasActive || !lightingProfiles.some(p => Number(p.index) === Number(activeLightingProfileIndex))) {
+                activeLightingProfileIndex = Number(lightingProfiles[0].index);
+            }
+            saveLocalLightingProfiles();
+            populateLightingProfileSelector();
+            updateDashboardActiveLightingProfile();
+            toast.success('Lighting profile deleted');
+            setLightingProfileStatus('Status: profile deleted', 'ok');
+        }
+
+        window.selectLightingProfile = selectLightingProfile;
+        window.saveAsNewLightingProfile = saveAsNewLightingProfile;
+        window.updateActiveLightingProfile = updateActiveLightingProfile;
+        window.confirmDeleteLightingProfile = confirmDeleteLightingProfile;
 
         function saveLightGroups(pushToHardware = true) {
             ensureLightGroupIds();
             localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(lightGroups));
             renderLightGroupsList();
-            renderLightsHierarchyControls();
-            populateNotificationGroupSelect(); // Update notification group dropdown
 
             if (pushToHardware) {
                 applyLightsHierarchyToHardware();
@@ -3497,14 +3992,22 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             localStorage.setItem(LIGHT_MASTER_STORAGE_KEY, isEnabled ? 'true' : 'false');
             syncMasterLightSwitches(isEnabled);
             if (applyNow) {
-                applyLightsHierarchyToHardware();
+                return Promise.resolve(applyLightsHierarchyToHardware())
+                .catch(error => {
+                    const msg = `Failed to apply master light state: ${String(error?.message || error)}`;
+                    console.error(msg, error);
+                    appendToSettingsConsoleCard(msg, 'error');
+                    toast.error('Failed to apply master light switch state.');
+                });
             }
+            return Promise.resolve();
         }
 
         function syncMasterLightSwitches(isEnabled) {
             const masterToggle = document.getElementById('lightsToggle');
             const dashboardToggle = document.getElementById('lightsToggleDashboard');
-            [masterToggle, dashboardToggle].forEach(toggleBtn => {
+            const lightGroupsToggle = document.getElementById('lightsToggleLightGroups');
+            [masterToggle, dashboardToggle, lightGroupsToggle].forEach(toggleBtn => {
                 if (!toggleBtn) return;
                 toggleBtn.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
                 toggleBtn.classList.toggle('is-active', isEnabled);
@@ -3523,8 +4026,28 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             toggleElement.dataset.bound = 'true';
             syncMasterLightSwitches(getMasterLightsEnabled());
-            toggleElement.addEventListener('click', function() {
-                setMasterLightsEnabled(!getMasterLightsEnabled(), true);
+            toggleElement.addEventListener('click', async function() {
+                try {
+                    if (!isBleConnected()) {
+                        const msg = 'Connect to a vehicle first to control lights.';
+                        toast.warning(msg);
+                        appendToSettingsConsoleCard(msg, 'warn');
+                        return;
+                    }
+                    if (masterLightToggleInFlight) {
+                        appendToSettingsConsoleCard('Master light switch busy, please wait.', 'warn');
+                        return;
+                    }
+                    masterLightToggleInFlight = true;
+                    await setMasterLightsEnabled(!getMasterLightsEnabled(), true);
+                } catch (error) {
+                    const msg = `Master switch click failed: ${String(error?.message || error)}`;
+                    console.error(msg, error);
+                    appendToSettingsConsoleCard(msg, 'error');
+                    toast.error('Master light switch failed. Check Debug logs.');
+                } finally {
+                    masterLightToggleInFlight = false;
+                }
             });
         }
 
@@ -3576,32 +4099,39 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function getFirmwareLightsPayload(groups, masterEnabled) {
-            const active = masterEnabled ? groups : [];
-            
+            const groupList = Array.isArray(groups) ? groups : [];
+            const normalizedGroups = groupList.map(normalizeLightGroup);
+            const active = masterEnabled
+                ? normalizedGroups.filter(group => {
+                    if (!group.enabled) return false;
+                    return normalizeLedIndices(group.indices).length > 0;
+                })
+                : [];
+
             // Build new format with full light groups array
             const lightGroupsArray = active.map(group => {
-                // Parse pattern to get mode and blink rate
-                const mode = getPatternMode(group.pattern);
-                const blinkRate = getPatternBlinkRate(group.pattern);
+                const pattern = group.pattern || LIGHT_GROUP_DEFAULT_PATTERN;
+                const mode = getPatternMode(pattern);
+                const blinkRate = getPatternBlinkRate(pattern);
                 const rawBrightness = Number(group.brightness);
                 const brightness = Number.isFinite(rawBrightness)
                     ? Math.max(0, Math.min(255, rawBrightness))
                     : 255;
-                
+
                 // Convert hex colors to firmware format (remove #)
                 const colorStr = (group.color || '#ff0000').replace('#', '');
                 const color2Str = (group.color2 || '#000000').replace('#', '');
-                
+
                 return {
-                    name: group.name,
+                    name: group.name || 'Unnamed Group',
                     enabled: !!group.enabled,
                     brightness,
                     color: colorStr,
                     color2: color2Str,
-                    indices: group.indices || [],
-                    mode: mode,
-                    blinkRate: blinkRate,
-                    pattern: group.pattern
+                    indices: normalizeLedIndices(group.indices),
+                    mode,
+                    blinkRate,
+                    pattern
                 };
             });
 
@@ -3611,42 +4141,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             };
         }
 
-        function renderLightsHierarchyControls() {
-            const container = document.getElementById('lightsHierarchyGroups');
-            if (!container) return;
-
-            container.innerHTML = '';
-
-            if (!lightGroups.length) {
-                container.innerHTML = '<div class="form-text"><small>No light groups available yet. Add groups in Settings > Light Settings.</small></div>';
-                return;
-            }
-
-            const sortedGroups = [...lightGroups].sort((a, b) => a.name.localeCompare(b.name));
-            sortedGroups.forEach(group => {
-                const index = lightGroups.indexOf(group);
-                const row = document.createElement('div');
-                row.className = 'd-flex justify-content-between align-items-center border rounded px-2 py-2';
-
-                const label = document.createElement('div');
-                label.innerHTML = `<strong>${group.name}</strong><div class="form-text"><small>${group.indices?.length || 0} LED(s)</small></div>`;
-
-                const switchWrap = document.createElement('div');
-                switchWrap.className = 'form-check form-switch m-0';
-                switchWrap.innerHTML = `<input class="form-check-input" type="checkbox" id="groupSwitch${index}" ${group.enabled ? 'checked' : ''}>`;
-
-                const input = switchWrap.querySelector('input');
-                input.addEventListener('change', () => {
-                    lightGroups[index].enabled = input.checked;
-                    saveLightGroups(true);
-                });
-
-                row.appendChild(label);
-                row.appendChild(switchWrap);
-                container.appendChild(row);
-            });
-        }
-
         function applyLightsHierarchyToHardware(override = null) {
             if (!isBleConnected()) {
                 // Startup and offline states can update local light groups before BLE is connected.
@@ -3654,17 +4148,30 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 return Promise.resolve();
             }
 
-            const masterEnabled = override?.masterEnabled ?? getMasterLightsEnabled();
-            const sourceGroups = override?.groups || lightGroups;
-            const payload = getFirmwareLightsPayload(sourceGroups, masterEnabled || !!override?.forceMasterOn);
+            try {
+                const masterEnabled = override?.masterEnabled ?? getMasterLightsEnabled();
+                const sourceGroupsRaw = Array.isArray(override?.groups)
+                    ? override.groups
+                    : (Array.isArray(lightGroups) ? lightGroups : []);
+                const sourceGroups = sourceGroupsRaw.map(normalizeLightGroup);
+                const payload = getFirmwareLightsPayload(sourceGroups, masterEnabled || !!override?.forceMasterOn);
 
-            console.log('[Lights] Sending to ESP32:', JSON.stringify(payload, null, 2));
-            console.log('[Lights] Source groups:', sourceGroups.map(g => ({ name: g.name, enabled: g.enabled, indices: g.indices?.length })));
+                console.log('[Lights] Sending to ESP32:', JSON.stringify(payload, null, 2));
+                console.log('[Lights] Source groups:', sourceGroups.map(g => ({
+                    name: g.name || 'Unnamed Group',
+                    enabled: !!g.enabled,
+                    indices: Array.isArray(g.indices) ? g.indices.length : 0
+                })));
 
-            return pushLightsPayload(payload)
-            .catch(error => {
-                console.error('Failed to apply hierarchy lights payload:', error);
-            });
+                return pushLightsPayload(payload)
+                .catch(error => {
+                    console.error('Failed to apply hierarchy lights payload:', error);
+                });
+            } catch (error) {
+                console.error('Unexpected error building lights payload:', error);
+                appendToSettingsConsoleCard(`Lights payload build failed: ${String(error?.message || error)}`, 'error');
+                return Promise.resolve();
+            }
         }
 
         function isolateGroupForPreview(index, draftGroup = null) {
@@ -3730,8 +4237,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     item.setAttribute('data-group-id', group.id || '');
                     item.setAttribute('data-index', index);
                     
-                    const ledCount = group.indices?.length || 0;
-                    const ledDisplay = ledCount > 0 ? formatLedRanges(group.indices) : 'No LEDs assigned';
+                    const assignedIndices = normalizeLedIndices(
+                        Array.isArray(group.indices) ? group.indices : group.leds
+                    );
+                    const ledCount = assignedIndices.length;
+                    const ledDisplay = ledCount > 0 ? formatLedRanges(assignedIndices) : 'No LEDs assigned';
                     const brightnessPercent = group.brightness !== undefined ?
                         Math.round(group.brightness * 100 / 255) : 100;
                     const color = group.color || '#ff0000';
@@ -3740,7 +4250,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const patternDisplay = (pattern === 'Cycle' || pattern === 'Cycle Favorites')
                         ? `${pattern} (${LIGHT_GROUP_CYCLE_INTERVAL_SECONDS}s)`
                         : pattern;
-                    const isConfigured = group.indices && group.indices.length > 0;
+                    const isConfigured = ledCount > 0;
                     const detailsExpanded = expandedLightGroupIds.has(group.id);
                     const hasSecondaryColor = color2 !== '#000000' && color2 !== '#00000000';
                     const warningIcon = !isConfigured
@@ -3749,10 +4259,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     
                     item.innerHTML = `
                         <div class="light-group-leading-controls" aria-label="Reorder group">
-                            <button type="button" class="light-group-order-btn" aria-label="Move group up" title="Move up" onclick="moveLightGroup(${index}, -1)" ${index === 0 ? 'disabled' : ''}>
+                            <button type="button" class="light-group-order-btn" aria-label="Move group up" title="Move up" onclick="moveLightGroup(${index}, -1)" ${(index === 0 || manageLightGroupsLocked) ? 'disabled' : ''}>
                                 <span class="material-symbols-outlined">keyboard_arrow_up</span>
                             </button>
-                            <button type="button" class="light-group-order-btn" aria-label="Move group down" title="Move down" onclick="moveLightGroup(${index}, 1)" ${index === lightGroups.length - 1 ? 'disabled' : ''}>
+                            <button type="button" class="light-group-order-btn" aria-label="Move group down" title="Move down" onclick="moveLightGroup(${index}, 1)" ${(index === lightGroups.length - 1 || manageLightGroupsLocked) ? 'disabled' : ''}>
                                 <span class="material-symbols-outlined">keyboard_arrow_down</span>
                             </button>
                         </div>
@@ -3761,6 +4271,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                                 <div class="light-group-name">${group.name}${warningIcon}</div>
                             </div>
                             <div class="light-group-meta-row">
+                                <div class="form-check form-switch m-0 light-group-enabled-toggle-wrap" title="Toggle this light group on or off">
+                                    <input class="form-check-input light-group-enabled-toggle" type="checkbox" ${group.enabled ? 'checked' : ''} ${manageLightGroupsLocked ? 'disabled' : ''} aria-label="Toggle ${group.name} on or off">
+                                </div>
                                 <div class="light-group-swatch-row" aria-label="Group colors">
                                     <span class="light-group-swatch" style="background-color: ${color};" title="Primary color"></span>
                                     ${hasSecondaryColor ? `<span class="light-group-swatch" style="background-color: ${color2};" title="Secondary color"></span>` : ''}
@@ -3782,15 +4295,28 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end garage-card-menu" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     <li>
-                                        <button type="button" class="dropdown-item" onclick="event.stopPropagation(); editLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Edit</button>
+                                        <button type="button" class="dropdown-item" ${manageLightGroupsLocked ? 'disabled' : ''} onclick="event.stopPropagation(); editLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Edit</button>
                                     </li>
                                     <li>
-                                        <button type="button" class="dropdown-item text-danger" onclick="event.stopPropagation(); deleteLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Delete</button>
+                                        <button type="button" class="dropdown-item text-danger" ${manageLightGroupsLocked ? 'disabled' : ''} onclick="event.stopPropagation(); deleteLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Delete</button>
                                     </li>
                                 </ul>
                             </div>
                         </div>
                     `;
+
+                    const enabledInput = item.querySelector('.light-group-enabled-toggle');
+                    if (enabledInput) {
+                        enabledInput.addEventListener('change', () => {
+                            if (manageLightGroupsLocked) {
+                                enabledInput.checked = !enabledInput.checked;
+                                toast.warning('Manage Light Groups is locked. Unlock to make changes.');
+                                return;
+                            }
+                            lightGroups[index].enabled = enabledInput.checked;
+                            saveLightGroups(true);
+                        });
+                    }
 
                     listContainer.appendChild(item);
                 });
@@ -3849,6 +4375,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function moveLightGroup(index, delta) {
+            if (manageLightGroupsLocked) {
+                toast.warning('Manage Light Groups is locked. Unlock to make changes.');
+                return;
+            }
             const targetIndex = index + delta;
             if (index < 0 || index >= lightGroups.length) return;
             if (targetIndex < 0 || targetIndex >= lightGroups.length) return;
@@ -3937,6 +4467,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         
         function toggleSecondaryColorVisibility(pattern) {
             const secondaryColorContainer = document.getElementById('secondaryColorPickerContainer');
+            const colorRow = document.getElementById('lightGroupColorRow');
             const secondaryTargetBtn = document.getElementById('favoriteColorTargetSecondary')?.closest('label');
             const secondaryTargetInput = document.getElementById('favoriteColorTargetSecondary');
             
@@ -3947,9 +4478,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             if (needsDualColor) {
                 secondaryColorContainer.style.display = 'block';
+                if (colorRow) colorRow.classList.remove('single-color');
                 if (secondaryTargetBtn) secondaryTargetBtn.style.display = '';
             } else {
                 secondaryColorContainer.style.display = 'none';
+                if (colorRow) colorRow.classList.add('single-color');
                 if (secondaryTargetBtn) secondaryTargetBtn.style.display = 'none';
                 // Switch to primary target if secondary was selected
                 if (secondaryTargetInput && secondaryTargetInput.checked) {
@@ -4020,7 +4553,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const group = lightGroups[index];
                 titleSpan.textContent = 'Edit';
                 nameInput.value = group.name;
-                group.indices.forEach(idx => currentSelectedLEDs.add(idx));
+                const groupIndices = Array.isArray(group.indices) ? group.indices : (Array.isArray(group.leds) ? group.leds : []);
+                groupIndices.forEach(idx => currentSelectedLEDs.add(idx));
                 
                 // Set brightness (convert 0-255 to 0-100 percentage)
                 const brightnessPercent = group.brightness !== undefined ? 
@@ -4093,10 +4627,18 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function addLightGroup() {
+            if (manageLightGroupsLocked) {
+                toast.warning('Manage Light Groups is locked. Unlock to make changes.');
+                return;
+            }
             openLightGroupModal(null);
         }
 
         function editLightGroup(index) {
+            if (manageLightGroupsLocked) {
+                toast.warning('Manage Light Groups is locked. Unlock to make changes.');
+                return;
+            }
             openLightGroupModal(index);
         }
 
@@ -4206,7 +4748,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function getLightGroupDraftFromModal() {
             const nameInput = document.getElementById('lightGroupNameInput');
             const patternSelect = document.getElementById('lightGroupPatternSelect');
-            const name = nameInput ? nameInput.value.trim() : 'Preview Group';
+            const name = nameInput ? normalizeLightGroupName(nameInput.value) : 'Preview Group';
             const selectedPattern = (patternSelect && patternSelect.value) ? patternSelect.value : LIGHT_GROUP_DEFAULT_PATTERN;
 
             return {
@@ -4246,12 +4788,18 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             testLightGroupFromModal(false);
         }
 
-        function saveLightGroupFromModal() {
+        async function saveLightGroupFromModal() {
             const nameInput = document.getElementById('lightGroupNameInput');
-            const name = nameInput.value.trim();
+            const name = normalizeLightGroupName(nameInput?.value);
+            if (nameInput) nameInput.value = name;
             
             if (!name) {
-                alert('Please enter a light group name');
+                await showSimpleNoticeDialog(
+                    'Missing Group Name',
+                    'Please enter a light group name before saving.',
+                    'OK',
+                    'light-group-name-required-overlay'
+                );
                 nameInput.focus();
                 return;
             }
@@ -4331,39 +4879,43 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function deleteLightGroup(index) {
+            if (manageLightGroupsLocked) {
+                toast.warning('Manage Light Groups is locked. Unlock to make changes.');
+                return;
+            }
             const group = lightGroups[index];
             if (!group) return;
-            
-            // Warn if deleting the last group
-            if (lightGroups.length === 1) {
-                if (!confirm(`Delete light group "${group.name}"?\n\nThis is your last light group. You can create new ones anytime.`)) {
-                    return;
-                }
-            } else {
-                if (!confirm(`Delete light group "${group.name}"? This cannot be undone.`)) {
-                    return;
-                }
-            }
-            
-            // Check if this group is used for system notifications
-            const notificationGroup = getNotificationGroup();
-            const wasNotificationGroup = notificationGroup === group.name;
-            
-            // Delete the group
-            lightGroups.splice(index, 1);
-            if (group.id) {
-                expandedLightGroupIds.delete(group.id);
-            }
-            saveLightGroups();
-            
-            // Failover: If deleted group was used for notifications, switch to "All LEDs"
-            if (wasNotificationGroup) {
-                localStorage.setItem(NOTIFICATION_GROUP_KEY, '__all__');
-                populateNotificationGroupSelect();
-                window.toast.warning(`Light group deleted. System notifications switched to "All LEDs".`);
-            } else {
+
+            const existing = document.getElementById('lg-delete-overlay');
+            if (existing) existing.remove();
+
+            const safeName = group.name.replace(/</g, '&lt;');
+            const subtext = lightGroups.length === 1
+                ? 'This is your last light group. You can create new ones anytime.'
+                : 'This cannot be undone.';
+
+            const overlay = document.createElement('div');
+            overlay.id = 'lg-delete-overlay';
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            overlay.innerHTML = `
+              <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+                <h5 style="margin:0 0 12px;color:#fff;">Delete Light Group</h5>
+                <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">Delete <strong style="color:#fff;">${safeName}</strong>? ${subtext}</p>
+                <div style="display:flex;gap:8px;">
+                                    <button id="lgd-cancel" style="flex:1;padding:10px;border:1px solid #555;border-radius:8px;background:#333;color:#aaa;cursor:pointer;">Cancel</button>
+                                    <button id="lgd-delete" style="flex:1;padding:10px;border:none;border-radius:8px;background:#c0392b;color:#fff;font-weight:600;cursor:pointer;">Delete</button>
+                </div>
+              </div>`;
+            document.body.appendChild(overlay);
+
+            overlay.querySelector('#lgd-cancel').onclick = () => overlay.remove();
+            overlay.querySelector('#lgd-delete').onclick = () => {
+                overlay.remove();
+                lightGroups.splice(index, 1);
+                if (group.id) expandedLightGroupIds.delete(group.id);
+                saveLightGroups();
                 window.toast.success('Light group deleted');
-            }
+            };
         }
 
         function parseLEDIndices(str) {
@@ -4399,21 +4951,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 addBtn.addEventListener('click', addLightGroup);
             }
 
-            const ltSelect = document.getElementById('lightingProfileSelect');
-            const ltSaveBtn = document.getElementById('saveLightingProfileBtn');
-            const ltDeleteBtn = document.getElementById('deleteLightingProfileBtn');
-            if (ltSelect) {
-                ltSelect.addEventListener('change', async () => {
-                    const selectedIndex = Number(ltSelect.value || 0);
-                    activeLightingProfileIndex = selectedIndex;
-                    updateDashboardActiveLightingProfile();
-
-                    if (!isBleConnected()) return;
-                    await loadLightingProfileFlow(selectedIndex);
-                });
-            }
-            if (ltSaveBtn) ltSaveBtn.addEventListener('click', saveLightingProfileFlow);
-            if (ltDeleteBtn) ltDeleteBtn.addEventListener('click', deleteLightingProfileFlow);
+            const ltSaveBtn2 = document.getElementById('saveNewLightingProfileBtn');
+            const ltUpdateBtn2 = document.getElementById('ltProfileUpdateBtn');
+            if (ltSaveBtn2) ltSaveBtn2.addEventListener('click', saveAsNewLightingProfile);
+            if (ltUpdateBtn2) ltUpdateBtn2.addEventListener('click', updateActiveLightingProfile);
             
             const totalLEDInput = document.getElementById('totalLEDCount');
             if (totalLEDInput) {
@@ -4423,6 +4964,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 
                 // Save on change
                 totalLEDInput.addEventListener('change', function() {
+                    if (lightStripConfigLocked) {
+                        this.value = localStorage.getItem(TOTAL_LED_COUNT_KEY) || 100;
+                        toast.warning('Light Strip Configuration is locked. Unlock to make changes.');
+                        return;
+                    }
                     const value = parseInt(this.value);
                     if (value >= 1 && value <= 300) {
                         localStorage.setItem(TOTAL_LED_COUNT_KEY, value);
@@ -4514,13 +5060,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     currentEditingGroupIndex = null;
                 });
             }
+
+            const lightGroupCancelBtn = document.getElementById('lightGroupCancelBtn');
+            const lightGroupCloseBtn = document.getElementById('lightGroupCloseBtn');
+            if (lightGroupCloseBtn && lightGroupCancelBtn) {
+                lightGroupCloseBtn.addEventListener('click', () => {
+                    lightGroupCancelBtn.click();
+                });
+            }
             
             // Load light groups and color presets
             await loadLightGroups();
             loadColorPresets();
-            populateNotificationGroupSelect(); // Initialize system notification LED dropdown
             setMasterLightsEnabled(getMasterLightsEnabled(), false);
             applyLightsHierarchyToHardware();
+
+            // Populate both profile selectors from localStorage on startup — no BLE needed.
+            populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+            updateDashboardActiveProfile();
+            populateLightingProfileSelector();
+            updateDashboardActiveLightingProfile();
             
             // Load version information
             loadVersionInfo();
@@ -4591,6 +5150,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 }
                 updateDashboardVehicleName(null);
                 updateVehicleQuickNav();
+                updateDashboardBleUI(true);
                 return;
             }
 
@@ -4603,6 +5163,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (status) status.textContent = 'Inactive';
             updateDashboardVehicleName(null);
             updateVehicleQuickNav();
+            updateDashboardBleUI(false);
         }
 
         function setHeaderSearching(active) {
@@ -5240,12 +5801,129 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function updateDashboardActiveProfile() {
             const el = document.getElementById('activeDrivingProfileDisplay');
             if (!el) return;
-            if (!isBleConnected()) {
-                el.textContent = '--';
-                return;
-            }
-            const p = drivingProfiles.find(x => x.index === activeDrivingProfileIndex);
+            const p = getActiveDrivingProfile();
             el.textContent = p ? p.name : '--';
+        }
+
+        function setDrivingProfileStatus(message, tone = 'muted') {
+            const statusEl = document.getElementById('drvProfileStatus');
+            if (!statusEl) return;
+            const showSpinner = tone === 'busy';
+            statusEl.innerHTML = showSpinner
+                ? `<small><span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${message}</small>`
+                : `<small>${message}</small>`;
+            statusEl.style.color = tone === 'warn'
+                ? '#f59e0b'
+                : tone === 'error'
+                    ? '#f87171'
+                    : tone === 'ok'
+                        ? '#4ade80'
+                        : '#aaa';
+        }
+
+        function delayMs(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        function withTimeout(promise, timeoutMs, label = 'Operation') {
+            let timeoutId = null;
+            const timeoutPromise = new Promise((_, reject) => {
+                timeoutId = setTimeout(() => {
+                    reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+                }, timeoutMs);
+            });
+
+            return Promise.race([promise, timeoutPromise]).finally(() => {
+                if (timeoutId) clearTimeout(timeoutId);
+            });
+        }
+
+        function setDrivingProfileBusy(isBusy, context = '') {
+            drivingProfileBusy = !!isBusy;
+            const saveBtn = document.getElementById('saveNewProfileBtn');
+            if (saveBtn) {
+                saveBtn.disabled = drivingProfileBusy || drivingProfilesLocked;
+            }
+            syncDrivingProfileActionButtons();
+            if (drivingProfileBusy) {
+                setDrivingProfileStatus(`Status: syncing ${context || 'profile'}...`, 'busy');
+            } else {
+                setDrivingProfileStatus('Status: idle', 'muted');
+            }
+        }
+
+        // Refresh profile UI from local state (profiles are stored in localStorage, not on device).
+        function refreshDrivingProfilesFromDevice() {
+            populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+            updateDashboardActiveProfile();
+            syncDrivingProfileActionButtons();
+            return { act_drv_prof: activeDrivingProfileIndex, drv_profiles: drivingProfiles };
+        }
+
+        function syncDrivingProfileActionButtons() {
+            const saveBtn = document.getElementById('saveNewProfileBtn');
+            if (saveBtn) {
+                saveBtn.disabled = drivingProfileBusy || drivingProfilesLocked;
+            }
+
+            const updateBtn = document.getElementById('drvProfileUpdateBtn');
+            if (!updateBtn) return;
+
+            const activeProfile = getActiveDrivingProfile();
+            const showUpdate = !!activeProfile && (isPageDirty('tuning') || isPageDirty('servo'));
+            updateBtn.style.display = showUpdate ? '' : 'none';
+            updateBtn.disabled = !showUpdate || drivingProfileBusy || drivingProfilesLocked;
+        }
+
+        function syncDrivingProfilesCardUI() {
+            const card = document.getElementById('drivingProfilesCard');
+            const body = document.getElementById('drivingProfilesCardBody');
+            const lockIcon = document.getElementById('drivingProfilesLockIcon');
+            const chevron = document.getElementById('drivingProfilesChevron');
+            const isCollapsed = localStorage.getItem('drivingProfilesCardCollapsed') === 'true';
+
+            if (card) card.classList.toggle('profile-card-locked', drivingProfilesLocked);
+            if (body) body.style.display = isCollapsed ? 'none' : 'block';
+            if (chevron) {
+                chevron.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+                chevron.title = isCollapsed ? 'Expand driving profiles' : 'Collapse driving profiles';
+            }
+            if (lockIcon) {
+                lockIcon.textContent = drivingProfilesLocked ? 'lock' : 'lock_open_right';
+                lockIcon.style.color = drivingProfilesLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
+                lockIcon.title = drivingProfilesLocked ? 'Unlock driving profiles' : 'Lock driving profiles to prevent changes';
+            }
+        }
+
+        function toggleDrivingProfilesLock() {
+            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
+            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            drivingProfilesLocked = !drivingProfilesLocked;
+            localStorage.setItem('drivingProfilesLocked', drivingProfilesLocked.toString());
+            syncDrivingProfilesCardUI();
+            populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+        }
+
+        function toggleDrivingProfilesCard() {
+            const isCollapsed = localStorage.getItem('drivingProfilesCardCollapsed') === 'true';
+            localStorage.setItem('drivingProfilesCardCollapsed', isCollapsed ? 'false' : 'true');
+            syncDrivingProfilesCardUI();
+        }
+
+        async function runDrivingProfileOperation(context, action) {
+            if (drivingProfileBusy) {
+                toast.info('A profile action is already in progress');
+                return null;
+            }
+
+            setDrivingProfileBusy(true, context);
+            try {
+                const timeoutMs = String(context || '').includes('loading') ? 12000 : 9000;
+                return await withTimeout(Promise.resolve().then(() => action()), timeoutMs, `Profile ${context || 'operation'}`);
+            } finally {
+                setDrivingProfileBusy(false);
+                populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+            }
         }
 
         function populateDrivingProfileSelector(profiles, activeIndex) {
@@ -5253,24 +5931,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!container) return;
             container.innerHTML = '';
 
-            const kvReady = !!(bleManager && bleManager.supportsKvUpdates);
-            if (!kvReady) {
-                const msg = document.createElement('div');
-                msg.className = 'text-muted text-center py-2';
-                msg.style.fontSize = '0.875rem';
-                msg.textContent = 'Driving profiles require firmware 2.0.0 or newer';
-                container.appendChild(msg);
-                const saveBtnLegacy = document.getElementById('saveNewProfileBtn');
-                if (saveBtnLegacy) saveBtnLegacy.disabled = true;
-                return;
-            }
-
             if (!profiles || profiles.length === 0) {
                 const msg = document.createElement('div');
                 msg.className = 'text-muted text-center py-2';
                 msg.style.fontSize = '0.875rem';
                 msg.textContent = 'No profiles saved yet';
                 container.appendChild(msg);
+                if (!drivingProfileBusy) {
+                    setDrivingProfileStatus('Status: no profiles found', 'warn');
+                }
+                syncDrivingProfilesCardUI();
                 return;
             }
 
@@ -5278,16 +5948,27 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const row = document.createElement('div');
                 row.className = 'drv-profile-item d-flex align-items-center justify-content-between px-2 py-1';
                 row.dataset.profileIndex = p.index;
-                if (p.index === activeIndex) {
+                const isActive = Number(p.index) === Number(activeIndex);
+                if (isActive) {
                     row.style.cssText = 'background:rgba(200,168,0,0.15);border-radius:6px;border:1px solid #c8a800;';
                 }
 
                 const nameBtn = document.createElement('button');
                 nameBtn.type = 'button';
                 nameBtn.className = 'btn btn-link p-0 text-start text-decoration-none flex-grow-1';
-                nameBtn.style.cssText = 'color:' + (p.index === activeIndex ? '#c8a800' : '#fff') + ';font-size:0.9rem;';
+                nameBtn.style.cssText = 'color:' + (isActive ? '#c8a800' : '#fff') + ';font-size:0.9rem;';
                 nameBtn.textContent = p.name;
+                nameBtn.disabled = drivingProfileBusy || drivingProfilesLocked;
                 nameBtn.addEventListener('click', () => selectDrivingProfile(p.index));
+
+                const metaWrap = document.createElement('div');
+                metaWrap.className = 'd-flex align-items-center gap-2';
+                if (isActive) {
+                    const activePill = document.createElement('span');
+                    activePill.textContent = 'Active';
+                    activePill.style.cssText = 'font-size:0.7rem;line-height:1;background:#c8a800;color:#000;border-radius:999px;padding:2px 8px;font-weight:700;';
+                    metaWrap.appendChild(activePill);
+                }
 
                 const delBtn = document.createElement('button');
                 delBtn.type = 'button';
@@ -5295,45 +5976,76 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 delBtn.style.cssText = 'color:#888;font-size:1rem;';
                 delBtn.title = 'Delete profile';
                 delBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem;vertical-align:middle;">delete</span>';
+                delBtn.disabled = drivingProfileBusy || drivingProfilesLocked;
                 delBtn.addEventListener('click', () => confirmDeleteDrivingProfile(p.index));
+                metaWrap.appendChild(delBtn);
 
                 row.appendChild(nameBtn);
-                row.appendChild(delBtn);
+                row.appendChild(metaWrap);
                 container.appendChild(row);
             });
 
             // Enable/disable "Save as New" button
             const saveBtn = document.getElementById('saveNewProfileBtn');
-            if (saveBtn) saveBtn.disabled = !isBleConnected();
+            if (saveBtn) saveBtn.disabled = drivingProfileBusy || drivingProfilesLocked;
+            syncDrivingProfileActionButtons();
+
+            if (!drivingProfileBusy) {
+                setDrivingProfileStatus('Status: ready', 'muted');
+            }
+
+            syncDrivingProfilesCardUI();
         }
 
         async function selectDrivingProfile(index) {
-            if (!(bleManager && bleManager.supportsKvUpdates)) {
-                toast.warning('Driving profiles require firmware 2.0.0 or newer');
+            if (drivingProfilesLocked) {
+                toast.warning('Driving profiles are locked. Unlock to make changes.');
                 return;
             }
-            if (!isBleConnected()) {
-                toast.warning('Connect via Bluetooth to switch profiles');
+            const profile = drivingProfiles.find(p => Number(p.index) === Number(index));
+            if (!profile) {
+                toast.warning('Profile not found');
                 return;
             }
+            if (!profile.tuning || !profile.servos) {
+                toast.warning(`"${profile.name}" has no saved values yet. Update the profile first.`);
+                return;
+            }
+
+            // Update active index and persist immediately so UI reflects change even if BLE push fails.
+            activeDrivingProfileIndex = index;
+            saveLocalDrivingProfiles();
+            populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+            updateDashboardActiveProfile();
+
+            // Apply stored values to the slider UI.
+            isLoadingTuningConfig = true;
             try {
-                await bleManager.sendSystemCommand('load_drv_profile', { index });
-                activeDrivingProfileIndex = index;
-                // Re-fetch config from device so all UI reflects the loaded profile
-                const config = await bleManager.readConfigScoped('tuning');
-                bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, config);
-                isLoadingTuningConfig = true;
-                updateTuningSliders(config);
-                updateServoSliders(config);
-                isLoadingTuningConfig = false;
+                updateTuningSliders(profile.tuning);
+                updateServoSliders({ servos: profile.servos });
+                await new Promise(r => setTimeout(r, 50));
                 clearPageDirty('tuning');
                 clearPageDirty('servo');
                 clearPageDirty('system');
-                populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
-                updateDashboardActiveProfile();
-                toast.success('Profile loaded');
-            } catch (e) {
-                toast.error('Failed to load profile: ' + e.message);
+            } finally {
+                isLoadingTuningConfig = false;
+            }
+
+            // Push all values to the ESP32 if connected — same path as a manual slider commit.
+            if (isBleConnected()) {
+                await runDrivingProfileOperation('applying profile', async () => {
+                    try {
+                        await pushConfigPayload({ ...profile.tuning, servos: profile.servos });
+                        toast.success(`Loaded profile "${profile.name}"`);
+                        setDrivingProfileStatus(`Status: applied "${profile.name}"`, 'ok');
+                    } catch (e) {
+                        toast.warning(`Profile set locally. Push failed: ${e.message}`);
+                        setDrivingProfileStatus('Status: push failed, values applied locally', 'warn');
+                    }
+                });
+            } else {
+                toast.success(`Profile "${profile.name}" loaded. Connect to apply to truck.`);
+                setDrivingProfileStatus(`Status: "${profile.name}" loaded (not connected)`, 'muted');
             }
         }
 
@@ -5400,20 +6112,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         async function saveAsNewDrivingProfile() {
-            if (!(bleManager && bleManager.supportsKvUpdates)) {
-                toast.warning('Driving profiles require firmware 2.0.0 or newer');
+            if (drivingProfilesLocked) {
+                toast.warning('Driving profiles are locked. Unlock to make changes.');
                 return;
             }
-            if (!isBleConnected()) {
-                toast.warning('Connect via Bluetooth to save profiles');
-                return;
-            }
-
             let targetSlot;
             let profileName;
 
             if (drivingProfiles.length >= MAX_DRIVING_PROFILES) {
-                // All 10 slots full — ask user to pick one to overwrite
+                // All slots full — ask user to pick one to overwrite
                 targetSlot = await showProfileOverwriteDialog(drivingProfiles);
                 if (targetSlot == null) return;
                 const existing = drivingProfiles.find(p => p.index === targetSlot);
@@ -5421,7 +6128,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             } else {
                 profileName = await showProfileNameDialog();
                 if (!profileName) return;
-                // Find next free slot
+                // Assign next sequential index
                 const usedSlots = new Set(drivingProfiles.map(p => p.index));
                 targetSlot = 0;
                 while (usedSlots.has(targetSlot) && targetSlot < MAX_DRIVING_PROFILES) targetSlot++;
@@ -5429,40 +6136,55 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             if (!profileName) return;
 
-            try {
-                await bleManager.sendSystemCommand('save_drv_profile', { index: targetSlot, name: profileName });
-                activeDrivingProfileIndex = targetSlot;
-                // Update local profiles list
-                const existingIdx = drivingProfiles.findIndex(p => p.index === targetSlot);
-                if (existingIdx >= 0) {
-                    drivingProfiles[existingIdx].name = profileName;
-                } else {
-                    drivingProfiles.push({ index: targetSlot, name: profileName });
-                    drivingProfiles.sort((a, b) => a.index - b.index);
-                }
-                populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
-                updateDashboardActiveProfile();
-                toast.success('Profile "' + profileName + '" saved');
-            } catch (e) {
-                toast.error('Failed to save profile: ' + e.message);
+            const snapshot = captureCurrentSliderValues();
+            const existingIdx = drivingProfiles.findIndex(p => Number(p.index) === Number(targetSlot));
+            if (existingIdx >= 0) {
+                drivingProfiles[existingIdx] = { index: targetSlot, name: profileName, ...snapshot };
+            } else {
+                drivingProfiles.push({ index: targetSlot, name: profileName, ...snapshot });
+                drivingProfiles.sort((a, b) => a.index - b.index);
             }
+            activeDrivingProfileIndex = targetSlot;
+            saveLocalDrivingProfiles();
+            clearPageDirty('tuning');
+            clearPageDirty('servo');
+            populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+            updateDashboardActiveProfile();
+            toast.success(`Saved profile "${profileName}"`);
+            setDrivingProfileStatus(`Status: "${profileName}" saved`, 'ok');
+        }
+
+        async function updateActiveDrivingProfile() {
+            if (drivingProfilesLocked) {
+                toast.warning('Driving profiles are locked. Unlock to make changes.');
+                return;
+            }
+            const active = getActiveDrivingProfile();
+            if (!active) {
+                toast.warning('No active profile selected. Save a profile first.');
+                return;
+            }
+
+            const snapshot = captureCurrentSliderValues();
+            const idx = drivingProfiles.indexOf(active);
+            drivingProfiles[idx] = { ...active, ...snapshot };
+            saveLocalDrivingProfiles();
+            clearPageDirty('tuning');
+            clearPageDirty('servo');
+            toast.success(`Updated profile "${active.name}"`);
+            setDrivingProfileStatus(`Status: "${active.name}" updated`, 'ok');
         }
 
         async function confirmDeleteDrivingProfile(index) {
-            if (!(bleManager && bleManager.supportsKvUpdates)) {
-                toast.warning('Driving profiles require firmware 2.0.0 or newer');
+            if (drivingProfilesLocked) {
+                toast.warning('Driving profiles are locked. Unlock to make changes.');
                 return;
             }
-            const profile = drivingProfiles.find(p => p.index === index);
+            const profile = drivingProfiles.find(p => Number(p.index) === Number(index));
             if (!profile) return;
 
             if (drivingProfiles.length <= 1) {
-                toast.warning('Cannot delete the last remaining profile.');
-                return;
-            }
-
-            if (!isBleConnected()) {
-                toast.warning('Connect via Bluetooth to delete profiles');
+                toast.warning('Cannot delete the last profile.');
                 return;
             }
 
@@ -5478,8 +6200,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     <h5 style="margin:0 0 12px;color:#fff;">Delete Profile</h5>
                     <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">Delete profile <strong style="color:#fff;">${profile.name.replace(/</g, '&lt;')}</strong>?<br>This cannot be undone.</p>
                     <div style="display:flex;gap:8px;">
-                      <button id="pd-delete" style="flex:1;padding:10px;border:none;border-radius:8px;background:#c0392b;color:#fff;font-weight:600;cursor:pointer;">Delete</button>
-                      <button id="pd-cancel" style="flex:1;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
+                                            <button id="pd-cancel" style="flex:1;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
+                                            <button id="pd-delete" style="flex:1;padding:10px;border:none;border-radius:8px;background:#c0392b;color:#fff;font-weight:600;cursor:pointer;">Delete</button>
                     </div>
                   </div>`;
                 document.body.appendChild(overlay);
@@ -5489,23 +6211,22 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             if (!confirmed) return;
 
-            try {
-                await bleManager.sendSystemCommand('delete_drv_profile', { index });
-                drivingProfiles = drivingProfiles.filter(p => p.index !== index);
-                if (activeDrivingProfileIndex === index && drivingProfiles.length > 0) {
-                    activeDrivingProfileIndex = drivingProfiles[0].index;
-                }
-                populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
-                updateDashboardActiveProfile();
-                toast.success('Profile deleted');
-            } catch (e) {
-                toast.error('Failed to delete profile: ' + e.message);
+            const wasActive = Number(activeDrivingProfileIndex) === Number(index);
+            drivingProfiles = drivingProfiles.filter(p => Number(p.index) !== Number(index));
+            if (wasActive || !drivingProfiles.some(p => p.index === activeDrivingProfileIndex)) {
+                activeDrivingProfileIndex = drivingProfiles[0].index;
             }
+            saveLocalDrivingProfiles();
+            populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+            updateDashboardActiveProfile();
+            toast.success('Profile deleted');
+            setDrivingProfileStatus('Status: profile deleted', 'ok');
         }
 
         // Expose profile functions for HTML onclick / dev console
         window.selectDrivingProfile   = selectDrivingProfile;
         window.saveAsNewDrivingProfile = saveAsNewDrivingProfile;
+        window.updateActiveDrivingProfile = updateActiveDrivingProfile;
         window.confirmDeleteDrivingProfile = confirmDeleteDrivingProfile;
 
         const MAX_DRIVING_PROFILES = 10;
@@ -5550,6 +6271,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 fullConfig = mergeConfigSnapshots(fullConfig, data);
                 hasLoadedConfigFromDevice = true;
 
+                if (bleManager && typeof bleManager._updateFirmwareCapabilities === 'function') {
+                    const hasFirmwareMetadata = !!(data && (data.fw_version || (data.system && data.system.fw_version)));
+                    if (hasFirmwareMetadata) {
+                        bleManager._updateFirmwareCapabilities(data);
+                    }
+                }
+
                 // Update suspension settings display
                 updateSuspensionSettings(data);
 
@@ -5562,10 +6290,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 // Update servo sliders from config data
                 updateServoSliders(data);
 
-                // Phase 3: Update driving profile selector
-                if (Array.isArray(data.drv_profiles)) {
-                    drivingProfiles = data.drv_profiles;
-                    activeDrivingProfileIndex = (data.act_drv_prof != null) ? data.act_drv_prof : 0;
+                // Phase 3: Driving profiles are localStorage-only. Always refresh UI from local state.
+                if (data.act_drv_prof != null) {
+                    activeDrivingProfileIndex = Number(data.act_drv_prof);
+                }
+                if (scope === 'tuning' || scope === 'bootstrap' || Array.isArray(data.drv_profiles)) {
                     populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
                     updateDashboardActiveProfile();
                 }
@@ -5579,16 +6308,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     if (addBtn) addBtn.disabled = (servoRegistry.aux_count >= MAX_AUX_SERVOS) || !isBleConnected();
                 }
 
-                // Phase 5: Lighting profile list + active profile hydration
-                if (Array.isArray(data.lt_profiles)) {
-                    lightingProfiles = data.lt_profiles;
-                }
-                if (data.act_lt_prof != null) {
-                    activeLightingProfileIndex = Number(data.act_lt_prof);
-                }
-                if (data.active_lt_profile) {
-                    hydrateLightGroupsFromActiveProfile(data.active_lt_profile);
-                }
+                // Phase 5: Lighting profiles are localStorage-only.
+                // Do NOT overwrite from ESP32 config — just refresh the UI.
                 populateLightingProfileSelector();
 
                 if (data.warnings && data.warnings.servoTrimReset) {
@@ -5611,10 +6332,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         activeDrivingProfileIndex = data.act_drv_prof;
                         updateDashboardActiveProfile();
                     }
-                    if (data.act_lt_prof != null) {
-                        activeLightingProfileIndex = Number(data.act_lt_prof);
-                        updateDashboardActiveLightingProfile();
-                    }
+                    // Lighting profiles are localStorage-only — just refresh the display.
+                    updateDashboardActiveLightingProfile();
                 }
 
                 if (showToast && !hasShownInitialConfigToast && scope === 'bootstrap') {
@@ -6169,6 +6888,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let servoRangeLocked = false;
         let servoTrimLocked = false;
         let servoRotationLocked = false;
+        let rcdccConfigurationLocked = false;
 
         // Flag to prevent saving while loading config
         let isLoadingTuningConfig = false;
@@ -6779,6 +7499,54 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 localStorage.setItem('lightsGuideCardCollapsed', 'true');
             }
         }
+
+        function syncCardCollapseState(cardId, chevronId, storageKey) {
+            const card = document.getElementById(cardId);
+            const chevron = document.getElementById(chevronId);
+            if (!card || !chevron) return;
+
+            const cardBody = card.querySelector('.card-body');
+            if (!cardBody) return;
+
+            const isCollapsed = localStorage.getItem(storageKey) === 'true';
+            cardBody.style.display = isCollapsed ? 'none' : 'block';
+            chevron.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+        }
+
+        function toggleCardCollapse(cardId, chevronId, storageKey) {
+            const isCollapsed = localStorage.getItem(storageKey) === 'true';
+            localStorage.setItem(storageKey, isCollapsed ? 'false' : 'true');
+            syncCardCollapseState(cardId, chevronId, storageKey);
+        }
+
+        function syncRcdccConfigurationLockUI() {
+            const card = document.getElementById('rcdccConfigurationCard');
+            const lockIcon = document.getElementById('rcdccConfigurationLockIcon');
+            const orientationSelect = document.getElementById('mpuOrientation');
+
+            if (card) {
+                card.classList.toggle('slider-locked', rcdccConfigurationLocked);
+            }
+            if (lockIcon) {
+                lockIcon.textContent = rcdccConfigurationLocked ? 'lock' : 'lock_open_right';
+                lockIcon.style.color = rcdccConfigurationLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
+                lockIcon.title = rcdccConfigurationLocked
+                    ? 'Unlock RCDCC configuration controls'
+                    : 'Lock RCDCC configuration controls';
+            }
+            if (orientationSelect) {
+                orientationSelect.disabled = rcdccConfigurationLocked;
+            }
+        }
+
+        function toggleRcdccConfigurationLock() {
+            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
+            clickSound.play().catch(e => console.log('Sound play failed:', e));
+
+            rcdccConfigurationLocked = !rcdccConfigurationLocked;
+            localStorage.setItem('rcdccConfigurationLocked', rcdccConfigurationLocked.toString());
+            syncRcdccConfigurationLockUI();
+        }
         
         function toggleServoRangeLock(iconElement) {
             // Play click sound
@@ -6838,12 +7606,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function syncServoSettingsLockUI(iconElement = null) {
             const card = document.getElementById('servoSettingsCard');
             const lockIcon = iconElement || document.getElementById('servoSettingsLockIcon');
+            const autoCalibrateBtn = document.getElementById('servoAutoCalibrateBtn');
+            const allLocked = servoTrimLocked && servoRotationLocked;
             if (card) {
                 card.classList.toggle('trim-locked', servoTrimLocked);
                 card.classList.toggle('rotation-locked', servoRotationLocked);
             }
+            if (autoCalibrateBtn) {
+                autoCalibrateBtn.disabled = allLocked;
+                autoCalibrateBtn.setAttribute('aria-disabled', allLocked ? 'true' : 'false');
+                autoCalibrateBtn.title = allLocked
+                    ? 'Unlock Servo Trim & Rotation to run Auto Calibrate'
+                    : 'Run Auto Calibrate';
+            }
             if (lockIcon) {
-                const allLocked = servoTrimLocked && servoRotationLocked;
                 lockIcon.textContent = allLocked ? 'lock' : 'lock_open_right';
                 lockIcon.style.color = allLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
                 lockIcon.title = allLocked ? 'Unlock trim and direction controls' : 'Lock trim and direction controls';
@@ -7553,9 +8329,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 return tabName;
             }
 
+            applyDebugModeVisibility();
+
             // Restore last active tab from localStorage
             const savedTabCandidate = localStorage.getItem('settings_active_tab') || 'preferences';
+            const savedTabAllowed = savedTabCandidate !== 'debugging' || isDebugModeEnabled();
             const savedTab = document.querySelector(`.settings-tab[data-tab="${savedTabCandidate}"]`)
+                && savedTabAllowed
                 ? savedTabCandidate
                 : 'preferences';
             
@@ -7563,6 +8343,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             document.querySelectorAll('.settings-tab').forEach(tab => {
                 tab.addEventListener('click', async function() {
                     const tabName = this.dataset.tab;
+                    if (tabName === 'debugging' && !isDebugModeEnabled()) return;
                     const currentTab = localStorage.getItem('settings_active_tab') || 'preferences';
                     const currentDirtyPage = dirtyPageForTab(currentTab);
                     const nextDirtyPage = dirtyPageForTab(tabName);

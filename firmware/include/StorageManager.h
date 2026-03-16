@@ -871,14 +871,16 @@ public:
     Serial.println("Config reset to defaults");
   }
 
-  String getConfigJSON() {
-    DynamicJsonDocument doc(10240);
+  String getConfigJSON(bool includeActiveLightingProfile = true) {
+    DynamicJsonDocument doc(includeActiveLightingProfile ? 10240 : 3072);
 
     auto writeServo = [&](const char* name, const RCDCCServoState& servo) {
       JsonObject s = doc.createNestedObject(name);
-      s["label"] = servo.label;
-      s["type"] = servo.type;
-      s["enabled"] = servo.enabled;
+      if (includeActiveLightingProfile) {
+        s["label"] = servo.label;
+        s["type"] = servo.type;
+        s["enabled"] = servo.enabled;
+      }
       s["trim"] = servo.trimUs;
       s["min"] = servo.minUs;
       s["max"] = servo.maxUs;
@@ -909,6 +911,13 @@ public:
     system["act_lt_prof"] = state.system.activeLightingProfile;
 
     doc["fw_version"] = state.system.firmwareVersion;
+
+    // BLE config reads use this compact shape to stay within characteristic size limits.
+    if (!includeActiveLightingProfile) {
+      String compactOutput;
+      serializeJson(doc, compactOutput);
+      return compactOutput;
+    }
 
     doc["reactionSpeed"] = legacyConfig.reactionSpeed;
     doc["rideHeightOffset"] = legacyConfig.rideHeightOffset;
@@ -1000,7 +1009,142 @@ public:
         doc["act_lt_prof"] = 0;
       }
 
-      // Include full active profile JSON in config response so app can hydrate editor.
+      // Include full active profile JSON only when requested.
+      // Keeping this out of BLE characteristic reads avoids large callback payloads.
+      if (includeActiveLightingProfile) {
+        LightingProfile activeProfile = {};
+        if (loadLightingProfile(activeLtProf, activeProfile)) {
+          JsonObject ap = doc.createNestedObject("active_lt_profile");
+          ap["index"] = activeLtProf;
+          ap["name"] = activeProfile.name;
+          ap["master"] = activeProfile.master;
+          ap["total_leds"] = activeProfile.totalLeds;
+          JsonArray groups = ap.createNestedArray("groups");
+          for (uint8_t i = 0; i < activeProfile.groupCount; i++) {
+            const LightingGroup& g = activeProfile.groups[i];
+            JsonObject go = groups.createNestedObject();
+            go["id"] = g.id;
+            go["name"] = g.name;
+            go["enabled"] = g.enabled;
+            go["effect"] = g.effect;
+            go["color_primary"] = g.colorPrimary;
+            go["color_secondary"] = g.colorSecondary;
+            go["brightness"] = g.brightness;
+            go["effect_speed"] = g.effectSpeed;
+            go["effect_intensity"] = g.effectIntensity;
+            JsonArray leds = go.createNestedArray("leds");
+            for (uint16_t j = 0; j < g.ledCount; j++) leds.add(g.leds[j]);
+          }
+        }
+      }
+    }
+
+    String output;
+    serializeJson(doc, output);
+    return output;
+  }
+
+  String getScopedConfigJSON(const String& rawScope) {
+    String scope = rawScope;
+    scope.toLowerCase();
+
+    auto writeServoCompact = [](JsonDocument& doc, const char* name, const RCDCCServoState& servo) {
+      JsonObject s = doc.createNestedObject(name);
+      s["trim"] = servo.trimUs;
+      s["min"] = servo.minUs;
+      s["max"] = servo.maxUs;
+      s["reverse"] = servo.reverse;
+      s["ride_ht"] = servo.rideHeight;
+    };
+
+    auto writeLegacyServos = [&](JsonDocument& doc) {
+      JsonObject servos = doc.createNestedObject("servos");
+      auto writeLegacyServo = [&](const char* key, const ServoCalibration& cal) {
+        JsonObject node = servos.createNestedObject(key);
+        node["trim"] = cal.trim;
+        node["min"] = cal.minLimit;
+        node["max"] = cal.maxLimit;
+        node["reversed"] = cal.reversed;
+      };
+
+      writeLegacyServo("frontLeft", legacyServoConfig.frontLeft);
+      writeLegacyServo("frontRight", legacyServoConfig.frontRight);
+      writeLegacyServo("rearLeft", legacyServoConfig.rearLeft);
+      writeLegacyServo("rearRight", legacyServoConfig.rearRight);
+    };
+
+    if (scope == "bootstrap") {
+      DynamicJsonDocument doc(768);
+      doc["fw_version"] = state.system.firmwareVersion;
+      doc["device_nm"] = state.system.deviceName;
+      doc["act_drv_prof"] = state.system.activeDrivingProfile;
+      String out;
+      serializeJson(doc, out);
+      return out;
+    }
+
+    if (scope == "tuning") {
+      DynamicJsonDocument doc(4096);
+      writeServoCompact(doc, "srv_fl", state.servoFL);
+      writeServoCompact(doc, "srv_fr", state.servoFR);
+      writeServoCompact(doc, "srv_rl", state.servoRL);
+      writeServoCompact(doc, "srv_rr", state.servoRR);
+
+      JsonObject susp = doc.createNestedObject("suspension");
+      susp["damping"] = state.suspension.damping;
+      susp["stiffness"] = state.suspension.stiffness;
+      susp["react_spd"] = state.suspension.reactSpeed;
+      susp["fr_balance"] = state.suspension.frontRearBalance;
+
+      JsonObject imu = doc.createNestedObject("imu");
+      imu["orient"] = state.imu.orient;
+      imu["roll_trim"] = state.imu.rollTrim;
+      imu["pitch_trim"] = state.imu.pitchTrim;
+
+      // Legacy fields still used by existing UI bindings.
+      doc["reactionSpeed"] = legacyConfig.reactionSpeed;
+      doc["rideHeightOffset"] = legacyConfig.rideHeightOffset;
+      doc["damping"] = legacyConfig.damping;
+      doc["stiffness"] = legacyConfig.stiffness;
+      doc["frontRearBalance"] = legacyConfig.frontRearBalance;
+      doc["sampleRate"] = legacyConfig.sampleRate;
+      doc["telemetryRate"] = legacyConfig.telemetryRate;
+      doc["mpuOrientation"] = legacyConfig.mpuOrientation;
+      doc["deviceName"] = legacyConfig.deviceName;
+      doc["servo_count"] = 4 + servoRegistry.auxCount;
+      writeLegacyServos(doc);
+
+      int profileCount = 0;
+      JsonArray profilesArr = doc.createNestedArray("drv_profiles");
+      for (int i = 0; i < MAX_DRIVING_PROFILES; i++) {
+        if (!drivingProfiles[i].populated) continue;
+        JsonObject pe = profilesArr.createNestedObject();
+        pe["index"] = i;
+        pe["name"] = drivingProfiles[i].name;
+        profileCount++;
+      }
+      doc["drv_profile_count"] = profileCount;
+      doc["act_drv_prof"] = state.system.activeDrivingProfile;
+
+      String out;
+      serializeJson(doc, out);
+      return out;
+    }
+
+    if (scope == "lights") {
+      DynamicJsonDocument doc(12288);
+      JsonArray ltProfArr = doc.createNestedArray("lt_profiles");
+      getLightingProfileNames(ltProfArr);
+      doc["lt_profile_count"] = ltProfArr.size();
+
+      int activeLtProf = state.system.activeLightingProfile;
+      Preferences pref;
+      if (pref.begin("system", false)) {
+        activeLtProf = pref.getInt("act_lt_prof", activeLtProf);
+        pref.end();
+      }
+      doc["act_lt_prof"] = activeLtProf;
+
       LightingProfile activeProfile = {};
       if (loadLightingProfile(activeLtProf, activeProfile)) {
         JsonObject ap = doc.createNestedObject("active_lt_profile");
@@ -1025,11 +1169,43 @@ public:
           for (uint16_t j = 0; j < g.ledCount; j++) leds.add(g.leds[j]);
         }
       }
+
+      String out;
+      serializeJson(doc, out);
+      return out;
     }
 
-    String output;
-    serializeJson(doc, output);
-    return output;
+    if (scope == "settings") {
+      DynamicJsonDocument doc(4096);
+      doc["fw_version"] = state.system.firmwareVersion;
+      doc["deviceName"] = legacyConfig.deviceName;
+
+      JsonObject system = doc.createNestedObject("system");
+      system["device_nm"] = state.system.deviceName;
+      system["fw_version"] = state.system.firmwareVersion;
+      system["act_drv_prof"] = state.system.activeDrivingProfile;
+      system["act_lt_prof"] = state.system.activeLightingProfile;
+
+      JsonObject srReg = doc.createNestedObject("servo_registry");
+      srReg["count"] = 4 + servoRegistry.auxCount;
+      srReg["aux_count"] = servoRegistry.auxCount;
+      JsonArray auxArr = srReg.createNestedArray("aux_servos");
+      for (int i = 0; i < servoRegistry.auxCount; i++) {
+        const AuxServoConfig& aux = servoRegistry.auxServos[i];
+        if (!aux.populated) continue;
+        JsonObject entry = auxArr.createNestedObject();
+        entry["ns"] = aux.ns;
+        entry["label"] = aux.label;
+        entry["type"] = aux.type;
+        entry["enabled"] = aux.enabled;
+      }
+
+      String out;
+      serializeJson(doc, out);
+      return out;
+    }
+
+    return getConfigJSON(false);
   }
 
   void saveConfigFromJSON(const String& jsonStr) {

@@ -277,18 +277,18 @@
             to { transform: rotate(-360deg); }
         }
 
-        /* Servo direction icons are static unless their button is active. */
-        .servo-direction-btn .material-symbols-outlined.rotate-cw,
+        .servo-direction-btn .material-symbols-outlined.rotate-cw {
+            display: inline-block;
+            transform-origin: center;
+            will-change: transform;
+            animation: rotateClockwise 60s linear infinite;
+        }
+
         .servo-direction-btn .material-symbols-outlined.rotate-ccw {
-            animation: none;
-        }
-
-        .servo-direction-btn.is-active .material-symbols-outlined.rotate-cw {
-            animation: rotateClockwise 5s linear infinite;
-        }
-
-        .servo-direction-btn.is-active .material-symbols-outlined.rotate-ccw {
-            animation: rotateCounterClockwise 5s linear infinite;
+            display: inline-block;
+            transform-origin: center;
+            will-change: transform;
+            animation: rotateCounterClockwise 60s linear infinite;
         }
 
         /* ========== Utility Classes ========== */
@@ -345,6 +345,28 @@
         
         .help-icon:hover {
             transform: scale(1.1);
+        }
+
+        .back-to-top-btn {
+            position: fixed;
+            right: 1rem;
+            bottom: calc(5.5rem + var(--sab, 0px));
+            width: 44px;
+            height: 44px;
+            border: 1px solid rgba(200, 168, 0, 0.7);
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.85);
+            color: var(--high-impact-color);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2300;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+        }
+
+        .back-to-top-btn:hover {
+            background: #000;
+            color: #ffd84d;
         }
         
         /* Flex utilities */
@@ -499,7 +521,8 @@
         }
 
         .garage-rename-modal-dialog {
-            margin: calc(var(--sat, 0px) + 1rem) auto 1rem;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .garage-rename-device-id {
@@ -522,11 +545,17 @@
             box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
             cursor: pointer;
             position: relative;
+            z-index: 0;
             --garage-disconnect-hold-ms: 650ms;
             -webkit-user-select: none;
             user-select: none;
             -webkit-touch-callout: none;
             touch-action: manipulation;
+        }
+
+        .garage-card:focus-within,
+        .garage-card:hover {
+            z-index: 20;
         }
 
         @keyframes garageDisconnectHoldSweep {
@@ -674,6 +703,45 @@
             text-align: right;
         }
 
+        .garage-card-signal {
+            margin-top: 0;
+            margin-left: auto;
+            font-size: 0.68rem;
+            line-height: 1.2;
+            white-space: nowrap;
+            text-align: right;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+        }
+
+        .garage-card-signal-icon {
+            font-size: 0.95rem;
+            line-height: 1;
+        }
+
+        .garage-card-signal-excellent {
+            color: #16a34a;
+        }
+
+        .garage-card-signal-good {
+            color: #2563eb;
+        }
+
+        .garage-card-signal-fair {
+            color: #d97706;
+        }
+
+        .garage-card-signal-poor {
+            color: #dc2626;
+        }
+
+        .garage-card-signal-pending {
+            color: #5a6270;
+            font-weight: 600;
+        }
+
         .garage-card-status {
             color: #6b7280;
             font-size: 0.74rem;
@@ -686,6 +754,11 @@
         .garage-card-overflow {
             position: relative;
             flex-shrink: 0;
+            z-index: 21;
+        }
+
+        .garage-card-overflow.dropdown.show {
+            z-index: 30;
         }
 
         .garage-card-overflow-btn {
@@ -717,6 +790,7 @@
             border: 1px solid #e5e7eb;
             box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
             padding: 0.35rem;
+            z-index: 2055;
         }
 
         .garage-card-menu .dropdown-item {
@@ -839,6 +913,21 @@
         .lights-master-toggle-btn:disabled {
             opacity: 0.55;
             cursor: not-allowed;
+        }
+
+        /* Dashboard BLE-disconnected muted state */
+        .ble-data-off span,
+        .ble-data-off small {
+            color: var(--text-muted) !important;
+        }
+        .ble-data-off .badge {
+            background-color: transparent !important;
+            color: var(--text-muted) !important;
+        }
+        .ble-data-off .metric-pill {
+            background-color: transparent !important;
+            border: 1px solid transparent !important;
+            color: var(--text-muted) !important;
         }
 
         /* Favorite color target toggle: active matches Save Group, inactive is inverted */
@@ -1193,6 +1282,16 @@
             margin-top: 0.28rem;
         }
 
+        .light-group-enabled-toggle-wrap {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 0.1rem;
+        }
+
+        .light-group-enabled-toggle-wrap .form-check-input {
+            margin-top: 0;
+        }
+
         .light-group-swatch-row {
             display: flex;
             align-items: center;
@@ -1325,6 +1424,21 @@
                 max-height: 88vh;
                 overflow-y: auto;
             }
+        }
+
+        .light-group-color-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+            align-items: start;
+        }
+
+        .light-group-color-row.single-color {
+            grid-template-columns: 1fr;
+        }
+
+        .light-group-color-col {
+            min-width: 0;
         }
 
         /* LED Grid Selector */
@@ -2182,9 +2296,17 @@
         .servo-settings-title {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            justify-content: space-between;
+            gap: 0.75rem;
             font-weight: 600;
             margin-bottom: 0.5rem;
+        }
+
+        .servo-settings-title-main {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 0;
         }
 
         .servo-settings-slider-labels {
@@ -2208,6 +2330,14 @@
             text-transform: uppercase;
         }
 
+        .profile-card-locked .card-body {
+            opacity: 0.72;
+        }
+
+        .profile-card-header-actions .icon-action {
+            user-select: none;
+        }
+
         .servo-settings-value-labels {
             display: flex;
             justify-content: space-between;
@@ -2223,6 +2353,14 @@
             margin-top: 0.65rem;
         }
 
+        .servo-direction-toggle-inline {
+            display: inline-grid;
+            grid-template-columns: repeat(2, auto);
+            gap: 0.35rem;
+            margin-top: 0;
+            flex-shrink: 0;
+        }
+
         .servo-direction-btn {
             border: 1px solid var(--high-impact-color);
             background: #111111;
@@ -2235,6 +2373,14 @@
             align-items: center;
             gap: 0.35rem;
             transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+
+        .servo-direction-toggle-inline .servo-direction-btn {
+            width: 2.35rem;
+            min-width: 2.35rem;
+            height: 2.1rem;
+            padding: 0;
+            gap: 0;
         }
 
         .servo-direction-btn .material-symbols-outlined {

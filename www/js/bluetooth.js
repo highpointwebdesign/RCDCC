@@ -61,6 +61,7 @@ class BluetoothManager {
         this.CHAR_LIGHTS_CMD   = 'f2b4d6e8-4b9d-11ec-81d3-0242ac130003';
         this.CHAR_SYSTEM_CMD   = '068c1d3a-4b9e-11ec-81d3-0242ac130003';
         this.PREFERRED_DEVICE_ID_KEY = 'rcdccBlePreferredDeviceId';
+        this.GATT_OPERATION_TIMEOUT_MS = 9000;
 
         this.deviceId   = null;
         this.deviceName = null;
@@ -76,6 +77,7 @@ class BluetoothManager {
         this.firmwareVersion = null;
         this.supportsKvUpdates = false;
         this.isLegacyPath = true;
+        this.schemaCompatible = true;
         this.writeFailureCallback = null;
         this._ble = null;
     }
@@ -195,6 +197,33 @@ class BluetoothManager {
 
     getConnectionStatus() { return this.isConnected; }
 
+    async readRssi(deviceId = null) {
+        const targetDeviceId = deviceId || this.deviceId;
+        if (!this.isConnected || !targetDeviceId) {
+            throw new Error('Bluetooth LE not connected');
+        }
+
+        const ble = await this._getBle();
+        if (!ble || typeof ble.readRssi !== 'function') {
+            throw new Error('BLE RSSI read not supported by this plugin');
+        }
+
+        let result;
+        try {
+            result = await ble.readRssi({ deviceId: targetDeviceId });
+        } catch (error) {
+            // Some plugin variants accept a positional deviceId instead of a named object.
+            result = await ble.readRssi(targetDeviceId);
+        }
+
+        const rssi = Number(result?.value ?? result?.rssi ?? result);
+        if (!Number.isFinite(rssi)) {
+            throw new Error('Invalid RSSI response');
+        }
+
+        return Math.round(rssi);
+    }
+
     _isRcdccDeviceName(name) {
         return String(name || '').toUpperCase().startsWith('RCDCC');
     }
@@ -274,13 +303,15 @@ class BluetoothManager {
         this.deviceId = deviceId;
         this.deviceName = deviceName;
         this.isConnected = true;
+        this.schemaCompatible = true;
         this.preferredDeviceId = deviceId;
         localStorage.setItem(this.PREFERRED_DEVICE_ID_KEY, deviceId);
         
-        // Request larger MTU for bigger data transfers (config with servos ~455 bytes)
+        // Keep MTU aligned with firmware-safe BLE stack limits.
+        // Higher values (e.g. 517) can destabilize some ESP32 builds/tasks.
         try {
-            await ble.requestMtu({ deviceId: deviceId, mtu: 517 });
-            console.log('Requested MTU: 517 bytes');
+            await ble.requestMtu({ deviceId: deviceId, mtu: 247 });
+            console.log('Requested MTU: 247 bytes');
         } catch (e) {
             console.warn('Could not request MTU (might not be supported):', e.message);
         }
@@ -327,20 +358,56 @@ class BluetoothManager {
     }
 
     async readConfig() {
+        return this.readConfigScoped('bootstrap');
+    }
+
+    async _readConfigOnce() {
         if (!this.isConnected) throw new Error('Not connected to BLE device');
+        if (!this.schemaCompatible) {
+            throw new Error('Incompatible firmware BLE schema: required characteristics not found');
+        }
         const startTime = performance.now();
         const ble = await this._getBle();
 
         let jsonString = '';
         const maxAttempts = 4;
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const payload = await this.enqueueGattOperation('read-config', () =>
-                ble.read({
-                    deviceId: this.deviceId,
-                    service: this.SERVICE_UUID,
-                    characteristic: this.CHAR_CONFIG_READ
-                })
+        let lastReadError = null;
+
+        const isTransientReadError = (error) => {
+            const message = String(error?.message || error || '').toLowerCase();
+            return (
+                message.includes('reading characteristic failed')
+                || message.includes('gatt')
+                || message.includes('timeout')
+                || message.includes('busy')
             );
+        };
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            let payload;
+            try {
+                payload = await this.enqueueGattOperation('read-config', () =>
+                    ble.read({
+                        deviceId: this.deviceId,
+                        service: this.SERVICE_UUID,
+                        characteristic: this.CHAR_CONFIG_READ
+                    })
+                );
+            } catch (error) {
+                if (this._isMissingGattAttributeError(error)) {
+                    this._markSchemaIncompatible('read-config', 'direct-read', error);
+                }
+                lastReadError = error;
+                const transient = this.isConnected && isTransientReadError(error);
+                console.warn(`BLE config read attempt ${attempt}/${maxAttempts} failed:`, error?.message || error);
+
+                if (transient && attempt < maxAttempts) {
+                    await new Promise(resolve => setTimeout(resolve, 80 * attempt));
+                    continue;
+                }
+
+                throw error;
+            }
 
             jsonString = this._decodeDataView(payload).trim();
             if (jsonString.length > 0) {
@@ -354,6 +421,14 @@ class BluetoothManager {
             if (attempt < maxAttempts) {
                 await new Promise(resolve => setTimeout(resolve, 80));
             }
+        }
+
+        if (!jsonString.length && lastReadError) {
+            throw lastReadError;
+        }
+
+        if (!jsonString.length) {
+            throw new Error('Empty config payload from BLE device after retries');
         }
 
         console.log('BLE raw config data received:', jsonString.length, 'bytes');
@@ -372,6 +447,72 @@ class BluetoothManager {
             console.error('Full raw data:', jsonString);
             throw new Error(`Invalid JSON from device: ${error.message}. Check device firmware.`);
         }
+    }
+
+    async readConfigScoped(scope = 'bootstrap') {
+        if (!this.isConnected) throw new Error('Not connected to BLE device');
+
+        const normalizedScope = String(scope || 'bootstrap').toLowerCase();
+        const maxAttempts = 4;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            await this.sendSystemCommand('cfg_read_prepare', { scope: normalizedScope });
+            // Give firmware time to process cfg_read_prepare before first read.
+            await new Promise(r => setTimeout(r, 120));
+
+            const firstEnvelope = await this._readConfigOnce();
+            if (!firstEnvelope || firstEnvelope.mode !== 'chunked') {
+                return firstEnvelope;
+            }
+
+            const envelopeScope = String(firstEnvelope.scope || '').toLowerCase();
+            if (envelopeScope && envelopeScope !== normalizedScope) {
+                console.warn(`[BLE] readConfigScoped attempt ${attempt}: stale scope ${envelopeScope}, expected ${normalizedScope}`);
+                await new Promise(r => setTimeout(r, 100));
+                continue;
+            }
+
+            const totalChunks = Math.max(1, Number(firstEnvelope.chunks) || 1);
+            const collected = new Array(totalChunks).fill('');
+            const firstIndex = Math.max(0, Number(firstEnvelope.chunk) || 0);
+            collected[firstIndex] = String(firstEnvelope.payload || '');
+            let scopeMismatch = false;
+
+            for (let i = 0; i < totalChunks; i++) {
+                if (i === firstIndex) continue;
+                await this.sendSystemCommand('cfg_read_chunk', { index: i });
+                const env = await this._readConfigOnce();
+                if (!env || env.mode !== 'chunked') {
+                    throw new Error(`Unexpected config chunk envelope for scope ${normalizedScope}`);
+                }
+                const chunkScope = String(env.scope || '').toLowerCase();
+                if (chunkScope && chunkScope !== normalizedScope) {
+                    scopeMismatch = true;
+                    break;
+                }
+                const envIndex = Math.max(0, Number(env.chunk) || i);
+                collected[envIndex] = String(env.payload || '');
+            }
+
+            if (scopeMismatch) {
+                console.warn(`[BLE] readConfigScoped attempt ${attempt}: mixed chunk scopes for ${normalizedScope}, retrying`);
+                await new Promise(r => setTimeout(r, 100));
+                continue;
+            }
+
+            const assembled = collected.join('');
+            if (!assembled.length) {
+                throw new Error(`Empty assembled config payload for scope ${normalizedScope}`);
+            }
+
+            try {
+                return JSON.parse(assembled);
+            } catch (error) {
+                console.error('Scoped config JSON parse failed:', normalizedScope, error, assembled);
+                throw new Error(`Invalid scoped config JSON (${normalizedScope}): ${error.message}`);
+            }
+        }
+
+        throw new Error(`Scoped config read failed after ${maxAttempts} attempts for scope ${normalizedScope}`);
     }
 
     async writeConfig(config) {
@@ -429,7 +570,7 @@ class BluetoothManager {
                 value: data
             })
         );
-        this.stats.bytesSent += data.byteLength;
+        this.stats.bytesSent += Math.floor(data.length / 2);
     }
 
     async sendLightsCommand(lightsConfig) {
@@ -444,11 +585,14 @@ class BluetoothManager {
                 value: data
             })
         );
-        this.stats.bytesSent += data.byteLength;
+        this.stats.bytesSent += Math.floor(data.length / 2);
     }
 
     async sendSystemCommand(command, params = {}) {
         if (!this.isConnected) throw new Error('Not connected to BLE device');
+        if (!this.schemaCompatible) {
+            throw new Error('Incompatible firmware BLE schema: required characteristics not found');
+        }
         const ble = await this._getBle();
         const data = this._encodeJson({ command, ...params });
         await this.enqueueGattOperation('write-system', () =>
@@ -459,7 +603,7 @@ class BluetoothManager {
                 value: data
             })
         );
-        this.stats.bytesSent += data.byteLength;
+        this.stats.bytesSent += Math.floor(data.length / 2);
     }
 
     async sendSaveCommandWithTimeout(timeoutMs = 3000) {
@@ -504,11 +648,146 @@ class BluetoothManager {
         }
     }
 
+    _isNativeNotConnectedError(error) {
+        const message = String(error?.message || error || '').toLowerCase();
+        return (
+            message.includes('not connected to device')
+            || message.includes('bluetooth le not connected')
+            || message.includes('device disconnected')
+            || message.includes('gatt 133')
+        );
+    }
+
+    _isMissingGattAttributeError(error) {
+        const message = String(error?.message || error || '').toLowerCase();
+        return (
+            message.includes('characteristic not found')
+            || message.includes('service not found')
+            || message.includes('descriptor not found')
+            || message.includes('attribute not found')
+        );
+    }
+
+    _markSchemaIncompatible(opName, phase, error) {
+        this.schemaCompatible = false;
+        console.error(
+            `[BLE][SCHEMA] incompatible op=${opName} phase=${phase} device=${this.deviceId || 'unknown'} reason=${error?.message || error}`
+        );
+        throw new Error('Incompatible firmware BLE schema: required characteristics not found');
+    }
+
+    async _recoverGattAttributes(opName) {
+        if (!this.deviceId) {
+            return false;
+        }
+
+        try {
+            const ble = await this._getBle();
+            if (typeof ble.discoverServices === 'function') {
+                console.warn(`[BLE] ${opName} failed: attempting service rediscovery`);
+                await ble.discoverServices({ deviceId: this.deviceId });
+                return true;
+            }
+        } catch (error) {
+            console.warn('[BLE] service rediscovery failed:', error?.message || error);
+        }
+
+        return this._recoverConnectionForGatt(opName);
+    }
+
+    async _recoverConnectionForGatt(opName) {
+        if (this.isConnecting) {
+            const pending = this.connectPromise;
+            return !!(pending && await pending);
+        }
+
+        if (!this.preferredDeviceId) {
+            this._resetConnectionState();
+            return false;
+        }
+
+        console.warn(`[BLE] ${opName} failed due to disconnected native state. Reconnecting and retrying...`);
+        this._resetConnectionState();
+
+        try {
+            return !!(await this.connectToKnownDevice());
+        } catch (reconnectError) {
+            console.warn('[BLE] reconnect for GATT retry failed:', reconnectError?.message || reconnectError);
+            this._resetConnectionState();
+            return false;
+        }
+    }
+
     enqueueGattOperation(opName, operation) {
         if (typeof operation !== 'function') throw new Error('Invalid GATT operation');
+
+        const runWithTimeout = () => {
+            let timeoutId = null;
+            const timeoutMs = Number(this.GATT_OPERATION_TIMEOUT_MS) > 0
+                ? Number(this.GATT_OPERATION_TIMEOUT_MS)
+                : 9000;
+
+            const timeoutPromise = new Promise((_, reject) => {
+                timeoutId = setTimeout(() => {
+                    reject(new Error(`GATT operation timed out (${opName}, ${timeoutMs}ms)`));
+                }, timeoutMs);
+            });
+
+            return Promise.race([Promise.resolve().then(() => operation()), timeoutPromise])
+                .finally(() => {
+                    if (timeoutId) clearTimeout(timeoutId);
+                });
+        };
+
         const run = async () => {
             if (!this.isConnected) throw new Error('Bluetooth LE not connected');
-            return operation();
+
+            try {
+                return await runWithTimeout();
+            } catch (error) {
+                const timeoutMessage = String(error?.message || error || '').toLowerCase();
+                if (timeoutMessage.includes('timed out')) {
+                    console.warn(`[BLE] ${opName} timed out. Attempting connection recovery...`);
+                    const recovered = await this._recoverConnectionForGatt(opName);
+                    if (!recovered) {
+                        throw error;
+                    }
+                    return runWithTimeout();
+                }
+
+                if (this._isNativeNotConnectedError(error)) {
+                    const recovered = await this._recoverConnectionForGatt(opName);
+                    if (!recovered) {
+                        throw error;
+                    }
+                    return runWithTimeout();
+                }
+
+                if (this._isMissingGattAttributeError(error)) {
+                    if (opName === 'write-system' || opName === 'read-config') {
+                        const recovered = await this._recoverGattAttributes(opName);
+                        if (!recovered) {
+                            this._markSchemaIncompatible(opName, 'recover-failed', error);
+                        }
+
+                        try {
+                            return await runWithTimeout();
+                        } catch (retryError) {
+                            if (this._isMissingGattAttributeError(retryError)) {
+                                this._markSchemaIncompatible(opName, 'retry-missing-attribute', retryError);
+                            }
+                            throw retryError;
+                        }
+                    }
+                    const recovered = await this._recoverGattAttributes(opName);
+                    if (!recovered) {
+                        throw error;
+                    }
+                    return runWithTimeout();
+                }
+
+                throw error;
+            }
         };
         const next = this.gattOperationChain.then(run, run);
         this.gattOperationChain = next.catch(() => {});
@@ -532,6 +811,7 @@ class BluetoothManager {
         this.isConnecting = false;
         this.deviceId     = null;
         this.deviceName   = null;
+        this.schemaCompatible = true;
         this.gattOperationChain = Promise.resolve();
     }
 

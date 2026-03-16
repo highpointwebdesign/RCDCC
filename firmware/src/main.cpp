@@ -23,6 +23,7 @@ BluetoothService* bluetoothService = nullptr;  // Initialize in setup()
 // LED feedback pin
 #define LED_PIN 2
 unsigned long ledBlinkEndTime = 0;
+bool ledBleOn = false;  // true while BLE is connected (steady-on state)
 
 // Continuous-servo BLE watchdog: stops all continuous servos if no BLE
 // command is received within this window (phone disconnection safety net).
@@ -225,11 +226,11 @@ float currentAccelX = 0.0f;
 float currentAccelY = 0.0f;
 float currentAccelZ = 0.0f;
 
-// Function to start LED blink (250ms)
+// Function to start LED blink (250ms); stays on after if BLE connected
 void startLedBlink() {
   digitalWrite(LED_PIN, HIGH);
   flashStatusLED(); // Flash addressable LED too
-  ledBlinkEndTime = millis() + 250; // Turn off after 250ms
+  ledBlinkEndTime = millis() + 250;
 }
 
 uint32_t parseHexColor(const String& colorStr) {
@@ -456,6 +457,23 @@ bool applySystemCommandPayload(const String& payload) {
 
   String command = doc["command"] | "";
   command.toLowerCase();
+
+  if (command == "cfg_read_prepare") {
+    String scope = doc["scope"] | String("bootstrap");
+    scope.toLowerCase();
+    if (bluetoothService) {
+      bluetoothService->requestConfigScope(scope);
+    }
+    return true;
+  }
+
+  if (command == "cfg_read_chunk") {
+    int32_t chunkIndex = doc["index"] | 0;
+    if (bluetoothService) {
+      bluetoothService->requestConfigChunk(chunkIndex);
+    }
+    return true;
+  }
 
   if (command == "autolevel" || command == "resetgyro" || command == "calibrate") {
     if (mpuConnected) {
@@ -808,7 +826,7 @@ void setup() {
   Serial.begin(115200);
   delay(500);
   
-  Serial.println("\n\nESP32 Active Suspension Simulator - Starting...");
+  Serial.println("\n\nR/C Dynamic Chassis Control - Starting...");
 
   // Initialize LightsEngine (after storage init, before other systems)
   lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
@@ -948,6 +966,13 @@ void setup() {
   bluetoothService->setServoWriteHandler(applyServoConfigPayload);
   bluetoothService->setLightsWriteHandler(applyLightsPayload);
   bluetoothService->setSystemWriteHandler(applySystemCommandPayload);
+  bluetoothService->setConnectionStateHandler([](bool connected) {
+    ledBleOn = connected;
+    if (!connected) {
+      ledBlinkEndTime = 0;
+    }
+    digitalWrite(LED_PIN, connected ? HIGH : LOW);
+  });
   const String bleDeviceName = buildBleAdvertisedName();
   Serial.printf("Starting BLE advertising as: %s\n", bleDeviceName.c_str());
   bluetoothService->begin(bleDeviceName.c_str());
@@ -962,25 +987,30 @@ void loop() {
   unsigned long currentTime = loopStartTime;
   static unsigned long lastLoopTime = 0;
   static bool firstLoop = true;
+
+  // Run BLE service work on the main loop task, not BTC_TASK callbacks.
+  if (bluetoothService) {
+    bluetoothService->update();
+  }
   
-  // Log loop execution time every 5 seconds for diagnostics
-  if (!firstLoop && (currentTime - lastLoopTime) > 5000) {
-    unsigned long loopDuration = currentTime - lastLoopTime;
-    Serial.printf("[LOOP] Loop cycle time: %lums\n", loopDuration);
-    if (loopDuration > 2000) {
-      Serial.printf("⚠️  LONG LOOP DETECTED: %lums - possible blocking operation!\n", loopDuration);
-    }
-    lastLoopTime = currentTime;
-  }
+  // Detect genuinely slow single loop iterations (>100ms each).
+  // lastLoopTime tracks the START of the previous iteration for per-iteration timing.
   if (firstLoop) {
-    lastLoopTime = currentTime;
+    lastLoopTime = loopStartTime;
     firstLoop = false;
+  } else {
+    unsigned long iterationTime = loopStartTime - lastLoopTime;
+    if (iterationTime > 100) {
+      Serial.printf("⚠️  LONG LOOP DETECTED: %lums - possible blocking operation!\n", iterationTime);
+    }
   }
+  lastLoopTime = loopStartTime;
   
   // Handle LED blink timeout
   if (ledBlinkEndTime > 0 && currentTime >= ledBlinkEndTime) {
-    digitalWrite(LED_PIN, LOW);
-    statusLED.clear(); // Turn off addressable LED
+    // After a blink: keep LED on if BLE is still connected, otherwise off.
+    digitalWrite(LED_PIN, ledBleOn ? HIGH : LOW);
+    statusLED.clear();
     statusLED.show();
     ledBlinkEndTime = 0;
   }
@@ -988,6 +1018,15 @@ void loop() {
   // Auto-disable Dance Mode on BLE disconnect and force all suspension servos to trim.
   static bool previousBleConnected = false;
   const bool bleConnected = (bluetoothService && bluetoothService->isConnected());
+
+  // Steady LED: on while connected, off while disconnected.
+  if (bleConnected != ledBleOn) {
+    ledBleOn = bleConnected;
+    if (ledBlinkEndTime == 0) {  // Don't interrupt an active blink
+      digitalWrite(LED_PIN, ledBleOn ? HIGH : LOW);
+    }
+  }
+
   if (previousBleConnected && !bleConnected && gDanceMode.enabled) {
     gDanceMode.enabled = false;
     gDanceMode.last_roll = 0.0f;

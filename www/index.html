@@ -151,15 +151,15 @@
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Vehicle</span>
-                            <span id="activeVehicleDisplay" class="badge" style="background-color:#6f7d8d;color:#fff;font-size:0.75rem;">--</span>
+                            <span id="activeVehicleDisplay" class="badge" style="background-color:#6f7d8d;color:#fff;">--</span>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Driving Profile</span>
-                            <span id="activeDrivingProfileDisplay" class="badge" style="background-color:var(--high-impact-color);color:#000;font-size:0.75rem;">--</span>
+                            <span id="activeDrivingProfileDisplay" class="badge" style="background-color:var(--high-impact-color);color:#000;">--</span>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Lighting Profile</span>
-                            <span id="activeLightingProfileDisplay" class="badge" style="background-color:#4f9cff;color:#fff;font-size:0.75rem;">--</span>
+                            <span id="activeLightingProfileDisplay" class="badge" style="background-color:#4f9cff;color:#fff;">--</span>
                         </div>
                     </div>
                 </div>
@@ -217,9 +217,9 @@
                                 <span class="material-symbols-outlined lights-master-toggle-icon" aria-hidden="true">light_off</span>
                                 <span class="lights-master-toggle-text">Master Light Switch</span>
                             </button>
-                            <div class="form-text mb-3">
+                            <!-- <div class="form-text mb-3">
                                 <small>When Master is off, all lights are off. When Master is on, only enabled groups run.</small>
-                            </div>
+                            </div> -->
                         </div>
                     </div>
                 </div>
@@ -230,7 +230,7 @@
 
         <!-- Settings Section -->
         <section id="settings" class="page-section">
-            <h2 class="section-title">Settings</h2>
+            <h2 class="section-title">More</h2>
             <!-- Settings Tabs Navigation -->
             <div class="settings-tabs">
                 <button class="settings-tab active" data-tab="preferences">
@@ -255,13 +255,13 @@
                     <span class="tab-label-full">Debugging</span>
                     <span class="tab-label-short">Debug</span>
                 </button>
-                <button class="settings-tab" data-tab="aux-servos">
+                <!-- <button class="settings-tab" data-tab="aux-servos">
                     <span class="material-symbols-outlined">
                     settings_input_component
                     </span>
                     <span class="tab-label-full">Aux Servos</span>
                     <span class="tab-label-short">Aux</span>
-                </button>
+                </button> -->
                 
             </div>
 
@@ -285,6 +285,18 @@
                                 <div>
                                     <div style="font-weight: 600; color: #000; margin-bottom: 0.25rem;">Build Date</div>
                                     <div style="color: #666; font-size: 0.875rem;" id="buildDate">Loading...</div>
+                                </div>
+                                <hr>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label mb-0" for="enableDebugMode">
+                                        <strong>Enable Debug Mode</strong>
+                                    </label>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" id="enableDebugMode">
+                                    </div>
+                                </div>
+                                <div class="form-text mt-2">
+                                    <small>Show or hide the Debug tab under Settings.</small>
                                 </div>
                             </div>
                         </div>
@@ -324,50 +336,6 @@
                                         <div class="form-check form-switch m-0">
                                             <input class="form-check-input" type="checkbox" id="enableNotificationSounds">
                                         </div>
-                                    </div>
-                                </div>
-
-                                <!-- LED Notifications Section -->
-                                <div id="ledNotificationsSection" class="notification-group-box">
-                                    <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <h6 class="mb-0" style="font-weight: 600; color: var(--text-primary);">
-                                            LED Notifications
-                                        </h6>
-                                        <div class="form-check form-switch m-0">
-                                            <input class="form-check-input" type="checkbox" id="enableTruckNotifications">
-                                        </div>
-                                    </div>
-                                    <div class="form-text mt-1 mb-3"><small>Enable or disable LED truck notifications.</small></div>
-                                    <div id="ledNotificationsContent">
-                                    <div class="mb-3">
-                                        <label for="notificationGroupSelect" class="form-label">
-                                            Light Group for LED Notifications
-                                        </label>
-                                        <select class="form-select" id="notificationGroupSelect" onchange="saveNotificationGroup()">
-                                            <option value="__none__">None - Disable LED Notifications</option>
-                                            <option value="__all__">All LEDs</option>
-                                            <!-- Light groups dynamically populated here -->
-                                        </select>
-                                        <div class="form-text">
-                                            <small>Select which LEDs flash during notifications. Success=Green, Error=Red, Warning=Amber, Info=Blue. Only the LEDs from the group will flash.</small>
-                                        </div>
-                                    </div>
-                                    <div class="d-flex gap-2">
-                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('success')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">check_circle</span> Test Success
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('error')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">error</span> Test Error
-                                        </button>
-                                    </div>
-                                    <div class="d-flex gap-2 mt-2">
-                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('warning')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">warning</span> Test Warning
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-gold flex-fill" onclick="testNotification('info')">
-                                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">info</span> Test Info
-                                        </button>
-                                    </div>
                                     </div>
                                 </div>
                             </div>
@@ -542,18 +510,32 @@
                 <div class="col-12">
                     <div class="card" id="drivingProfilesCard">
                         <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
-                            <div>
-                                <span class="material-symbols-outlined" style="color: var(--danger);">manage_accounts</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span style="position:relative;display:inline-flex;width:22px;height:22px;">
+                                    <span class="material-symbols-outlined" style="font-size:22px;color:var(--danger);line-height:1;">directions_car</span>
+                                    <span class="material-symbols-outlined" style="position:absolute;top:-4px;right:-6px;font-size:12px;color:var(--danger);background:#000;border-radius:50%;line-height:1;">settings</span>
+                                </span>
                                 Driving Profiles
                             </div>
-                            <button type="button" class="btn btn-sm btn-gold" id="saveNewProfileBtn" disabled
-                                    onclick="saveAsNewDrivingProfile()">
-                                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">add</span> Save as New
-                            </button>
+                            <div class="d-flex align-items-center gap-2 profile-card-header-actions">
+                                <span class="material-symbols-outlined icon-action" id="drivingProfilesLockIcon" title="Lock driving profiles to prevent changes" onclick="toggleDrivingProfilesLock(this)">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action" id="drivingProfilesChevron" title="Collapse driving profiles" onclick="toggleDrivingProfilesCard()">keyboard_arrow_down</span>
+                            </div>
                         </div>
-                        <div class="card-body p-2">
+                        <div class="card-body p-2" id="drivingProfilesCardBody" style="background:#1a1a1a;">
                             <div id="drvProfileList" style="display:flex;flex-direction:column;gap:4px;">
                                 <div class="text-muted text-center py-2" style="font-size:0.875rem;">Connect to load profiles</div>
+                            </div>
+                            <div id="drvProfileStatus" class="form-text mt-2"><small style="color:#aaa;">Status: idle</small></div>
+                            <div class="d-grid gap-2 mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-warning" id="drvProfileUpdateBtn" style="display:none;"
+                                        onclick="updateActiveDrivingProfile()">
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">sync</span> Update Active Profile
+                                </button>
+                                <button type="button" class="btn btn-sm btn-gold" id="saveNewProfileBtn" disabled
+                                        onclick="saveAsNewDrivingProfile()">
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">add</span> Save as New
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -566,9 +548,12 @@
                             <div>
                                 <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Suspension
                             </div>
-                            <span class="material-symbols-outlined icon-action" id="tuningLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleTuningLock(this)">lock</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="material-symbols-outlined icon-action" id="tuningLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleTuningLock(this)">lock</span>
+                                <span class="material-symbols-outlined icon-action" id="tuningParametersChevron" title="Collapse suspension card" onclick="toggleCardCollapse('tuningParametersCard', 'tuningParametersChevron', 'tuningParametersCardCollapsed')">keyboard_arrow_down</span>
+                            </div>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" id="tuningParametersCardBody">
                             <!-- Ride Height -->
                             <div class="tuning-slider-group">
                                 <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger); transform: rotate(90deg);">
@@ -637,18 +622,7 @@
                                 </div>
                             </div>
 
-                            <!-- Sensor Refresh Rate -->
-                            <div class="tuning-slider-group mb-0">
-                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">memory</span> Sensor Refresh Rate</h6>
-                                <div class="slider-section">
-                                    <div id="sliderSensorRate"></div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Low</span>
-                                        <span>Balanced</span>
-                                        <span>High</span>
-                                    </div>
-                                </div>
-                            </div>
+                            
                         </div>
                     </div>
                 </div>
@@ -663,9 +637,12 @@
                             </span>
                                 Servo Range
                             </div>
-                            <span class="material-symbols-outlined icon-action" id="servoRangeLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoRangeLock(this)">lock</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="material-symbols-outlined icon-action" id="servoRangeLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoRangeLock(this)">lock</span>
+                                <span class="material-symbols-outlined icon-action" id="servoRangeChevron" title="Collapse servo range card" onclick="toggleCardCollapse('servoRangeCard', 'servoRangeChevron', 'servoRangeCardCollapsed')">keyboard_arrow_down</span>
+                            </div>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" id="servoRangeCardBody">
                             <div class="tuning-slider-group">
                                 <h6 class="mb-3">
                                     <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span>
@@ -730,14 +707,25 @@
                             </div>
                             <div class="d-flex align-items-center gap-2 servo-settings-header-actions">
                                 <span class="material-symbols-outlined icon-action" id="servoSettingsLockIcon" title="Lock trim and rotation controls" onclick="toggleServoSettingsLock(this)">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action" id="servoSettingsChevron" title="Collapse servo settings card" onclick="toggleCardCollapse('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed')">keyboard_arrow_down</span>
                             </div>
                         </div>
                         <div class="card-body" id="servoSettingsCardBody">
                             <div class="servo-settings-block">
                                     <div class="servo-settings-section tuning-slider-group">
                                         <div class="servo-settings-title">
-                                            <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span>
-                                            <span>Front Left Trim</span>
+                                            <div class="servo-settings-title-main">
+                                                <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span>
+                                                <span>Front Left Trim</span>
+                                            </div>
+                                            <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Front Left direction" id="servoFLRevBadge">
+                                                <button type="button" class="btn servo-direction-btn" id="servoFLCwBtn" data-dir="cw" aria-label="Front Left clockwise rotation">
+                                                    <span class="material-symbols-outlined rotate-cw">rotate_right</span>
+                                                </button>
+                                                <button type="button" class="btn servo-direction-btn" id="servoFLCcwBtn" data-dir="ccw" aria-label="Front Left counterclockwise rotation">
+                                                    <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="servo-settings-slider-labels">
                                             <span id="servoFLTrimDisplay"></span>
@@ -748,23 +736,23 @@
                                             <span>Center</span>
                                             <span>Right</span>
                                         </div>
-                                        <div class="btn-group servo-direction-toggle w-100 mt-2" role="group" aria-label="Front Left direction" id="servoFLRevBadge">
-                                            <button type="button" class="btn servo-direction-btn" id="servoFLCwBtn" data-dir="cw">
-                                                <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                CW
-                                            </button>
-                                            <button type="button" class="btn servo-direction-btn" id="servoFLCcwBtn" data-dir="ccw">
-                                                <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                CCW
-                                            </button>
-                                        </div>
                                         <input class="form-check-input" type="checkbox" id="servoFLReversed" style="display: none;">
                                     </div>
 
                                     <div class="servo-settings-section tuning-slider-group">
                                         <div class="servo-settings-title">
-                                            <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
-                                            <span>Front Right Trim</span>
+                                            <div class="servo-settings-title-main">
+                                                <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
+                                                <span>Front Right Trim</span>
+                                            </div>
+                                            <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Front Right direction" id="servoFRRevBadge">
+                                                <button type="button" class="btn servo-direction-btn" id="servoFRCwBtn" data-dir="cw" aria-label="Front Right clockwise rotation">
+                                                    <span class="material-symbols-outlined rotate-cw">rotate_right</span>
+                                                </button>
+                                                <button type="button" class="btn servo-direction-btn" id="servoFRCcwBtn" data-dir="ccw" aria-label="Front Right counterclockwise rotation">
+                                                    <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="servo-settings-slider-labels">
                                             <span id="servoFRTrimDisplay"></span>
@@ -775,23 +763,23 @@
                                             <span>Center</span>
                                             <span>Right</span>
                                         </div>
-                                        <div class="btn-group servo-direction-toggle w-100 mt-2" role="group" aria-label="Front Right direction" id="servoFRRevBadge">
-                                            <button type="button" class="btn servo-direction-btn" id="servoFRCwBtn" data-dir="cw">
-                                                <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                CW
-                                            </button>
-                                            <button type="button" class="btn servo-direction-btn" id="servoFRCcwBtn" data-dir="ccw">
-                                                <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                CCW
-                                            </button>
-                                        </div>
                                         <input class="form-check-input" type="checkbox" id="servoFRReversed" style="display: none;">
                                     </div>
 
                                     <div class="servo-settings-section tuning-slider-group">
                                         <div class="servo-settings-title">
-                                            <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span>
-                                            <span>Rear Left Trim</span>
+                                            <div class="servo-settings-title-main">
+                                                <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span>
+                                                <span>Rear Left Trim</span>
+                                            </div>
+                                            <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Rear Left direction" id="servoRLRevBadge">
+                                                <button type="button" class="btn servo-direction-btn" id="servoRLCwBtn" data-dir="cw" aria-label="Rear Left clockwise rotation">
+                                                    <span class="material-symbols-outlined rotate-cw">rotate_right</span>
+                                                </button>
+                                                <button type="button" class="btn servo-direction-btn" id="servoRLCcwBtn" data-dir="ccw" aria-label="Rear Left counterclockwise rotation">
+                                                    <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="servo-settings-slider-labels">
                                             <span id="servoRLTrimDisplay"></span>
@@ -802,23 +790,23 @@
                                             <span>Center</span>
                                             <span>Right</span>
                                         </div>
-                                        <div class="btn-group servo-direction-toggle w-100 mt-2" role="group" aria-label="Rear Left direction" id="servoRLRevBadge">
-                                            <button type="button" class="btn servo-direction-btn" id="servoRLCwBtn" data-dir="cw">
-                                                <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                CW
-                                            </button>
-                                            <button type="button" class="btn servo-direction-btn" id="servoRLCcwBtn" data-dir="ccw">
-                                                <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                CCW
-                                            </button>
-                                        </div>
                                         <input class="form-check-input" type="checkbox" id="servoRLReversed" style="display: none;">
                                     </div>
 
                                     <div class="servo-settings-section tuning-slider-group">
                                         <div class="servo-settings-title">
-                                            <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span>
-                                            <span>Rear Right Trim</span>
+                                            <div class="servo-settings-title-main">
+                                                <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span>
+                                                <span>Rear Right Trim</span>
+                                            </div>
+                                            <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Rear Right direction" id="servoRRRevBadge">
+                                                <button type="button" class="btn servo-direction-btn" id="servoRRCwBtn" data-dir="cw" aria-label="Rear Right clockwise rotation">
+                                                    <span class="material-symbols-outlined rotate-cw">rotate_right</span>
+                                                </button>
+                                                <button type="button" class="btn servo-direction-btn" id="servoRRCcwBtn" data-dir="ccw" aria-label="Rear Right counterclockwise rotation">
+                                                    <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="servo-settings-slider-labels">
                                             <span id="servoRRTrimDisplay"></span>
@@ -829,32 +817,43 @@
                                             <span>Center</span>
                                             <span>Right</span>
                                         </div>
-                                        <div class="btn-group servo-direction-toggle w-100 mt-2" role="group" aria-label="Rear Right direction" id="servoRRRevBadge">
-                                            <button type="button" class="btn servo-direction-btn" id="servoRRCwBtn" data-dir="cw">
-                                                <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                CW
-                                            </button>
-                                            <button type="button" class="btn servo-direction-btn" id="servoRRCcwBtn" data-dir="ccw">
-                                                <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                CCW
-                                            </button>
-                                        </div>
                                         <input class="form-check-input" type="checkbox" id="servoRRReversed" style="display: none;">
                                     </div>
 
+                                    <!-- Auto Level Progress Container -->
                                     <div class="servo-settings-footer">
                                         <button type="button" class="btn btn-gold w-100" id="servoAutoCalibrateBtn">
                                             <span class="material-symbols-outlined">wand_stars</span>
                                             Auto Calibrate
                                         </button>
                                     </div>
+                                    
+                                    <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <div class="bubble-level-card">
+                                                    <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
+                                                    <div class="bubble-level-face" id="bubbleLevelFace">
+                                                        <div class="bubble-level-crosshair horizontal"></div>
+                                                        <div class="bubble-level-crosshair vertical"></div>
+                                                        <div class="bubble-level-target"></div>
+                                                        <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
+                                                        <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
+                                                    </div>
+                                                    <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Auto Level Progress Container -->
-                <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
+                <!-- <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
                     <div class="card">
                         <div class="card-body">
                             <div class="bubble-level-card">
@@ -870,18 +869,24 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </div> -->
 
-                <!-- RCDCC Mounting Card -->
+                <!-- RCDCC Configuration Card -->
                 <div class="col-12 col-md-6 col-lg-4">
-                    <div class="card">
-                        <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">
-                            arrows_input
-                            </span>
-                            RCDCC Mounting
+                    <div class="card" id="rcdccConfigurationCard">
+                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
+                            <div>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                arrows_input
+                                </span>
+                                RCDCC Configuration
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="material-symbols-outlined icon-action" id="rcdccConfigurationLockIcon" title="Lock RCDCC configuration controls" onclick="toggleRcdccConfigurationLock(this)">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action" id="rcdccConfigurationChevron" title="Collapse RCDCC configuration card" onclick="toggleCardCollapse('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed')">keyboard_arrow_down</span>
+                            </div>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" id="rcdccConfigurationCardBody">
                             <label for="mpuOrientation" class="form-label"><strong>Select Orientation</strong></label>
                             <select class="form-select" id="mpuOrientation">
                                 <option value="0">Arrow Forward, Chip Up (Default)</option>
@@ -891,17 +896,25 @@
                                 <option value="4">Arrow Right, Chip Up</option>
                                 <option value="5">Arrow Left, Chip Up</option>
                             </select>
+                        
+                            <!-- Sensor Refresh Rate -->
+                            <div class="tuning-slider-group mt-4 mb-0">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">memory</span> Sensor Refresh Rate</h6>
+                                <div class="slider-section">
+                                    <div id="sliderSensorRate"></div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Low</span>
+                                        <span>Balanced</span>
+                                        <span>High</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+
+                        
                     </div>
                 </div>
            
-            <!-- Phase 2: Save button -->
-            <div class="col-12">
-                <button type="button" id="tuning-save-btn" class="btn btn-secondary w-100" disabled onclick="savePage('tuning')">
-                    <span class="material-symbols-outlined" style="vertical-align:middle;font-size:1rem;">save</span> Save Settings
-                </button>
-            </div>
-
             <!-- Help Card -->
                 <div class="col-12 col-md-6 col-lg-4">
                     <div class="card">
@@ -928,7 +941,7 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrows_input</span> RCDCC Mounting
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrows_input</span> RCDCC Configuration
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div>Select how your DCC is physically mounted. The arrow is printed on the box.</div>
@@ -1053,85 +1066,104 @@
                 <h2 class="section-title">Lights</h2>
             </div>
             <div class="row g-3">
-                <!-- Master Light Switch Card -->
+
+                <!-- Lighting Profiles Card -->
                 <div class="col-12">
-                    <div class="card">
-                        <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">emoji_objects</span>
-                            Lighting Control
+                    <div class="card" id="lightingProfilesCard">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                            <div class="d-flex align-items-center gap-2">
+                                <span style="position:relative;display:inline-flex;width:22px;height:22px;">
+                                    <span class="material-symbols-outlined" style="font-size:22px;color:var(--danger);line-height:1;">lightbulb</span>
+                                    <span class="material-symbols-outlined" style="position:absolute;top:-4px;right:-6px;font-size:12px;color:var(--danger);background:#000;border-radius:50%;line-height:1;">settings</span>
+                                </span>
+                                Lighting Profiles
+                            </div>
+                            <div class="d-flex align-items-center gap-2 profile-card-header-actions">
+                                <span class="material-symbols-outlined icon-action" id="lightingProfilesLockIcon" title="Lock lighting profiles to prevent changes" onclick="toggleLightingProfilesLock(this)">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action" id="lightingProfilesChevron" title="Collapse lighting profiles" onclick="toggleLightingProfilesCard()">keyboard_arrow_down</span>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <div class="mb-3 pb-3" style="border-bottom: 1px solid #e5e7eb;">
-                                <label for="lightingProfileSelect" class="form-label"><strong>Lighting Profile</strong></label>
-                                <div class="mb-2">
-                                    <select id="lightingProfileSelect" class="form-select form-select-sm"></select>
-                                </div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" id="saveLightingProfileBtn" class="btn btn-sm btn-gold flex-fill">Save as New</button>
-                                    <button type="button" id="deleteLightingProfileBtn" class="btn btn-sm btn-outline-danger">Delete</button>
-                                </div>
-                                <div class="form-text mt-2"><small>Up to 3 profiles per truck.</small></div>
+                        <div class="card-body p-2" id="lightingProfilesCardBody" style="background:#1a1a1a;">
+                            <div id="ltProfileList" style="display:flex;flex-direction:column;gap:4px;">
+                                <div class="text-muted text-center py-2" style="font-size:0.875rem;">No profiles saved yet</div>
                             </div>
-
-                            <div class="mb-4 pb-3" style="border-bottom: 1px solid #e5e7eb;">
-                                <label for="totalLEDCount" class="form-label"><strong>Total LEDs in your strip:</strong></label>
-                                <input type="number" class="form-control" id="totalLEDCount" min="1" max="300" value="100" placeholder="100">
-                                <div class="form-text">
-                                    <small>If you add more addressable LEDs to your strip, update this number. Minimum: 1, Maximum: 300</small>
-                                </div>
+                            <div id="ltProfileStatus" class="form-text mt-2"><small style="color:#aaa;">Status: idle</small></div>
+                            <div class="d-grid gap-2 mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-warning" id="ltProfileUpdateBtn" style="display:none;"
+                                        onclick="updateActiveLightingProfile()">
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">sync</span> Update Active Profile
+                                </button>
+                                <button type="button" class="btn btn-sm btn-gold" id="saveNewLightingProfileBtn"
+                                        onclick="saveAsNewLightingProfile()">
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">add</span> Save as New
+                                </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
 
-                            <button type="button" class="lights-master-toggle-btn mb-3" id="lightsToggle" aria-pressed="false" aria-label="Master Light Switch off" title="Master lights off">
+                <!-- Manage Light Groups Card -->
+                <div class="col-12">
+                    <div class="card" id="manageLightGroupsCard">
+                        <div class="card-header card-header-dark d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">ad_group</span>
+                                &nbsp;Manage Light Groups
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="material-symbols-outlined icon-action" id="manageLightGroupsLockIcon" title="Lock light group controls" onclick="toggleManageLightGroupsLock()">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action" id="manageLightGroupsChevron" title="Collapse manage light groups" onclick="toggleCardCollapse('manageLightGroupsCard', 'manageLightGroupsChevron', 'manageLightGroupsCardCollapsed')">keyboard_arrow_down</span>
+                            </div>
+                        </div>
+                        <div class="card-body" id="manageLightGroupsCardBody">
+                            <button type="button" class="lights-master-toggle-btn mb-3" id="lightsToggleLightGroups" aria-pressed="false" aria-label="Master Light Switch off" title="Master lights off">
                                 <span class="material-symbols-outlined lights-master-toggle-icon" aria-hidden="true">light_off</span>
                                 <span class="lights-master-toggle-text">Master Light Switch</span>
                             </button>
-                            <div class="form-text mb-3">
-                                <small>When Master is off, all lights are off. When Master is on, only enabled groups run.</small>
+
+                            <div id="lightGroupsList" style="margin-bottom: 1rem;"></div>
+                            <div id="lightGroupsEmptyState" style="text-align: center; color: #999; padding: 2rem;">
+                                <span class="material-symbols-outlined" style="font-size: 3rem; display: block; margin-bottom: 0.5rem;">fluorescent</span>
+                                <p>No light groups yet. Create your first one to get started!</p>
                             </div>
-                            <div id="lightsHierarchyGroups" class="d-flex flex-column gap-2">
-                                <!-- Group switches populated by JavaScript -->
-                            </div>
+                            <button type="button" class="btn w-100 btn-gold" id="addLightGroupBtn">
+                                <span class="material-symbols-outlined">add_circle</span>
+                                Add Light Group
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Light Groups Management Card -->
+                <!-- Light Strip Configuration Card -->
                 <div class="col-12">
-                    <div class="card">
-                        <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">ad_group</span>
-                            Manage Light Groups
-                        </div>
-                        <div class="card-body">
-                            <!-- Light Groups List -->
-                            <div class="mb-3">
-                                <label class="form-label"><strong>Light Groups</strong></label>
-                                <div id="lightGroupsList" style="margin-bottom: 1rem;">
-                                    <!-- Groups will be populated here by JavaScript -->
-                                </div>
-
-                                <!-- Empty State Message -->
-                                <div id="lightGroupsEmptyState" style="text-align: center; color: #999; padding: 2rem;">
-                                    <span class="material-symbols-outlined" style="font-size: 3rem; display: block; margin-bottom: 0.5rem;">fluorescent</span>
-                                    <p>No light groups yet. Create your first one to get started!</p>
-                                </div>
-
-                                <!-- Add Light Group Button -->
-                                <button type="button" class="btn w-100 btn-gold" id="addLightGroupBtn">
-                                    <span class="material-symbols-outlined">add_circle</span>
-                                    Add Light Group
-                                </button>
+                    <div class="card" id="lightStripConfigCard">
+                        <div class="card-header card-header-dark d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">linear_scale</span>
+                                &nbsp;Light Strip Configuration
                             </div>
-
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="material-symbols-outlined icon-action" id="lightStripConfigLockIcon" title="Lock light strip configuration" onclick="toggleLightStripConfigLock()">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action" id="lightStripConfigChevron" title="Collapse light strip configuration" onclick="toggleCardCollapse('lightStripConfigCard', 'lightStripConfigChevron', 'lightStripConfigCardCollapsed')">keyboard_arrow_down</span>
+                            </div>
+                        </div>
+                        <div class="card-body" id="lightStripConfigCardBody">
+                            <div class="d-flex align-items-center justify-content-between gap-3">
+                                <label for="totalLEDCount" class="form-label mb-0" style="flex:1;">
+                                    <strong>Total LEDs in your strip</strong>
+                                    <div class="form-text mt-0"><small>Minimum: 1, Maximum: 300</small></div>
+                                </label>
+                                <input type="number" class="form-control text-center" id="totalLEDCount" min="1" max="300" value="100" placeholder="100" style="width:80px;flex-shrink:0;">
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- How to Configure Light Strip Card -->
+                <!-- Help Card -->
                 <div class="col-12">
                     <div class="card" id="lightsGuideCard">
-                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white; cursor: pointer;" onclick="toggleLightsGuideCard()">
-                            <div>
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor: pointer;" onclick="toggleLightsGuideCard()">
+                            <div class="d-flex align-items-center gap-2">
                                 <span class="material-symbols-outlined" style="color: var(--danger);">help</span>
                                 Help: Lights
                             </div>
@@ -1139,19 +1171,21 @@
                         </div>
                         <div class="card-body" id="lightsGuideCardBody">
                             <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.8;">
-                                <li><strong>Set Total LED Count:</strong> Update the "Total LEDs in your strip" field to match the number of addressable LEDs wired to your RCDCC.</li>
+                                <li><strong>Set Total LED Count:</strong> Update the "Light Strip Configuration" card to match your LED count.</li>
                                 <li><strong>Create Light Groups:</strong> Click "Add Light Group" to define a group with a name, pattern, and color(s).</li>
-                                <li><strong>Assign LEDs to Groups:</strong> In the group editor, select which LED positions belong to this group (e.g., LEDs 1-20 for front lights, 21-40 for underglow).</li>
-                                <li><strong>Set Brightness:</strong> Adjust the brightness slider for each group independently. Setting at 80% will help ensure LED longevity.</li>
+                                <li><strong>Assign LEDs to Groups:</strong> In the group editor, select which LED positions belong to this group.</li>
+                                <li><strong>Set Brightness:</strong> Adjust the brightness slider for each group independently.</li>
                                 <li><strong>Configure Patterns:</strong> Choose a pattern (solid, blink, pulse, etc.). Patterns marked with * use both primary and secondary colors.</li>
-                                <li><strong>Organize Priority:</strong> Use up/down arrows in each group card to set priority order (top = highest priority = will override LED conflicts).</li>
-                                <li><strong>Toggle Master Switch:</strong> On the "Lighting Control" card above, toggle the Master Switch to enable/disable all lights.</li>
-                                <li><strong>Enable Individual Groups:</strong> Use the group toggles in "Lighting Control" to enable/disable specific groups while driving.</li>
+                                <li><strong>Organize Priority:</strong> Use up/down arrows in each group card to set priority order (top = highest priority).</li>
+                                <li><strong>Master Switch:</strong> Available on the Dashboard to enable/disable all lights at once.</li>
+                                <li><strong>Enable Individual Groups:</strong> Use the group toggles in the Manage Light Groups card to enable/disable specific groups.</li>
+                                <li><strong>Save a Profile:</strong> Tap "+ Save as New" in the Lighting Profiles card to save your setup for quick recall.</li>
                             </ol>
                         </div>
                     </div>
                 </div>
-            </div>      
+
+            </div>
         </section>
 
         <!-- Garage Section -->
@@ -1185,8 +1219,30 @@
                     </div>
                 </div>
 
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header" style="background-color: black; color: white;">
+                            <span class="material-symbols-outlined" style="color: var(--danger);">database</span>
+                            Manage Data
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-gold" id="garageExportBtn">
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">upload</span>
+                                    Backup
+                                </button>
+                                <button type="button" class="btn btn-gold" id="garageImportBtn">
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">download</span>
+                                    Restore
+                                </button>
+                                <input type="file" id="garageImportInput" accept="application/json,.json" style="display:none;" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="modal fade" id="garageRenameModal" tabindex="-1" aria-labelledby="garageRenameModalTitle" aria-hidden="true">
-                        <div class="modal-dialog garage-rename-modal-dialog">
+                    <div class="modal-dialog modal-dialog-centered garage-rename-modal-dialog">
                         <div class="modal-content">
                             <div class="modal-header" style="background-color: black; color: white;">
                                 <h5 class="modal-title" id="garageRenameModalTitle">
@@ -1224,7 +1280,7 @@
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
                             <span class="material-symbols-outlined" style="color: var(--danger);">videocam</span>
-                            Features
+                            Features - Coming Soon? Maybe?
                         </div>
                         <div class="card-body">
                             <ul style="margin: 0; padding-left: 1.5rem;">
@@ -1253,8 +1309,8 @@
             <span>Garage</span>
         </button>
         <button id="nav-settings" data-target="settings">
-            <span class="material-symbols-outlined">settings</span>
-            <span>Settings</span>
+            <span class="material-symbols-outlined" style="transform: rotate(180deg); display: inline-block;">more</span>
+            <span>More</span>
         </button>
     </nav>
 
@@ -1362,13 +1418,13 @@
                         <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
                         <span id="lightGroupEditMode">Add</span> Light Group
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close btn-close-white" id="lightGroupCloseBtn" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" style="color: #000;">
                     <!-- Group Name Input -->
                     <div class="mb-4">
                         <label for="lightGroupNameInput" class="form-label"><strong>Group Name</strong></label>
-                        <input type="text" class="form-control" id="lightGroupNameInput" placeholder="e.g., Headlights, Underglow, KC Lights">
+                        <input type="text" class="form-control" id="lightGroupNameInput" maxlength="12" placeholder="e.g., Headlights">
                     </div>
 
                     <!-- Brightness Slider -->
@@ -1396,21 +1452,22 @@
                         </div>
                     </div>
 
-                    <!-- Color Picker -->
-                    <div class="mb-4">
-                        <label for="lightGroupColorPicker" class="form-label"><strong>Primary Color</strong></label>
-                        <div class="d-flex align-items-center gap-3 mb-2">
-                            <input type="color" class="form-control form-control-color" id="lightGroupColorPicker" value="#ff0000" title="Choose primary color">
-                            <span id="lightGroupColorHex" style="font-family: monospace; font-weight: 600;">#FF0000</span>
+                    <!-- Color Pickers -->
+                    <div class="mb-4 light-group-color-row" id="lightGroupColorRow">
+                        <div class="light-group-color-col" id="primaryColorPickerContainer">
+                            <label for="lightGroupColorPicker" class="form-label"><strong>Primary Color</strong></label>
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <input type="color" class="form-control form-control-color" id="lightGroupColorPicker" value="#ff0000" title="Choose primary color">
+                                <span id="lightGroupColorHex" style="font-family: monospace; font-weight: 600;">#FF0000</span>
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- Second Color Picker -->
-                    <div class="mb-4" id="secondaryColorPickerContainer">
-                        <label for="lightGroupColorPicker2" class="form-label"><strong>Secondary Color</strong></label>
-                        <div class="d-flex align-items-center gap-3 mb-2">
-                            <input type="color" class="form-control form-control-color" id="lightGroupColorPicker2" value="#000000" title="Choose secondary color">
-                            <span id="lightGroupColorHex2" style="font-family: monospace; font-weight: 600;">#000000</span>
+                        <div class="light-group-color-col" id="secondaryColorPickerContainer">
+                            <label for="lightGroupColorPicker2" class="form-label"><strong>Secondary Color</strong></label>
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <input type="color" class="form-control form-control-color" id="lightGroupColorPicker2" value="#000000" title="Choose secondary color">
+                                <span id="lightGroupColorHex2" style="font-family: monospace; font-weight: 600;">#000000</span>
+                            </div>
                         </div>
                     </div>
                     
@@ -1464,6 +1521,10 @@
             </div>
         </div>
     </div>
+
+    <button type="button" id="backToTopBtn" class="back-to-top-btn" aria-label="Back to top" title="Back to top">
+        <span class="material-symbols-outlined" aria-hidden="true">keyboard_arrow_up</span>
+    </button>
 
 <!-- <button type="button" class="btn btn-primary" onclick="offlineMode()">Go Offline</button>
 

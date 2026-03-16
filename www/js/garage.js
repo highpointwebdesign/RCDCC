@@ -7,6 +7,9 @@
 
 const GarageManager = (() => {
     const STORAGE_KEY = 'rcdcc_garage_vehicles';
+    const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
+    const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
+    const LIGHTING_PROFILES_STORAGE_KEY = 'rcdcc_lighting_profiles_v1';
     let _renameVehicleId = null;
     let _connectingVehicleId = null;
     let _connectErrorVehicleId = null;
@@ -18,6 +21,10 @@ const GarageManager = (() => {
     let _longPressTriggeredVehicleId = null;
     let _lastLongPressHintAtMs = 0;
     let _pressingVehicleId = null;
+    let _connectedVehicleRssi = null;
+    let _rssiPollTimer = null;
+    let _rssiPollDeviceId = null;
+    let _rssiPollInFlight = false;
     const LONG_PRESS_DISCONNECT_MS = 650;
     const MAX_LABEL_LENGTH = 12;
 
@@ -69,6 +76,117 @@ const GarageManager = (() => {
             .replace(/'/g, '&#39;');
     }
 
+    function clearRssiPollTimer() {
+        if (_rssiPollTimer) {
+            clearTimeout(_rssiPollTimer);
+            _rssiPollTimer = null;
+        }
+    }
+
+    function stopRssiPolling() {
+        clearRssiPollTimer();
+        _rssiPollDeviceId = null;
+        _rssiPollInFlight = false;
+        _connectedVehicleRssi = null;
+    }
+
+    async function refreshConnectedVehicleRssi() {
+        if (_rssiPollInFlight) return;
+        if (!window.bleManager || !window.bleManager.isConnected || typeof window.bleManager.readRssi !== 'function') {
+            _connectedVehicleRssi = null;
+            return;
+        }
+
+        _rssiPollInFlight = true;
+        try {
+            const nextRssi = await window.bleManager.readRssi();
+            if (Number.isFinite(nextRssi) && nextRssi !== _connectedVehicleRssi) {
+                _connectedVehicleRssi = nextRssi;
+                renderGarage();
+            }
+        } catch (error) {
+            console.warn('Garage RSSI read failed:', error?.message || error);
+        } finally {
+            _rssiPollInFlight = false;
+        }
+    }
+
+    function getSignalStrengthPresentation(rssi) {
+        const value = Number(rssi);
+        if (!Number.isFinite(value)) {
+            return {
+                icon: 'network_check',
+                label: 'Signal ...',
+                toneClass: 'garage-card-signal-pending'
+            };
+        }
+
+        if (value >= -55) {
+            return {
+                icon: 'signal_cellular_4_bar',
+                label: 'Signal Excellent',
+                toneClass: 'garage-card-signal-excellent'
+            };
+        }
+
+        if (value >= -70) {
+            return {
+                icon: 'signal_cellular_3_bar',
+                label: 'Signal Good',
+                toneClass: 'garage-card-signal-good'
+            };
+        }
+
+        if (value >= -85) {
+            return {
+                icon: 'signal_cellular_2_bar',
+                label: 'Signal Fair',
+                toneClass: 'garage-card-signal-fair'
+            };
+        }
+
+        return {
+            icon: 'signal_cellular_1_bar',
+            label: 'Signal Poor',
+            toneClass: 'garage-card-signal-poor'
+        };
+    }
+
+    function ensureRssiPollingState() {
+        const activeDeviceId = (window.bleManager && window.bleManager.isConnected)
+            ? window.bleManager.deviceId
+            : null;
+
+        if (!activeDeviceId) {
+            stopRssiPolling();
+            return;
+        }
+
+        if (_rssiPollDeviceId && deviceIdsEqual(_rssiPollDeviceId, activeDeviceId)) {
+            return;
+        }
+
+        clearRssiPollTimer();
+        _rssiPollDeviceId = activeDeviceId;
+        _connectedVehicleRssi = null;
+
+        const scheduleNextPoll = () => {
+            clearRssiPollTimer();
+            _rssiPollTimer = setTimeout(async () => {
+                if (!_rssiPollDeviceId || !window.bleManager || !window.bleManager.isConnected) {
+                    stopRssiPolling();
+                    renderGarage();
+                    return;
+                }
+
+                await refreshConnectedVehicleRssi();
+                scheduleNextPoll();
+            }, 4000);
+        };
+
+        refreshConnectedVehicleRssi().finally(scheduleNextPoll);
+    }
+
     // -------------------------------------------------------------------------
     // Storage helpers
     // -------------------------------------------------------------------------
@@ -103,6 +221,232 @@ const GarageManager = (() => {
             name: v.friendlyName || v.bleName || v.id,
             lastSeen: v.lastSeen || null
         }))));
+    }
+
+    function buildExportPayload() {
+        let lightGroups = [];
+        let lightingProfiles = { profiles: [], activeIndex: 0 };
+        try {
+            const parsed = JSON.parse(localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY) || '[]');
+            lightGroups = Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+            lightGroups = [];
+        }
+
+        try {
+            const parsedLightingProfiles = JSON.parse(localStorage.getItem(LIGHTING_PROFILES_STORAGE_KEY) || '{"profiles":[],"activeIndex":0}');
+            lightingProfiles = (parsedLightingProfiles && Array.isArray(parsedLightingProfiles.profiles))
+                ? parsedLightingProfiles
+                : { profiles: [], activeIndex: 0 };
+        } catch (_) {
+            lightingProfiles = { profiles: [], activeIndex: 0 };
+        }
+
+        return {
+            schema: 'rcdcc-garage-lighting-export-v2',
+            exportedAt: new Date().toISOString(),
+            garageVehicles: getVehicles(),
+            lightGroups,
+            lightingProfiles
+        };
+    }
+
+    function downloadTextFile(filename, content) {
+        const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+    }
+
+    function toBase64Utf8(text) {
+        return btoa(unescape(encodeURIComponent(String(text || ''))));
+    }
+
+    async function exportViaNativeShare(filename, content) {
+        const plugins = window.Capacitor?.Plugins;
+        const Filesystem = plugins?.Filesystem;
+        const Share = plugins?.Share;
+        if (!Filesystem || !Share) return false;
+
+        const directory = Filesystem?.Directory?.Cache || 'CACHE';
+        const path = `exports/${filename}`;
+        await Filesystem.writeFile({
+            path,
+            data: toBase64Utf8(content),
+            directory,
+            recursive: true
+        });
+        const uriResult = await Filesystem.getUri({ path, directory });
+        await Share.share({
+            title: 'Export Garage + Light Groups',
+            text: 'Choose where to save/share the export file.',
+            url: uriResult.uri,
+            dialogTitle: 'Save or share export file'
+        });
+        return true;
+    }
+
+    async function exportViaSavePicker(filename, content) {
+        if (typeof window.showSaveFilePicker !== 'function') return false;
+        const fileHandle = await window.showSaveFilePicker({
+            suggestedName: filename,
+            types: [{
+                description: 'JSON Files',
+                accept: { 'application/json': ['.json'] }
+            }]
+        });
+        const writable = await fileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        return true;
+    }
+
+    function formatExportFilename() {
+        const now = new Date();
+        const two = (n) => String(n).padStart(2, '0');
+        const stamp = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}_${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
+        return `rcdcc_garage_lightgroups_${stamp}.json`;
+    }
+
+    async function exportGarageAndLightGroups() {
+        try {
+            const payload = buildExportPayload();
+            const json = JSON.stringify(payload, null, 2);
+            const filename = formatExportFilename();
+            const isNative = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+
+            if (isNative && await exportViaNativeShare(filename, json)) {
+                if (window.toast) toast.success('Export ready. Choose destination in the share/save dialog.');
+                return;
+            }
+
+            if (await exportViaSavePicker(filename, json)) {
+                if (window.toast) toast.success('Garage and light groups exported');
+                return;
+            }
+
+            downloadTextFile(filename, json);
+            if (window.toast) toast.success('Garage and light groups exported to your default Downloads location');
+        } catch (error) {
+            console.error('Export failed:', error);
+            if (window.toast) toast.error(`Export failed: ${String(error?.message || error)}`);
+        }
+    }
+
+    function normalizeImportedGarageVehicles(sourceVehicles) {
+        if (!Array.isArray(sourceVehicles)) return [];
+
+        const normalized = sourceVehicles
+            .filter(v => v && v.id)
+            .map(v => {
+                const id = String(v.id || '').trim();
+                if (!id) return null;
+                const bleName = String(v.bleName || v.deviceName || id).trim() || id;
+                const friendlyName = sanitizeVehicleLabel(v.friendlyName || v.name || bleName, bleName);
+                return {
+                    id,
+                    bleName,
+                    friendlyName,
+                    name: friendlyName,
+                    lastSeen: v.lastSeen || null
+                };
+            })
+            .filter(Boolean);
+
+        const deduped = [];
+        normalized.forEach(v => {
+            if (deduped.some(x => deviceIdsEqual(x.id, v.id))) return;
+            deduped.push(v);
+        });
+
+        return deduped.slice(0, MAX_GARAGE_VEHICLES);
+    }
+
+    function normalizeImportedLightGroups(sourceLightGroups) {
+        if (!Array.isArray(sourceLightGroups)) return [];
+        return sourceLightGroups
+            .filter(group => group && typeof group === 'object')
+            .map(group => ({ ...group }));
+    }
+
+    async function importGarageAndLightGroupsFromFile(file) {
+        if (!file) return;
+
+        try {
+            const rawText = await file.text();
+            const parsed = JSON.parse(rawText);
+
+            const garageSource = Array.isArray(parsed?.garageVehicles)
+                ? parsed.garageVehicles
+                : (Array.isArray(parsed?.garage) ? parsed.garage : []);
+            const lightGroupSource = Array.isArray(parsed?.lightGroups)
+                ? parsed.lightGroups
+                : [];
+            const lightingProfilesSource = (parsed?.lightingProfiles && Array.isArray(parsed.lightingProfiles.profiles))
+                ? parsed.lightingProfiles
+                : null;
+
+            if (!garageSource.length && !lightGroupSource.length && !lightingProfilesSource) {
+                throw new Error('No garage vehicles, light groups, or lighting profiles found in file');
+            }
+
+            const importedVehicles = normalizeImportedGarageVehicles(garageSource);
+            const importedLightGroups = normalizeImportedLightGroups(lightGroupSource);
+
+            saveVehicles(importedVehicles);
+
+            if (lightGroupSource.length) {
+                localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(importedLightGroups));
+                localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
+                if (typeof window.reloadLightGroupsFromStorage === 'function') {
+                    await window.reloadLightGroupsFromStorage();
+                }
+            }
+
+            if (lightingProfilesSource) {
+                localStorage.setItem(LIGHTING_PROFILES_STORAGE_KEY, JSON.stringify({
+                    profiles: lightingProfilesSource.profiles,
+                    activeIndex: Number(lightingProfilesSource.activeIndex) || 0
+                }));
+                if (typeof window.reloadLightingProfilesFromStorage === 'function') {
+                    await window.reloadLightingProfilesFromStorage();
+                }
+            }
+
+            renderGarage();
+
+            if (window.toast) {
+                const importedLightingProfileCount = lightingProfilesSource ? lightingProfilesSource.profiles.length : 0;
+                toast.success(`Import complete: ${importedVehicles.length} vehicles, ${importedLightGroups.length} light groups, ${importedLightingProfileCount} lighting profiles`);
+            }
+        } catch (error) {
+            console.error('Import failed:', error);
+            if (window.toast) toast.error(`Import failed: ${String(error?.message || error)}`);
+        }
+    }
+
+    function bindGarageTransferButtons() {
+        const exportBtn = document.getElementById('garageExportBtn');
+        const importBtn = document.getElementById('garageImportBtn');
+        const importInput = document.getElementById('garageImportInput');
+
+        if (exportBtn) {
+            exportBtn.addEventListener('click', exportGarageAndLightGroups);
+        }
+
+        if (importBtn && importInput) {
+            importBtn.addEventListener('click', () => importInput.click());
+            importInput.addEventListener('change', async (event) => {
+                const selectedFile = event.target?.files?.[0] || null;
+                await importGarageAndLightGroupsFromFile(selectedFile);
+                importInput.value = '';
+            });
+        }
     }
 
     const MAX_GARAGE_VEHICLES = 20;
@@ -142,12 +486,15 @@ const GarageManager = (() => {
     }
 
     function deleteVehicle(deviceId) {
+        if (isVehicleConnected(deviceId) && window.bleManager) {
+            window.bleManager.disconnect();
+        }
+
         const vehicles = getVehicles().filter(v => v.id !== deviceId);
         saveVehicles(vehicles);
         renderGarage();
 
-        const hasActiveBleConnection = !!(window.bleManager && window.bleManager.isConnected);
-        if (vehicles.length === 0 && !hasActiveBleConnection && typeof window.updateConnectionStatus === 'function') {
+        if (vehicles.length === 0 && typeof window.updateConnectionStatus === 'function') {
             window.updateConnectionStatus(false);
         }
     }
@@ -188,6 +535,8 @@ const GarageManager = (() => {
         const empty = document.getElementById('garageEmptyState');
         if (!list) return;
 
+        ensureRssiPollingState();
+
         const vehicles = getVehicles();
 
         if (vehicles.length === 0) {
@@ -220,6 +569,10 @@ const GarageManager = (() => {
             const cardIcon = isConnecting ? 'modeling' : 'bluetooth_drive';
             const iconClass = isConnecting ? 'material-symbols-outlined pulsating' : 'material-symbols-outlined';
             const lastConnectedStr = isConnected ? null : timeAgo(v.lastSeen);
+            const signalPresentation = isConnected ? getSignalStrengthPresentation(_connectedVehicleRssi) : null;
+            const signalStrengthMarkup = isConnected
+                ? `<div class="garage-card-signal ${signalPresentation.toneClass}"><span class="material-symbols-outlined garage-card-signal-icon">${signalPresentation.icon}</span><span>${signalPresentation.label}</span></div>`
+                : '';
             return `
             <div class="garage-card ${isConnected ? 'connected' : ''} ${isConnecting ? 'connecting' : ''} ${isError ? 'connect-error' : ''}" data-vehicle-id="${v.id}" role="button" tabindex="0" aria-label="${accessibilityLabel}" onclick="GarageManager.handleCardTap('${v.id}')" onkeydown="GarageManager.handleCardKeydown(event, '${v.id}')" onpointerdown="GarageManager.handleCardPointerDown(event, '${v.id}')" onpointerup="GarageManager.handleCardPointerUp(event)" onpointerleave="GarageManager.handleCardPointerCancel()" onpointercancel="GarageManager.handleCardPointerCancel()">
                 <div class="garage-card-top">
@@ -271,6 +624,7 @@ const GarageManager = (() => {
                 </div>
                 <div class="garage-card-meta">
                     <div class="garage-card-hint">${interactionHint}</div>
+                    ${signalStrengthMarkup}
                     ${lastConnectedStr ? `<div class="garage-card-last-seen">Last connected: ${lastConnectedStr}</div>` : ''}
                 </div>
             </div>`;
@@ -573,8 +927,30 @@ const GarageManager = (() => {
     function confirmDeleteVehicle(deviceId) {
         const vehicle = getVehicles().find(v => v.id === deviceId);
         if (!vehicle) return;
-        if (!confirm(`Remove ${vehicle.friendlyName} from your garage?`)) return;
-        deleteVehicle(deviceId);
+
+        const existing = document.getElementById('garage-delete-overlay');
+        if (existing) existing.remove();
+
+        const safeName = vehicle.friendlyName.replace(/</g, '&lt;');
+        const overlay = document.createElement('div');
+        overlay.id = 'garage-delete-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+        overlay.innerHTML = `
+          <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+            <h5 style="margin:0 0 12px;color:#fff;">Remove Vehicle</h5>
+            <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">Remove <strong style="color:#fff;">${safeName}</strong> from your garage? This cannot be undone.</p>
+            <div style="display:flex;gap:8px;">
+                            <button id="gd-cancel" style="flex:1;padding:10px;border:1px solid #555;border-radius:8px;background:#333;color:#aaa;cursor:pointer;">Cancel</button>
+                            <button id="gd-delete" style="flex:1;padding:10px;border:none;border-radius:8px;background:#c0392b;color:#fff;font-weight:600;cursor:pointer;">Delete</button>
+            </div>
+          </div>`;
+        document.body.appendChild(overlay);
+
+        overlay.querySelector('#gd-cancel').onclick = () => overlay.remove();
+        overlay.querySelector('#gd-delete').onclick = () => {
+            overlay.remove();
+            deleteVehicle(deviceId);
+        };
     }
 
     async function openVehicleSection(deviceId, sectionId) {
@@ -633,6 +1009,7 @@ const GarageManager = (() => {
         if (scanBtn) scanBtn.addEventListener('click', scanAndConnect);
 
         bindRenameModal();
+        bindGarageTransferButtons();
 
         // Auto-add vehicle after successful BLE connect (hook into disconnect callback)
         // This is called from app.js after a successful connectBLE()
