@@ -151,15 +151,24 @@
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Vehicle</span>
-                            <span id="activeVehicleDisplay" class="badge" style="background-color:#6f7d8d;color:#fff;">--</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="activeVehicleDisplay" class="dashboard-quick-nav-text">--</span>
+                                <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i>
+                            </div>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Driving Profile</span>
-                            <span id="activeDrivingProfileDisplay" class="badge" style="background-color:var(--high-impact-color);color:#000;">--</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="activeDrivingProfileDisplay" class="dashboard-quick-nav-text">--</span>
+                                <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i>
+                            </div>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Lighting Profile</span>
-                            <span id="activeLightingProfileDisplay" class="badge" style="background-color:#4f9cff;color:#fff;">--</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span id="activeLightingProfileDisplay" class="dashboard-quick-nav-text">--</span>
+                                <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -367,11 +376,6 @@
                         </div>
                     </div>
 
-                    <div class="col-12">
-                        <button id="system-save-btn" class="btn btn-secondary w-100" disabled onclick="savePage('system')">
-                            Save Settings
-                        </button>
-                    </div>
                 </div>
             </div>
 
@@ -622,271 +626,40 @@
                                 </div>
                             </div>
 
+                                <!-- Sensor Refresh Rate -->
+                                <div class="tuning-slider-group mb-0">
+                                    <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">memory</span> Sensor Refresh Rate</h6>
+                                    <div class="slider-section">
+                                        <div id="sliderSensorRate"></div>
+                                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                            <span>Low</span>
+                                            <span>Balanced</span>
+                                            <span>High</span>
+                                        </div>
+                                    </div>
+                                </div>
+
                             
                         </div>
                     </div>
                 </div>
 
-                <!-- Servo Range Card -->
-                <div class="col-12 col-md-6 col-lg-4">
-                    <div class="card" id="servoRangeCard">
-                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
-                            <div>
-                                <span class="material-symbols-outlined" style="color: var(--danger);">
-                            radar
-                            </span>
-                                Servo Range
-                            </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="material-symbols-outlined icon-action" id="servoRangeLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleServoRangeLock(this)">lock</span>
-                                <span class="material-symbols-outlined icon-action" id="servoRangeChevron" title="Collapse servo range card" onclick="toggleCardCollapse('servoRangeCard', 'servoRangeChevron', 'servoRangeCardCollapsed')">keyboard_arrow_down</span>
-                            </div>
-                        </div>
-                        <div class="card-body" id="servoRangeCardBody">
-                            <div class="tuning-slider-group">
-                                <h6 class="mb-3">
-                                    <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span>
-                                    Front Left
-                                </h6>
-                                <div class="slider-section">
-                                    <div id="sliderFrontLeft"></div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Min</span>
-                                        <span>Max</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="tuning-slider-group">
-                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span> Front Right</h6>
-                                <div class="slider-section">
-                                    <div id="sliderFrontRight"></div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Min</span>
-                                        <span>Max</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="tuning-slider-group">
-                                <h6 class="mb-3">
-                                    <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span> Rear Left
-                                </h6>
-                                <div class="slider-section">
-                                    <div id="sliderRearLeft"></div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Min</span>
-                                        <span>Max</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="tuning-slider-group mb-0">
-                                <h6 class="mb-3">
-                                    <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span> Rear Right
-                                </h6>
-                                <div class="slider-section">
-                                    <div id="sliderRearRight"></div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Min</span>
-                                        <span>Max</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Servo Settings Card (Trim + Rotation) -->
-                <div class="col-12 col-md-6 col-lg-4">
-                    <div class="card" id="servoSettingsCard">
-                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
-                            <div>
-                                <span class="material-symbols-outlined icon-danger">tune</span>
-                                Servo Trim & Rotation
-                            </div>
-                            <div class="d-flex align-items-center gap-2 servo-settings-header-actions">
-                                <span class="material-symbols-outlined icon-action" id="servoSettingsLockIcon" title="Lock trim and rotation controls" onclick="toggleServoSettingsLock(this)">lock_open_right</span>
-                                <span class="material-symbols-outlined icon-action" id="servoSettingsChevron" title="Collapse servo settings card" onclick="toggleCardCollapse('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed')">keyboard_arrow_down</span>
-                            </div>
-                        </div>
-                        <div class="card-body" id="servoSettingsCardBody">
-                            <div class="servo-settings-block">
-                                    <div class="servo-settings-section tuning-slider-group">
-                                        <div class="servo-settings-title">
-                                            <div class="servo-settings-title-main">
-                                                <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span>
-                                                <span>Front Left Trim</span>
-                                            </div>
-                                            <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Front Left direction" id="servoFLRevBadge">
-                                                <button type="button" class="btn servo-direction-btn" id="servoFLCwBtn" data-dir="cw" aria-label="Front Left clockwise rotation">
-                                                    <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                </button>
-                                                <button type="button" class="btn servo-direction-btn" id="servoFLCcwBtn" data-dir="ccw" aria-label="Front Left counterclockwise rotation">
-                                                    <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="servo-settings-slider-labels">
-                                            <span id="servoFLTrimDisplay"></span>
-                                        </div>
-                                        <div id="sliderFrontLeftTrim"></div>
-                                        <div class="servo-settings-value-labels">
-                                            <span>Left</span>
-                                            <span>Center</span>
-                                            <span>Right</span>
-                                        </div>
-                                        <input class="form-check-input" type="checkbox" id="servoFLReversed" style="display: none;">
-                                    </div>
-
-                                    <div class="servo-settings-section tuning-slider-group">
-                                        <div class="servo-settings-title">
-                                            <div class="servo-settings-title-main">
-                                                <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
-                                                <span>Front Right Trim</span>
-                                            </div>
-                                            <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Front Right direction" id="servoFRRevBadge">
-                                                <button type="button" class="btn servo-direction-btn" id="servoFRCwBtn" data-dir="cw" aria-label="Front Right clockwise rotation">
-                                                    <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                </button>
-                                                <button type="button" class="btn servo-direction-btn" id="servoFRCcwBtn" data-dir="ccw" aria-label="Front Right counterclockwise rotation">
-                                                    <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="servo-settings-slider-labels">
-                                            <span id="servoFRTrimDisplay"></span>
-                                        </div>
-                                        <div id="sliderFrontRightTrim"></div>
-                                        <div class="servo-settings-value-labels">
-                                            <span>Left</span>
-                                            <span>Center</span>
-                                            <span>Right</span>
-                                        </div>
-                                        <input class="form-check-input" type="checkbox" id="servoFRReversed" style="display: none;">
-                                    </div>
-
-                                    <div class="servo-settings-section tuning-slider-group">
-                                        <div class="servo-settings-title">
-                                            <div class="servo-settings-title-main">
-                                                <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span>
-                                                <span>Rear Left Trim</span>
-                                            </div>
-                                            <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Rear Left direction" id="servoRLRevBadge">
-                                                <button type="button" class="btn servo-direction-btn" id="servoRLCwBtn" data-dir="cw" aria-label="Rear Left clockwise rotation">
-                                                    <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                </button>
-                                                <button type="button" class="btn servo-direction-btn" id="servoRLCcwBtn" data-dir="ccw" aria-label="Rear Left counterclockwise rotation">
-                                                    <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="servo-settings-slider-labels">
-                                            <span id="servoRLTrimDisplay"></span>
-                                        </div>
-                                        <div id="sliderRearLeftTrim"></div>
-                                        <div class="servo-settings-value-labels">
-                                            <span>Left</span>
-                                            <span>Center</span>
-                                            <span>Right</span>
-                                        </div>
-                                        <input class="form-check-input" type="checkbox" id="servoRLReversed" style="display: none;">
-                                    </div>
-
-                                    <div class="servo-settings-section tuning-slider-group">
-                                        <div class="servo-settings-title">
-                                            <div class="servo-settings-title-main">
-                                                <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span>
-                                                <span>Rear Right Trim</span>
-                                            </div>
-                                            <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Rear Right direction" id="servoRRRevBadge">
-                                                <button type="button" class="btn servo-direction-btn" id="servoRRCwBtn" data-dir="cw" aria-label="Rear Right clockwise rotation">
-                                                    <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                </button>
-                                                <button type="button" class="btn servo-direction-btn" id="servoRRCcwBtn" data-dir="ccw" aria-label="Rear Right counterclockwise rotation">
-                                                    <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="servo-settings-slider-labels">
-                                            <span id="servoRRTrimDisplay"></span>
-                                        </div>
-                                        <div id="sliderRearRightTrim"></div>
-                                        <div class="servo-settings-value-labels">
-                                            <span>Left</span>
-                                            <span>Center</span>
-                                            <span>Right</span>
-                                        </div>
-                                        <input class="form-check-input" type="checkbox" id="servoRRReversed" style="display: none;">
-                                    </div>
-
-                                    <!-- Auto Level Progress Container -->
-                                    <div class="servo-settings-footer">
-                                        <button type="button" class="btn btn-gold w-100" id="servoAutoCalibrateBtn">
-                                            <span class="material-symbols-outlined">wand_stars</span>
-                                            Auto Calibrate
-                                        </button>
-                                    </div>
-                                    
-                                    <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
-                                        <div class="card">
-                                            <div class="card-body">
-                                                <div class="bubble-level-card">
-                                                    <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
-                                                    <div class="bubble-level-face" id="bubbleLevelFace">
-                                                        <div class="bubble-level-crosshair horizontal"></div>
-                                                        <div class="bubble-level-crosshair vertical"></div>
-                                                        <div class="bubble-level-target"></div>
-                                                        <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
-                                                        <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
-                                                    </div>
-                                                    <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Auto Level Progress Container -->
-                <!-- <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
-                    <div class="card">
-                        <div class="card-body">
-                            <div class="bubble-level-card">
-                                <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
-                                <div class="bubble-level-face" id="bubbleLevelFace">
-                                    <div class="bubble-level-crosshair horizontal"></div>
-                                    <div class="bubble-level-crosshair vertical"></div>
-                                    <div class="bubble-level-target"></div>
-                                    <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
-                                    <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
-                                </div>
-                                <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
-                            </div>
-                        </div>
-                    </div>
-                </div> -->
-
                 <!-- RCDCC Configuration Card -->
-                <div class="col-12 col-md-6 col-lg-4">
+                <div class="col-12">
                     <div class="card" id="rcdccConfigurationCard">
                         <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                             <div>
-                                <span class="material-symbols-outlined" style="color: var(--danger);">
-                                arrows_input
-                                </span>
-                                RCDCC Configuration
+                                <span class="material-symbols-outlined" style="color: var(--danger);">arrows_input</span>
+                                Hardware Configuration
                             </div>
                             <div class="d-flex align-items-center gap-2">
-                                <span class="material-symbols-outlined icon-action" id="rcdccConfigurationLockIcon" title="Lock RCDCC configuration controls" onclick="toggleRcdccConfigurationLock(this)">lock_open_right</span>
-                                <span class="material-symbols-outlined icon-action" id="rcdccConfigurationChevron" title="Collapse RCDCC configuration card" onclick="toggleCardCollapse('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed')">keyboard_arrow_down</span>
+                                <span class="material-symbols-outlined icon-action" id="rcdccConfigurationLockIcon" title="Lock hardware configuration controls" onclick="toggleRcdccConfigurationLock(this)">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action" id="rcdccConfigurationChevron" title="Collapse hardware configuration card" onclick="toggleCardCollapse('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed')">keyboard_arrow_down</span>
                             </div>
                         </div>
                         <div class="card-body" id="rcdccConfigurationCardBody">
+
+                            <!-- Select Orientation -->
                             <label for="mpuOrientation" class="form-label"><strong>Select Orientation</strong></label>
                             <select class="form-select" id="mpuOrientation">
                                 <option value="0">Arrow Forward, Chip Up (Default)</option>
@@ -896,22 +669,238 @@
                                 <option value="4">Arrow Right, Chip Up</option>
                                 <option value="5">Arrow Left, Chip Up</option>
                             </select>
-                        
-                            <!-- Sensor Refresh Rate -->
-                            <div class="tuning-slider-group mt-4 mb-0">
-                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">memory</span> Sensor Refresh Rate</h6>
-                                <div class="slider-section">
-                                    <div id="sliderSensorRate"></div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Low</span>
-                                        <span>Balanced</span>
-                                        <span>High</span>
+
+                            <!-- Servo Range sub-section -->
+                            <hr class="mt-4 mb-3">
+                            <div id="servoRangeCard">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">
+                                        <span class="material-symbols-outlined icon-danger">radar</span>
+                                        Servo Range
+                                    </h6>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="material-symbols-outlined icon-action" id="servoRangeChevron" title="Collapse servo range" onclick="toggleCardCollapse('servoRangeCard', 'servoRangeChevron', 'servoRangeCardCollapsed')">keyboard_arrow_down</span>
+                                    </div>
+                                </div>
+                                <div class="card-body p-0" id="servoRangeCardBody">
+                                    <div class="row g-3">
+                                        <div class="col-12 col-md-6">
+                                            <div class="tuning-slider-group mb-0">
+                                                <h6 class="mb-3">
+                                                    <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span>
+                                                    Front Left
+                                                </h6>
+                                                <div class="slider-section">
+                                                    <div id="sliderFrontLeft"></div>
+                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                                        <span>Min</span>
+                                                        <span>Max</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <div class="tuning-slider-group mb-0">
+                                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span> Front Right</h6>
+                                                <div class="slider-section">
+                                                    <div id="sliderFrontRight"></div>
+                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                                        <span>Min</span>
+                                                        <span>Max</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <div class="tuning-slider-group mb-0">
+                                                <h6 class="mb-3">
+                                                    <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span> Rear Left
+                                                </h6>
+                                                <div class="slider-section">
+                                                    <div id="sliderRearLeft"></div>
+                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                                        <span>Min</span>
+                                                        <span>Max</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <div class="tuning-slider-group mb-0">
+                                                <h6 class="mb-3">
+                                                    <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span> Rear Right
+                                                </h6>
+                                                <div class="slider-section">
+                                                    <div id="sliderRearRight"></div>
+                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                                        <span>Min</span>
+                                                        <span>Max</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        
+                            <!-- Trim / Rotation sub-section -->
+                            <hr class="mt-4 mb-3">
+                            <div id="servoSettingsCard">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">
+                                        <span class="material-symbols-outlined icon-danger">tune</span>
+                                        Trim / Rotation
+                                    </h6>
+                                    <div class="d-flex align-items-center gap-2 servo-settings-header-actions">
+                                        <span class="material-symbols-outlined icon-action" id="servoSettingsChevron" title="Collapse servo trim &amp; rotation" onclick="toggleCardCollapse('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed')">keyboard_arrow_down</span>
+                                    </div>
+                                </div>
+                                <div class="card-body p-0" id="servoSettingsCardBody">
+                                    <div class="servo-settings-block">
+                                        <div class="servo-settings-section tuning-slider-group">
+                                            <div class="servo-settings-title">
+                                                <div class="servo-settings-title-main">
+                                                    <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span>
+                                                    <span>Front Left Trim</span>
+                                                </div>
+                                                <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Front Left direction" id="servoFLRevBadge">
+                                                    <button type="button" class="btn servo-direction-btn" id="servoFLCwBtn" data-dir="cw" aria-label="Front Left clockwise rotation">
+                                                        <span class="material-symbols-outlined rotate-cw">rotate_right</span>
+                                                    </button>
+                                                    <button type="button" class="btn servo-direction-btn" id="servoFLCcwBtn" data-dir="ccw" aria-label="Front Left counterclockwise rotation">
+                                                        <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="servo-settings-slider-labels">
+                                                <span id="servoFLTrimDisplay"></span>
+                                            </div>
+                                            <div id="sliderFrontLeftTrim"></div>
+                                            <div class="servo-settings-value-labels">
+                                                <span>Left</span>
+                                                <span>Center</span>
+                                                <span>Right</span>
+                                            </div>
+                                            <input class="form-check-input" type="checkbox" id="servoFLReversed" style="display: none;">
+                                        </div>
+
+                                        <div class="servo-settings-section tuning-slider-group">
+                                            <div class="servo-settings-title">
+                                                <div class="servo-settings-title-main">
+                                                    <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
+                                                    <span>Front Right Trim</span>
+                                                </div>
+                                                <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Front Right direction" id="servoFRRevBadge">
+                                                    <button type="button" class="btn servo-direction-btn" id="servoFRCwBtn" data-dir="cw" aria-label="Front Right clockwise rotation">
+                                                        <span class="material-symbols-outlined rotate-cw">rotate_right</span>
+                                                    </button>
+                                                    <button type="button" class="btn servo-direction-btn" id="servoFRCcwBtn" data-dir="ccw" aria-label="Front Right counterclockwise rotation">
+                                                        <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="servo-settings-slider-labels">
+                                                <span id="servoFRTrimDisplay"></span>
+                                            </div>
+                                            <div id="sliderFrontRightTrim"></div>
+                                            <div class="servo-settings-value-labels">
+                                                <span>Left</span>
+                                                <span>Center</span>
+                                                <span>Right</span>
+                                            </div>
+                                            <input class="form-check-input" type="checkbox" id="servoFRReversed" style="display: none;">
+                                        </div>
+
+                                        <div class="servo-settings-section tuning-slider-group">
+                                            <div class="servo-settings-title">
+                                                <div class="servo-settings-title-main">
+                                                    <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span>
+                                                    <span>Rear Left Trim</span>
+                                                </div>
+                                                <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Rear Left direction" id="servoRLRevBadge">
+                                                    <button type="button" class="btn servo-direction-btn" id="servoRLCwBtn" data-dir="cw" aria-label="Rear Left clockwise rotation">
+                                                        <span class="material-symbols-outlined rotate-cw">rotate_right</span>
+                                                    </button>
+                                                    <button type="button" class="btn servo-direction-btn" id="servoRLCcwBtn" data-dir="ccw" aria-label="Rear Left counterclockwise rotation">
+                                                        <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="servo-settings-slider-labels">
+                                                <span id="servoRLTrimDisplay"></span>
+                                            </div>
+                                            <div id="sliderRearLeftTrim"></div>
+                                            <div class="servo-settings-value-labels">
+                                                <span>Left</span>
+                                                <span>Center</span>
+                                                <span>Right</span>
+                                            </div>
+                                            <input class="form-check-input" type="checkbox" id="servoRLReversed" style="display: none;">
+                                        </div>
+
+                                        <div class="servo-settings-section tuning-slider-group">
+                                            <div class="servo-settings-title">
+                                                <div class="servo-settings-title-main">
+                                                    <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span>
+                                                    <span>Rear Right Trim</span>
+                                                </div>
+                                                <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Rear Right direction" id="servoRRRevBadge">
+                                                    <button type="button" class="btn servo-direction-btn" id="servoRRCwBtn" data-dir="cw" aria-label="Rear Right clockwise rotation">
+                                                        <span class="material-symbols-outlined rotate-cw">rotate_right</span>
+                                                    </button>
+                                                    <button type="button" class="btn servo-direction-btn" id="servoRRCcwBtn" data-dir="ccw" aria-label="Rear Right counterclockwise rotation">
+                                                        <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="servo-settings-slider-labels">
+                                                <span id="servoRRTrimDisplay"></span>
+                                            </div>
+                                            <div id="sliderRearRightTrim"></div>
+                                            <div class="servo-settings-value-labels">
+                                                <span>Left</span>
+                                                <span>Center</span>
+                                                <span>Right</span>
+                                            </div>
+                                            <input class="form-check-input" type="checkbox" id="servoRRReversed" style="display: none;">
+                                        </div>
+
+                                        <!-- Auto Calibrate & Level -->
+                                        <div class="servo-settings-footer">
+                                            <button type="button" class="btn btn-gold w-100" id="servoAutoCalibrateBtn">
+                                                <span class="material-symbols-outlined">wand_stars</span>
+                                                Auto Calibrate
+                                            </button>
+                                        </div>
+
+                                        <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <div class="bubble-level-card">
+                                                        <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
+                                                        <div class="bubble-level-face" id="bubbleLevelFace">
+                                                            <div class="bubble-level-crosshair horizontal"></div>
+                                                            <div class="bubble-level-crosshair vertical"></div>
+                                                            <div class="bubble-level-target"></div>
+                                                            <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
+                                                            <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
+                                                        </div>
+                                                        <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Save Settings to NVS (persistent storage) -->
+                            <hr class="mt-4 mb-3">
+                            <button id="system-save-btn" class="btn btn-secondary w-100" disabled onclick="savePage('system')">
+                                Save Settings
+                            </button>
+
+                        </div>
                     </div>
                 </div>
            
@@ -941,7 +930,7 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrows_input</span> RCDCC Configuration
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrows_input</span> Hardware Configuration
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div>Select how your DCC is physically mounted. The arrow is printed on the box.</div>
@@ -957,6 +946,7 @@
                                             <span class="material-symbols-outlined" style="color: var(--danger);">height</span> Ride Height
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Sets the suspension's resting position, controlling how high or low the chassis sits before the vehicle starts reacting to movement.</div>
                                             <div><strong>Formula:</strong> servoOffset = rideHeight × (maxServo - minServo) / 100</div>
                                             <div style="margin-top: 5px;">
                                                 <div>0% = Lowest ride height (maximum compression)</div>
@@ -975,6 +965,7 @@
                                             
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Controls how much the system resists vertical motion, smoothing bumps and limiting bounce after the chassis is disturbed.</div>
                                             <div><strong>Formula:</strong> verticalEffect = -verticalAccel × damping</div>
                                             <div style="margin-top: 5px;">
                                                 <div>0.1 = Soft damping (minimal vertical compensation)</div>
@@ -992,6 +983,7 @@
                                             <span class="material-symbols-outlined" style="color: var(--danger);">compress</span> Stiffness
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Sets how strongly the suspension counters body roll and pitch when the vehicle leans under cornering, braking, or acceleration.</div>
                                             <div><strong>Formula:</strong> rollEffect = roll × stiffness, pitchEffect = pitch × stiffness</div>
                                             <div style="margin-top: 5px;">
                                                 <div>0.5 = Soft response (minimal roll/pitch correction)</div>
@@ -1010,6 +1002,7 @@
                                             Reaction Speed
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Determines how quickly suspension corrections are applied after motion is detected, balancing sharp response against smoothness.</div>
                                             <div><strong>Formula:</strong> smoothing = 1.0 / (1.0 + (5.0 / reactionSpeed))</div>
                                             <div style="margin-top: 5px;">
                                                 <div>0.1 = Very slow/smooth response (smoothing ≈ 0.02)</div>
@@ -1027,6 +1020,7 @@
                                             <span class="material-symbols-outlined" style="color: var(--danger);">balance</span> Balance (Rear/Front)
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Splits pitch correction between the front and rear axles so you can favor nose control, rear stability, or an even mix.</div>
                                             <div><strong>Formula:</strong> frontFactor = balance, rearFactor = 1.0 - balance</div>
                                             <div style="margin-top: 5px;">
                                                 <div>0% = All rear (front: 0%, rear: 100% pitch effect)</div>
@@ -1116,6 +1110,16 @@
                             </div>
                         </div>
                         <div class="card-body" id="manageLightGroupsCardBody">
+                            <hr class="my-3">
+                            <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+                                <label for="totalLEDCount" class="form-label mb-0" style="flex:1;">
+                                    <strong>Total LEDs in your strip</strong>
+                                    <div class="form-text mt-0"><small>Minimum: 1, Maximum: 300</small></div>
+                                </label>
+                                <input type="number" class="form-control text-center" id="totalLEDCount" min="1" max="300" value="100" placeholder="100" style="width:80px;flex-shrink:0;">
+                            </div>
+                            <hr class="my-3">
+
                             <button type="button" class="lights-master-toggle-btn mb-3" id="lightsToggleLightGroups" aria-pressed="false" aria-label="Master Light Switch off" title="Master lights off">
                                 <span class="material-symbols-outlined lights-master-toggle-icon" aria-hidden="true">light_off</span>
                                 <span class="lights-master-toggle-text">Master Light Switch</span>
@@ -1134,31 +1138,6 @@
                     </div>
                 </div>
 
-                <!-- Light Strip Configuration Card -->
-                <div class="col-12">
-                    <div class="card" id="lightStripConfigCard">
-                        <div class="card-header card-header-dark d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="material-symbols-outlined" style="color: var(--danger);">linear_scale</span>
-                                &nbsp;Light Strip Configuration
-                            </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="material-symbols-outlined icon-action" id="lightStripConfigLockIcon" title="Lock light strip configuration" onclick="toggleLightStripConfigLock()">lock_open_right</span>
-                                <span class="material-symbols-outlined icon-action" id="lightStripConfigChevron" title="Collapse light strip configuration" onclick="toggleCardCollapse('lightStripConfigCard', 'lightStripConfigChevron', 'lightStripConfigCardCollapsed')">keyboard_arrow_down</span>
-                            </div>
-                        </div>
-                        <div class="card-body" id="lightStripConfigCardBody">
-                            <div class="d-flex align-items-center justify-content-between gap-3">
-                                <label for="totalLEDCount" class="form-label mb-0" style="flex:1;">
-                                    <strong>Total LEDs in your strip</strong>
-                                    <div class="form-text mt-0"><small>Minimum: 1, Maximum: 300</small></div>
-                                </label>
-                                <input type="number" class="form-control text-center" id="totalLEDCount" min="1" max="300" value="100" placeholder="100" style="width:80px;flex-shrink:0;">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Help Card -->
                 <div class="col-12">
                     <div class="card" id="lightsGuideCard">
@@ -1171,7 +1150,7 @@
                         </div>
                         <div class="card-body" id="lightsGuideCardBody">
                             <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.8;">
-                                <li><strong>Set Total LED Count:</strong> Update the "Light Strip Configuration" card to match your LED count.</li>
+                                <li><strong>Set Total LED Count:</strong> Update the Total LEDs field in the Manage Light Groups card to match your LED count.</li>
                                 <li><strong>Create Light Groups:</strong> Click "Add Light Group" to define a group with a name, pattern, and color(s).</li>
                                 <li><strong>Assign LEDs to Groups:</strong> In the group editor, select which LED positions belong to this group.</li>
                                 <li><strong>Set Brightness:</strong> Adjust the brightness slider for each group independently.</li>
@@ -1213,7 +1192,7 @@
 
                             <div id="garageEmptyState" class="text-center" style="display:none; color:#777; padding: 1rem 0;">
                                 <span class="material-symbols-outlined" style="font-size:2rem; display:block; margin-bottom:0.35rem;">garage_home</span>
-                                No vehicles saved yet. Use "Scan &amp; Connect" to add one.
+                                No vehicles saved yet.
                             </div>
                         </div>
                     </div>

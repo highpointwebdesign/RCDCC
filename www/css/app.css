@@ -967,6 +967,19 @@
             border-radius: 4px;
             padding: 10px;
         }
+
+        /* Dashboard quick-nav elements */
+        .dashboard-quick-nav-text {
+            color: var(--text-muted);
+            text-decoration: underline dashed;
+            text-underline-offset: 4px;
+        }
+
+        .dashboard-quick-nav-icon {
+            color: var(--text-muted);
+            font-size: 1em;
+            cursor: pointer;
+        }
         
         /* Bubble level modal */
         .bubble-level-modal .modal-content {
@@ -2332,6 +2345,17 @@
 
         .profile-card-locked .card-body {
             opacity: 0.72;
+        }
+
+        #drivingProfilesCard,
+        #lightingProfilesCard {
+            overflow: hidden;
+        }
+
+        #drivingProfilesCardBody,
+        #lightingProfilesCardBody {
+            border-bottom-left-radius: var(--bs-card-border-radius);
+            border-bottom-right-radius: var(--bs-card-border-radius);
         }
 
         .profile-card-header-actions .icon-action {

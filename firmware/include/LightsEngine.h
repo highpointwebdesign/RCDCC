@@ -1,510 +1,594 @@
-#ifndef LIGHTS_ENGINE_H
-#define LIGHTS_ENGINE_H
+#pragma once
+// =============================================================================
+// LightsEngine.h — RCDCC Addressable LED Effect Engine
+// =============================================================================
+// Runs on Core 0 via FreeRTOS task. Core 1 handles BLE.
+// Effects adapted from WLED open source project (MIT license).
+// Each effect operates ONLY on its group's defined LED indices —
+// never on the full strip.
+//
+// BLE sends a group update packet via CHAR_LIGHTS_CMD:
+// {
+//   "group": 0,
+//   "name": "Headlights",
+//   "enabled": true,
+//   "color": "#FFFFFF",
+//   "color2": "#000000",
+//   "brightness": 100,
+//   "effect": "solid",
+//   "speed": 128,
+//   "leds": [0, 2]
+// }
+// =============================================================================
 
+#include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
-#include <algorithm>
-#include <math.h>
-#include <cstring>
+#include <ArduinoJson.h>
 #include "Config.h"
 
-class LightsEngine {
-private:
-  Adafruit_NeoPixel *strip;
-  uint16_t ledCount;
-  LightingProfile currentProfile = {};
-  uint8_t frameBuffer[300];  // RGB buffer: max 100 LEDs * 3 bytes
-  volatile bool flashOverrideActive = false;
+// ── Constants ─────────────────────────────────────────────────────────────────
+#define LIGHTS_ENGINE_PIN        27
+#define LIGHTS_ENGINE_MAX_LEDS   300
+#define LIGHTS_ENGINE_MAX_GROUPS 16
+#define LIGHTS_ENGINE_MAX_GROUP_LEDS 64
+#define LIGHTS_ENGINE_TASK_HZ    50    // frame rate — 50Hz = 20ms per tick
+#define LIGHTS_ENGINE_TICK_MS    (1000 / LIGHTS_ENGINE_TASK_HZ)
+#define LIGHTS_ENGINE_CORE       0     // pin to Core 0; BLE runs on Core 1
 
-  // Effect animation state per group
-  struct GroupState {
-    uint16_t counter;
-    uint8_t position;
-    unsigned long lastUpdate;
-  } groupStates[MAX_GROUPS_PER_PROFILE];
-
-  // Pseudo-random number generator (deterministic, suitable for effects)
-  uint8_t random8(uint16_t seed) {
-    seed ^= (seed << 13);
-    seed ^= (seed >> 7);
-    seed ^= (seed << 17);
-    return (uint8_t)(seed & 0xFF);
-  }
-
-  // CRGB color (8-bit per channel)
-  struct CRGB {
-    uint8_t r, g, b;
-    CRGB() : r(0), g(0), b(0) {}
-    CRGB(uint8_t _r, uint8_t _g, uint8_t _b) : r(_r), g(_g), b(_b) {}
-    CRGB(const char* hexStr) {
-      // Parse hex color #RRGGBB
-      if (hexStr && hexStr[0] == '#' && strlen(hexStr) >= 7) {
-        r = strtol(hexStr + 1, nullptr, 16) >> 16 & 0xFF;
-        g = (strtol(hexStr + 1, nullptr, 16) >> 8) & 0xFF;
-        b = strtol(hexStr + 1, nullptr, 16) & 0xFF;
-      } else {
-        r = g = b = 0;
-      }
-    }
-  };
-
-  // Apply brightness scaling to a color
-  CRGB applyBrightness(CRGB color, uint8_t brightness) {
-    color.r = (uint32_t)color.r * brightness / 100;
-    color.g = (uint32_t)color.g * brightness / 100;
-    color.b = (uint32_t)color.b * brightness / 100;
-    return color;
-  }
-
-  // Linear interpolation between two colors
-  CRGB colorLerp(CRGB a, CRGB b, uint8_t frac) {
-    return CRGB(
-      a.r + ((b.r - a.r) * frac) / 255,
-      a.g + ((b.g - a.g) * frac) / 255,
-      a.b + ((b.b - a.b) * frac) / 255
-    );
-  }
-
-  // Sine-wave lookup table (0-255)
-  uint8_t sin8(uint8_t x) {
-    if (x == 0) return 0;
-    if (x == 85) return 255;
-    if (x == 170) return 255;
-    if (x == 255) return 0;
-    // Simple sine approximation
-    float rad = (x / 255.0f) * 3.14159f * 2.0f;
-    return (uint8_t)((sin(rad) + 1.0f) * 127.5f);
-  }
-
-  // === EFFECT IMPLEMENTATIONS (14 effects) ===
-
-  // 1. SOLID: All LEDs in group set to color_primary at brightness
-  void effectSolid(const LightingGroup& group, uint8_t groupIdx) {
-    CRGB primary(group.colorPrimary);
-    primary = applyBrightness(primary, group.brightness);
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led < ledCount) {
-        frameBuffer[led * 3 + 0] = primary.r;
-        frameBuffer[led * 3 + 1] = primary.g;
-        frameBuffer[led * 3 + 2] = primary.b;
-      }
-    }
-  }
-
-  // 2. BLINK: Alternate between primary and secondary at effect_speed
-  void effectBlink(const LightingGroup& group, uint8_t groupIdx) {
-    uint16_t period = std::max<uint16_t>(100, static_cast<uint16_t>(group.effectSpeed) * 2);
-    uint32_t elapsed = millis() % period;
-    CRGB color = (elapsed < period / 2) ? CRGB(group.colorPrimary) : CRGB(group.colorSecondary);
-    color = applyBrightness(color, group.brightness);
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led < ledCount) {
-        frameBuffer[led * 3 + 0] = color.r;
-        frameBuffer[led * 3 + 1] = color.g;
-        frameBuffer[led * 3 + 2] = color.b;
-      }
-    }
-  }
-
-  // 3. STROBE: Rapid on/off flash at very high speed
-  void effectStrobe(const LightingGroup& group, uint8_t groupIdx) {
-    uint16_t period = std::max<uint16_t>(20, static_cast<uint16_t>(200 - (group.effectSpeed * 2)));  // 20-200ms period
-    uint32_t elapsed = millis() % period;
-    bool on = (elapsed < period / 8);  // Flash 1/8 of period
-    CRGB color = on ? CRGB(group.colorPrimary) : CRGB(0, 0, 0);
-    color = applyBrightness(color, group.brightness);
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led < ledCount) {
-        frameBuffer[led * 3 + 0] = color.r;
-        frameBuffer[led * 3 + 1] = color.g;
-        frameBuffer[led * 3 + 2] = color.b;
-      }
-    }
-  }
-
-  // 4. BREATHE: Sine-wave brightness pulse at effect_speed
-  void effectBreathe(const LightingGroup& group, uint8_t groupIdx) {
-    uint16_t period = std::max<uint16_t>(500, static_cast<uint16_t>(1000 - (group.effectSpeed * 5)));
-    uint32_t elapsed = millis() % period;
-    uint8_t phase = (elapsed * 255) / period;
-    uint8_t brightness = 50 + (sin8(phase) * group.brightness) / 510;  // 50-100%
-    CRGB color(group.colorPrimary);
-    color = applyBrightness(color, brightness);
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led < ledCount) {
-        frameBuffer[led * 3 + 0] = color.r;
-        frameBuffer[led * 3 + 1] = color.g;
-        frameBuffer[led * 3 + 2] = color.b;
-      }
-    }
-  }
-
-  // 5. FADE: Linear transition between primary and secondary
-  void effectFade(const LightingGroup& group, uint8_t groupIdx) {
-    uint16_t period = std::max<uint16_t>(500, static_cast<uint16_t>(2000 - (group.effectSpeed * 10)));
-    uint32_t elapsed = millis() % period;
-    uint8_t frac = (elapsed * 255) / period;
-    CRGB primary(group.colorPrimary);
-    CRGB secondary(group.colorSecondary);
-    CRGB color = (frac < 128) 
-      ? colorLerp(primary, secondary, frac * 2)  // Primary to secondary
-      : colorLerp(secondary, primary, (frac - 128) * 2);  // Back to primary
-    color = applyBrightness(color, group.brightness);
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led < ledCount) {
-        frameBuffer[led * 3 + 0] = color.r;
-        frameBuffer[led * 3 + 1] = color.g;
-        frameBuffer[led * 3 + 2] = color.b;
-      }
-    }
-  }
-
-  // 6. TWINKLE: Random individual LEDs fade in/out (WLED Twinkle adapted)
-  void effectTwinkle(const LightingGroup& group, uint8_t groupIdx) {
-    CRGB primary(group.colorPrimary);
-    CRGB secondary(group.colorSecondary);
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led >= ledCount) continue;
-      uint8_t noise = random8((j + groupIdx) * 123 + (millis() / 10));
-      CRGB color;
-      if (noise > 220) {
-        color = CRGB(255, 255, 255);  // White twinkle
-      } else if (noise > 180) {
-        color = primary;
-      } else {
-        color = secondary;
-      }
-      color = applyBrightness(color, group.brightness);
-      frameBuffer[led * 3 + 0] = color.r;
-      frameBuffer[led * 3 + 1] = color.g;
-      frameBuffer[led * 3 + 2] = color.b;
-    }
-  }
-
-  // 7. SPARKLE: Random LED flashes to full brightness then fades
-  void effectSparkle(const LightingGroup& group, uint8_t groupIdx) {
-    CRGB primary(group.colorPrimary);
-    uint8_t sparkleCount = static_cast<uint8_t>(std::max<int>(1, (group.effectIntensity * group.ledCount) / 300));
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led >= ledCount) continue;
-      uint8_t noise = random8((j + groupIdx) * 201 + (millis() / 20));
-      CRGB color = (noise < sparkleCount * 5) ? CRGB(255, 255, 255) : primary;
-      color = applyBrightness(color, group.brightness);
-      frameBuffer[led * 3 + 0] = color.r;
-      frameBuffer[led * 3 + 1] = color.g;
-      frameBuffer[led * 3 + 2] = color.b;
-    }
-  }
-
-  // 8. FLASH_SPARKLE: Sparkle layered over solid color base
-  void effectFlashSparkle(const LightingGroup& group, uint8_t groupIdx) {
-    CRGB primary(group.colorPrimary);
-    CRGB secondary(group.colorSecondary);
-    uint8_t sparkleCount = static_cast<uint8_t>(std::max<int>(1, (group.effectIntensity * group.ledCount) / 300));
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led >= ledCount) continue;
-      uint8_t noise = random8((j + groupIdx) * 307 + (millis() / 25));
-      CRGB color = (noise < sparkleCount * 5) ? CRGB(255, 255, 255) : primary;
-      color = applyBrightness(color, group.brightness);
-      frameBuffer[led * 3 + 0] = color.r;
-      frameBuffer[led * 3 + 1] = color.g;
-      frameBuffer[led * 3 + 2] = color.b;
-    }
-  }
-
-  // 9. GLITTER: Random bright white flashes (WLED Glitter adapted)
-  void effectGlitter(const LightingGroup& group, uint8_t groupIdx) {
-    CRGB primary(group.colorPrimary);
-    uint8_t glitterDensity = (group.effectIntensity * 255) / 100;
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led >= ledCount) continue;
-      uint8_t noise = random8((j + groupIdx) * 311 + (millis() / 30));
-      CRGB color = (noise < glitterDensity / 8) ? CRGB(255, 255, 255) : primary;
-      color = applyBrightness(color, group.brightness);
-      frameBuffer[led * 3 + 0] = color.r;
-      frameBuffer[led * 3 + 1] = color.g;
-      frameBuffer[led * 3 + 2] = color.b;
-    }
-  }
-
-  // 10. RUNNING: Sine wave sweeping across LED positions (WLED Running Lights adapted)
-  void effectRunning(const LightingGroup& group, uint8_t groupIdx) {
-    CRGB primary(group.colorPrimary);
-    uint16_t period = std::max<uint16_t>(500, static_cast<uint16_t>(2000 - (group.effectSpeed * 10)));
-    uint32_t elapsed = millis() % period;
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led >= ledCount) continue;
-      uint8_t phase = ((j * 256 / group.ledCount) + (elapsed * 256 / period)) & 0xFF;
-      uint8_t brightness = 50 + (sin8(phase) * group.brightness) / 510;
-      CRGB color = primary;
-      color = applyBrightness(color, brightness);
-      frameBuffer[led * 3 + 0] = color.r;
-      frameBuffer[led * 3 + 1] = color.g;
-      frameBuffer[led * 3 + 2] = color.b;
-    }
-  }
-
-  // 11. LARSON: Bouncing bright point with decay trail (KITT scanner, WLED Larson adapted)
-  void effectLarson(const LightingGroup& group, uint8_t groupIdx) {
-    if (group.ledCount == 0) return;
-    CRGB primary(group.colorPrimary);
-    uint16_t period = std::max<uint16_t>(500, static_cast<uint16_t>(2000 - (group.effectSpeed * 10)));
-    uint32_t elapsed = millis() % period;
-    uint8_t cycle = (elapsed * group.ledCount * 2) / period;
-    uint8_t bouncePos = (cycle < group.ledCount) ? cycle : (group.ledCount * 2 - 1 - cycle);
-
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led >= ledCount) continue;
-      int distance = abs((int)j - (int)bouncePos);
-      uint8_t brightness = static_cast<uint8_t>((distance == 0) ? 100 : std::max<int>(10, 100 - distance * 20));
-      CRGB color = primary;
-      color = applyBrightness(color, (brightness * group.brightness) / 100);
-      frameBuffer[led * 3 + 0] = color.r;
-      frameBuffer[led * 3 + 1] = color.g;
-      frameBuffer[led * 3 + 2] = color.b;
-    }
-  }
-
-  // 12. FLICKER: Random brightness variation simulating flame (WLED Fire Flicker adapted)
-  void effectFlicker(const LightingGroup& group, uint8_t groupIdx) {
-    CRGB primary(group.colorPrimary);
-    uint8_t flickerIntensity = (group.effectIntensity * 100) / 100;
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led >= ledCount) continue;
-      uint8_t noise = random8((j + groupIdx) * 401 + (millis() / 40));
-      uint8_t brightness = 70 + ((noise * flickerIntensity) / 256);
-      brightness = constrain(brightness, 50, 100);
-      CRGB color = primary;
-      color = applyBrightness(color, brightness);
-      frameBuffer[led * 3 + 0] = color.r;
-      frameBuffer[led * 3 + 1] = color.g;
-      frameBuffer[led * 3 + 2] = color.b;
-    }
-  }
-
-  // 13. HEARTBEAT: Double-pulse rhythmic pattern
-  void effectHeartbeat(const LightingGroup& group, uint8_t groupIdx) {
-    CRGB primary(group.colorPrimary);
-    uint16_t period = std::max<uint16_t>(600, static_cast<uint16_t>(1500 - (group.effectSpeed * 5)));
-    uint32_t elapsed = millis() % period;
-    uint8_t brightness = 20;  // Base dim
-    
-    // First pulse: 0-100ms
-    if (elapsed < 100) brightness = 20 + (elapsed * 80) / 100;
-    // Slight dip: 100-150ms
-    else if (elapsed < 150) brightness = 100 - ((elapsed - 100) * 60) / 50;
-    // Second pulse: 150-250ms
-    else if (elapsed < 250) brightness = 40 + ((elapsed - 150) * 60) / 100;
-    // Back to base: 250+ms
-    else brightness = 20;
-
-    CRGB color = primary;
-    color = applyBrightness(color, (brightness * group.brightness) / 100);
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led < ledCount) {
-        frameBuffer[led * 3 + 0] = color.r;
-        frameBuffer[led * 3 + 1] = color.g;
-        frameBuffer[led * 3 + 2] = color.b;
-      }
-    }
-  }
-
-  // 14. ALTERNATE: Two halves of LED list swap colors
-  void effectAlternate(const LightingGroup& group, uint8_t groupIdx) {
-    CRGB primary(group.colorPrimary);
-    CRGB secondary(group.colorSecondary);
-    uint16_t period = std::max<uint16_t>(300, static_cast<uint16_t>(1000 - (group.effectSpeed * 5)));
-    uint32_t elapsed = millis() % period;
-    bool primaryFirst = (elapsed < period / 2);
-
-    uint16_t halfway = group.ledCount / 2;
-    for (int j = 0; j < group.ledCount; j++) {
-      uint16_t led = group.leds[j];
-      if (led >= ledCount) continue;
-      bool isFirstHalf = (j < halfway);
-      CRGB color = (isFirstHalf == primaryFirst) ? primary : secondary;
-      color = applyBrightness(color, group.brightness);
-      frameBuffer[led * 3 + 0] = color.r;
-      frameBuffer[led * 3 + 1] = color.g;
-      frameBuffer[led * 3 + 2] = color.b;
-    }
-  }
-
-public:
-  LightsEngine(uint16_t pin, uint16_t count) : ledCount(count) {
-    strip = new Adafruit_NeoPixel(count, pin, NEO_GRB + NEO_KHZ800);
-    strip->begin();
-    strip->show();
-    memset(frameBuffer, 0, sizeof(frameBuffer));
-    memset(groupStates, 0, sizeof(groupStates));
-  }
-
-  ~LightsEngine() {
-    if (strip) {
-      delete strip;
-    }
-  }
-
-  // Load current lighting profile
-  void loadProfile(const LightingProfile& profile) {
-    currentProfile = profile;
-    Serial.printf("[LightsEngine] Loaded profile: %s (%d groups)\n", 
-                  profile.name, profile.groupCount);
-  }
-
-  // Backward compatibility for pre-Phase 5 callsites.
-  // Converts dynamic NewLightsConfig groups into Phase 5 LightingProfile format.
-  void updateFromPayload(const NewLightsConfig& config) {
-    auto rgbToHex = [](uint32_t rgb, char out[8]) {
-      snprintf(out, 8, "#%06X", rgb & 0xFFFFFF);
-    };
-    auto modeToEffect = [](uint8_t mode) -> const char* {
-      switch (mode) {
-        case LIGHT_MODE_BLINK: return EFFECT_BLINK;
-        case LIGHT_MODE_PULSE: return EFFECT_BREATHE;
-        case LIGHT_MODE_WIPE:  return EFFECT_RUNNING;
-        case LIGHT_MODE_CHASE: return EFFECT_RUNNING;
-        case LIGHT_MODE_TWINKLE: return EFFECT_TWINKLE;
-        case LIGHT_MODE_DUAL_BREATHE: return EFFECT_FADE;
-        case LIGHT_MODE_SOLID:
-        default: return EFFECT_SOLID;
-      }
-    };
-
-    LightingProfile p = {};
-    strncpy(p.name, "Runtime", sizeof(p.name) - 1);
-    p.master = true;
-    p.totalLeds = ledCount;
-    p.groupCount = (config.groupCount > MAX_GROUPS_PER_PROFILE) ? MAX_GROUPS_PER_PROFILE : config.groupCount;
-    for (uint8_t i = 0; i < p.groupCount; i++) {
-      const ExtendedLightGroup& src = config.groups[i];
-      LightingGroup& dst = p.groups[i];
-      dst.id = i;
-      strncpy(dst.name, src.name, sizeof(dst.name) - 1);
-      dst.enabled = src.enabled;
-      String pattern = String(src.pattern);
-      pattern.trim();
-      pattern.toLowerCase();
-      const char* effectName = pattern.length() ? pattern.c_str() : modeToEffect(src.mode);
-      strncpy(dst.effect, effectName, sizeof(dst.effect) - 1);
-      rgbToHex(src.color, dst.colorPrimary);
-      rgbToHex(src.color2, dst.colorSecondary);
-      dst.brightness = (src.brightness > 100) ? 100 : src.brightness;
-      dst.effectSpeed = static_cast<uint8_t>(std::min<int>(100, std::max<int>(0, src.blinkRate / 10)));
-      dst.effectIntensity = 100;
-      dst.ledCount = (src.ledCount > MAX_GROUP_LEDS) ? MAX_GROUP_LEDS : src.ledCount;
-      for (uint16_t j = 0; j < dst.ledCount; j++) {
-        dst.leds[j] = src.ledIndices[j];
-      }
-    }
-    loadProfile(p);
-  }
-
-  // Main update loop — call frequently (e.g., every 50ms)
-  void update() {
-    if (flashOverrideActive) {
-      return;
-    }
-
-    if (!currentProfile.master) {
-      strip->clear();
-      strip->show();
-      return;
-    }
-
-    // Clear frame buffer
-    memset(frameBuffer, 0, sizeof(frameBuffer));
-
-    // Process each group (effects only write their own LED indices)
-    for (int i = 0; i < currentProfile.groupCount; i++) {
-      const LightingGroup& group = currentProfile.groups[i];
-      if (!group.enabled || group.ledCount == 0) continue;
-
-      // Dispatch to appropriate effect handler
-      String effect = group.effect;
-      if (effect == EFFECT_SOLID) effectSolid(group, i);
-      else if (effect == EFFECT_BLINK) effectBlink(group, i);
-      else if (effect == EFFECT_STROBE) effectStrobe(group, i);
-      else if (effect == EFFECT_BREATHE) effectBreathe(group, i);
-      else if (effect == EFFECT_FADE) effectFade(group, i);
-      else if (effect == EFFECT_TWINKLE) effectTwinkle(group, i);
-      else if (effect == EFFECT_SPARKLE) effectSparkle(group, i);
-      else if (effect == EFFECT_FLASH_SPARKLE) effectFlashSparkle(group, i);
-      else if (effect == EFFECT_GLITTER) effectGlitter(group, i);
-      else if (effect == EFFECT_RUNNING) effectRunning(group, i);
-      else if (effect == EFFECT_LARSON) effectLarson(group, i);
-      else if (effect == EFFECT_FLICKER) effectFlicker(group, i);
-      else if (effect == EFFECT_HEARTBEAT) effectHeartbeat(group, i);
-      else if (effect == EFFECT_ALTERNATE) effectAlternate(group, i);
-      else effectSolid(group, i);  // Default to solid
-    }
-
-    // Push frame buffer to LED strip
-    for (int i = 0; i < ledCount && i * 3 + 2 < (int)sizeof(frameBuffer); i++) {
-      strip->setPixelColor(i, frameBuffer[i * 3], frameBuffer[i * 3 + 1], frameBuffer[i * 3 + 2]);
-    }
-    strip->show();
-  }
-
-  // Turn off all LEDs
-  void clear() {
-    strip->clear();
-    strip->show();
-    memset(frameBuffer, 0, sizeof(frameBuffer));
-    currentProfile.groupCount = 0;
-  }
-
-  // Temporary full-strip flash override used by truck-switch confirmation.
-  // This does not mutate the active lighting profile.
-  void flashAllBlocking(uint32_t rgbColor, uint8_t count, uint16_t onMs = 200, uint16_t offMs = 200, volatile bool* cancelFlag = nullptr) {
-    if (count == 0) return;
-    flashOverrideActive = true;
-
-    uint8_t r = (rgbColor >> 16) & 0xFF;
-    uint8_t g = (rgbColor >> 8) & 0xFF;
-    uint8_t b = rgbColor & 0xFF;
-
-    for (uint8_t i = 0; i < count; i++) {
-      if (cancelFlag && *cancelFlag) break;
-      for (uint16_t led = 0; led < ledCount; led++) {
-        strip->setPixelColor(led, r, g, b);
-      }
-      strip->show();
-      for (uint16_t t = 0; t < onMs; t += 10) {
-        if (cancelFlag && *cancelFlag) break;
-        delay(10);
-      }
-      if (cancelFlag && *cancelFlag) break;
-
-      strip->clear();
-      strip->show();
-      if (i + 1 < count) {
-        for (uint16_t t = 0; t < offMs; t += 10) {
-          if (cancelFlag && *cancelFlag) break;
-          delay(10);
-        }
-      }
-    }
-
-    flashOverrideActive = false;
-  }
-
-  // Get reference to current profile
-  LightingProfile* getProfile() {
-    return &currentProfile;
-  }
+// ── Effect enum ───────────────────────────────────────────────────────────────
+enum LightEffect : uint8_t {
+    FX_SOLID         = 0,
+    FX_BLINK         = 1,
+    FX_STROBE        = 2,
+    FX_BREATHE       = 3,
+    FX_FADE          = 4,
+    FX_TWINKLE       = 5,
+    FX_SPARKLE       = 6,
+    FX_FLASH_SPARKLE = 7,
+    FX_GLITTER       = 8,
+    FX_RUNNING       = 9,
+    FX_LARSON        = 10,
+    FX_FLICKER       = 11,
+    FX_HEARTBEAT     = 12,
+    FX_ALTERNATE     = 13,
+    FX_COUNT         = 14
 };
 
-#endif
+static const char* const EFFECT_NAMES[FX_COUNT] = {
+    "solid", "blink", "strobe", "breathe", "fade",
+    "twinkle", "sparkle", "flash_sparkle", "glitter",
+    "running", "larson", "flicker", "heartbeat", "alternate"
+};
+
+static LightEffect effectFromString(const char* name) {
+    if (!name) return FX_SOLID;
+    for (uint8_t i = 0; i < FX_COUNT; i++) {
+        if (strcasecmp(name, EFFECT_NAMES[i]) == 0) return static_cast<LightEffect>(i);
+    }
+    return FX_SOLID;
+}
+
+// ── Light group config ─────────────────────────────────────────────────────────
+struct EngineLightGroup {
+    char       name[24]     = {0};
+    bool       enabled      = false;
+    uint32_t   colorPrimary = 0xFFFFFF;   // RGB packed
+    uint32_t   colorSecond  = 0x000000;
+    uint8_t    brightness   = 100;        // 0–100 %
+    LightEffect effect      = FX_SOLID;
+    uint8_t    speed        = 128;        // 0–255, higher = faster
+    uint16_t   leds[LIGHTS_ENGINE_MAX_GROUP_LEDS] = {0};
+    uint8_t    ledCount     = 0;
+
+    // Per-group animation state (not sent over BLE, managed internally)
+    uint32_t   _tick        = 0;          // increments every frame
+    uint8_t    _pos         = 0;          // position for scanning effects
+    int8_t     _dir         = 1;          // direction for Larson
+    uint8_t    _twinkle[LIGHTS_ENGINE_MAX_GROUP_LEDS] = {0}; // per-LED twinkle phase
+};
+
+// NOTE:
+// LightingProfile / NewLightsConfig / ExtendedLightGroup are defined in Config.h.
+// LightsEngine maps those shared storage/BLE structs into internal EngineLightGroup.
+
+// ── Helper: scale a 0–100 brightness onto a 0–255 channel value ──────────────
+static inline uint8_t scaleBrightness(uint8_t channelVal, uint8_t bri100) {
+    return (uint8_t)(((uint16_t)channelVal * bri100) / 100);
+}
+
+// ── Helper: apply brightness to a packed RGB color ────────────────────────────
+static inline uint32_t applyBri(uint32_t rgb, uint8_t bri100) {
+    uint8_t r = scaleBrightness((rgb >> 16) & 0xFF, bri100);
+    uint8_t g = scaleBrightness((rgb >>  8) & 0xFF, bri100);
+    uint8_t b = scaleBrightness( rgb        & 0xFF, bri100);
+    return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+}
+
+// ── Helper: blend two packed colors 0..255 ────────────────────────────────────
+static inline uint32_t blendColor(uint32_t c1, uint32_t c2, uint8_t t) {
+    uint8_t r = ((uint16_t)((c1>>16)&0xFF)*(255-t) + (uint16_t)((c2>>16)&0xFF)*t) >> 8;
+    uint8_t g = ((uint16_t)((c1>> 8)&0xFF)*(255-t) + (uint16_t)((c2>> 8)&0xFF)*t) >> 8;
+    uint8_t b = ((uint16_t)( c1     &0xFF)*(255-t) + (uint16_t)( c2     &0xFF)*t) >> 8;
+    return ((uint32_t)r<<16)|((uint32_t)g<<8)|b;
+}
+
+// =============================================================================
+// LightsEngine class
+// =============================================================================
+class LightsEngine {
+public:
+    LightsEngine(uint8_t pin, uint16_t numLeds)
+        : _strip(numLeds, pin, NEO_GRB + NEO_KHZ800)
+        , _numLeds(min((uint16_t)LIGHTS_ENGINE_MAX_LEDS, numLeds))
+        , _master(true)
+        , _groupCount(0)
+    {
+        memset(_groups, 0, sizeof(_groups));
+        memset(_frameBuffer, 0, sizeof(_frameBuffer));
+    }
+
+    // ── Lifecycle ──────────────────────────────────────────────────────────────
+    void begin() {
+        _strip.begin();
+        _strip.show();
+        xTaskCreatePinnedToCore(
+            _task, "LEDEffects",
+            4096, this,
+            1, &_taskHandle,
+            LIGHTS_ENGINE_CORE
+        );
+    }
+
+    // ── BLE: update a single group from JSON payload ───────────────────────────
+    // Expected JSON keys: group(int), name(str), enabled(bool),
+    //   color(str "#RRGGBB"), color2(str), brightness(0-100),
+    //   effect(str), speed(0-255), leds([int...])
+    bool updateGroupFromJson(const String& payload) {
+        DynamicJsonDocument doc(1024);
+        if (deserializeJson(doc, payload) != DeserializationError::Ok) return false;
+
+        int idx = doc["group"] | -1;
+        if (idx < 0 || idx >= LIGHTS_ENGINE_MAX_GROUPS) return false;
+
+        // Expand group array if needed
+        if (idx >= _groupCount) _groupCount = idx + 1;
+
+        EngineLightGroup& g = _groups[idx];
+
+        if (doc.containsKey("name"))
+            strncpy(g.name, doc["name"].as<const char*>(), sizeof(g.name)-1);
+
+        if (doc.containsKey("enabled"))
+            g.enabled = doc["enabled"].as<bool>();
+
+        if (doc.containsKey("color"))
+            g.colorPrimary = _parseHex(doc["color"].as<const char*>());
+
+        if (doc.containsKey("color2"))
+            g.colorSecond = _parseHex(doc["color2"].as<const char*>());
+
+        if (doc.containsKey("brightness"))
+            g.brightness = constrain((int)doc["brightness"], 0, 100);
+
+        if (doc.containsKey("effect"))
+            g.effect = effectFromString(doc["effect"].as<const char*>());
+
+        if (doc.containsKey("speed"))
+            g.speed = constrain((int)doc["speed"], 0, 255);
+
+        if (doc.containsKey("leds")) {
+            JsonArray arr = doc["leds"].as<JsonArray>();
+            g.ledCount = 0;
+            for (uint16_t ledIdx : arr) {
+                if (g.ledCount >= LIGHTS_ENGINE_MAX_GROUP_LEDS) break;
+                if (ledIdx < _numLeds)
+                    g.leds[g.ledCount++] = ledIdx;
+            }
+            // Reset animation state when LED indices change
+            g._tick = 0; g._pos = 0; g._dir = 1;
+            memset(g._twinkle, 0, sizeof(g._twinkle));
+        }
+
+        return true;
+    }
+
+    // ── Legacy payload compat (existing main.cpp path) ─────────────────────────
+    void updateFromPayload(const NewLightsConfig& cfg) {
+        if (cfg.useLegacyMode) return; // legacy mode not handled by new engine
+        _groupCount = 0;
+        for (int i = 0; i < cfg.groupCount && i < LIGHTS_ENGINE_MAX_GROUPS; i++) {
+            const ExtendedLightGroup& src = cfg.groups[i];
+            EngineLightGroup& g = _groups[i];
+            strncpy(g.name, src.name, sizeof(g.name)-1);
+            g.name[sizeof(g.name) - 1] = '\0';
+            g.enabled      = src.enabled;
+            g.colorPrimary = src.color;
+            g.colorSecond  = src.color2;
+            g.brightness   = (src.brightness * 100) / 255;
+            g.effect       = effectFromString(src.pattern);
+            g.speed        = 128;
+            g.ledCount     = min((uint8_t)src.ledCount, (uint8_t)LIGHTS_ENGINE_MAX_GROUP_LEDS);
+            for (int j = 0; j < g.ledCount; j++) g.leds[j] = src.ledIndices[j];
+            g._tick = 0; g._pos = 0; g._dir = 1;
+            _groupCount++;
+        }
+    }
+
+    // ── Profile load/save compat ───────────────────────────────────────────────
+    void loadProfile(const LightingProfile& profile) {
+        _master = profile.master;
+        _groupCount = min((int)profile.groupCount, LIGHTS_ENGINE_MAX_GROUPS);
+        for (int i = 0; i < _groupCount; i++) {
+            const LightingGroup& src = profile.groups[i];
+            EngineLightGroup& dst = _groups[i];
+
+            strncpy(dst.name, src.name, sizeof(dst.name) - 1);
+            dst.name[sizeof(dst.name) - 1] = '\0';
+            dst.enabled = src.enabled;
+            dst.colorPrimary = _parseHex(src.colorPrimary);
+            dst.colorSecond = _parseHex(src.colorSecondary);
+            dst.brightness = constrain((int)src.brightness, 0, 100);
+            dst.effect = effectFromString(src.effect);
+            dst.speed = (uint8_t)((uint16_t)constrain((int)src.effectSpeed, 0, 100) * 255 / 100);
+
+            dst.ledCount = 0;
+            uint16_t maxLeds = min((uint16_t)src.ledCount, (uint16_t)LIGHTS_ENGINE_MAX_GROUP_LEDS);
+            for (uint16_t j = 0; j < maxLeds; j++) {
+                uint16_t led = src.leds[j];
+                if (led < _numLeds) {
+                    dst.leds[dst.ledCount++] = led;
+                }
+            }
+
+            dst._tick = 0;
+            dst._pos = 0;
+            dst._dir = 1;
+            memset(dst._twinkle, 0, sizeof(dst._twinkle));
+        }
+    }
+
+    LightingProfile* getProfile() {
+        if (_exportProfile.name[0] == '\0') {
+            strncpy(_exportProfile.name, "Runtime", sizeof(_exportProfile.name) - 1);
+            _exportProfile.name[sizeof(_exportProfile.name) - 1] = '\0';
+        }
+        _exportProfile.master     = _master;
+        _exportProfile.totalLeds  = _numLeds;
+        _exportProfile.groupCount = _groupCount;
+        for (int i = 0; i < _groupCount; i++) {
+            EngineLightGroup& src = _groups[i];
+            LightingGroup& dst = _exportProfile.groups[i];
+
+            dst.id = i;
+            strncpy(dst.name, src.name, sizeof(dst.name) - 1);
+            dst.name[sizeof(dst.name) - 1] = '\0';
+            dst.ledCount = src.ledCount;
+            for (uint16_t j = 0; j < src.ledCount; j++) {
+                dst.leds[j] = src.leds[j];
+            }
+
+            dst.enabled = src.enabled;
+            strncpy(dst.effect, EFFECT_NAMES[src.effect], sizeof(dst.effect) - 1);
+            dst.effect[sizeof(dst.effect) - 1] = '\0';
+            snprintf(dst.colorPrimary, sizeof(dst.colorPrimary), "#%06lX", (unsigned long)(src.colorPrimary & 0xFFFFFF));
+            snprintf(dst.colorSecondary, sizeof(dst.colorSecondary), "#%06lX", (unsigned long)(src.colorSecond & 0xFFFFFF));
+            dst.brightness = src.brightness;
+            dst.effectSpeed = (uint8_t)((uint16_t)src.speed * 100 / 255);
+            dst.effectIntensity = DEFAULT_EFFECT_INTENSITY;
+        }
+        return &_exportProfile;
+    }
+
+    // ── Master switch ──────────────────────────────────────────────────────────
+    void setMaster(bool on) { _master = on; }
+    bool getMaster() const  { return _master; }
+
+    // ── Flash all LEDs blocking (used by garage truck-switch command) ──────────
+    void flashAllBlocking(uint32_t color, uint8_t count,
+                          uint16_t onMs, uint16_t offMs,
+                          volatile bool* cancel = nullptr)
+    {
+        for (uint8_t i = 0; i < count; i++) {
+            if (cancel && *cancel) break;
+            _fillAll(color);
+            _strip.show();
+            delay(onMs);
+            if (cancel && *cancel) break;
+            _fillAll(0);
+            _strip.show();
+            delay(offMs);
+        }
+        // Restore normal operation on next tick
+    }
+
+private:
+    Adafruit_NeoPixel _strip;
+    uint16_t          _numLeds;
+    bool              _master;
+    int               _groupCount;
+    EngineLightGroup        _groups[LIGHTS_ENGINE_MAX_GROUPS];
+    uint32_t          _frameBuffer[LIGHTS_ENGINE_MAX_LEDS]; // RGB packed
+    TaskHandle_t      _taskHandle = nullptr;
+    LightingProfile   _exportProfile;
+    SemaphoreHandle_t _mutex = xSemaphoreCreateMutex();
+
+    // ── FreeRTOS task ──────────────────────────────────────────────────────────
+    static void _task(void* arg) {
+        LightsEngine* self = static_cast<LightsEngine*>(arg);
+        TickType_t xLastWake = xTaskGetTickCount();
+        for (;;) {
+            vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(LIGHTS_ENGINE_TICK_MS));
+            self->_tick();
+        }
+    }
+
+    void _tick() {
+        if (xSemaphoreTake(_mutex, 0) != pdTRUE) return; // skip frame if busy
+
+        memset(_frameBuffer, 0, _numLeds * sizeof(uint32_t));
+
+        if (_master) {
+            for (int i = 0; i < _groupCount; i++) {
+                EngineLightGroup& g = _groups[i];
+                if (!g.enabled || g.ledCount == 0) continue;
+                _runEffect(g);
+                g._tick++;
+            }
+        }
+
+        // Push frame buffer to strip
+        for (uint16_t i = 0; i < _numLeds; i++) {
+            uint32_t c = _frameBuffer[i];
+            _strip.setPixelColor(i, (c>>16)&0xFF, (c>>8)&0xFF, c&0xFF);
+        }
+        _strip.show();
+
+        xSemaphoreGive(_mutex);
+    }
+
+    // ── Write a color to a group LED by slot index ─────────────────────────────
+    inline void _setGroupLed(const EngineLightGroup& g, uint8_t slot, uint32_t color) {
+        if (slot < g.ledCount && g.leds[slot] < _numLeds)
+            _frameBuffer[g.leds[slot]] = color;
+    }
+
+    // ── Fill all physical LEDs ─────────────────────────────────────────────────
+    void _fillAll(uint32_t color) {
+        for (uint16_t i = 0; i < _numLeds; i++) _frameBuffer[i] = color;
+    }
+
+    // ── Speed to period conversion (ticks) ────────────────────────────────────
+    // speed 0 = very slow (~10s period), speed 255 = very fast (~0.1s period)
+    inline uint32_t _speedToPeriod(uint8_t speed, uint32_t slowTicks, uint32_t fastTicks) {
+        // Linearly interpolate between slow and fast
+        return fastTicks + ((uint32_t)(255 - speed) * (slowTicks - fastTicks)) / 255;
+    }
+
+    // ── Parse "#RRGGBB" or "RRGGBB" hex string ────────────────────────────────
+    static uint32_t _parseHex(const char* s) {
+        if (!s) return 0;
+        if (*s == '#') s++;
+        return strtoul(s, nullptr, 16) & 0xFFFFFF;
+    }
+
+    // ── Pseudo-random helper (no stdlib rand() dependency) ────────────────────
+    static uint8_t _rnd8(uint32_t seed) {
+        seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+        return (uint8_t)(seed & 0xFF);
+    }
+
+    // =========================================================================
+    // EFFECT IMPLEMENTATIONS
+    // Each effect writes only to _frameBuffer at positions in g.leds[].
+    // Adapted from WLED (MIT license) — WLED segment abstraction replaced
+    // with direct iteration over g.leds[].
+    // =========================================================================
+
+    void _runEffect(EngineLightGroup& g) {
+        switch (g.effect) {
+            case FX_SOLID:         _fx_solid(g);         break;
+            case FX_BLINK:         _fx_blink(g, false);  break;
+            case FX_STROBE:        _fx_blink(g, true);   break;
+            case FX_BREATHE:       _fx_breathe(g);       break;
+            case FX_FADE:          _fx_fade(g);          break;
+            case FX_TWINKLE:       _fx_twinkle(g);       break;
+            case FX_SPARKLE:       _fx_sparkle(g, false);break;
+            case FX_FLASH_SPARKLE: _fx_sparkle(g, true); break;
+            case FX_GLITTER:       _fx_glitter(g);       break;
+            case FX_RUNNING:       _fx_running(g);       break;
+            case FX_LARSON:        _fx_larson(g);        break;
+            case FX_FLICKER:       _fx_flicker(g);       break;
+            case FX_HEARTBEAT:     _fx_heartbeat(g);     break;
+            case FX_ALTERNATE:     _fx_alternate(g);     break;
+            default:               _fx_solid(g);         break;
+        }
+    }
+
+    // ── Solid ─────────────────────────────────────────────────────────────────
+    void _fx_solid(EngineLightGroup& g) {
+        uint32_t c = applyBri(g.colorPrimary, g.brightness);
+        for (uint8_t i = 0; i < g.ledCount; i++) _setGroupLed(g, i, c);
+    }
+
+    // ── Blink / Strobe ────────────────────────────────────────────────────────
+    // Blink: slow (period ~500ms at speed 128)
+    // Strobe: same logic, caller passes isStrobe=true for tight duty cycle
+    void _fx_blink(EngineLightGroup& g, bool isStrobe) {
+        // Period in ticks. Speed 128 => ~25 ticks on / 25 off at 50Hz = ~1s cycle
+        uint32_t halfPeriod = _speedToPeriod(g.speed, 150, 2); // ticks
+        bool on = (g._tick % (halfPeriod * 2)) < (isStrobe ? 1 : halfPeriod);
+        uint32_t c = on ? applyBri(g.colorPrimary, g.brightness) : 0;
+        for (uint8_t i = 0; i < g.ledCount; i++) _setGroupLed(g, i, c);
+    }
+
+    // ── Breathe (sine wave brightness on colorPrimary) ────────────────────────
+    void _fx_breathe(EngineLightGroup& g) {
+        uint32_t period = _speedToPeriod(g.speed, 300, 20); // ticks per full cycle
+        uint8_t phase = (uint8_t)((g._tick % period) * 255 / period);
+        // Sine approximation: use quarter-wave lookup
+        // phase 0=bottom(dim), 128=top(bright)
+        // Simple formula: bri = (1 - cos(2π*phase/255)) / 2
+        // Integer approx: bri = (255 - cos8(phase)) / 2  where cos8 gives 0-255
+        // cos8 approximation using parabola
+        uint8_t p2 = phase < 128 ? phase * 2 : (255 - phase) * 2;
+        // p2 goes 0→255→0 over the cycle (triangle wave)
+        // Smooth it: bri8 = p2^2 / 255
+        uint8_t bri8 = (uint8_t)(((uint16_t)p2 * p2) >> 8);
+        uint8_t scaledBri = (uint8_t)(((uint16_t)bri8 * g.brightness) / 100);
+        uint32_t c = applyBri(g.colorPrimary, scaledBri);
+        for (uint8_t i = 0; i < g.ledCount; i++) _setGroupLed(g, i, c);
+    }
+
+    // ── Fade (cross-fade between colorPrimary and colorSecond) ───────────────
+    void _fx_fade(EngineLightGroup& g) {
+        uint32_t period = _speedToPeriod(g.speed, 300, 20);
+        uint8_t phase = (uint8_t)((g._tick % period) * 255 / period);
+        uint8_t t = phase < 128 ? phase * 2 : (255 - phase) * 2;
+        uint32_t c = applyBri(blendColor(g.colorPrimary, g.colorSecond, t), g.brightness);
+        for (uint8_t i = 0; i < g.ledCount; i++) _setGroupLed(g, i, c);
+    }
+
+    // ── Twinkle (random LEDs fade in and out independently) ───────────────────
+    void _fx_twinkle(EngineLightGroup& g) {
+        uint8_t fadeRate = 8 + (g.speed >> 3); // faster speed = faster fade
+        for (uint8_t i = 0; i < g.ledCount; i++) {
+            uint8_t& phase = g._twinkle[i];
+            // Randomly trigger a new twinkle
+            if (phase == 0 && (_rnd8(g._tick * 31 + i * 7) < 12)) {
+                phase = 255;
+            }
+            if (phase > 0) {
+                uint8_t bri8 = phase;
+                uint8_t scaledBri = (uint8_t)(((uint16_t)bri8 * g.brightness) / 100);
+                _setGroupLed(g, i, applyBri(g.colorPrimary, scaledBri));
+                phase = (phase > fadeRate) ? phase - fadeRate : 0;
+            } else {
+                _setGroupLed(g, i, 0);
+            }
+        }
+    }
+
+    // ── Sparkle / Flash Sparkle ───────────────────────────────────────────────
+    // Sparkle: random single LED flashes bright then fades
+    // Flash Sparkle: same but with solid colorPrimary as base
+    void _fx_sparkle(EngineLightGroup& g, bool flashBase) {
+        uint32_t base = flashBase ? applyBri(g.colorPrimary, g.brightness) : 0;
+        for (uint8_t i = 0; i < g.ledCount; i++) _setGroupLed(g, i, base);
+        // Pick a random LED to sparkle this frame
+        uint8_t sparkIdx = _rnd8(g._tick * 13 + 7) % g.ledCount;
+        uint32_t period  = _speedToPeriod(g.speed, 40, 3);
+        if ((g._tick % period) == 0) {
+            _setGroupLed(g, sparkIdx, applyBri(0xFFFFFF, g.brightness));
+        }
+    }
+
+    // ── Glitter (random bright white flashes over a base solid) ───────────────
+    void _fx_glitter(EngineLightGroup& g) {
+        // Base: solid colorPrimary
+        uint32_t base = applyBri(g.colorPrimary, g.brightness);
+        for (uint8_t i = 0; i < g.ledCount; i++) _setGroupLed(g, i, base);
+        // Add glitter: density ~speed/32 sparkles per frame
+        uint8_t density = 1 + (g.speed >> 5);
+        for (uint8_t d = 0; d < density; d++) {
+            uint8_t idx = _rnd8(g._tick * 17 + d * 11) % g.ledCount;
+            _setGroupLed(g, idx, 0xFFFFFF); // full white glitter
+        }
+    }
+
+    // ── Running Lights (sine wave sweeping across LEDs) ───────────────────────
+    void _fx_running(EngineLightGroup& g) {
+        uint32_t period = _speedToPeriod(g.speed, 200, 10);
+        uint8_t offset = (uint8_t)((g._tick % period) * 255 / period);
+        for (uint8_t i = 0; i < g.ledCount; i++) {
+            // Phase per LED: spread 255 across all LEDs
+            uint8_t phase = offset + (i * 255 / max((uint8_t)1, g.ledCount));
+            // Sine brightness: 0-255 mapped to 0-bri
+            uint8_t p2 = phase < 128 ? phase * 2 : (255 - phase) * 2;
+            uint8_t bri8 = (uint8_t)(((uint16_t)p2 * p2) >> 8);
+            uint8_t scaledBri = (uint8_t)(((uint16_t)bri8 * g.brightness) / 100);
+            _setGroupLed(g, i, applyBri(g.colorPrimary, scaledBri));
+        }
+    }
+
+    // ── Larson Scanner (KITT — bouncing point with decay trail) ───────────────
+    void _fx_larson(EngineLightGroup& g) {
+        uint32_t period = _speedToPeriod(g.speed, 60, 4); // ticks to traverse one LED
+        if ((g._tick % period) == 0) {
+            g._pos += g._dir;
+            if (g._pos >= g.ledCount - 1) { g._pos = g.ledCount - 1; g._dir = -1; }
+            if (g._pos <= 0)              { g._pos = 0;               g._dir =  1; }
+        }
+        // Draw decay: center full, neighbors at 50%, outer at 20%
+        // First clear group
+        for (uint8_t i = 0; i < g.ledCount; i++) _setGroupLed(g, i, 0);
+        uint32_t c = applyBri(g.colorPrimary, g.brightness);
+        _setGroupLed(g, g._pos, c);
+        if (g._pos > 0)
+            _setGroupLed(g, g._pos - 1, applyBri(g.colorPrimary, g.brightness / 2));
+        if (g._pos < g.ledCount - 1)
+            _setGroupLed(g, g._pos + 1, applyBri(g.colorPrimary, g.brightness / 2));
+        if (g._pos > 1)
+            _setGroupLed(g, g._pos - 2, applyBri(g.colorPrimary, g.brightness / 5));
+        if (g._pos < g.ledCount - 2)
+            _setGroupLed(g, g._pos + 2, applyBri(g.colorPrimary, g.brightness / 5));
+    }
+
+    // ── Flicker (random irregular brightness — flame / damaged light) ──────────
+    void _fx_flicker(EngineLightGroup& g) {
+        for (uint8_t i = 0; i < g.ledCount; i++) {
+            // Random brightness per LED per frame, weighted toward high
+            uint8_t rnd = _rnd8(g._tick * 29 + i * 13);
+            // Bias: mostly bright with occasional dips
+            uint8_t flickBri;
+            if (rnd < 30) {
+                flickBri = 30 + (rnd * 2); // occasional deep dip
+            } else {
+                flickBri = 180 + (rnd >> 2); // mostly bright
+            }
+            uint8_t scaledBri = (uint8_t)(((uint16_t)flickBri * g.brightness) / 255);
+            _setGroupLed(g, i, applyBri(g.colorPrimary, scaledBri));
+        }
+    }
+
+    // ── Heartbeat (double-pulse pattern) ──────────────────────────────────────
+    // Pattern: quick beat, quick beat, long pause — ~BPM controlled by speed
+    void _fx_heartbeat(EngineLightGroup& g) {
+        // Heartbeat sequence in ticks at 50Hz:
+        // speed 128 => total cycle ~100 ticks (2 seconds)
+        uint32_t cycle = _speedToPeriod(g.speed, 200, 30);
+        uint32_t t = g._tick % cycle;
+
+        uint8_t bri8 = 0;
+        uint32_t beat1End   = cycle / 10;      // first beat
+        uint32_t beat1Decay = cycle / 7;
+        uint32_t beat2Start = cycle / 5;       // second beat
+        uint32_t beat2End   = beat2Start + beat1End;
+        uint32_t beat2Decay = beat2Start + beat1Decay;
+
+        if (t < beat1End) {
+            bri8 = 255;
+        } else if (t < beat1Decay) {
+            bri8 = 255 - (uint8_t)((t - beat1End) * 255 / (beat1Decay - beat1End));
+        } else if (t >= beat2Start && t < beat2End) {
+            bri8 = 200;
+        } else if (t >= beat2End && t < beat2Decay) {
+            bri8 = 200 - (uint8_t)((t - beat2End) * 200 / (beat2Decay - beat2End));
+        }
+
+        uint8_t scaledBri = (uint8_t)(((uint16_t)bri8 * g.brightness) / 255);
+        uint32_t c = applyBri(g.colorPrimary, scaledBri);
+        for (uint8_t i = 0; i < g.ledCount; i++) _setGroupLed(g, i, c);
+    }
+
+    // ── Alternate (two halves swap between colorPrimary and colorSecond) ───────
+    // Classic police light bar / blinker alternation
+    void _fx_alternate(EngineLightGroup& g) {
+        uint32_t halfPeriod = _speedToPeriod(g.speed, 100, 3);
+        bool phase = (g._tick / halfPeriod) & 1;
+        uint8_t half = g.ledCount / 2;
+        uint32_t cA = applyBri(phase ? g.colorSecond  : g.colorPrimary, g.brightness);
+        uint32_t cB = applyBri(phase ? g.colorPrimary : g.colorSecond,  g.brightness);
+        for (uint8_t i = 0; i < half; i++)              _setGroupLed(g, i, cA);
+        for (uint8_t i = half; i < g.ledCount; i++)     _setGroupLed(g, i, cB);
+    }
+};

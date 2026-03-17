@@ -7,8 +7,11 @@
 
 const GarageManager = (() => {
     const STORAGE_KEY = 'rcdcc_garage_vehicles';
+    const DRIVING_PROFILES_STORAGE_KEY = 'rcdcc_driving_profiles_v2';
     const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
     const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
+    const LIGHT_MASTER_STORAGE_KEY = 'lightsMasterEnabled';
+    const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
     const LIGHTING_PROFILES_STORAGE_KEY = 'rcdcc_lighting_profiles_v1';
     let _renameVehicleId = null;
     let _connectingVehicleId = null;
@@ -488,6 +491,22 @@ const GarageManager = (() => {
     function deleteVehicle(deviceId) {
         if (isVehicleConnected(deviceId) && window.bleManager) {
             window.bleManager.disconnect();
+        }
+
+        if (typeof window.purgeVehicleLocalData === 'function') {
+            window.purgeVehicleLocalData(deviceId);
+        } else {
+            const scopedSuffix = normalizeDeviceId(deviceId);
+            if (scopedSuffix) {
+                [
+                    DRIVING_PROFILES_STORAGE_KEY,
+                    LIGHTING_PROFILES_STORAGE_KEY,
+                    LIGHT_GROUPS_STORAGE_KEY,
+                    LIGHT_GROUPS_INITIALIZED_KEY,
+                    LIGHT_MASTER_STORAGE_KEY,
+                    TOTAL_LED_COUNT_KEY
+                ].forEach((baseKey) => localStorage.removeItem(`${baseKey}::${scopedSuffix}`));
+            }
         }
 
         const vehicles = getVehicles().filter(v => v.id !== deviceId);

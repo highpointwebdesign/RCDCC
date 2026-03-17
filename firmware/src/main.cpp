@@ -356,6 +356,19 @@ bool applyLightsPayload(const String& payload) {
     return false;
   }
 
+  // New path: single-group updates for low-latency effect edits.
+  if (doc.containsKey("group")) {
+    if (lightsEngine) {
+      const bool ok = lightsEngine->updateGroupFromJson(payload);
+      if (!ok) {
+        Serial.println("BLE lights single-group update rejected");
+        return false;
+      }
+    }
+    startLedBlink();
+    return true;
+  }
+
   NewLightsConfig config;
   memset(&config, 0, sizeof(NewLightsConfig));
 
@@ -492,6 +505,14 @@ bool applySystemCommandPayload(const String& payload) {
   if (command == "save") {
     storageManager.saveAll();
     Serial.println("{\"status\":\"saved\"}");
+    return true;
+  }
+
+  if (command == "lights_master") {
+    const bool on = doc["enabled"] | true;
+    if (lightsEngine) {
+      lightsEngine->setMaster(on);
+    }
     return true;
   }
 
@@ -827,13 +848,15 @@ void setup() {
   delay(500);
   
   Serial.println("\n\nR/C Dynamic Chassis Control - Starting...");
-
-  // Initialize LightsEngine (after storage init, before other systems)
-  lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
-  Serial.printf("LightsEngine initialized: %d LED capacity\n", STATUS_LED_COUNT);
   
   // Load configuration from storage
   storageManager.init();
+
+  // Initialize LightsEngine after storage init. begin() starts the Core 0 task.
+  lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
+  lightsEngine->begin();
+  Serial.printf("LightsEngine initialized: %d LED capacity\n", STATUS_LED_COUNT);
+
   storageManager.loadConfig();
   storageManager.loadLights();
   // Note: Phase 5 loads lighting profiles from LittleFS, not from legacy lights config
@@ -936,28 +959,7 @@ void setup() {
     }
   }
 
-  // Start LED effects FreeRTOS task (pinned to Core 0 for isolation from BLE on Core 1)
-  xTaskCreatePinnedToCore(
-    [](void* parameter) {
-      // LED effects task running on Core 0
-      TickType_t xLastWakeTime = xTaskGetTickCount();
-      const TickType_t xFrequency = pdMS_TO_TICKS(50);  // 50ms update rate (20 FPS)
-      
-      while (true) {
-        if (lightsEngine) {
-          lightsEngine->update();
-        }
-        vTaskDelayUntil(&xLastWakeTime, xFrequency);
-      }
-    },
-    "LEDEffects",     // Task name
-    4096,             // Stack size (bytes)
-    NULL,             // Parameters
-    1,                // Priority
-    NULL,             // Task handle
-    0                 // Core 0 (isolated from BLE on Core 1)
-  );
-  Serial.println("LED effects task started (Core 0)");
+  Serial.println("LED effects task started by LightsEngine::begin() on Core 0");
   
   // Initialize Bluetooth Low Energy service
   bluetoothService = new BluetoothService(&storageManager);

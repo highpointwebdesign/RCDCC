@@ -63,6 +63,7 @@ private:
     String pendingKvWrite;
     String pendingServoWrite;
     String pendingLightsWrite;
+    String pendingLightsMasterSystemWrite;
     static constexpr size_t SYSTEM_QUEUE_CAPACITY = 8;
     String pendingSystemWrites[SYSTEM_QUEUE_CAPACITY];
     size_t pendingSystemHead = 0;
@@ -72,7 +73,13 @@ private:
     volatile bool hasPendingKvWrite = false;
     volatile bool hasPendingServoWrite = false;
     volatile bool hasPendingLightsWrite = false;
+    volatile bool hasPendingLightsMasterSystemWrite = false;
     volatile bool hasPendingSystemWrite = false;
+
+    bool isLightsMasterSystemCommand(const String& payload) {
+        // Fast-path matcher to coalesce master-light toggles without parsing overhead.
+        return payload.indexOf("\"command\"") >= 0 && payload.indexOf("lights_master") >= 0;
+    }
 
     void queuePayload(String& slot, volatile bool& hasPending, const String& payload) {
         taskENTER_CRITICAL(&queueMux);
@@ -97,7 +104,11 @@ private:
     bool queueSystemPayload(const String& payload) {
         bool queued = false;
         taskENTER_CRITICAL(&queueMux);
-        if (pendingSystemCount < SYSTEM_QUEUE_CAPACITY) {
+        if (isLightsMasterSystemCommand(payload)) {
+            pendingLightsMasterSystemWrite = payload;
+            hasPendingLightsMasterSystemWrite = true;
+            queued = true;
+        } else if (pendingSystemCount < SYSTEM_QUEUE_CAPACITY) {
             pendingSystemWrites[pendingSystemTail] = payload;
             pendingSystemTail = (pendingSystemTail + 1) % SYSTEM_QUEUE_CAPACITY;
             pendingSystemCount++;
@@ -117,6 +128,19 @@ private:
             pendingSystemHead = (pendingSystemHead + 1) % SYSTEM_QUEUE_CAPACITY;
             pendingSystemCount--;
             hasPendingSystemWrite = (pendingSystemCount > 0);
+            dequeued = true;
+        }
+        taskEXIT_CRITICAL(&queueMux);
+        return dequeued;
+    }
+
+    bool dequeueLightsMasterSystemPayload(String& out) {
+        bool dequeued = false;
+        taskENTER_CRITICAL(&queueMux);
+        if (hasPendingLightsMasterSystemWrite) {
+            out = pendingLightsMasterSystemWrite;
+            pendingLightsMasterSystemWrite = "";
+            hasPendingLightsMasterSystemWrite = false;
             dequeued = true;
         }
         taskEXIT_CRITICAL(&queueMux);
@@ -501,6 +525,13 @@ void BluetoothService::update() {
     if (dequeuePayload(pendingLightsWrite, hasPendingLightsWrite, payload)) {
         bool ok = lightsWriteHandler ? lightsWriteHandler(payload) : false;
         Serial.println(ok ? "BLE: Lights command processed" : "BLE: Lights command handler failed");
+        if (ok) markConfigDirty();
+    }
+
+    // Master light is a state command; coalesce to the latest requested state.
+    if (dequeueLightsMasterSystemPayload(payload)) {
+        bool ok = systemWriteHandler ? systemWriteHandler(payload) : false;
+        Serial.println(ok ? "BLE: System command processed" : "BLE: System command handler failed");
         if (ok) markConfigDirty();
     }
 
