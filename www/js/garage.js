@@ -325,19 +325,38 @@ const GarageManager = (() => {
 
             if (isNative && await exportViaNativeShare(filename, json)) {
                 if (window.toast) toast.success('Export ready. Choose destination in the share/save dialog.');
+                localStorage.setItem('rcdcc_last_backup_at', new Date().toISOString());
+                updateLastBackupTimestampUI();
                 return;
             }
 
             if (await exportViaSavePicker(filename, json)) {
                 if (window.toast) toast.success('Garage and light groups exported');
+                localStorage.setItem('rcdcc_last_backup_at', new Date().toISOString());
+                updateLastBackupTimestampUI();
                 return;
             }
 
             downloadTextFile(filename, json);
             if (window.toast) toast.success('Garage and light groups exported to your default Downloads location');
+            localStorage.setItem('rcdcc_last_backup_at', new Date().toISOString());
+            updateLastBackupTimestampUI();
         } catch (error) {
             console.error('Export failed:', error);
             if (window.toast) toast.error(`Export failed: ${String(error?.message || error)}`);
+        }
+    }
+
+    function updateLastBackupTimestampUI() {
+        const el = document.getElementById('lastBackupTimestamp');
+        if (!el) return;
+        const raw = localStorage.getItem('rcdcc_last_backup_at');
+        if (!raw) { el.textContent = ''; return; }
+        try {
+            const d = new Date(raw);
+            el.textContent = `Last backup: ${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+        } catch (_) {
+            el.textContent = '';
         }
     }
 
@@ -450,6 +469,8 @@ const GarageManager = (() => {
                 importInput.value = '';
             });
         }
+
+        updateLastBackupTimestampUI();
     }
 
     const MAX_GARAGE_VEHICLES = 20;
@@ -606,6 +627,19 @@ const GarageManager = (() => {
                             <span class="material-symbols-outlined">more_vert</span>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end garage-card-menu" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                            ${isConnected
+                                ? `<li>
+                                    <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.disconnectConnectedVehicle()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                        Disconnect
+                                    </button>
+                                </li>`
+                                : `<li>
+                                    <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.toggleVehicleConnection('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                        Connect
+                                    </button>
+                                </li>`
+                            }
+                            <li><hr class="dropdown-divider"></li>
                             <li>
                                 <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'tuning')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     Suspension
@@ -1022,6 +1056,13 @@ const GarageManager = (() => {
     // -------------------------------------------------------------------------
     // Init — wire up buttons
     // -------------------------------------------------------------------------
+    async function disconnectConnectedVehicle() {
+        if (window.disconnectBLE) {
+            await window.disconnectBLE(true);
+        }
+        renderGarage();
+    }
+
     function init() {
         // Scan button
         const scanBtn = document.getElementById('garageScanBtn');
@@ -1036,7 +1077,7 @@ const GarageManager = (() => {
     }
 
     // Public API
-    return { init, renderGarage, upsertVehicle, updateLastSeen, scanAndConnect, openRenameModal, toggleVehicleConnection, confirmDeleteVehicle, openVehicleSection, openVehicleAbout, handleCardKeydown, handleCardTap, handleCardPointerDown, handleCardPointerUp, handleCardPointerCancel, setAutoReconnectState };
+    return { init, renderGarage, upsertVehicle, updateLastSeen, scanAndConnect, openRenameModal, toggleVehicleConnection, confirmDeleteVehicle, openVehicleSection, openVehicleAbout, handleCardKeydown, handleCardTap, handleCardPointerDown, handleCardPointerUp, handleCardPointerCancel, setAutoReconnectState, disconnectConnectedVehicle };
 })();
 
 // Initialize on DOM ready

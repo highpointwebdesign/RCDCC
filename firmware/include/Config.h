@@ -217,7 +217,7 @@ struct ExtendedLightGroup {
   uint16_t blinkRate;    // Blink rate in ms
   uint32_t color;        // Primary color (RGB)
   uint32_t color2;       // Secondary color (RGB)
-  uint16_t ledIndices[100]; // Which LED indices belong to this group (max 100 per group)
+  uint16_t ledIndices[15]; // Which LED indices belong to this group (max 15 per group)
   uint8_t ledCount;      // How many LEDs in this group
 };
 
@@ -229,10 +229,12 @@ struct LightsConfig {
 };
 
 // New lights configuration: support both legacy and arbitrary groups
+#define MAX_DYNAMIC_LIGHT_GROUPS 15
+#define MAX_DYNAMIC_GROUP_LEDS 15
 struct NewLightsConfig {
   bool useLegacyMode;    // If true, use the 3 fixed groups; if false, use dynamic groups
   LightsConfig legacy;   // Legacy 3-group config for backward compatibility
-  ExtendedLightGroup groups[10]; // Support up to 10 dynamic custom groups
+  ExtendedLightGroup groups[MAX_DYNAMIC_LIGHT_GROUPS]; // Support up to 15 dynamic custom groups
   uint8_t groupCount;    // Number of dynamic groups currently configured
 };
 
@@ -348,8 +350,9 @@ struct DrivingProfile {
 // LED indices are ZERO-BASED throughout — LED 0 is the first LED on the strip.
 
 #define MAX_LIGHTING_PROFILES 10
-#define MAX_GROUP_LEDS 100  // Max individual LED indices per group
-#define MAX_GROUPS_PER_PROFILE 32
+#define MAX_LIGHTS_TOTAL_LEDS 30
+#define MAX_GROUP_LEDS 15  // Max individual LED indices per group
+#define MAX_GROUPS_PER_PROFILE 15
 
 // Effect names (string identifiers for JSON serialization)
 #define EFFECT_SOLID           "solid"
@@ -361,11 +364,12 @@ struct DrivingProfile {
 #define EFFECT_SPARKLE         "sparkle"
 #define EFFECT_FLASH_SPARKLE   "flash_sparkle"
 #define EFFECT_GLITTER         "glitter"
+#define EFFECT_SOLID_GLITTER   "solid_glitter"
 #define EFFECT_RUNNING         "running"
 #define EFFECT_LARSON          "larson"
 #define EFFECT_FLICKER         "flicker"
+#define EFFECT_FIRE_FLICKER    "fire_flicker"
 #define EFFECT_HEARTBEAT       "heartbeat"
-#define EFFECT_ALTERNATE       "alternate"
 
 // Default effect for new groups
 #define DEFAULT_EFFECT EFFECT_SOLID
@@ -378,7 +382,7 @@ struct DrivingProfile {
 // The same LED index can appear in multiple groups — overlapping is allowed.
 // When two groups both write to the same LED, the last group processed wins.
 struct LightingGroup {
-  uint8_t  id;                  // 0-31, group identifier
+  uint8_t  id;                  // 0-14, group identifier
   char     name[64];            // Group name (e.g., "Headlights")
   uint16_t leds[MAX_GROUP_LEDS]; // Array of zero-based LED indices (LED 0 = first LED)
   uint16_t ledCount;            // How many LEDs in this group (0 = disabled)
@@ -398,7 +402,7 @@ struct LightingProfile {
   char       name[64];          // Profile name (e.g., "Night Mode")
   bool       master;            // Master enable/disable
   uint16_t   totalLeds;         // Total LEDs on the strip (e.g., 100)
-  uint8_t    groupCount;        // Number of groups (0-32)
+  uint8_t    groupCount;        // Number of groups (0-15)
   LightingGroup groups[MAX_GROUPS_PER_PROFILE];
 };
 

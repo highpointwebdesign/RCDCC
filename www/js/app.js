@@ -57,8 +57,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.135';
-        const BUILD_DATE = '2026-03-17';
+        const APP_VERSION = '1.1.191';
+        const BUILD_DATE = '2026-03-18';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -74,6 +74,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let autoReconnectAttemptCount = 0;
         let manualBleDisconnect = false;
         let hasEverBleConnection = false;
+        let bleSyncInProgress = false;
+        let bleSyncInternalWritesAllowed = false;
         const GARAGE_STORAGE_KEY = 'rcdcc_garage_vehicles';
         const DEBUG_MODE_STORAGE_KEY = 'settings_debug_mode_enabled';
         const VEHICLE_QUICK_SECTIONS = ['tuning', 'lights', 'fpv'];
@@ -113,17 +115,41 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
         }
 
-        function updateDashboardVehicleName(name = null) {
-            const el = document.getElementById('activeVehicleDisplay');
+        function getDashboardQuickNavPlaceholderMarkup(type) {
+            if (type === 'vehicle') {
+                return '<span class="dashboard-quick-nav-placeholder-icon dashboard-quick-nav-placeholder-icon-combo" aria-hidden="true">--</span>';
+            }
+            if (type === 'driving') {
+                return '<span class="dashboard-quick-nav-placeholder-icon" aria-hidden="true">--</span>';
+            }
+            return '<span class="dashboard-quick-nav-placeholder-icon dashboard-quick-nav-placeholder-icon-combo" aria-hidden="true">--</span>';
+        }
+
+        function setDashboardQuickNavDisplay(elementId, connectedLabel, placeholderType) {
+            const el = document.getElementById(elementId);
             if (!el) return;
+
             if (!isBleConnected()) {
-                el.textContent = '--';
+                el.innerHTML = getDashboardQuickNavPlaceholderMarkup(placeholderType);
+                el.classList.add('dashboard-quick-nav-placeholder');
+                el.setAttribute('aria-label', 'Not connected');
+                return;
+            }
+
+            el.textContent = connectedLabel || '--';
+            el.classList.remove('dashboard-quick-nav-placeholder');
+            el.setAttribute('aria-label', connectedLabel || '--');
+        }
+
+        function updateDashboardVehicleName(name = null) {
+            if (!isBleConnected()) {
+                setDashboardQuickNavDisplay('activeVehicleDisplay', null, 'vehicle');
                 updateVehicleQuickNav();
                 return;
             }
             // Always prefer the garage custom label, fall back to passed name then BLE device name.
             const garageLabel = getGarageVehicleNameById(bleManager?.deviceId);
-            el.textContent = garageLabel || (name && String(name).trim()) || bleManager?.deviceName || 'RCDCC Truck';
+            setDashboardQuickNavDisplay('activeVehicleDisplay', garageLabel || (name && String(name).trim()) || bleManager?.deviceName || 'RCDCC Truck', 'vehicle');
             updateVehicleQuickNav();
         }
 
@@ -156,10 +182,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function clearDashboardActiveStatus() {
-            const driving = document.getElementById('activeDrivingProfileDisplay');
-            const lighting = document.getElementById('activeLightingProfileDisplay');
-            if (driving) driving.textContent = '--';
-            if (lighting) lighting.textContent = '--';
+            setDashboardQuickNavDisplay('activeDrivingProfileDisplay', null, 'driving');
+            setDashboardQuickNavDisplay('activeLightingProfileDisplay', null, 'lighting');
             updateDashboardVehicleName(null);
         }
 
@@ -393,6 +417,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!isBleConnected()) {
                 communicationMode = 'ble';
                 throw new Error('Bluetooth LE not connected');
+            }
+
+            if (bleSyncInProgress && !bleSyncInternalWritesAllowed) {
+                throw new Error('Bluetooth sync in progress. Please wait.');
             }
         }
 
@@ -742,63 +770,77 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         async function runPostConnectFlow(connectionLabel = null, showToast = true) {
+            bleSyncInProgress = true;
+            bleSyncInternalWritesAllowed = true;
             communicationMode = 'ble';
             hasEverBleConnection = true;
             stopAutoReconnect();
             stopHeartbeat();
 
-            const connectedDeviceId = bleManager?.deviceId;
-            if (connectedDeviceId) {
-                localStorage.setItem('rcdccBlePreferredDeviceId', connectedDeviceId);
-                bleManager.preferredDeviceId = connectedDeviceId;
-            }
-
-            // Refresh local per-vehicle state so each truck gets isolated profiles/groups.
-            const restoredDriving = loadLocalDrivingProfiles();
-            drivingProfiles = Array.isArray(restoredDriving.profiles) ? restoredDriving.profiles : [];
-            activeDrivingProfileIndex = Number(restoredDriving.activeIndex) || 0;
-            populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
-            syncDrivingProfileActionButtons();
-
-            const restoredLighting = loadLocalLightingProfiles();
-            lightingProfiles = Array.isArray(restoredLighting.profiles) ? restoredLighting.profiles : [];
-            activeLightingProfileIndex = Number(restoredLighting.activeIndex) || 0;
-            populateLightingProfileSelector();
-            syncLightingProfileActionButtons();
-
-            await loadLightGroups();
-            setMasterLightsEnabled(getMasterLightsEnabled(), false);
-
-            updateConnectionStatus(true);
-            updateConnectionMethodDisplay();
-
-            resetSectionDataState();
-            await fetchConfigFromESP32(false, { scope: 'bootstrap' });
-            if (bleManager && bleManager.schemaCompatible === false) {
-                toast.error('Connected, but this truck firmware is not compatible with this app build.');
-                return;
-            }
-            applyFeatureAvailabilityGate();
-
-            const vehicleName = connectionLabel
-                || getGarageVehicleNameById(bleManager?.deviceId)
-                || bleManager?.deviceName
-                || 'RCDCC Truck';
-            updateDashboardVehicleName(vehicleName);
-            updateDashboardActiveProfile();
-            updateDashboardActiveLightingProfile();
-
             try {
-                await bleManager.sendSystemCommand('flash', { color: 'green', count: 2 });
-            } catch (error) {
-                const message = String(error?.message || error || '').toLowerCase();
-                if (!message.includes('incompatible firmware ble schema')) {
-                    console.warn('Post-connect green flash command failed:', error?.message || error);
+                const connectedDeviceId = bleManager?.deviceId;
+                if (connectedDeviceId) {
+                    localStorage.setItem('rcdccBlePreferredDeviceId', connectedDeviceId);
+                    bleManager.preferredDeviceId = connectedDeviceId;
                 }
-            }
 
-            if (showToast) {
-                toast.success(`Connected to ${vehicleName}`);
+                // Refresh local per-vehicle state so each truck gets isolated profiles/groups.
+                const restoredDriving = loadLocalDrivingProfiles();
+                drivingProfiles = Array.isArray(restoredDriving.profiles) ? restoredDriving.profiles : [];
+                activeDrivingProfileIndex = Number(restoredDriving.activeIndex) || 0;
+                populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+                syncDrivingProfileActionButtons();
+
+                const restoredLighting = loadLocalLightingProfiles();
+                lightingProfiles = Array.isArray(restoredLighting.profiles) ? restoredLighting.profiles : [];
+                activeLightingProfileIndex = Number(restoredLighting.activeIndex) || 0;
+                populateLightingProfileSelector();
+                syncLightingProfileActionButtons();
+
+                await loadLightGroups();
+                setMasterLightsEnabled(getMasterLightsEnabled(), false);
+                lightingGroupsDirty = false;
+                syncLightingProfileActionButtons();
+                updateTotalLEDCountLabel();
+
+                updateConnectionStatus(true);
+                updateConnectionMethodDisplay();
+
+                resetSectionDataState();
+                await fetchConfigFromESP32(false, { scope: 'bootstrap' });
+                if (bleManager && bleManager.schemaCompatible === false) {
+                    toast.error('Connected, but this truck firmware is not compatible with this app build.');
+                    return;
+                }
+                applyFeatureAvailabilityGate();
+
+                // Hard-reset firmware runtime lighting state, then push current app groups.
+                try {
+                    await pushSystemCommand('lights_clear_all', {});
+                } catch (error) {
+                    console.warn('Failed to clear firmware light groups on connect:', error?.message || error);
+                }
+                // Firmware just cleared runtime groups; only push active groups from app state.
+                lastPushedLightGroupCount = 0;
+                lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
+                lastPushedLightsColorOrder = null;
+                lastPushedLightsMasterEnabled = null;
+                await applyLightsHierarchyToHardware();
+
+                const vehicleName = connectionLabel
+                    || getGarageVehicleNameById(bleManager?.deviceId)
+                    || bleManager?.deviceName
+                    || 'RCDCC Truck (app.js:832)';
+                updateDashboardVehicleName(vehicleName);
+                updateDashboardActiveProfile();
+                updateDashboardActiveLightingProfile();
+
+                if (showToast) {
+                    toast.success(`Connected to ${vehicleName}`);
+                }
+            } finally {
+                bleSyncInternalWritesAllowed = false;
+                bleSyncInProgress = false;
             }
         }
 
@@ -871,6 +913,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         async function disconnectBLE(markManual = true) {
             if (!bleManager) return;
+            bleSyncInProgress = false;
+            bleSyncInternalWritesAllowed = false;
             manualBleDisconnect = !!markManual;
             stopAutoReconnect();
             await bleManager.disconnect();
@@ -883,6 +927,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             clearDashboardActiveStatus();
             applyFeatureAvailabilityGate();
             resetSectionDataState();
+            lightingGroupsDirty = false;
+            syncLightingProfileActionButtons();
+            updateTotalLEDCountLabel();
             // Refresh garage UI so Connected badges and button labels update.
             if (window.GarageManager && typeof window.GarageManager.renderGarage === 'function') {
                 window.GarageManager.renderGarage();
@@ -908,6 +955,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         window.purgeVehicleLocalData = purgeVehicleLocalData;
+
+        function updateTotalLEDCountLabel() {
+            const el = document.getElementById('totalLEDCountVehicleLabel');
+            if (!el) return;
+            const vehicleName = (isBleConnected() && bleManager?.deviceId)
+                ? (getGarageVehicleNameById(bleManager.deviceId) || bleManager?.deviceName || null)
+                : null;
+            el.textContent = vehicleName ? ` — ${vehicleName}` : '';
+        }
+
+        function toggleGarageHelpCard() {
+            const cardBody = document.getElementById('garageHelpCardBody');
+            const chevron = document.getElementById('garageHelpChevron');
+            if (!cardBody || !chevron) return;
+            const isCollapsed = cardBody.style.display === 'none';
+            cardBody.style.display = isCollapsed ? '' : 'none';
+            chevron.textContent = isCollapsed ? 'keyboard_arrow_down' : 'keyboard_arrow_right';
+            localStorage.setItem('garageHelpCardCollapsed', isCollapsed ? 'false' : 'true');
+        }
+        window.toggleGarageHelpCard = toggleGarageHelpCard;
 
         async function attemptAutoReconnect(source = 'timer') {
             if (!bleManager || !bleManager.connectToKnownDevice) return false;
@@ -1667,6 +1734,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return true;
         }
 
+        const GPS_POLL_INTERVAL_MS = 60000;
+        let gpsPollIntervalId = null;
+
         function setButtonBusy(button, busyText) {
             if (!button) return;
             if (!button.dataset.originalText) {
@@ -1687,6 +1757,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function captureGPSCoordinates() {
             if (!('geolocation' in navigator)) {
                 console.log('Geolocation not supported');
+                const latEl = document.getElementById('latitude');
+                const lonEl = document.getElementById('longitude');
+                const accEl = document.getElementById('accuracy');
+                const altEl = document.getElementById('altitude');
+                if (latEl) latEl.textContent = '--';
+                if (lonEl) lonEl.textContent = '--';
+                if (accEl) accEl.textContent = '--';
+                if (altEl) altEl.textContent = '--';
                 return;
             }
 
@@ -1717,13 +1795,22 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const lonEl = document.getElementById('longitude');
                     const accEl = document.getElementById('accuracy');
                     const altEl = document.getElementById('altitude');
-                    if (latEl) latEl.textContent = 'Error';
-                    if (lonEl) lonEl.textContent = 'Error';
-                    if (accEl) accEl.textContent = 'Error';
-                    if (altEl) altEl.textContent = 'Error';
+                    if (latEl) latEl.innerHTML = '<span class="material-symbols-outlined">sync</span>';
+                    if (lonEl) lonEl.innerHTML = '<span class="material-symbols-outlined">sync</span>';
+                    if (accEl) accEl.innerHTML = '<span class="material-symbols-outlined">sync</span>';
+                    if (altEl) altEl.innerHTML = '<span class="material-symbols-outlined">sync</span>';
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
+        }
+
+        function startGpsPolling() {
+            if (gpsPollIntervalId) {
+                clearInterval(gpsPollIntervalId);
+            }
+            gpsPollIntervalId = setInterval(() => {
+                captureGPSCoordinates();
+            }, GPS_POLL_INTERVAL_MS);
         }
 
         async function handleSetAsLevel() {
@@ -3039,8 +3126,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 });
             }
 
-            // Initialize GPS coordinates
-            captureGPSCoordinates()
+            // Initialize GPS coordinates and keep phone location fresh.
+            captureGPSCoordinates();
+            startGpsPolling();
 
             // Initialize bubble level container
             initBubbleLevelContainer();
@@ -3333,6 +3421,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     }
                 });
             }
+
+            const runLedColorDiagnosticBtn = document.getElementById('runLedColorDiagnosticBtn');
+            if (runLedColorDiagnosticBtn) {
+                runLedColorDiagnosticBtn.addEventListener('click', function() {
+                    runLedColorDiagnosticSequence();
+                });
+            }
             
             // Restore page from localStorage
             const lastPage = localStorage.getItem('currentPage') || 'dashboard';
@@ -3375,6 +3470,97 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             document.body.removeChild(textarea);
         }
 
+        let ledColorDiagnosticInFlight = false;
+
+        function setLedColorDiagnosticPreview(colorName = null) {
+            const previewEl = document.getElementById('ledColorDiagnosticPreview');
+            const labelEl = document.getElementById('ledColorDiagnosticColorLabel');
+            if (!previewEl && !labelEl) return;
+
+            const palette = {
+                red: '#ff3b30',
+                green: '#34c759',
+                blue: '#0a84ff',
+                yellow: '#ffd60a'
+            };
+
+            if (!colorName || !palette[colorName]) {
+                if (previewEl) {
+                    previewEl.style.backgroundColor = '#111';
+                    previewEl.style.boxShadow = '0 0 0 rgba(0,0,0,0)';
+                }
+                if (labelEl) {
+                    labelEl.textContent = 'Preview: idle';
+                    labelEl.style.color = '#9ca3af';
+                }
+                return;
+            }
+
+            const colorHex = palette[colorName];
+            if (previewEl) {
+                previewEl.style.backgroundColor = colorHex;
+                previewEl.style.boxShadow = `0 0 14px ${colorHex}`;
+            }
+            if (labelEl) {
+                labelEl.textContent = `Preview: ${colorName.toUpperCase()}`;
+                labelEl.style.color = colorHex;
+            }
+        }
+
+        async function runLedColorDiagnosticSequence() {
+            if (ledColorDiagnosticInFlight) return;
+
+            const triggerBtn = document.getElementById('runLedColorDiagnosticBtn');
+            const statusEl = document.getElementById('ledColorDiagnosticStatus');
+
+            if (!isBleConnected()) {
+                toast.warning('Connect to Bluetooth before running LED color diagnostic.');
+                if (statusEl) statusEl.textContent = 'Not connected';
+                return;
+            }
+
+            const setStatus = (text, tone = 'muted') => {
+                if (!statusEl) return;
+                statusEl.textContent = text;
+                statusEl.style.color = tone === 'error' ? '#f87171'
+                    : tone === 'ok' ? '#4ade80'
+                    : tone === 'busy' ? '#fbbf24'
+                    : '#9ca3af';
+            };
+
+            ledColorDiagnosticInFlight = true;
+            if (triggerBtn) {
+                triggerBtn.disabled = true;
+                triggerBtn.setAttribute('aria-disabled', 'true');
+            }
+
+            const sequence = ['red', 'green', 'blue', 'yellow'];
+            const holdMs = 1000;
+
+            try {
+                setStatus('Running: red -> green -> blue -> yellow', 'busy');
+                for (const color of sequence) {
+                    setLedColorDiagnosticPreview(color);
+                    setStatus(`Testing ${color.toUpperCase()}...`, 'busy');
+                    await pushSystemCommand('flash', { color, count: 1, onMs: holdMs, offMs: 0 });
+                    await delay(holdMs);
+                }
+                setStatus('Complete', 'ok');
+                toast.success('LED color diagnostic completed');
+            } catch (error) {
+                console.error('LED color diagnostic failed:', error);
+                setStatus('Failed (see console)', 'error');
+                toast.error(`LED color diagnostic failed: ${error?.message || error}`);
+            } finally {
+                setLedColorDiagnosticPreview(null);
+                ledColorDiagnosticInFlight = false;
+                if (triggerBtn) {
+                    triggerBtn.disabled = false;
+                    triggerBtn.setAttribute('aria-disabled', 'false');
+                }
+            }
+        }
+
         // Show visual feedback for copy action
         function showCopyFeedback(element) {
             if (element) {
@@ -3406,7 +3592,29 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         await savePage(dirtyKey);
                         if (isPageDirty(dirtyKey)) return; // save failed, abort
                     } else if (choice === 'discard') {
-                        await discardPage(dirtyKey);
+                        try {
+                            await discardPage(dirtyKey);
+                        } catch (error) {
+                            console.warn('Discard failed, continuing navigation:', error?.message || error);
+                            clearPageDirty(dirtyKey);
+                        }
+                    }
+                }
+
+                if (currentSection === 'lights' && lightingGroupsDirty) {
+                    const choice = await showDirtyConfirmDialog();
+                    if (choice === 'cancel') return;
+                    if (choice === 'save') {
+                        await updateActiveLightingProfile();
+                        if (lightingGroupsDirty) return;
+                    } else if (choice === 'discard') {
+                        try {
+                            await discardLightingProfileChanges();
+                        } catch (error) {
+                            console.warn('Lighting discard failed, continuing navigation:', error?.message || error);
+                            lightingGroupsDirty = false;
+                            syncLightingProfileActionButtons();
+                        }
                     }
                 }
             }
@@ -3504,17 +3712,27 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
         const LIGHT_MASTER_STORAGE_KEY = 'lightsMasterEnabled';
         const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
+        const LIGHT_COLOR_ORDER_KEY = 'lightColorOrder';
         const COLOR_PRESETS_KEY = 'lightGroupColorPresets';
         const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
         const LIGHT_GROUP_DEFAULT_PATTERN = 'solid';
         const LIGHT_GROUP_CYCLE_INTERVAL_SECONDS = 30;
         const MAX_LIGHT_GROUP_NAME_LENGTH = 12;
-        const LIGHTS_ENGINE_MAX_GROUPS = 16;
-        const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'blink', 'strobe', 'breathe', 'fade', 'twinkle', 'sparkle', 'flash_sparkle', 'glitter', 'running', 'larson', 'flicker', 'heartbeat', 'alternate'];
-        const LIGHTS_ENGINE_EFFECTS = new Set(['solid', 'blink', 'strobe', 'breathe', 'fade', 'twinkle', 'sparkle', 'flash_sparkle', 'glitter', 'running', 'larson', 'flicker', 'heartbeat', 'alternate']);
+        const LIGHTS_ENGINE_MAX_GROUPS = 15;
+        const MAX_LIGHTS_TOTAL_LEDS = 30;
+        const MAX_LIGHT_GROUP_LEDS = 15;
+        const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'blink', 'strobe', 'breathe', 'fade', 'twinkle', 'sparkle', 'flash_sparkle', 'glitter', 'solid_glitter', 'running', 'larson', 'heartbeat', 'flicker', 'fire_flicker'];
+        const LIGHTS_ENGINE_EFFECTS = new Set(['solid', 'blink', 'strobe', 'breathe', 'fade', 'twinkle', 'sparkle', 'flash_sparkle', 'glitter', 'solid_glitter', 'running', 'larson', 'heartbeat', 'flicker', 'fire_flicker']);
+        const LIGHT_COLOR_ORDER_OPTIONS = new Set(['grb', 'rgb', 'rbg', 'gbr', 'brg', 'bgr']);
+        const DEFAULT_LIGHT_COLOR_ORDER = 'grb';
 
         function normalizeLightGroupName(name) {
             return String(name || '').trim().slice(0, MAX_LIGHT_GROUP_NAME_LENGTH);
+        }
+
+        function normalizeLightColorOrder(value) {
+            const normalized = String(value || '').trim().toLowerCase();
+            return LIGHT_COLOR_ORDER_OPTIONS.has(normalized) ? normalized : DEFAULT_LIGHT_COLOR_ORDER;
         }
 
         // Phase 5: Lighting profiles stored in localStorage (mirrors driving profile architecture)
@@ -3547,11 +3765,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let lightingProfilesLocked = localStorage.getItem('lightingProfilesLocked') === 'true';
         let manageLightGroupsLocked = localStorage.getItem('manageLightGroupsLocked') === 'true';
         let lightStripConfigLocked = localStorage.getItem('lightStripConfigLocked') === 'true';
+        let lightingGroupsDirty = false;
         
         // Predefined light groups (initialized on first load)
         const PREDEFINED_LIGHT_GROUPS = [
             { name: 'Brake Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#000000', pattern: 'solid', enabled: false, isPredefined: true },
-            { name: 'Emergency/Police Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#0000ff', pattern: 'alternate', enabled: false, isPredefined: true },
+            { name: 'Emergency/Police Lights', indices: [], brightness: 255, color: '#ff0000', color2: '#0000ff', pattern: 'flash_sparkle', enabled: false, isPredefined: true },
             { name: 'Hazard Lights', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'blink', enabled: false, isPredefined: true },
             { name: 'Headlights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'solid', enabled: false, isPredefined: true },
             { name: 'Reverse Lights', indices: [], brightness: 255, color: '#ffffff', color2: '#000000', pattern: 'solid', enabled: false, isPredefined: true },
@@ -3579,7 +3798,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let masterStateBeforeModal = false;
         let lightGroupModalSaved = false;
         let masterLightToggleInFlight = false;
-        let lastPushedLightGroupCount = 0;
+        // Start at max so the first sync clears any stale groups on firmware.
+        let lastPushedLightGroupCount = LIGHTS_ENGINE_MAX_GROUPS;
+        let lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
+        let lastPushedLightsColorOrder = null;
+        let lastPushedLightsMasterEnabled = null;
         const expandedLightGroupIds = new Set();
 
         function createLightGroupId() {
@@ -3598,10 +3821,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             const normalized = indicesLike
                 .map(value => Number(value))
-                .filter(value => Number.isFinite(value) && value >= 0)
+                .filter(value => Number.isFinite(value) && value >= 0 && value < MAX_LIGHTS_TOTAL_LEDS)
                 .map(value => Math.trunc(value));
 
-            return Array.from(new Set(normalized)).sort((a, b) => a - b);
+            return Array.from(new Set(normalized)).sort((a, b) => a - b).slice(0, MAX_LIGHT_GROUP_LEDS);
         }
 
         function normalizeLightGroup(group) {
@@ -3611,9 +3834,25 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             return {
                 ...rest,
-                indices: normalizeLedIndices(indexSource),
+                indices: normalizeLedIndices(indexSource).slice(0, MAX_LIGHT_GROUP_LEDS),
                 enabled: !!rest.enabled
             };
+        }
+
+        function getLightGroupPayloadSignature(payload) {
+            if (!payload || typeof payload !== 'object') return '';
+
+            return JSON.stringify({
+                group: Number(payload.group),
+                name: String(payload.name || ''),
+                enabled: !!payload.enabled,
+                color: String(payload.color || ''),
+                color2: String(payload.color2 || ''),
+                brightness: Number(payload.brightness) || 0,
+                effect: String(payload.effect || ''),
+                speed: Number(payload.speed) || 0,
+                leds: normalizeLedIndices(payload.leds)
+            });
         }
 
         // Load color presets from localStorage or use defaults
@@ -3741,9 +3980,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 lightGroups = stored ? JSON.parse(stored) : [];
             }
 
-            lightGroups = lightGroups.map(normalizeLightGroup);
+            lightGroups = lightGroups.map(normalizeLightGroup).slice(0, LIGHTS_ENGINE_MAX_GROUPS);
 
             ensureLightGroupIds();
+            refreshTotalLEDInputFromStorage();
+            refreshLightColorOrderInputFromStorage();
 
             saveLightGroups(false);
             renderLightGroupsList();
@@ -3766,10 +4007,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         };
 
         function updateDashboardActiveLightingProfile() {
-            const el = document.getElementById('activeLightingProfileDisplay');
-            if (!el) return;
+            if (!isBleConnected()) {
+                setDashboardQuickNavDisplay('activeLightingProfileDisplay', null, 'lighting');
+                return;
+            }
             const hit = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
-            el.textContent = hit ? (hit.name || `Profile ${hit.index}`) : '--';
+            setDashboardQuickNavDisplay('activeLightingProfileDisplay', hit ? (hit.name || `Profile ${hit.index}`) : '--', 'lighting');
         }
 
         function setLightingProfileStatus(message, tone = 'muted') {
@@ -3784,14 +4027,38 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 : '#aaa';
         }
 
+        function getVehicleScopedTotalLEDCount() {
+            const saved = parseInt(readVehicleScopedStorage(TOTAL_LED_COUNT_KEY), 10);
+            return Number.isInteger(saved) && saved >= 1 && saved <= MAX_LIGHTS_TOTAL_LEDS
+                ? saved
+                : Math.min(20, MAX_LIGHTS_TOTAL_LEDS);
+        }
+
+        function getVehicleScopedLightColorOrder() {
+            return normalizeLightColorOrder(readVehicleScopedStorage(LIGHT_COLOR_ORDER_KEY));
+        }
+
+        function refreshTotalLEDInputFromStorage() {
+            const totalLEDInput = document.getElementById('totalLEDCount');
+            if (!totalLEDInput) return;
+            totalLEDInput.value = getVehicleScopedTotalLEDCount();
+        }
+
+        function refreshLightColorOrderInputFromStorage() {
+            const colorOrderInput = document.getElementById('lightColorOrder');
+            if (!colorOrderInput) return;
+            colorOrderInput.value = getVehicleScopedLightColorOrder();
+        }
+
         function syncLightingProfileActionButtons() {
             const saveBtn = document.getElementById('saveNewLightingProfileBtn');
             if (saveBtn) saveBtn.disabled = lightingProfileBusy || lightingProfilesLocked;
             const updateBtn = document.getElementById('ltProfileUpdateBtn');
             if (!updateBtn) return;
             const activeProfile = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
-            updateBtn.style.display = !!activeProfile ? '' : 'none';
-            updateBtn.disabled = !activeProfile || lightingProfileBusy || lightingProfilesLocked;
+            const showUpdate = !!activeProfile && lightingGroupsDirty;
+            updateBtn.classList.toggle('profile-update-needs-save', showUpdate);
+            updateBtn.disabled = !showUpdate || lightingProfileBusy || lightingProfilesLocked;
         }
 
         function syncLightingProfilesCardUI() {
@@ -3835,6 +4102,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const masterToggle = document.getElementById('lightsToggleLightGroups');
             const addGroupBtn = document.getElementById('addLightGroupBtn');
             const totalLedInput = document.getElementById('totalLEDCount');
+            const colorOrderInput = document.getElementById('lightColorOrder');
+            const controlsLocked = manageLightGroupsLocked || lightStripConfigLocked;
 
             if (card) card.classList.toggle('profile-card-locked', manageLightGroupsLocked);
             if (lockIcon) {
@@ -3855,8 +4124,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 addGroupBtn.setAttribute('aria-disabled', manageLightGroupsLocked ? 'true' : 'false');
             }
             if (totalLedInput) {
-                totalLedInput.disabled = manageLightGroupsLocked;
-                totalLedInput.setAttribute('aria-disabled', manageLightGroupsLocked ? 'true' : 'false');
+                totalLedInput.disabled = controlsLocked;
+                totalLedInput.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
+            }
+            if (colorOrderInput) {
+                colorOrderInput.disabled = controlsLocked;
+                colorOrderInput.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
             }
         }
 
@@ -3873,6 +4146,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const card = document.getElementById('lightStripConfigCard');
             const lockIcon = document.getElementById('lightStripConfigLockIcon');
             const totalLedInput = document.getElementById('totalLEDCount');
+            const colorOrderInput = document.getElementById('lightColorOrder');
+            const controlsLocked = manageLightGroupsLocked || lightStripConfigLocked;
 
             if (card) card.classList.toggle('profile-card-locked', lightStripConfigLocked);
             if (lockIcon) {
@@ -3883,8 +4158,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     : 'Lock light strip configuration';
             }
             if (totalLedInput) {
-                totalLedInput.disabled = lightStripConfigLocked;
-                totalLedInput.setAttribute('aria-disabled', lightStripConfigLocked ? 'true' : 'false');
+                totalLedInput.disabled = controlsLocked;
+                totalLedInput.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
+            }
+            if (colorOrderInput) {
+                colorOrderInput.disabled = controlsLocked;
+                colorOrderInput.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
             }
         }
 
@@ -3921,6 +4200,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (isActive) {
                     row.style.cssText = 'background:rgba(200,168,0,0.15);border-radius:6px;border:1px solid #c8a800;';
                 }
+
+                const nameWrap = document.createElement('div');
+                nameWrap.className = 'd-flex align-items-center flex-grow-1';
+
+                const activeDotSlot = document.createElement('span');
+                activeDotSlot.setAttribute('aria-hidden', 'true');
+                activeDotSlot.style.cssText = 'display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;flex:0 0 10px;background:' + (isActive ? 'var(--lime-green)' : 'transparent') + ';';
+
                 const nameBtn = document.createElement('button');
                 nameBtn.type = 'button';
                 nameBtn.className = 'btn btn-link p-0 text-start text-decoration-none flex-grow-1';
@@ -3929,14 +4216,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 nameBtn.disabled = lightingProfileBusy || lightingProfilesLocked;
                 nameBtn.addEventListener('click', () => selectLightingProfile(p.index));
 
+                nameWrap.appendChild(activeDotSlot);
+                nameWrap.appendChild(nameBtn);
+
                 const metaWrap = document.createElement('div');
                 metaWrap.className = 'd-flex align-items-center gap-2';
-                if (isActive) {
-                    const pill = document.createElement('span');
-                    pill.textContent = 'Active';
-                    pill.style.cssText = 'font-size:0.7rem;line-height:1;background:#c8a800;color:#000;border-radius:999px;padding:2px 8px;font-weight:700;';
-                    metaWrap.appendChild(pill);
-                }
                 const delBtn = document.createElement('button');
                 delBtn.type = 'button';
                 delBtn.className = 'btn btn-link p-0 ms-2';
@@ -3946,7 +4230,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 delBtn.disabled = lightingProfileBusy || lightingProfilesLocked;
                 delBtn.addEventListener('click', () => confirmDeleteLightingProfile(p.index));
 
-                row.appendChild(nameBtn);
+                row.appendChild(nameWrap);
                 row.appendChild(metaWrap);
                 row.appendChild(delBtn);
                 container.appendChild(row);
@@ -3996,6 +4280,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             ensureLightGroupIds();
             saveLightGroups(false);
             renderLightGroupsList();
+            lightingGroupsDirty = false;
+            syncLightingProfileActionButtons();
             if (isBleConnected()) {
                 try {
                     await pushAllLightGroupsToESP32(lightGroups);
@@ -4047,6 +4333,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             saveLocalLightingProfiles();
             populateLightingProfileSelector();
             updateDashboardActiveLightingProfile();
+            lightingGroupsDirty = false;
+            syncLightingProfileActionButtons();
             toast.success(`Saved lighting profile "${profileName}"`);
             setLightingProfileStatus(`Status: "${profileName}" saved`, 'ok');
         }
@@ -4064,8 +4352,31 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 groups: JSON.parse(JSON.stringify(lightGroups))
             };
             saveLocalLightingProfiles();
+            lightingGroupsDirty = false;
+            syncLightingProfileActionButtons();
             toast.success(`Updated lighting profile "${active.name}"`);
             setLightingProfileStatus(`Status: "${active.name}" updated`, 'ok');
+        }
+
+        async function discardLightingProfileChanges() {
+            const active = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
+            if (active && Array.isArray(active.groups)) {
+                lightGroups = JSON.parse(JSON.stringify(active.groups)).map(normalizeLightGroup);
+                ensureLightGroupIds();
+                saveLightGroups(false);
+                renderLightGroupsList();
+                if (isBleConnected()) {
+                    try {
+                        await pushAllLightGroupsToESP32(lightGroups);
+                        await pushSystemCommand('lights_master', { enabled: getMasterLightsEnabled() });
+                    } catch (error) {
+                        console.warn('Failed to apply discarded lighting snapshot to hardware:', error?.message || error);
+                    }
+                }
+            }
+            lightingGroupsDirty = false;
+            syncLightingProfileActionButtons();
+            setLightingProfileStatus('Status: unsaved lighting changes discarded', 'muted');
         }
 
         async function confirmDeleteLightingProfile(index) {
@@ -4122,6 +4433,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             renderLightGroupsList();
 
             if (pushToHardware) {
+                lightingGroupsDirty = true;
+                syncLightingProfileActionButtons();
                 applyLightsHierarchyToHardware();
             }
         }
@@ -4196,19 +4509,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function getPatternMode(patternName) {
             const value = (patternName || '').toLowerCase();
             if (!value) return 1;
-            if (value === 'blink' || value === 'strobe' || value === 'alternate') return 2;
+            if (value === 'blink' || value === 'strobe') return 2;
             if (value === 'breathe' || value === 'fade' || value === 'heartbeat') return 3;
             if (value === 'running' || value === 'larson') return 4;
-            if (value === 'twinkle' || value === 'sparkle' || value === 'flash_sparkle' || value === 'glitter') return 5;
-            if (value === 'flicker') return 6;
+            if (value === 'twinkle' || value === 'sparkle' || value === 'flash_sparkle' || value === 'glitter' || value === 'solid_glitter') return 5;
+            if (value === 'flicker' || value === 'fire_flicker') return 6;
             return 1; // solid default
         }
 
         function getPatternBlinkRate(patternName) {
             const value = (patternName || '').toLowerCase();
             if (value === 'strobe') return 80;
-            if (value === 'blink' || value === 'alternate') return 220;
-            if (value === 'flicker' || value === 'sparkle' || value === 'glitter') return 120;
+            if (value === 'blink') return 220;
+            if (value === 'flicker' || value === 'fire_flicker' || value === 'sparkle' || value === 'glitter' || value === 'solid_glitter' || value === 'flash_sparkle') return 120;
             if (value === 'running' || value === 'larson') return 180;
             if (value === 'breathe' || value === 'fade' || value === 'heartbeat') return 650;
             return 450;
@@ -4294,7 +4607,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     leds: []
                 };
 
+            const signature = getLightGroupPayloadSignature(payload);
+            if (lastPushedLightGroupSignatures[index] === signature) return;
+
             await pushLightsPayload(payload);
+            lastPushedLightGroupSignatures[index] = signature;
         }
 
         async function pushAllLightGroupsToESP32(groupsSource = null) {
@@ -4303,14 +4620,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const groups = Array.isArray(groupsSource)
                 ? groupsSource.map(normalizeLightGroup)
                 : lightGroups.map(normalizeLightGroup);
-            const maxNeeded = Math.max(groups.length, lastPushedLightGroupCount);
-            const capped = Math.min(maxNeeded, LIGHTS_ENGINE_MAX_GROUPS);
+            const desiredCount = Math.min(groups.length, LIGHTS_ENGINE_MAX_GROUPS);
+            const previousCount = Math.min(lastPushedLightGroupCount, LIGHTS_ENGINE_MAX_GROUPS);
 
-            for (let i = 0; i < capped; i++) {
+            for (let i = 0; i < desiredCount; i++) {
                 await pushLightGroupToESP32(i, groups);
             }
 
-            lastPushedLightGroupCount = Math.min(groups.length, LIGHTS_ENGINE_MAX_GROUPS);
+            // Only clear trailing firmware slots when group count shrinks.
+            for (let i = desiredCount; i < previousCount; i++) {
+                await pushLightGroupToESP32(i, groups);
+            }
+
+            lastPushedLightGroupCount = desiredCount;
         }
 
         window.pushLightGroupToESP32 = pushLightGroupToESP32;
@@ -4358,15 +4680,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             };
         }
 
-        function applyLightsHierarchyToHardware(override = null) {
+        async function applyLightsHierarchyToHardware(override = null) {
             if (!isBleConnected()) {
                 // Startup and offline states can update local light groups before BLE is connected.
                 console.debug('[Lights] Skipping hardware sync: BLE not connected');
-                return Promise.resolve();
+                return;
             }
 
             try {
                 const masterEnabled = override?.masterEnabled ?? getMasterLightsEnabled();
+                const colorOrder = getVehicleScopedLightColorOrder();
                 const sourceGroupsRaw = Array.isArray(override?.groups)
                     ? override.groups
                     : (Array.isArray(lightGroups) ? lightGroups : []);
@@ -4378,15 +4701,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     indices: Array.isArray(g.indices) ? g.indices.length : 0
                 })));
 
-                return pushAllLightGroupsToESP32(sourceGroups)
-                    .then(() => pushSystemCommand('lights_master', { enabled: !!finalMaster }))
-                    .catch(error => {
-                        console.error('Failed to apply hierarchy lights payload:', error);
-                    });
+                if (lastPushedLightsColorOrder !== colorOrder) {
+                    await pushSystemCommand('lights_color_order', { order: colorOrder });
+                    lastPushedLightsColorOrder = colorOrder;
+                }
+
+                await pushAllLightGroupsToESP32(sourceGroups);
+
+                if (lastPushedLightsMasterEnabled !== !!finalMaster) {
+                    await pushSystemCommand('lights_master', { enabled: !!finalMaster });
+                    lastPushedLightsMasterEnabled = !!finalMaster;
+                }
             } catch (error) {
-                console.error('Unexpected error building lights payload:', error);
+                console.error('Failed to apply hierarchy lights payload:', error);
                 appendToSettingsConsoleCard(`Lights payload build failed: ${String(error?.message || error)}`, 'error');
-                return Promise.resolve();
             }
         }
 
@@ -4531,6 +4859,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                             }
                             lightGroups[index].enabled = enabledInput.checked;
                             saveLightGroups(false);
+                            lightingGroupsDirty = true;
+                            syncLightingProfileActionButtons();
                             pushLightGroupToESP32(index).catch(error => {
                                 console.error('Failed to push single light group toggle:', error);
                             });
@@ -4642,17 +4972,18 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             solid: { needsDualColor: false },
             blink: { needsDualColor: true },
             strobe: { needsDualColor: false },
-            breathe: { needsDualColor: false },
+            breathe: { needsDualColor: true },
             fade: { needsDualColor: true },
             twinkle: { needsDualColor: true },
             sparkle: { needsDualColor: false },
             flash_sparkle: { needsDualColor: true },
             glitter: { needsDualColor: false },
-            running: { needsDualColor: false },
+            solid_glitter: { needsDualColor: false },
+            running: { needsDualColor: true },
             larson: { needsDualColor: false },
             flicker: { needsDualColor: false },
-            heartbeat: { needsDualColor: false },
-            alternate: { needsDualColor: true }
+            fire_flicker: { needsDualColor: false },
+            heartbeat: { needsDualColor: true }
         };
 
         function getLightGroupPatternNames() {
@@ -4759,7 +5090,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const patternSelect = document.getElementById('lightGroupPatternSelect');
             const colorPicker = document.getElementById('lightGroupColorPicker');
             const colorHex = document.getElementById('lightGroupColorHex');
-            const totalLEDCount = parseInt(document.getElementById('totalLEDCount').value) || 100;
+            const totalLEDCount = parseInt(document.getElementById('totalLEDCount').value) || 20;
             
             // Update modal title and total LED count display
             const modalTotalLedsSpan = document.getElementById('modalTotalLeds');
@@ -4861,15 +5192,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             openLightGroupModal(index);
         }
 
-        function renderLedGrid(totalCount = 100) {
+        function renderLedGrid(totalCount = 20) {
             const gridContainer = document.getElementById('ledGrid');
             gridContainer.innerHTML = '';
             gridContainer.style.display = 'grid';
             gridContainer.style.gridTemplateColumns = 'repeat(10, 1fr)';
             gridContainer.style.gap = '0.5rem';
             
-            // Clamp total to max 100 (10x10 grid)
-            const maxLEDs = Math.min(totalCount, 100);
+            const maxLEDs = Math.min(totalCount, MAX_LIGHTS_TOTAL_LEDS);
             
             for (let i = 0; i < maxLEDs; i++) {
                 const button = document.createElement('button');
@@ -4983,16 +5313,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function canAutoPreviewGroup(draftGroup) {
-            return !!draftGroup.name && draftGroup.indices.length > 0;
+            return draftGroup.indices.length > 0;
         }
 
         function testLightGroupFromModal(showValidationErrors = false) {
             const draftGroup = getLightGroupDraftFromModal();
 
             if (!canAutoPreviewGroup(draftGroup)) {
-                if (showValidationErrors && !draftGroup.name) {
-                    window.toast.error('Enter a group name before testing');
-                }
                 if (showValidationErrors && draftGroup.indices.length === 0) {
                     window.toast.error('Select at least one LED before testing');
                 }
@@ -5026,6 +5353,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const indices = Array.from(currentSelectedLEDs).sort((a, b) => a - b);
             const patternSelect = document.getElementById('lightGroupPatternSelect');
             const selectedPattern = (patternSelect && patternSelect.value) ? patternSelect.value : LIGHT_GROUP_DEFAULT_PATTERN;
+
+            if (indices.length > MAX_LIGHT_GROUP_LEDS) {
+                await showSimpleNoticeDialog(
+                    'Too Many LEDs In Group',
+                    `Each light group can include up to ${MAX_LIGHT_GROUP_LEDS} LEDs. Please reduce the selection and try again.`,
+                    'OK',
+                    'light-group-led-limit-overlay'
+                );
+                return;
+            }
             
             // Convert brightness percentage (0-100) to 0-255 scale
             const brightness255 = Math.round(currentBrightness * 255 / 100);
@@ -5047,11 +5384,23 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     enabled: wasEnabled
                 };
                 saveLightGroups(false);
+                lightingGroupsDirty = true;
+                syncLightingProfileActionButtons();
                 if (isBleConnected()) {
                     await pushLightGroupToESP32(currentEditingGroupIndex);
                 }
                 window.toast.success(`Light group "${name}" updated!`);
             } else {
+                if (lightGroups.length >= LIGHTS_ENGINE_MAX_GROUPS) {
+                    await showSimpleNoticeDialog(
+                        'Group Limit Reached',
+                        `You can create up to ${LIGHTS_ENGINE_MAX_GROUPS} light groups per vehicle.`,
+                        'OK',
+                        'light-group-limit-overlay'
+                    );
+                    return;
+                }
+
                 // Create new group disabled by default so save does not force it on.
                 lightGroups.push({
                     id: createLightGroupId(),
@@ -5065,6 +5414,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     enabled: false
                 });
                 saveLightGroups(false);
+                lightingGroupsDirty = true;
+                syncLightingProfileActionButtons();
                 if (isBleConnected()) {
                     await pushLightGroupToESP32(lightGroups.length - 1);
                 }
@@ -5184,24 +5535,54 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const totalLEDInput = document.getElementById('totalLEDCount');
             if (totalLEDInput) {
                 // Load saved value
-                const saved = readVehicleScopedStorage(TOTAL_LED_COUNT_KEY);
-                if (saved) totalLEDInput.value = saved;
+                refreshTotalLEDInputFromStorage();
                 
                 // Save on change
                 totalLEDInput.addEventListener('change', function() {
-                    if (manageLightGroupsLocked) {
-                        this.value = readVehicleScopedStorage(TOTAL_LED_COUNT_KEY, { migrateLegacy: false }) || 100;
-                        toast.warning('Manage Light Groups is locked. Unlock to make changes.');
+                    if (manageLightGroupsLocked || lightStripConfigLocked) {
+                        this.value = getVehicleScopedTotalLEDCount();
+                        toast.warning('Light controls are locked. Unlock to make changes.');
                         return;
                     }
                     const value = parseInt(this.value);
-                    if (value >= 1 && value <= 300) {
+                    if (value >= 1 && value <= MAX_LIGHTS_TOTAL_LEDS) {
                         writeVehicleScopedStorage(TOTAL_LED_COUNT_KEY, String(value));
+                        lightingGroupsDirty = true;
+                        syncLightingProfileActionButtons();
                         window.toast.success(`Total LED count set to ${value}`);
                     } else {
-                        alert('Please enter a value between 1 and 300');
-                        this.value = readVehicleScopedStorage(TOTAL_LED_COUNT_KEY, { migrateLegacy: false }) || 100;
+                        alert(`Please enter a value between 1 and ${MAX_LIGHTS_TOTAL_LEDS}`);
+                        this.value = getVehicleScopedTotalLEDCount();
                     }
+                });
+            }
+
+            const lightColorOrderInput = document.getElementById('lightColorOrder');
+            if (lightColorOrderInput) {
+                refreshLightColorOrderInputFromStorage();
+
+                lightColorOrderInput.addEventListener('change', async function() {
+                    if (manageLightGroupsLocked || lightStripConfigLocked) {
+                        this.value = getVehicleScopedLightColorOrder();
+                        toast.warning('Light controls are locked. Unlock to make changes.');
+                        return;
+                    }
+
+                    const order = normalizeLightColorOrder(this.value);
+                    this.value = order;
+                    writeVehicleScopedStorage(LIGHT_COLOR_ORDER_KEY, order);
+                    lightingGroupsDirty = true;
+                    syncLightingProfileActionButtons();
+
+                    if (isBleConnected()) {
+                        try {
+                            await pushSystemCommand('lights_color_order', { order });
+                        } catch (error) {
+                            console.warn('Failed to push light color order to firmware:', error?.message || error);
+                        }
+                    }
+
+                    window.toast.success(`LED color order set to ${order.toUpperCase()}`);
                 });
             }
             
@@ -5305,6 +5686,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             updateDashboardActiveProfile();
             populateLightingProfileSelector();
             updateDashboardActiveLightingProfile();
+            ensureApplicationDataStorageHooks();
+            refreshApplicationDataCard();
             
             // Load version information
             loadVersionInfo();
@@ -6024,10 +6407,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Phase 3: Driving Profiles ====================
 
         function updateDashboardActiveProfile() {
-            const el = document.getElementById('activeDrivingProfileDisplay');
-            if (!el) return;
+            if (!isBleConnected()) {
+                setDashboardQuickNavDisplay('activeDrivingProfileDisplay', null, 'driving');
+                return;
+            }
             const p = getActiveDrivingProfile();
-            el.textContent = p ? p.name : '--';
+            setDashboardQuickNavDisplay('activeDrivingProfileDisplay', p ? p.name : '--', 'driving');
         }
 
         function setDrivingProfileStatus(message, tone = 'muted') {
@@ -6096,7 +6481,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             const activeProfile = getActiveDrivingProfile();
             const showUpdate = !!activeProfile && (isPageDirty('tuning') || isPageDirty('servo'));
-            updateBtn.style.display = showUpdate ? '' : 'none';
+            updateBtn.classList.toggle('profile-update-needs-save', showUpdate);
             updateBtn.disabled = !showUpdate || drivingProfileBusy || drivingProfilesLocked;
         }
 
@@ -6178,6 +6563,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     row.style.cssText = 'background:rgba(200,168,0,0.15);border-radius:6px;border:1px solid #c8a800;';
                 }
 
+                const nameWrap = document.createElement('div');
+                nameWrap.className = 'd-flex align-items-center flex-grow-1';
+
+                const activeDotSlot = document.createElement('span');
+                activeDotSlot.setAttribute('aria-hidden', 'true');
+                activeDotSlot.style.cssText = 'display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;flex:0 0 10px;background:' + (isActive ? 'var(--lime-green)' : 'transparent') + ';';
+
                 const nameBtn = document.createElement('button');
                 nameBtn.type = 'button';
                 nameBtn.className = 'btn btn-link p-0 text-start text-decoration-none flex-grow-1';
@@ -6186,14 +6578,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 nameBtn.disabled = drivingProfileBusy || drivingProfilesLocked;
                 nameBtn.addEventListener('click', () => selectDrivingProfile(p.index));
 
+                nameWrap.appendChild(activeDotSlot);
+                nameWrap.appendChild(nameBtn);
+
                 const metaWrap = document.createElement('div');
                 metaWrap.className = 'd-flex align-items-center gap-2';
-                if (isActive) {
-                    const activePill = document.createElement('span');
-                    activePill.textContent = 'Active';
-                    activePill.style.cssText = 'font-size:0.7rem;line-height:1;background:#c8a800;color:#000;border-radius:999px;padding:2px 8px;font-weight:700;';
-                    metaWrap.appendChild(activePill);
-                }
 
                 const delBtn = document.createElement('button');
                 delBtn.type = 'button';
@@ -6205,7 +6594,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 delBtn.addEventListener('click', () => confirmDeleteDrivingProfile(p.index));
                 metaWrap.appendChild(delBtn);
 
-                row.appendChild(nameBtn);
+                row.appendChild(nameWrap);
                 row.appendChild(metaWrap);
                 container.appendChild(row);
             });
@@ -6280,7 +6669,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (existing) existing.remove();
                 const overlay = document.createElement('div');
                 overlay.id = 'profile-name-overlay';
-                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:calc(24px + env(safe-area-inset-top, 0px)) 20px 20px;';
                 overlay.innerHTML = `
                   <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
                     <h5 style="margin:0 0 12px;color:#fff;">Save Driving Profile</h5>
@@ -6313,7 +6702,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (existing) existing.remove();
                 const overlay = document.createElement('div');
                 overlay.id = 'profile-overwrite-overlay';
-                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:calc(24px + env(safe-area-inset-top, 0px)) 20px 20px;';
 
                 let listHtml = profiles.map(p =>
                     `<button class="po-slot" data-idx="${p.index}" style="display:block;width:100%;text-align:left;padding:10px 12px;margin-bottom:6px;border:1px solid #444;border-radius:8px;background:#2a2a2a;color:#fff;cursor:pointer;">
@@ -6459,6 +6848,66 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Config Fetching ====================
         let hasShownInitialConfigToast = false;
 
+        function buildLocalStorageSnapshot() {
+            const snapshot = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (!key) continue;
+                const rawValue = localStorage.getItem(key);
+                if (rawValue == null) {
+                    snapshot[key] = null;
+                    continue;
+                }
+                try {
+                    snapshot[key] = JSON.parse(rawValue);
+                } catch (_) {
+                    snapshot[key] = rawValue;
+                }
+            }
+            const orderedSnapshot = {};
+            Object.keys(snapshot).sort().forEach((key) => {
+                orderedSnapshot[key] = snapshot[key];
+            });
+            return orderedSnapshot;
+        }
+
+        function refreshApplicationDataCard() {
+            const appDataEl = document.getElementById('tuningConfigData');
+            if (!appDataEl) return;
+            appDataEl.textContent = JSON.stringify(buildLocalStorageSnapshot(), null, 2);
+        }
+
+        function ensureApplicationDataStorageHooks() {
+            if (window.__rcdccStorageHooksInstalled) return;
+            window.__rcdccStorageHooksInstalled = true;
+
+            const dispatchStorageUpdate = () => {
+                window.dispatchEvent(new Event('rcdcc:local-storage-updated'));
+            };
+
+            const nativeSetItem = localStorage.setItem.bind(localStorage);
+            const nativeRemoveItem = localStorage.removeItem.bind(localStorage);
+            const nativeClear = localStorage.clear.bind(localStorage);
+
+            localStorage.setItem = function(key, value) {
+                nativeSetItem(key, value);
+                dispatchStorageUpdate();
+            };
+
+            localStorage.removeItem = function(key) {
+                nativeRemoveItem(key);
+                dispatchStorageUpdate();
+            };
+
+            localStorage.clear = function() {
+                nativeClear();
+                dispatchStorageUpdate();
+            };
+
+            window.addEventListener('storage', refreshApplicationDataCard);
+            window.addEventListener('rcdcc:local-storage-updated', refreshApplicationDataCard);
+        }
+
         async function fetchConfigFromESP32(showToast = true, options = {}) {
             if (typeof showToast === 'object' && showToast !== null) {
                 options = showToast;
@@ -6475,10 +6924,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     rideHeightDisplay: '--',
                     dampingDisplay: '--',
                     stiffnessDisplay: '--',
-                    frontRearBalanceDisplay: '--',
-                    activeVehicleDisplay: '--',
-                    activeDrivingProfileDisplay: '--',
-                    activeLightingProfileDisplay: '--'
+                    frontRearBalanceDisplay: '--'
                 };
 
                 Object.entries(placeholderMap).forEach(([id, value]) => {
@@ -6490,6 +6936,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const el = document.getElementById(id);
                     if (el) el.textContent = '--';
                 });
+
+                clearDashboardActiveStatus();
             };
 
             const applyLoadedConfig = (data) => {
@@ -6543,13 +6991,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     toast.warning(warningMessage, { duration: 10000 });
                 }
 
-                // Display config data in the Config Data card (Settings page)
+                // Display ESP32 payload in the RCDCC Data card.
                 const configData = document.getElementById('configData');
                 if (configData) configData.textContent = JSON.stringify(data, null, 2);
 
-                // Display tuning data in the Tuning Configuration Data card (Tuning page)
-                const tuningConfigData = document.getElementById('tuningConfigData');
-                if (tuningConfigData) tuningConfigData.textContent = JSON.stringify(data, null, 2);
+                // Display browser localStorage in the Application Data card.
+                refreshApplicationDataCard();
 
                 if (scope === 'bootstrap') {
                     // Defer full tab hydration until the user opens a section.
@@ -6573,8 +7020,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 applyNoVehiclePlaceholders();
                 const configData = document.getElementById('configData');
                 if (configData) configData.textContent = 'Bluetooth LE not connected';
-                const tuningConfigData = document.getElementById('tuningConfigData');
-                if (tuningConfigData) tuningConfigData.textContent = 'Bluetooth LE not connected';
+                refreshApplicationDataCard();
                 if (showToast) {
                     toast.warning('Select a vehicle to begin.');
                 }
@@ -6595,9 +7041,64 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     settings: 'settings'
                 };
                 const requestedScope = scopeMap[scope] || 'bootstrap';
-                const bleData = (typeof bleManager.readConfigScoped === 'function')
-                    ? await bleManager.readConfigScoped(requestedScope)
-                    : await bleManager.readConfig();
+                let bleData;
+                if (requestedScope === 'lights'
+                    && typeof bleManager.readLightsGroupIndex === 'function'
+                    && typeof bleManager.readLightsGroupDetail === 'function') {
+                    try {
+                        const indexPayload = await bleManager.readLightsGroupIndex();
+                        const activeMeta = indexPayload && indexPayload.active_lt_profile ? indexPayload.active_lt_profile : null;
+                        if (!activeMeta || typeof activeMeta !== 'object') {
+                            throw new Error('Missing active_lt_profile in lights index payload');
+                        }
+
+                        const groupCount = Math.max(0, Number(activeMeta.group_count) || 0);
+                        const groups = [];
+                        let cursor = 0;
+                        let safety = 0;
+
+                        while (cursor < groupCount && safety < 16) {
+                            safety++;
+                            const detailPayload = await bleManager.readLightsGroupDetail(cursor);
+                            const done = !!detailPayload?.done;
+                            const nextCursor = Number(detailPayload?.next_cursor);
+                            const group = detailPayload?.group;
+                            if (group && typeof group === 'object') {
+                                groups.push(group);
+                            }
+
+                            if (Number.isFinite(nextCursor) && nextCursor > cursor) {
+                                cursor = nextCursor;
+                            } else {
+                                cursor++;
+                            }
+
+                            if (done) break;
+                        }
+
+                        bleData = {
+                            lt_profiles: Array.isArray(indexPayload.lt_profiles) ? indexPayload.lt_profiles : [],
+                            lt_profile_count: Number(indexPayload.lt_profile_count) || 0,
+                            act_lt_prof: Number(indexPayload.act_lt_prof) || 0,
+                            active_lt_profile: {
+                                index: Number(activeMeta.index) || 0,
+                                name: String(activeMeta.name || 'Unnamed'),
+                                master: !!activeMeta.master,
+                                total_leds: Number(activeMeta.total_leds) || 0,
+                                groups
+                            }
+                        };
+                    } catch (lightsIncrementalError) {
+                        console.warn('[Lights] Incremental fetch failed, falling back to scoped lights read:', lightsIncrementalError);
+                        bleData = (typeof bleManager.readConfigScoped === 'function')
+                            ? await bleManager.readConfigScoped(requestedScope)
+                            : await bleManager.readConfig();
+                    }
+                } else {
+                    bleData = (typeof bleManager.readConfigScoped === 'function')
+                        ? await bleManager.readConfigScoped(requestedScope)
+                        : await bleManager.readConfig();
+                }
                 let shouldClearDirtyOnSuccess = true;
 
                 const canEvaluateDirtyState = requestedScope === 'bootstrap';
@@ -6634,8 +7135,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 console.error('Failed to fetch config:', error);
                 const configData = document.getElementById('configData');
                 if (configData) configData.textContent = `Error: ${error.message}`;
-                const tuningConfigData = document.getElementById('tuningConfigData');
-                if (tuningConfigData) tuningConfigData.textContent = `Error: ${error.message}`;
+                refreshApplicationDataCard();
                 if (showToast) {
                     toast.warning('Could not load configuration from RCDCC module');
                 }

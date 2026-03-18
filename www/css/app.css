@@ -975,6 +975,43 @@
             text-underline-offset: 4px;
         }
 
+        .dashboard-quick-nav-text.dashboard-quick-nav-placeholder {
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 1.5rem;
+        }
+
+        .dashboard-quick-nav-placeholder-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+        }
+
+        .dashboard-quick-nav-placeholder-icon-combo {
+            position: relative;
+            width: 1.45rem;
+            height: 1.45rem;
+        }
+
+        .dashboard-quick-nav-placeholder-main {
+            font-size: 1.3rem;
+            line-height: 1;
+        }
+
+        .dashboard-quick-nav-placeholder-badge {
+            position: absolute;
+            top: -0.2rem;
+            right: -0.3rem;
+            font-size: 0.72rem;
+            line-height: 1;
+            color: var(--danger);
+            background: #111;
+            border-radius: 50%;
+        }
+
         .dashboard-quick-nav-icon {
             color: var(--text-muted);
             font-size: 1em;
@@ -1425,7 +1462,8 @@
 
         @media (max-width: 768px) {
             .light-group-editor-dialog {
-                margin: 0;
+                margin: 0 5px;
+                max-width: calc(100% - 10px);
                 display: flex;
                 align-items: flex-end;
                 min-height: 100%;
@@ -2134,7 +2172,7 @@
         /* Sticky Footer Navigation */
         .footer-nav {
             position: fixed;
-            bottom: 0;
+            bottom: var(--sab, 0px);
             left: 0;
             right: 0;
             background: #000000;
@@ -2360,6 +2398,36 @@
 
         .profile-card-header-actions .icon-action {
             user-select: none;
+        }
+
+        .profile-update-btn {
+            border-width: 2px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+        }
+
+        @keyframes profileUpdateBorderPulse {
+            0%, 100% {
+                border-color: var(--high-impact-color);
+                box-shadow: 0 0 0 0 rgba(249, 194, 27, 0);
+            }
+            50% {
+                border-color: #ffe082;
+                box-shadow: 0 0 0 4px rgba(249, 194, 27, 0.28);
+            }
+        }
+
+        .profile-update-btn.profile-update-needs-save {
+            border-color: #ffe082;
+            box-shadow: 0 0 0 2px rgba(249, 194, 27, 0.2);
+        }
+
+        .profile-update-btn.profile-update-needs-save:disabled {
+            box-shadow: none;
+        }
+
+        .profile-update-hidden {
+            visibility: hidden;
+            pointer-events: none;
         }
 
         .servo-settings-value-labels {

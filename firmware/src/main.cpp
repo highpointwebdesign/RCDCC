@@ -33,6 +33,7 @@ static constexpr uint32_t CONTINUOUS_WATCHDOG_MS = 500;
 // Addressable LED (NeoPixel) - kept for backward compatibility
 Adafruit_NeoPixel statusLED(STATUS_LED_COUNT, STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
 uint32_t currentLEDColor = 0;
+bool legacyStatusLedEnabled = false;
 
 // Emergency light state variables
 struct PatternStep {
@@ -57,6 +58,7 @@ unsigned long emergencyLightLastUpdate = 0;
 // ==================== Phase 6: Dance Mode ====================
 DanceMode gDanceMode = { false, 0.0f, 0.0f };
 volatile bool gFlashCancelRequested = false;
+static int32_t gLightsReadCursor = 0;
 
 static float clampNorm(float value) {
   if (value < -1.0f) return -1.0f;
@@ -169,12 +171,14 @@ void updateStatusLEDColor() {
 
 // Function to flash the alert LED (LED index 2)
 void flashStatusLED() {
+  if (!legacyStatusLedEnabled) return;
   statusLED.setPixelColor(2, currentLEDColor);
   statusLED.show();
 }
 
 // Function to update emergency lights with generic pattern sequencer
 void updateEmergencyLights() {
+  if (!legacyStatusLedEnabled) return;
   if (!emergencyLightsEnabled || currentPattern.stepCount == 0) {
     // Turn off emergency lights
     statusLED.setPixelColor(0, 0);
@@ -246,6 +250,10 @@ uint32_t parseHexColor(const String& colorStr) {
 }
 
 bool applyConfigUpdatePayload(const String& payload) {
+  if (payload.length() == 0) {
+    return true;
+  }
+
   DynamicJsonDocument doc(2048);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
@@ -378,7 +386,7 @@ bool applyLightsPayload(const String& payload) {
     config.groupCount = 0;
 
     for (JsonObject groupObj : groupsArray) {
-      if (config.groupCount >= 10) break;
+      if (config.groupCount >= MAX_DYNAMIC_LIGHT_GROUPS) break;
 
       ExtendedLightGroup& group = config.groups[config.groupCount];
       memset(&group, 0, sizeof(ExtendedLightGroup));
@@ -415,7 +423,7 @@ bool applyLightsPayload(const String& payload) {
       if (groupObj.containsKey("indices")) {
         JsonArray indicesArray = groupObj["indices"];
         for (uint16_t idx : indicesArray) {
-          if (group.ledCount >= 100) break;
+          if (group.ledCount >= MAX_DYNAMIC_GROUP_LEDS) break;
           group.ledIndices[group.ledCount++] = idx;
         }
       }
@@ -488,6 +496,52 @@ bool applySystemCommandPayload(const String& payload) {
     return true;
   }
 
+  if (command == "lights_group_index") {
+    if (!bluetoothService) return false;
+
+    String payloadOut;
+    const bool ok = storageManager.getActiveLightingGroupIndexJSON(payloadOut);
+    bluetoothService->setDirectConfigReadResponse(payloadOut);
+    gLightsReadCursor = 0;
+    if (!ok) {
+      Serial.println("BLE: lights_group_index active profile missing");
+    }
+    return true;
+  }
+
+  if (command == "lights_group_detail") {
+    if (!bluetoothService) return false;
+
+    int32_t requestedCursor = -1;
+    if (doc.containsKey("cursor")) {
+      requestedCursor = doc["cursor"] | -1;
+    } else if (doc.containsKey("index")) {
+      requestedCursor = doc["index"] | -1;
+    }
+
+    if (requestedCursor < 0) {
+      requestedCursor = gLightsReadCursor;
+    }
+
+    String payloadOut;
+    int nextCursor = 0;
+    bool done = true;
+    const bool ok = storageManager.getActiveLightingGroupDetailJSON(
+      static_cast<int>(requestedCursor),
+      payloadOut,
+      nextCursor,
+      done
+    );
+
+    bluetoothService->setDirectConfigReadResponse(payloadOut);
+    gLightsReadCursor = nextCursor;
+
+    if (!ok) {
+      Serial.printf("BLE: lights_group_detail failed at cursor=%d\n", static_cast<int>(requestedCursor));
+    }
+    return true;
+  }
+
   if (command == "autolevel" || command == "resetgyro" || command == "calibrate") {
     if (mpuConnected) {
       sensorFusion.calibrate(mpu, [](const String& msg) {
@@ -516,21 +570,44 @@ bool applySystemCommandPayload(const String& payload) {
     return true;
   }
 
+  if (command == "lights_color_order") {
+    String order = doc["order"] | String("grb");
+    order.toLowerCase();
+    if (lightsEngine) {
+      lightsEngine->setColorOrderByName(order.c_str());
+    }
+    return true;
+  }
+
+  if (command == "lights_clear_all") {
+    if (lightsEngine) {
+      lightsEngine->clearAllGroups(true);
+    }
+    return true;
+  }
+
   if (command == "flash") {
     String color = doc["color"] | String("white");
     color.toLowerCase();
     int count = doc["count"] | 1;
+    int onMs = doc["onMs"] | 200;
+    int offMs = doc["offMs"] | 200;
     count = constrain(count, 1, 10);
+    onMs = constrain(onMs, 0, 5000);
+    offMs = constrain(offMs, 0, 5000);
 
     uint32_t rgb = 0xFFFFFF;
     if (color == "red") rgb = 0xFF0000;
     else if (color == "green") rgb = 0x00FF00;
     else if (color == "blue") rgb = 0x0000FF;
+    else if (color == "yellow") rgb = 0xFFFF00;
+    else if (color == "cyan") rgb = 0x00FFFF;
+    else if (color == "magenta") rgb = 0xFF00FF;
 
     if (lightsEngine) {
-      // 200ms on / 200ms off per Phase 7 flash confirmation contract.
+      // Defaults remain 200ms on / 200ms off unless overridden by command payload.
       gFlashCancelRequested = false;
-      lightsEngine->flashAllBlocking(rgb, static_cast<uint8_t>(count), 200, 200, &gFlashCancelRequested);
+      lightsEngine->flashAllBlocking(rgb, static_cast<uint8_t>(count), static_cast<uint16_t>(onMs), static_cast<uint16_t>(offMs), &gFlashCancelRequested);
       gFlashCancelRequested = false;
     }
     return true;
@@ -854,8 +931,14 @@ void setup() {
 
   // Initialize LightsEngine after storage init. begin() starts the Core 0 task.
   lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
-  lightsEngine->begin();
-  Serial.printf("LightsEngine initialized: %d LED capacity\n", STATUS_LED_COUNT);
+  if (lightsEngine) {
+    lightsEngine->begin();
+    Serial.printf("LightsEngine initialized: %d LED capacity\n", STATUS_LED_COUNT);
+  } else {
+    Serial.println("LightsEngine allocation failed; falling back to legacy status LED control");
+  }
+  // Never drive the same WS2812 strip from both statusLED and LightsEngine.
+  legacyStatusLedEnabled = (lightsEngine == nullptr);
 
   storageManager.loadConfig();
   storageManager.loadLights();
@@ -913,12 +996,16 @@ void setup() {
   digitalWrite(LED_PIN, LOW);
   
   // Initialize addressable LED (NeoPixel)
-  statusLED.begin();
-  statusLED.setBrightness(50); // Set brightness (0-255)
-  statusLED.clear();
-  statusLED.show();
-  updateStatusLEDColor(); // Load color from config
-  Serial.println("Status LED initialized");
+  if (legacyStatusLedEnabled) {
+    statusLED.begin();
+    statusLED.setBrightness(50); // Set brightness (0-255)
+    statusLED.clear();
+    statusLED.show();
+    updateStatusLEDColor(); // Load color from config
+    Serial.println("Status LED initialized");
+  } else {
+    Serial.println("Status LED disabled while LightsEngine owns LED strip");
+  }
   
   // Calibrate to current position as level
   if (mpuConnected) {
@@ -1012,8 +1099,10 @@ void loop() {
   if (ledBlinkEndTime > 0 && currentTime >= ledBlinkEndTime) {
     // After a blink: keep LED on if BLE is still connected, otherwise off.
     digitalWrite(LED_PIN, ledBleOn ? HIGH : LOW);
-    statusLED.clear();
-    statusLED.show();
+    if (legacyStatusLedEnabled) {
+      statusLED.clear();
+      statusLED.show();
+    }
     ledBlinkEndTime = 0;
   }
 

@@ -324,15 +324,20 @@ class BluetoothManager {
             console.warn('Could not set connection priority:', e.message);
         }
         
-        await this._subscribeTelemetry(ble);
-
-        // Phase 1 connect flow: negotiate MTU first (already done above), then read full config once.
+        // Phase 1 connect flow: negotiate MTU first (already done above), then read config once.
+        // Subscribe telemetry after config handshake to reduce BLE load during connect.
         try {
             const config = await this.readConfig();
             this.lastKnownSavedState = config;
             this._updateFirmwareCapabilities(config);
         } catch (e) {
             console.warn('Initial config sync after BLE connect failed:', e.message || e);
+        }
+
+        try {
+            await this._subscribeTelemetry(ble);
+        } catch (e) {
+            console.warn('Telemetry subscription after connect failed:', e.message || e);
         }
 
         console.log('BLE connection successful:', deviceId);
@@ -513,6 +518,39 @@ class BluetoothManager {
         }
 
         throw new Error(`Scoped config read failed after ${maxAttempts} attempts for scope ${normalizedScope}`);
+    }
+
+    async readLightsGroupIndex() {
+        if (!this.isConnected) throw new Error('Not connected to BLE device');
+
+        await this.sendSystemCommand('lights_group_index', {});
+        await new Promise(r => setTimeout(r, 80));
+        const response = await this._readConfigOnce();
+
+        if (!response || typeof response !== 'object' || Array.isArray(response)) {
+            throw new Error('Invalid lights group index response');
+        }
+
+        return response;
+    }
+
+    async readLightsGroupDetail(cursor = null) {
+        if (!this.isConnected) throw new Error('Not connected to BLE device');
+
+        const payload = {};
+        if (Number.isInteger(cursor) && cursor >= 0) {
+            payload.cursor = cursor;
+        }
+
+        await this.sendSystemCommand('lights_group_detail', payload);
+        await new Promise(r => setTimeout(r, 80));
+        const response = await this._readConfigOnce();
+
+        if (!response || typeof response !== 'object' || Array.isArray(response)) {
+            throw new Error('Invalid lights group detail response');
+        }
+
+        return response;
     }
 
     async writeConfig(config) {

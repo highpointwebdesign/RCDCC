@@ -1597,7 +1597,7 @@ public:
       newLightsConfig.groupCount = 0;
 
       for (JsonObject groupObj : groupsArray) {
-        if (newLightsConfig.groupCount >= 10) break;
+        if (newLightsConfig.groupCount >= MAX_DYNAMIC_LIGHT_GROUPS) break;
 
         ExtendedLightGroup& group = newLightsConfig.groups[newLightsConfig.groupCount];
         memset(&group, 0, sizeof(ExtendedLightGroup));
@@ -1621,7 +1621,7 @@ public:
         if (groupObj.containsKey("indices")) {
           JsonArray indicesArray = groupObj["indices"];
           for (uint16_t idx : indicesArray) {
-            if (group.ledCount >= 100) break;
+            if (group.ledCount >= MAX_DYNAMIC_GROUP_LEDS) break;
             group.ledIndices[group.ledCount++] = idx;
           }
         }
@@ -1667,7 +1667,7 @@ public:
     defaults["blinkRate"] = 500;
 
     JsonArray dynamicGroups = doc.createNestedArray("lightGroupsArray");
-    for (uint8_t i = 0; i < newLightsConfig.groupCount && i < 10; i++) {
+    for (uint8_t i = 0; i < newLightsConfig.groupCount && i < MAX_DYNAMIC_LIGHT_GROUPS; i++) {
       const ExtendedLightGroup& group = newLightsConfig.groups[i];
       JsonObject g = dynamicGroups.createNestedObject();
       g["name"] = group.name;
@@ -1680,7 +1680,7 @@ public:
       g["color2"] = group.color2;
 
       JsonArray idx = g.createNestedArray("indices");
-      for (uint8_t led = 0; led < group.ledCount && led < 100; led++) {
+      for (uint8_t led = 0; led < group.ledCount && led < MAX_DYNAMIC_GROUP_LEDS; led++) {
         idx.add(group.ledIndices[led]);
       }
     }
@@ -1726,7 +1726,7 @@ public:
     el["blinkRate"] = lightsConfig.emergencyLights.blinkRate;
 
     JsonArray dynamicGroups = doc.createNestedArray("lightGroupsArray");
-    for (uint8_t i = 0; i < newLightsConfig.groupCount && i < 10; i++) {
+    for (uint8_t i = 0; i < newLightsConfig.groupCount && i < MAX_DYNAMIC_LIGHT_GROUPS; i++) {
       const ExtendedLightGroup& group = newLightsConfig.groups[i];
       JsonObject g = dynamicGroups.createNestedObject();
       g["name"] = group.name;
@@ -1739,7 +1739,7 @@ public:
       g["color2"] = group.color2;
 
       JsonArray idx = g.createNestedArray("indices");
-      for (uint8_t led = 0; led < group.ledCount && led < 100; led++) {
+      for (uint8_t led = 0; led < group.ledCount && led < MAX_DYNAMIC_GROUP_LEDS; led++) {
         idx.add(group.ledIndices[led]);
       }
     }
@@ -1810,6 +1810,18 @@ private:
     return String(buf);
   }
 
+  int getActiveLightingProfileIndex() {
+    int activeLtProf = state.system.activeLightingProfile;
+    Preferences pref;
+    if (pref.begin("system", false)) {
+      activeLtProf = pref.getInt("act_lt_prof", activeLtProf);
+      pref.end();
+    }
+    if (activeLtProf < 0) activeLtProf = 0;
+    if (activeLtProf >= MAX_LIGHTING_PROFILES) activeLtProf = MAX_LIGHTING_PROFILES - 1;
+    return activeLtProf;
+  }
+
 public:
   // Load a lighting profile from LittleFS
   bool loadLightingProfile(int index, LightingProfile& profile) {
@@ -1841,7 +1853,7 @@ public:
     // Parse profile from JSON
     strncpy(profile.name, doc["name"] | "Unnamed", sizeof(profile.name) - 1);
     profile.master = doc["master"] | true;
-    profile.totalLeds = doc["total_leds"] | 20;
+    profile.totalLeds = constrain(static_cast<uint16_t>(doc["total_leds"] | 20), static_cast<uint16_t>(1), static_cast<uint16_t>(MAX_LIGHTS_TOTAL_LEDS));
     profile.groupCount = 0;
 
     if (doc.containsKey("groups") && doc["groups"].is<JsonArray>()) {
@@ -1866,7 +1878,10 @@ public:
           JsonArray ledsArr = groupObj["leds"];
           for (JsonVariant ledVal : ledsArr) {
             if (grp.ledCount >= MAX_GROUP_LEDS) break;
-            grp.leds[grp.ledCount++] = ledVal.as<uint16_t>();
+            const uint16_t led = ledVal.as<uint16_t>();
+            if (led < MAX_LIGHTS_TOTAL_LEDS) {
+              grp.leds[grp.ledCount++] = led;
+            }
           }
         }
         
@@ -1888,7 +1903,7 @@ public:
     doc.clear();
     doc["name"]        = profile.name;
     doc["master"]      = profile.master;
-    doc["total_leds"]  = profile.totalLeds;
+    doc["total_leds"]  = constrain(profile.totalLeds, static_cast<uint16_t>(1), static_cast<uint16_t>(MAX_LIGHTS_TOTAL_LEDS));
 
     JsonArray groupsArr = doc.createNestedArray("groups");
     for (int i = 0; i < profile.groupCount; i++) {
@@ -1907,7 +1922,9 @@ public:
       
       JsonArray ledsArr = groupObj.createNestedArray("leds");
       for (int j = 0; j < grp.ledCount; j++) {
-        ledsArr.add(grp.leds[j]);  // Zero-based LED indices
+        if (grp.leds[j] < MAX_LIGHTS_TOTAL_LEDS) {
+          ledsArr.add(grp.leds[j]);  // Zero-based LED indices
+        }
       }
     }
 
@@ -1976,6 +1993,115 @@ public:
         }
       }
     }
+  }
+
+  // Build lightweight active lighting profile index payload for BLE.
+  // Includes only metadata and a compact group list (no LED arrays).
+  bool getActiveLightingGroupIndexJSON(String& outJson) {
+    outJson = "{}";
+    const int activeLtProf = getActiveLightingProfileIndex();
+
+    DynamicJsonDocument doc(4096);
+    JsonArray ltProfArr = doc.createNestedArray("lt_profiles");
+    getLightingProfileNames(ltProfArr);
+    doc["lt_profile_count"] = ltProfArr.size();
+    doc["act_lt_prof"] = activeLtProf;
+
+    static LightingProfile activeProfile = {};
+    if (!loadLightingProfile(activeLtProf, activeProfile)) {
+      doc["active_lt_profile_missing"] = true;
+      serializeJson(doc, outJson);
+      return false;
+    }
+
+    JsonObject ap = doc.createNestedObject("active_lt_profile");
+    ap["index"] = activeLtProf;
+    ap["name"] = activeProfile.name;
+    ap["master"] = activeProfile.master;
+    ap["total_leds"] = activeProfile.totalLeds;
+    ap["group_count"] = activeProfile.groupCount;
+
+    JsonArray groups = ap.createNestedArray("groups");
+    for (uint8_t i = 0; i < activeProfile.groupCount; i++) {
+      const LightingGroup& g = activeProfile.groups[i];
+      JsonObject go = groups.createNestedObject();
+      go["cursor"] = i;
+      go["id"] = g.id;
+      go["name"] = g.name;
+      go["enabled"] = g.enabled;
+      go["effect"] = g.effect;
+      go["brightness"] = g.brightness;
+      go["led_count"] = g.ledCount;
+    }
+
+    serializeJson(doc, outJson);
+    return true;
+  }
+
+  // Build one active lighting group payload by cursor index.
+  // Returns false when profile/group is unavailable.
+  bool getActiveLightingGroupDetailJSON(int cursor, String& outJson, int& nextCursor, bool& done) {
+    outJson = "{}";
+    nextCursor = 0;
+    done = true;
+
+    const int activeLtProf = getActiveLightingProfileIndex();
+    static LightingProfile activeProfile = {};
+    if (!loadLightingProfile(activeLtProf, activeProfile)) {
+      DynamicJsonDocument missDoc(256);
+      missDoc["mode"] = "lights_group_detail";
+      missDoc["ok"] = false;
+      missDoc["reason"] = "active_profile_missing";
+      missDoc["act_lt_prof"] = activeLtProf;
+      serializeJson(missDoc, outJson);
+      return false;
+    }
+
+    const int safeCursor = cursor < 0 ? 0 : cursor;
+    if (safeCursor >= activeProfile.groupCount) {
+      DynamicJsonDocument doneDoc(320);
+      doneDoc["mode"] = "lights_group_detail";
+      doneDoc["ok"] = true;
+      doneDoc["act_lt_prof"] = activeLtProf;
+      doneDoc["cursor"] = safeCursor;
+      doneDoc["group_count"] = activeProfile.groupCount;
+      doneDoc["done"] = true;
+      doneDoc["next_cursor"] = activeProfile.groupCount;
+      serializeJson(doneDoc, outJson);
+      nextCursor = activeProfile.groupCount;
+      done = true;
+      return true;
+    }
+
+    const LightingGroup& g = activeProfile.groups[safeCursor];
+    DynamicJsonDocument doc(3072);
+    doc["mode"] = "lights_group_detail";
+    doc["ok"] = true;
+    doc["act_lt_prof"] = activeLtProf;
+    doc["cursor"] = safeCursor;
+    doc["group_count"] = activeProfile.groupCount;
+    doc["done"] = (safeCursor + 1) >= activeProfile.groupCount;
+    doc["next_cursor"] = doc["done"].as<bool>() ? activeProfile.groupCount : (safeCursor + 1);
+
+    JsonObject go = doc.createNestedObject("group");
+    go["id"] = g.id;
+    go["name"] = g.name;
+    go["enabled"] = g.enabled;
+    go["effect"] = g.effect;
+    go["color_primary"] = g.colorPrimary;
+    go["color_secondary"] = g.colorSecondary;
+    go["brightness"] = g.brightness;
+    go["effect_speed"] = g.effectSpeed;
+    go["effect_intensity"] = g.effectIntensity;
+    JsonArray leds = go.createNestedArray("leds");
+    for (uint16_t j = 0; j < g.ledCount; j++) {
+      leds.add(g.leds[j]);
+    }
+
+    serializeJson(doc, outJson);
+    nextCursor = doc["next_cursor"].as<int>();
+    done = doc["done"].as<bool>();
+    return true;
   }
 
   // Create default lighting profiles on first boot

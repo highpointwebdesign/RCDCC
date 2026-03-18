@@ -87,7 +87,7 @@
                             <span class="material-symbols-outlined icon-danger">landscape</span>
                             Roll/Pitch/GPS
                         </div>
-                        <span class="material-symbols-outlined icon-action" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values.">refresh</span>
+                        <span class="material-symbols-outlined icon-action" id="rollPitchRefreshBtn" title="Retrieve roll and pitch values.">satellite_alt</span>
                     </div>
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
@@ -107,12 +107,12 @@
                             <span class="value" id="longitude">--</span>
                         </div>
                         <div class="d-flex justify-content-between mt-2">
-                            <span >Accuracy</span>
-                            <span class="value" id="accuracy">--</span>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2">
                             <span >Altitude</span>
                             <span class="value" id="altitude">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2">
+                            <span >Accuracy</span>
+                            <span class="value" id="accuracy">--</span>
                         </div>
                     </div>
                 </div>
@@ -153,21 +153,21 @@
                             <span>Vehicle</span>
                             <div class="d-flex align-items-center gap-2">
                                 <span id="activeVehicleDisplay" class="dashboard-quick-nav-text">--</span>
-                                <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i>
+                                <!-- <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i> -->
                             </div>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Driving Profile</span>
                             <div class="d-flex align-items-center gap-2">
                                 <span id="activeDrivingProfileDisplay" class="dashboard-quick-nav-text">--</span>
-                                <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i>
+                                <!-- <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i> -->
                             </div>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Lighting Profile</span>
                             <div class="d-flex align-items-center gap-2">
                                 <span id="activeLightingProfileDisplay" class="dashboard-quick-nav-text">--</span>
-                                <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i>
+                                <!-- <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i> -->
                             </div>
                         </div>
                     </div>
@@ -352,7 +352,7 @@
                     </div>
 
                     <!-- Dance Mode Card -->
-                    <div class="col-12">
+                    <div class="col-12 col-md-6">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                                 <div>
@@ -382,6 +382,27 @@
             <!-- Tab Content: Debugging -->
             <div class="tab-pane" id="tab-debugging">
                 <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <div class="card">
+                            <div class="card-header" style="background-color: black; color: white;">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
+                                LED Color Diagnostic
+                            </div>
+                            <div class="card-body" style="background-color: #ffffff; color: #111;">
+                                <p class="mb-3" style="font-size: 0.9rem;">Runs a quick strip test sequence: red, green, blue, then yellow. Use this to verify channel order and identify missing color channels.</p>
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    <span id="ledColorDiagnosticPreview" aria-label="LED diagnostic color preview" style="width:20px;height:20px;border-radius:50%;display:inline-block;background:#111;border:1px solid #555;box-shadow:0 0 0 rgba(0,0,0,0);transition:background-color 120ms ease, box-shadow 120ms ease;"></span>
+                                    <small id="ledColorDiagnosticColorLabel" style="color:#9ca3af;">Preview: idle</small>
+                                </div>
+                                <button type="button" class="btn btn-gold" id="runLedColorDiagnosticBtn">
+                                    <span class="material-symbols-outlined" style="vertical-align: middle;">science</span>
+                                    Run LED Color Test
+                                </button>
+                                <small id="ledColorDiagnosticStatus" class="d-block mt-2" style="color:#9ca3af;">Idle</small>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Console Card -->
                     <div class="col-12 col-md-6">
                         <div class="card h-100"  style="background-color: #1E1E1E;">
@@ -401,7 +422,7 @@
                         </div>
                     </div>
 
-                    <!-- Configuration Data Card (Servo) -->
+                    <!-- RCDCC Data Card -->
                     <div class="col-12 col-md-6">
                         <div class="card h-100">
                             <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
@@ -409,7 +430,7 @@
                                     <span class="material-symbols-outlined" style="color: var(--danger);">
                                 settings
                                 </span>
-                                    Configuration Data
+                                    RCDCC Data
                                 </div>
                                 <span class="material-symbols-outlined icon-action" id="configCopyBtn" title="Copy configuration to clipboard">content_copy</span>
 
@@ -422,7 +443,7 @@
                         </div>
                     </div>
 
-                    <!-- Tuning Configuration Data Card -->
+                    <!-- Application Data Card -->
                     <div class="col-12 col-md-6">
                         <div class="card h-100">
                             <div class="card-header" style="background-color: black; color: white; display: flex; justify-content: space-between; align-items: center;">
@@ -430,7 +451,7 @@
                                     <span class="material-symbols-outlined" style="color: var(--danger);">
                                 tune
                                 </span>
-                                    Tuning Configuration Data
+                                    Application Data
                                 </div>
                                 <span class="material-symbols-outlined icon-action" id="tuningConfigCopyBtn" title="Copy tuning configuration to clipboard">content_copy</span>
 
@@ -450,7 +471,7 @@
                 <div class="row g-3">
 
                     <!-- Reserved Servo Labels Card -->
-                    <div class="col-12">
+                    <div class="col-12 col-md-6">
                         <div class="card">
                             <div class="card-header card-header-dark d-flex align-items-center">
                                 <span class="material-symbols-outlined icon-danger me-2">settings_input_component</span>
@@ -467,7 +488,7 @@
                     </div>
 
                     <!-- Aux Servos Card -->
-                    <div class="col-12">
+                    <div class="col-12 col-md-6">
                         <div class="card">
                             <div class="card-header card-header-dark d-flex justify-content-between align-items-center">
                                 <div>
@@ -488,7 +509,7 @@
                     </div>
 
                     <!-- Info Card -->
-                    <div class="col-12">
+                    <div class="col-12 col-md-6">
                         <div class="alert alert-info" style="font-size:0.8rem;">
                             <strong>Aux Servo GPIO Pins (slots 0-9):</strong><br>
                             Slot 0: GPIO 17 &nbsp; Slot 1: GPIO 18 &nbsp; Slot 2: GPIO 19 &nbsp; Slot 3: GPIO 23<br>
@@ -532,7 +553,7 @@
                             </div>
                             <div id="drvProfileStatus" class="form-text mt-2"><small style="color:#aaa;">Status: idle</small></div>
                             <div class="d-grid gap-2 mt-2">
-                                <button type="button" class="btn btn-sm btn-outline-warning" id="drvProfileUpdateBtn" style="display:none;"
+                                <button type="button" class="btn btn-sm btn-outline-warning profile-update-btn" id="drvProfileUpdateBtn" disabled
                                         onclick="updateActiveDrivingProfile()">
                                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">sync</span> Update Active Profile
                                 </button>
@@ -546,7 +567,7 @@
                 </div>
 
                 <!-- Parameters Card -->
-                <div class="col-12 col-md-6 col-lg-4">
+                <div class="<div class="col-12 col-md-6">">
                     <div class="card" id="tuningParametersCard">
                         <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                             <div>
@@ -645,7 +666,7 @@
                 </div>
 
                 <!-- RCDCC Configuration Card -->
-                <div class="col-12">
+                <div class="<div class="col-12 col-md-6">">
                     <div class="card" id="rcdccConfigurationCard">
                         <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                             <div>
@@ -905,7 +926,7 @@
                 </div>
            
             <!-- Help Card -->
-                <div class="col-12 col-md-6 col-lg-4">
+                <div class="<div class="col-12 col-md-6">">
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center card-header-dark" onclick="toggleFormulasCard()">
                             <div>
@@ -1083,7 +1104,7 @@
                             </div>
                             <div id="ltProfileStatus" class="form-text mt-2"><small style="color:#aaa;">Status: idle</small></div>
                             <div class="d-grid gap-2 mt-2">
-                                <button type="button" class="btn btn-sm btn-outline-warning" id="ltProfileUpdateBtn" style="display:none;"
+                                <button type="button" class="btn btn-sm btn-outline-warning profile-update-btn" id="ltProfileUpdateBtn" disabled
                                         onclick="updateActiveLightingProfile()">
                                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">sync</span> Update Active Profile
                                 </button>
@@ -1097,7 +1118,7 @@
                 </div>
 
                 <!-- Manage Light Groups Card -->
-                <div class="col-12">
+                <div class="<div class="col-12 col-md-6">">
                     <div class="card" id="manageLightGroupsCard">
                         <div class="card-header card-header-dark d-flex justify-content-between align-items-center">
                             <div>
@@ -1113,10 +1134,24 @@
                             <hr class="my-3">
                             <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
                                 <label for="totalLEDCount" class="form-label mb-0" style="flex:1;">
-                                    <strong>Total LEDs in your strip</strong>
+                                    <strong>Total LEDs in your strip<span id="totalLEDCountVehicleLabel" class="ms-1 fw-normal text-muted" style="font-size:0.85em; display:none;"></span></strong>
                                     <div class="form-text mt-0"><small>Minimum: 1, Maximum: 300</small></div>
                                 </label>
-                                <input type="number" class="form-control text-center" id="totalLEDCount" min="1" max="300" value="100" placeholder="100" style="width:80px;flex-shrink:0;">
+                                <input type="number" class="form-control text-center" id="totalLEDCount" min="1" max="30" value="20" placeholder="20" style="width:80px;flex-shrink:0;">
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+                                <label for="lightColorOrder" class="form-label mb-0" style="flex:1;">
+                                    <strong>LED Color Order</strong>
+                                    <div class="form-text mt-0"><small>Match your strip channel order to fix swapped colors.</small></div>
+                                </label>
+                                <select class="form-select" id="lightColorOrder" style="max-width:120px;flex-shrink:0;">
+                                    <option value="grb" selected>GRB</option>
+                                    <option value="rgb">RGB</option>
+                                    <option value="rbg">RBG</option>
+                                    <option value="gbr">GBR</option>
+                                    <option value="brg">BRG</option>
+                                    <option value="bgr">BGR</option>
+                                </select>
                             </div>
                             <hr class="my-3">
 
@@ -1173,7 +1208,7 @@
                 <h2 class="section-title">Garage</h2>
             </div>
             <div class="row g-3">
-                <div class="col-12">
+                <div class="col-12 col-md-6">
                     <div class="card">
                         <div class="card-header d-flex align-items-center justify-content-between" style="background-color: black; color: white;">
                             <div>
@@ -1198,7 +1233,7 @@
                     </div>
                 </div>
 
-                <div class="col-12">
+                <div class="col-12 col-md-6">
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
                             <span class="material-symbols-outlined" style="color: var(--danger);">database</span>
@@ -1210,6 +1245,7 @@
                                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">upload</span>
                                     Backup
                                 </button>
+                                <div id="lastBackupTimestamp" class="form-text text-center mt-1" style="color:#aaa;"></div>
                                 <button type="button" class="btn btn-gold" id="garageImportBtn">
                                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">download</span>
                                     Restore
@@ -1245,17 +1281,42 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </section>
 
-        <!-- FPV Section -->
+                <!-- Help: Garage Card -->
+                <div class="col-12">
+                    <div class="card" id="garageHelpCard">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor:pointer;" onclick="toggleGarageHelpCard()">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">help</span>
+                                Help: Garage
+                            </div>
+                            <span class="material-symbols-outlined" id="garageHelpChevron" style="color: var(--high-impact-color);">keyboard_arrow_right</span>
+                        </div>
+                        <div class="card-body" id="garageHelpCardBody" style="display:none;">
+                            <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.9;">
+                                <li><strong>Adding a vehicle</strong> &mdash; Tap the <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">directions_car</span>+ button in the card header to scan for a nearby ESP32 and add it to your garage.</li>
+                                <li><strong>Connecting</strong> &mdash; Tap a vehicle card to connect. The card turns green when connected.</li>
+                                <li><strong>Disconnecting</strong> &mdash; Long-press (hold) a connected card, or tap &nbsp;<strong>⋮</strong>&nbsp; &rarr; <em>Disconnect</em> from the menu.</li>
+                                <li><strong>Navigating</strong> &mdash; Tap &nbsp;<strong>⋮</strong>&nbsp; &rarr; <em>Suspension</em>, <em>Lights</em>, or <em>FPV</em> to jump directly to that section for the selected vehicle.</li>
+                                <li><strong>Renaming</strong> &mdash; Tap &nbsp;<strong>⋮</strong>&nbsp; &rarr; <em>Rename</em> to give your vehicle a custom display name (up to 10 characters).</li>
+                                <li><strong>About</strong> &mdash; Tap &nbsp;<strong>⋮</strong>&nbsp; &rarr; <em>About</em> to see the device MAC ID and firmware details.</li>
+                                <li><strong>Backup</strong> &mdash; Tap <em>Backup</em> to export your garage, light groups, and lighting profiles to a JSON file. Store it somewhere safe.</li>
+                                <li><strong>Restore</strong> &mdash; Tap <em>Restore</em> to import a previously exported backup file. This replaces current data.</li>
+                                <li><strong>Deleting a vehicle</strong> &mdash; Tap &nbsp;<strong>⋮</strong>&nbsp; &rarr; <em>Delete</em>. All driving profiles, lighting profiles, and light groups saved for that truck are also removed.</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
         <section id="fpv" class="page-section">
             <div class="section-title-row">
                 <h2 class="section-title">FPV Controls</h2>
             </div>
             <div class="row g-3">
                 <!-- Features Card -->
-                <div class="col-12">
+                <div class="<div class="col-12 col-md-6">">
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
                             <span class="material-symbols-outlined" style="color: var(--danger);">videocam</span>
@@ -1288,7 +1349,7 @@
             <span>Garage</span>
         </button>
         <button id="nav-settings" data-target="settings">
-            <span class="material-symbols-outlined" style="transform: rotate(180deg); display: inline-block;">more</span>
+            <span class="material-symbols-outlined">settings_ethernet</span>
             <span>More</span>
         </button>
     </nav>
@@ -1471,7 +1532,7 @@
                     <!-- LED Selection Section -->
                     <div class="mb-4">
                         <label class="form-label"><strong>Select LED Positions</strong></label>
-                        <div class="form-text mb-3">Click any LED number to toggle it on or off. Your total LED count is set to <strong id="modalTotalLeds">100</strong>.</div>
+                        <div class="form-text mb-3">Click any LED number to toggle it on or off. Your total LED count is set to <strong id="modalTotalLeds">20</strong>.</div>
                         
                         <!-- LED Grid -->
                         <div id="ledGridContainer" style="background-color: #f9fafb; padding: 1.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb; max-height: 400px; overflow-y: auto;">
