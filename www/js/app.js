@@ -57,8 +57,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.191';
-        const BUILD_DATE = '2026-03-18';
+        const APP_VERSION = '1.1.203';
+        const BUILD_DATE = '2026-03-19';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -782,6 +782,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (connectedDeviceId) {
                     localStorage.setItem('rcdccBlePreferredDeviceId', connectedDeviceId);
                     bleManager.preferredDeviceId = connectedDeviceId;
+
+                    // Ensure picker-based connects are represented in Garage before label resolution.
+                    if (window.GarageManager && typeof window.GarageManager.upsertVehicle === 'function') {
+                        const connectedDeviceName = bleManager?.deviceName || connectedDeviceId;
+                        window.GarageManager.upsertVehicle(connectedDeviceId, connectedDeviceName);
+                    }
                 }
 
                 // Refresh local per-vehicle state so each truck gets isolated profiles/groups.

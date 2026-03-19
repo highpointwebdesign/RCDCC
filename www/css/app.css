@@ -1462,8 +1462,8 @@
 
         @media (max-width: 768px) {
             .light-group-editor-dialog {
-                margin: 0 5px;
-                max-width: calc(100% - 10px);
+                margin: 0 10px;
+                max-width: calc(100% - 20px);
                 display: flex;
                 align-items: flex-end;
                 min-height: 100%;
@@ -2489,6 +2489,7 @@
         .servo-settings-footer {
             margin-top: 1rem;
             padding-top: 1rem;
+            padding-bottom: 0.5rem;
             border-top: 2px solid rgba(200, 168, 0, 0.32);
         }
 

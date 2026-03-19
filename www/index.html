@@ -777,6 +777,34 @@
                                     </div>
                                 </div>
                                 <div class="card-body p-0" id="servoSettingsCardBody">
+
+                                    <!-- Auto Calibrate & Level -->
+                                    <div class="servo-settings-footer">
+                                        <button type="button" class="btn btn-gold w-100" id="servoAutoCalibrateBtn">
+                                            <span class="material-symbols-outlined">wand_stars</span>
+                                            Auto Calibrate
+                                        </button>
+                                    </div>
+
+                                    <div id="autoLevelProgressContainer" class="col-12" style="display: none; padding-bottom: 0.5rem;">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <div class="bubble-level-card">
+                                                    <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
+                                                    <div class="bubble-level-face" id="bubbleLevelFace">
+                                                        <div class="bubble-level-crosshair horizontal"></div>
+                                                        <div class="bubble-level-crosshair vertical"></div>
+                                                        <div class="bubble-level-target"></div>
+                                                        <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
+                                                        <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
+                                                    </div>
+                                                    <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    
                                     <div class="servo-settings-block">
                                         <div class="servo-settings-section tuning-slider-group">
                                             <div class="servo-settings-title">
@@ -887,7 +915,7 @@
                                         </div>
 
                                         <!-- Auto Calibrate & Level -->
-                                        <div class="servo-settings-footer">
+                                        <!-- <div class="servo-settings-footer">
                                             <button type="button" class="btn btn-gold w-100" id="servoAutoCalibrateBtn">
                                                 <span class="material-symbols-outlined">wand_stars</span>
                                                 Auto Calibrate
@@ -910,7 +938,7 @@
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </div> -->
                                     </div>
                                 </div>
                             </div>

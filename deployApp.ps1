@@ -10,11 +10,21 @@ Set-Location (Join-Path $projectRoot 'android')
 .\gradlew.bat assembleDebug
 
 $apk = Join-Path $projectRoot 'android\app\build\outputs\apk\debug\app-debug.apk'
-adb install -r -d -t "$apk"
-
-# Relaunch app after install
 $appId = 'com.rcdcc.app'
-adb shell monkey -p $appId -c android.intent.category.LAUNCHER 1 | Out-Null
+
+# Install and launch on all connected devices
+$allDeviceLines = adb devices | Select-String 'device$'
+if (-not $allDeviceLines) {
+    Write-Warning "No ADB devices connected. Skipping install."
+} else {
+    foreach ($line in $allDeviceLines) {
+        $serial = ($line -split '\s+')[0].Trim()
+        Write-Host "Installing on $serial ..."
+        adb -s $serial install -r -d -t "$apk"
+        adb -s $serial shell monkey -p $appId -c android.intent.category.LAUNCHER 1 | Out-Null
+        Write-Host "Done: $serial"
+    }
+}
 
 # Open WebView inspector page (best effort)
 # Start-Sleep -Seconds 2
