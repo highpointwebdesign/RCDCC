@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.247';
+        const APP_VERSION = '1.1.250';
         const BUILD_DATE = '2026-03-20';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -3705,7 +3705,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const requestedSection = String(sectionId || 'dashboard');
             const requiresBle = VEHICLE_CONNECTION_REQUIRED_SECTIONS.includes(requestedSection);
             if (requiresBle && !isBleConnected() && options.toastOnVehicleRedirect === true) {
-                toast.info(options.vehicleRedirectMessage || 'Select a vehicle card first. Opening Garage.');
+                toast.info(options.vehicleRedirectMessage || 'Please connect to a vehicle first.');
             }
             const targetSection = (requiresBle && !isBleConnected()) ? 'garage' : requestedSection;
 
@@ -7516,7 +7516,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Update Ride Height
             if (config.rideHeightOffset !== undefined) {
                 const display = document.getElementById('rideHeightDisplay');
-                if (display) display.textContent = `${config.rideHeightOffset.toFixed(0)}%`;
+                if (display) display.textContent = `${config.rideHeightOffset.toFixed(0)}`;
             }
             
             // Update Damping

@@ -146,7 +146,7 @@ const GarageManager = (() => {
         if (value >= -55) {
             return {
                 icon: 'signal_cellular_4_bar',
-                label: 'Signal Excellent',
+                label: '',
                 toneClass: 'garage-card-signal-excellent'
             };
         }
@@ -154,7 +154,7 @@ const GarageManager = (() => {
         if (value >= -85) {
             return {
                 icon: 'signal_cellular_3_bar',
-                label: 'Signal Good',
+                label: '',
                 toneClass: 'garage-card-signal-good'
             };
         }
@@ -162,14 +162,14 @@ const GarageManager = (() => {
         if (value >= -95) {
             return {
                 icon: 'signal_cellular_2_bar',
-                label: 'Signal Fair',
+                label: '',
                 toneClass: 'garage-card-signal-fair'
             };
         }
 
         return {
             icon: 'signal_cellular_1_bar',
-            label: 'Signal Poor',
+            label: '',
             toneClass: 'garage-card-signal-poor'
         };
     }

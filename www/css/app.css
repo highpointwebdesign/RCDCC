@@ -1028,11 +1028,10 @@
         /* Dashboard quick-nav elements */
         .dashboard-quick-nav-text {
             color: var(--text-muted);
-            display: inline-flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 0.18rem;
-            line-height: 1.1;
+            display: inline-block;
+            text-align: right;
+            line-height: 1.2;
+            min-width: 2ch;
         }
 
         .dashboard-quick-nav-text::after {
@@ -1044,10 +1043,9 @@
         }
 
         .dashboard-quick-nav-text.dashboard-quick-nav-placeholder {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 1.5rem;
+            display: inline-block;
+            text-align: right;
+            min-width: 2ch;
         }
 
         .dashboard-quick-nav-text.dashboard-quick-nav-placeholder::after {
@@ -1055,10 +1053,10 @@
         }
 
         .dashboard-quick-nav-placeholder-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+            display: inline;
             color: var(--text-muted);
+            font-size: inherit;
+            line-height: inherit;
         }
 
         .dashboard-quick-nav-placeholder-icon-combo {
