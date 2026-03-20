@@ -381,9 +381,10 @@ public:
             return;
         }
         activeReadChunk = chunkIndex < 0 ? 0 : chunkIndex;
-        // Chunk paging should reuse the existing scope snapshot.
-        // Rebuild is only needed when scope changes or data is marked dirty by writes.
-        configCacheDirty = false;
+        // Mark dirty so update() calls buildChunkedSnapshot() to serve the new chunk.
+        // The snapshot builder reuses cachedScopePayload when the scope hasn't changed,
+        // so this does NOT cause a full re-read from storage on each chunk page.
+        configCacheDirty = true;
         unlockQueue();
     }
 

@@ -18,6 +18,8 @@ if (-not (Test-Path $firmwareDir)) {
 	throw "Firmware directory not found: $firmwareDir"
 }
 
+$bumpScriptPath = Join-Path $projectRoot 'bump-firmware-version.js'
+
 $pioCommand = $null
 if (Get-Command 'pio' -ErrorAction SilentlyContinue) {
 	$pioCommand = 'pio'
@@ -38,6 +40,16 @@ try {
 	}
 
 	if (-not $SkipBuild) {
+		if (-not (Test-Path $bumpScriptPath)) {
+			throw "Firmware version bump script not found: $bumpScriptPath"
+		}
+
+		Write-Host "Incrementing firmware version..."
+		& node $bumpScriptPath
+		if ($LASTEXITCODE -ne 0) {
+			throw "Firmware version increment failed."
+		}
+
 		Write-Host "Building firmware for environment '$Environment'..."
 		& $pioCommand run -e $Environment
 		if ($LASTEXITCODE -ne 0) {

@@ -64,6 +64,8 @@ public:
   void setColorOrderByName(const char* orderName);
   void clearAllGroups(bool clearPixels = true);
   void flashAllBlocking(uint32_t color, uint8_t count, uint16_t onMs, uint16_t offMs, volatile bool* cancel = nullptr);
+  // Basic diagnostic mode: bypasses all group/profile logic in-task, no RMT contention.
+  void setBasicMode(bool on, uint8_t r = 0, uint8_t g = 0, uint8_t b = 0, int count = 0);
 
 private:
   Adafruit_NeoPixel _strip;
@@ -76,6 +78,10 @@ private:
   TaskHandle_t _taskHandle = nullptr;
   LightingProfile _exportProfile;
   SemaphoreHandle_t _mutex = xSemaphoreCreateMutex();
+  // Basic mode state (written from BLE handler, read from task — volatile for visibility)
+  volatile bool    _basicMode  = false;
+  volatile uint8_t _basicR = 0, _basicG = 0, _basicB = 0;
+  volatile int     _basicCount = 0;
 
   static void _task(void* arg);
   void _tick();

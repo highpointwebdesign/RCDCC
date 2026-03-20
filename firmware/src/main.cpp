@@ -3,6 +3,7 @@
 #include <Wire.h>
 #include <MPU6050.h>
 #include <Adafruit_NeoPixel.h>
+#include <driver/gpio.h>
 #include "Config.h"
 #include "SensorFusion.h"
 #include "SuspensionSimulator.h"
@@ -29,11 +30,17 @@ bool ledBleOn = false;  // true while BLE is connected (steady-on state)
 // command is received within this window (phone disconnection safety net).
 static uint32_t lastBleCommandMs = 0;
 static constexpr uint32_t CONTINUOUS_WATCHDOG_MS = 500;
+static constexpr bool LIGHTS_ENTRYPOINT_ENABLED = false;
 
 // Addressable LED (NeoPixel) - kept for backward compatibility
 Adafruit_NeoPixel statusLED(STATUS_LED_COUNT, STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
 uint32_t currentLEDColor = 0;
 bool legacyStatusLedEnabled = false;
+static bool basicLightsModeActive = false; // lights_basic diagnostic mode state
+static bool lightsDiagActive = false;
+static uint32_t lightsDiagLastStepMs = 0;
+static uint8_t lightsDiagStep = 0;
+static uint16_t lightsDiagIntervalMs = 500;
 
 // Emergency light state variables
 struct PatternStep {
@@ -232,7 +239,8 @@ float currentAccelZ = 0.0f;
 
 // Function to start LED blink (250ms); stays on after if BLE connected
 void startLedBlink() {
-  digitalWrite(LED_PIN, HIGH);
+  // Pulse opposite the steady BLE state so the 250ms flash is visible.
+  digitalWrite(LED_PIN, ledBleOn ? LOW : HIGH);
   flashStatusLED(); // Flash addressable LED too
   ledBlinkEndTime = millis() + 250;
 }
@@ -357,6 +365,11 @@ bool applyServoConfigPayload(const String& payload) {
 }
 
 bool applyLightsPayload(const String& payload) {
+  if (!LIGHTS_ENTRYPOINT_ENABLED) {
+    Serial.println("BLE lights payload ignored: lights entrypoint disabled");
+    return true;
+  }
+
   DynamicJsonDocument doc(4096);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
@@ -478,6 +491,11 @@ bool applySystemCommandPayload(const String& payload) {
 
   String command = doc["command"] | "";
   command.toLowerCase();
+
+  if (!LIGHTS_ENTRYPOINT_ENABLED && command.startsWith("lights_")) {
+    Serial.printf("BLE system command ignored (lights disabled): %s\n", command.c_str());
+    return true;
+  }
 
   if (command == "cfg_read_prepare") {
     String scope = doc["scope"] | String("bootstrap");
@@ -648,53 +666,17 @@ bool applySystemCommandPayload(const String& payload) {
   // ==================== Driving Profile Commands (Phase 3) ====================
 
   if (command == "load_drv_profile") {
-    int32_t idx = doc["index"] | -1;
-    if (idx < 0 || idx >= MAX_DRIVING_PROFILES) {
-      Serial.println("{\"status\":\"error\",\"reason\":\"invalid_index\"}");
-      return false;
-    }
-    if (!storageManager.loadDrivingProfile(static_cast<int>(idx))) {
-      Serial.println("{\"status\":\"error\",\"reason\":\"not_found\"}");
-      return false;
-    }
-    SuspensionConfig newCfg = storageManager.getConfig();
-    ServoConfig newSrvCfg = storageManager.getServoConfig();
-    suspensionSimulator.init(newCfg, newSrvCfg);
-    sensorFusion.setOrientation(newCfg.mpuOrientation);
-    startLedBlink();
-    Serial.printf("{\"status\":\"ok\",\"profile\":%d}\n", static_cast<int>(idx));
+    Serial.println("{\"status\":\"deprecated\",\"command\":\"load_drv_profile\",\"owner\":\"app\"}");
     return true;
   }
 
   if (command == "save_drv_profile") {
-    int32_t idx = doc["index"] | -1;
-    String name = doc["name"] | "";
-    if (idx < 0 || idx >= MAX_DRIVING_PROFILES) {
-      Serial.println("{\"status\":\"error\",\"reason\":\"invalid_index\"}");
-      return false;
-    }
-    if (name.length() == 0) { name = String("Profile ") + String(static_cast<int>(idx)); }
-    if (name.length() > 20) { name = name.substring(0, 20); }
-    storageManager.saveDrivingProfile(static_cast<int>(idx), name);
-    startLedBlink();
-    Serial.printf("{\"status\":\"saved\",\"profile\":%d}\n", static_cast<int>(idx));
+    Serial.println("{\"status\":\"deprecated\",\"command\":\"save_drv_profile\",\"owner\":\"app\"}");
     return true;
   }
 
   if (command == "delete_drv_profile") {
-    int32_t idx = doc["index"] | -1;
-    if (idx < 0 || idx >= MAX_DRIVING_PROFILES) {
-      Serial.println("{\"status\":\"error\",\"reason\":\"invalid_index\"}");
-      return false;
-    }
-    int newActive = -1;
-    if (!storageManager.deleteDrivingProfile(static_cast<int>(idx), newActive)) {
-      Serial.println("{\"status\":\"error\",\"reason\":\"last_profile\"}");
-      return false;
-    }
-    startLedBlink();
-    Serial.printf("{\"status\":\"deleted\",\"profile\":%d,\"new_active\":%d}\n",
-                  static_cast<int>(idx), newActive);
+    Serial.println("{\"status\":\"deprecated\",\"command\":\"delete_drv_profile\",\"owner\":\"app\"}");
     return true;
   }
 
@@ -852,6 +834,53 @@ bool applySystemCommandPayload(const String& payload) {
     return true;
   }
 
+  // lights_basic: Stage-1 diagnostic mode.
+  // Runs inside LightsEngine task context so RMT writes stay deterministic.
+  if (command == "lights_basic") {
+    const bool on = doc["on"] | false;
+    const int r   = constrain((int)(doc["r"]   | 0),   0, 255);
+    const int g   = constrain((int)(doc["g"]   | 0),   0, 255);
+    const int b   = constrain((int)(doc["b"]   | 0),   0, 255);
+    const int bri = constrain((int)(doc["bri"] | 100), 0, 100);
+
+    Serial.printf("[lights_basic] received on=%d r=%d g=%d b=%d bri=%d\n", on, r, g, b, bri);
+    lightsDiagActive = false;
+    if (on) {
+      const float scale = bri / 100.0f;
+      const uint8_t sr = (uint8_t)(r * scale);
+      const uint8_t sg = (uint8_t)(g * scale);
+      const uint8_t sb = (uint8_t)(b * scale);
+      if (lightsEngine) lightsEngine->setBasicMode(true, sr, sg, sb, 11);
+      basicLightsModeActive = true;
+      Serial.printf("[lights_basic] ON sr=%d sg=%d sb=%d\n", sr, sg, sb);
+    } else {
+      // Keep stage-1 active with zero active LEDs so OFF is truly dark (no profile fallback flicker).
+      if (lightsEngine) lightsEngine->setBasicMode(true, 0, 0, 0, 0);
+      basicLightsModeActive = false;
+      Serial.println("[lights_basic] OFF");
+    }
+    return true;
+  }
+
+  // lights_diag: deterministic hardware diagnostic sequence for signal-integrity testing.
+  // Sequence: red -> green -> blue -> white -> off (repeats).
+  if (command == "lights_diag") {
+    const bool on = doc["on"] | false;
+    lightsDiagIntervalMs = constrain((int)(doc["intervalMs"] | 500), 100, 2000);
+    if (on) {
+      lightsDiagActive = true;
+      lightsDiagStep = 0;
+      lightsDiagLastStepMs = 0;
+      Serial.printf("[lights_diag] START interval=%u ms\n", lightsDiagIntervalMs);
+    } else {
+      lightsDiagActive = false;
+      lightsDiagStep = 0;
+      if (lightsEngine) lightsEngine->setBasicMode(true, 0, 0, 0, 0);
+      Serial.println("[lights_diag] STOP");
+    }
+    return true;
+  }
+
   // delete_lt_profile: Delete a lighting profile
   if (command == "delete_lt_profile") {
     int index = doc["index"] | 0;
@@ -933,7 +962,9 @@ void setup() {
   lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
   if (lightsEngine) {
     lightsEngine->begin();
+    gpio_set_drive_capability((gpio_num_t)STATUS_LED_PIN, GPIO_DRIVE_CAP_3);
     Serial.printf("LightsEngine initialized: %d LED capacity\n", STATUS_LED_COUNT);
+    Serial.printf("WS2812 data pin GPIO%d drive strength set to max\n", STATUS_LED_PIN);
   } else {
     Serial.println("LightsEngine allocation failed; falling back to legacy status LED control");
   }
@@ -1053,7 +1084,9 @@ void setup() {
   bluetoothService->setConfigWriteHandler(applyConfigUpdatePayload);
   bluetoothService->setKVWriteHandler(applyKVWritePayload);
   bluetoothService->setServoWriteHandler(applyServoConfigPayload);
-  bluetoothService->setLightsWriteHandler(applyLightsPayload);
+  if (LIGHTS_ENTRYPOINT_ENABLED) {
+    bluetoothService->setLightsWriteHandler(applyLightsPayload);
+  }
   bluetoothService->setSystemWriteHandler(applySystemCommandPayload);
   bluetoothService->setConnectionStateHandler([](bool connected) {
     ledBleOn = connected;
@@ -1080,6 +1113,36 @@ void loop() {
   // Run BLE service work on the main loop task, not BTC_TASK callbacks.
   if (bluetoothService) {
     bluetoothService->update();
+  }
+
+  // Deterministic lighting diagnostics to expose electrical/data integrity issues.
+  if (lightsDiagActive && lightsEngine) {
+    if (lightsDiagLastStepMs == 0 || (uint32_t)(currentTime - lightsDiagLastStepMs) >= lightsDiagIntervalMs) {
+      lightsDiagLastStepMs = currentTime;
+      switch (lightsDiagStep) {
+        case 0:
+          lightsEngine->setBasicMode(true, 255, 0, 0, 11);
+          Serial.println("[lights_diag] RED");
+          break;
+        case 1:
+          lightsEngine->setBasicMode(true, 0, 255, 0, 11);
+          Serial.println("[lights_diag] GREEN");
+          break;
+        case 2:
+          lightsEngine->setBasicMode(true, 0, 0, 255, 11);
+          Serial.println("[lights_diag] BLUE");
+          break;
+        case 3:
+          lightsEngine->setBasicMode(true, 255, 255, 255, 11);
+          Serial.println("[lights_diag] WHITE");
+          break;
+        default:
+          lightsEngine->setBasicMode(true, 0, 0, 0, 0);
+          Serial.println("[lights_diag] OFF");
+          break;
+      }
+      lightsDiagStep = (lightsDiagStep + 1) % 5;
+    }
   }
   
   // Detect genuinely slow single loop iterations (>100ms each).

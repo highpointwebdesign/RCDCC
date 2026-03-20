@@ -454,10 +454,25 @@ class BluetoothManager {
         }
     }
 
-    async readConfigScoped(scope = 'bootstrap') {
+    async readConfigScoped(scope = 'bootstrap', options = {}) {
         if (!this.isConnected) throw new Error('Not connected to BLE device');
 
         const normalizedScope = String(scope || 'bootstrap').toLowerCase();
+        const onProgress = (options && typeof options.onProgress === 'function') ? options.onProgress : null;
+        const reportProgress = (stage, done, total, attempt) => {
+            if (!onProgress) return;
+            const safeTotal = Math.max(1, Number(total) || 1);
+            const safeDone = Math.max(0, Math.min(Number(done) || 0, safeTotal));
+            onProgress({
+                scope: normalizedScope,
+                stage,
+                done: safeDone,
+                total: safeTotal,
+                attempt: Number(attempt) || 1,
+                percent: Math.round((safeDone / safeTotal) * 100)
+            });
+        };
+
         const maxAttempts = 4;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             await this.sendSystemCommand('cfg_read_prepare', { scope: normalizedScope });
@@ -466,6 +481,7 @@ class BluetoothManager {
 
             const firstEnvelope = await this._readConfigOnce();
             if (!firstEnvelope || firstEnvelope.mode !== 'chunked') {
+                reportProgress('complete', 1, 1, attempt);
                 return firstEnvelope;
             }
 
@@ -480,11 +496,16 @@ class BluetoothManager {
             const collected = new Array(totalChunks).fill('');
             const firstIndex = Math.max(0, Number(firstEnvelope.chunk) || 0);
             collected[firstIndex] = String(firstEnvelope.payload || '');
+            const receivedIndices = new Set([firstIndex]);
+            reportProgress('syncing', receivedIndices.size, totalChunks, attempt);
             let scopeMismatch = false;
 
             for (let i = 0; i < totalChunks; i++) {
                 if (i === firstIndex) continue;
                 await this.sendSystemCommand('cfg_read_chunk', { index: i });
+                // Small delay so the firmware main loop can call buildChunkedSnapshot()
+                // and update the BLE characteristic to reflect the requested chunk index.
+                await new Promise(r => setTimeout(r, 50));
                 const env = await this._readConfigOnce();
                 if (!env || env.mode !== 'chunked') {
                     throw new Error(`Unexpected config chunk envelope for scope ${normalizedScope}`);
@@ -494,11 +515,17 @@ class BluetoothManager {
                     scopeMismatch = true;
                     break;
                 }
-                const envIndex = Math.max(0, Number(env.chunk) || i);
+                // Use env.chunk directly rather than (Number(env.chunk) || i) because
+                // chunk index 0 is falsy in JS and would incorrectly fall back to i.
+                const rawChunk = Number(env.chunk);
+                const envIndex = (!isNaN(rawChunk) && rawChunk >= 0) ? rawChunk : i;
                 collected[envIndex] = String(env.payload || '');
+                receivedIndices.add(envIndex);
+                reportProgress('syncing', receivedIndices.size, totalChunks, attempt);
             }
 
             if (scopeMismatch) {
+                reportProgress('retrying', 0, totalChunks, attempt);
                 console.warn(`[BLE] readConfigScoped attempt ${attempt}: mixed chunk scopes for ${normalizedScope}, retrying`);
                 await new Promise(r => setTimeout(r, 100));
                 continue;
@@ -506,12 +533,23 @@ class BluetoothManager {
 
             const assembled = collected.join('');
             if (!assembled.length) {
-                throw new Error(`Empty assembled config payload for scope ${normalizedScope}`);
+                reportProgress('retrying', 0, totalChunks, attempt);
+                console.warn(`[BLE] readConfigScoped attempt ${attempt}: empty assembled payload for ${normalizedScope}, retrying`);
+                await new Promise(r => setTimeout(r, 100 * attempt));
+                continue;
             }
 
             try {
-                return JSON.parse(assembled);
+                const parsed = JSON.parse(assembled);
+                reportProgress('complete', totalChunks, totalChunks, attempt);
+                return parsed;
             } catch (error) {
+                reportProgress('retrying', 0, totalChunks, attempt);
+                console.warn(`[BLE] readConfigScoped attempt ${attempt}: JSON parse failed for ${normalizedScope}:`, error.message, `(${assembled.length} bytes assembled)`);
+                if (attempt < maxAttempts) {
+                    await new Promise(r => setTimeout(r, 150 * attempt));
+                    continue;
+                }
                 console.error('Scoped config JSON parse failed:', normalizedScope, error, assembled);
                 throw new Error(`Invalid scoped config JSON (${normalizedScope}): ${error.message}`);
             }

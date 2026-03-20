@@ -63,15 +63,6 @@
             </div>
         </div>
 
-        <div id="vehicleQuickNav" class="vehicle-quick-nav" hidden>
-            <div class="vehicle-quick-nav-tabs" role="tablist" aria-label="Vehicle feature navigation">
-                <button type="button" class="vehicle-quick-nav-btn" data-target="garage" role="tab" aria-selected="false"><span class="material-symbols-outlined">chevron_left</span>Garage</button>
-                <button type="button" class="vehicle-quick-nav-btn" data-target="tuning" role="tab" aria-selected="false">Suspension</button>
-                <button type="button" class="vehicle-quick-nav-btn" data-target="lights" role="tab" aria-selected="false">Lights</button>
-                <button type="button" class="vehicle-quick-nav-btn" data-target="fpv" role="tab" aria-selected="false">FPV</button>
-            </div>
-        </div>
-        
         <!-- Dashboard Section -->
         <section id="dashboard" class="page-section active">
             <h2 class="section-title">Dashboard</h2>
@@ -129,10 +120,18 @@
                         <span class="material-symbols-outlined icon-action" id="suspensionSettingsGear" title="Modify suspension parameters.">settings</span>
                     </div>
                     <div class="card-body">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <span>Reaction Speed</span>
-                            <span class="metric-pill" id="reactionSpeedBadge">--</span>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Vehicle Name</span>
+                            <span id="activeVehicleDisplay" class="dashboard-quick-nav-text">--</span>
                         </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Driving Profile</span>
+                            <span id="activeDrivingProfileDisplay" class="dashboard-quick-nav-text">--</span>
+                        </div>
+                        <!-- <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Lighting Profile</span>
+                            <span id="activeLightingProfileDisplay">--</span>
+                        </div> -->
                         <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Ride Height</span>
                             <span id="rideHeightDisplay">--</span>
@@ -146,30 +145,14 @@
                             <span id="stiffnessDisplay">--</span>
                         </div>
                         <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Reaction Speed</span>
+                            <span class="metric-pill" id="reactionSpeedBadge">--</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
                             <span>Rear/Front Balance</span>
                             <span id="frontRearBalanceDisplay">--</span>
                         </div>
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Vehicle</span>
-                            <div class="d-flex align-items-center gap-2">
-                                <span id="activeVehicleDisplay" class="dashboard-quick-nav-text">--</span>
-                                <!-- <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i> -->
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Driving Profile</span>
-                            <div class="d-flex align-items-center gap-2">
-                                <span id="activeDrivingProfileDisplay" class="dashboard-quick-nav-text">--</span>
-                                <!-- <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i> -->
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between mt-2">
-                            <span>Lighting Profile</span>
-                            <div class="d-flex align-items-center gap-2">
-                                <span id="activeLightingProfileDisplay" class="dashboard-quick-nav-text">--</span>
-                                <!-- <i class="material-symbols-outlined dashboard-quick-nav-icon">jump_to_element</i> -->
-                            </div>
-                        </div>
+                       
                     </div>
                 </div>
             </div>
@@ -213,7 +196,7 @@
             -->
 
             <!-- Lights Control Card (Master Kill Switch) -->
-            <div class="col-12 col-md-6 col-lg-4">
+            <!-- <div class="col-12 col-md-6 col-lg-4">
                 <div class="card" id="lightsCard">
                     <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                         <div>
@@ -226,13 +209,13 @@
                                 <span class="material-symbols-outlined lights-master-toggle-icon" aria-hidden="true">light_off</span>
                                 <span class="lights-master-toggle-text">Master Light Switch</span>
                             </button>
-                            <!-- <div class="form-text mb-3">
+                            <div class="form-text mb-3">
                                 <small>When Master is off, all lights are off. When Master is on, only enabled groups run.</small>
-                            </div> -->
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> -->
 
         </div>
         </section>
@@ -382,7 +365,7 @@
             <!-- Tab Content: Debugging -->
             <div class="tab-pane" id="tab-debugging">
                 <div class="row g-3">
-                    <div class="col-12 col-md-6">
+                    <!-- <div class="col-12 col-md-6">
                         <div class="card">
                             <div class="card-header" style="background-color: black; color: white;">
                                 <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
@@ -401,7 +384,7 @@
                                 <small id="ledColorDiagnosticStatus" class="d-block mt-2" style="color:#9ca3af;">Idle</small>
                             </div>
                         </div>
-                    </div>
+                    </div> -->
 
                     <!-- Console Card -->
                     <div class="col-12 col-md-6">
@@ -528,7 +511,7 @@
         <!-- Tuning Section -->
         <section id="tuning" class="page-section">
             <div class="section-title-row">
-                <h2 class="section-title">Suspension</h2>
+                <h2 class="section-title">Tuning</h2>
             </div>
             <div class="row g-3">
                 <!-- Driving Profiles Card -->
@@ -1015,6 +998,7 @@
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Definition:</strong> Controls how much the system resists vertical motion, smoothing bumps and limiting bounce after the chassis is disturbed.</div>
+                                            <div><strong>Workflow:</strong> Start around the default and run over your roughest section. Increase damping if the truck keeps bouncing after bumps; reduce damping if it feels harsh and loses grip on choppy terrain.</div>
                                             <div><strong>Formula:</strong> verticalEffect = -verticalAccel × damping</div>
                                             <div style="margin-top: 5px;">
                                                 <div>0.1 = Soft damping (minimal vertical compensation)</div>
@@ -1033,6 +1017,7 @@
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Definition:</strong> Sets how strongly the suspension counters body roll and pitch when the vehicle leans under cornering, braking, or acceleration.</div>
+                                            <div><strong>Workflow:</strong> Tune stiffness after ride height and damping feel close. Raise it if body roll is excessive in turns; lower it if the chassis feels twitchy or over-corrects during quick transitions.</div>
                                             <div><strong>Formula:</strong> rollEffect = roll × stiffness, pitchEffect = pitch × stiffness</div>
                                             <div style="margin-top: 5px;">
                                                 <div>0.5 = Soft response (minimal roll/pitch correction)</div>
@@ -1052,6 +1037,7 @@
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Definition:</strong> Determines how quickly suspension corrections are applied after motion is detected, balancing sharp response against smoothness.</div>
+                                            <div><strong>Workflow:</strong> Set reaction speed to match terrain and driving style. Increase it for high-speed or aggressive driving where fast correction helps, and decrease it for crawling or mixed terrain to keep motion smoother.</div>
                                             <div><strong>Formula:</strong> smoothing = 1.0 / (1.0 + (5.0 / reactionSpeed))</div>
                                             <div style="margin-top: 5px;">
                                                 <div>0.1 = Very slow/smooth response (smoothing ≈ 0.02)</div>
@@ -1070,6 +1056,7 @@
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Definition:</strong> Splits pitch correction between the front and rear axles so you can favor nose control, rear stability, or an even mix.</div>
+                                            <div><strong>Workflow:</strong> Use this after core response is dialed in. Shift toward front if the nose dives too much under braking, or toward rear if acceleration squat and rear instability are the bigger issue.</div>
                                             <div><strong>Formula:</strong> frontFactor = balance, rearFactor = 1.0 - balance</div>
                                             <div style="margin-top: 5px;">
                                                 <div>0% = All rear (front: 0%, rear: 100% pitch effect)</div>
@@ -1109,6 +1096,54 @@
                 <h2 class="section-title">Lights</h2>
             </div>
             <div class="row g-3">
+
+                <!-- Basic Lights Test / STAGE 1 -->
+                <div class="col-12">
+                    <div class="card" id="basicLightsTestCard" style="border:2px solid gold;">
+                        <div class="card-header card-header-dark d-flex align-items-center gap-2">
+                            <span class="material-symbols-outlined" style="color:gold;font-size:1.2rem;">bolt</span>
+                            <span style="color:gold;font-weight:700;letter-spacing:.03em;">Basic Lights Test / STAGE 1</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <span class="fw-semibold" style="min-width:80px;">Master</span>
+                                <button type="button" id="basicLightsMasterToggle"
+                                        class="btn btn-outline-secondary"
+                                        aria-pressed="false"
+                                        onclick="basicLightsToggle(this)">
+                                    <span class="material-symbols-outlined" style="vertical-align:middle;">light_off</span>
+                                </button>
+                            </div>
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <span class="fw-semibold" style="min-width:80px;">Color</span>
+                                <div id="basicLightsColorSwatch"
+                                     style="width:42px;height:42px;border-radius:6px;background:#0000ff;cursor:pointer;border:2px solid #555;"
+                                     onclick="document.getElementById('basicLightsColorInput').click()"></div>
+                                <input type="color" id="basicLightsColorInput" value="#0000ff"
+                                       style="opacity:0;width:0;height:0;position:absolute;pointer-events:none;"
+                                       oninput="basicLightsColorChange(this.value)">
+                            </div>
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <span class="fw-semibold" style="min-width:80px;">Brightness</span>
+                                <input type="range" class="form-range flex-grow-1" id="basicLightsBriSlider"
+                                       min="0" max="100" value="100"
+                                       oninput="basicLightsBriChange(this.value)">
+                                <span id="basicLightsBriLabel" style="min-width:44px;text-align:right;">100%</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <button type="button" class="btn btn-outline-warning btn-sm" id="basicLightsDiagStartBtn"
+                                        onclick="basicLightsDiagStart()">
+                                    Start Diag Cycle
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="basicLightsDiagStopBtn"
+                                        onclick="basicLightsDiagStop()">
+                                    Stop Diag
+                                </button>
+                            </div>
+                            <div id="basicLightsStatus" class="text-muted small mt-1">Waiting for connection…</div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Lighting Profiles Card -->
                 <div class="col-12">
@@ -1159,14 +1194,14 @@
                             </div>
                         </div>
                         <div class="card-body" id="manageLightGroupsCardBody">
-                            <hr class="my-3">
                             <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
                                 <label for="totalLEDCount" class="form-label mb-0" style="flex:1;">
                                     <strong>Total LEDs in your strip<span id="totalLEDCountVehicleLabel" class="ms-1 fw-normal text-muted" style="font-size:0.85em; display:none;"></span></strong>
-                                    <div class="form-text mt-0"><small>Minimum: 1, Maximum: 300</small></div>
+                                    <div class="form-text mt-0"><small>Minimum: 1, Maximum: 30</small></div>
                                 </label>
                                 <input type="number" class="form-control text-center" id="totalLEDCount" min="1" max="30" value="20" placeholder="20" style="width:80px;flex-shrink:0;">
                             </div>
+                            <hr class="my-3">
                             <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
                                 <label for="lightColorOrder" class="form-label mb-0" style="flex:1;">
                                     <strong>LED Color Order</strong>
@@ -1376,6 +1411,17 @@
             <span class="material-symbols-outlined">garage_home</span>
             <span>Garage</span>
         </button>
+        <button id="nav-tuning" data-target="tuning">
+            <span class="footer-nav-icon-stack" aria-hidden="true">
+                <span class="material-symbols-outlined footer-nav-icon-primary">directions_car</span>
+                <span class="material-symbols-outlined footer-nav-icon-badge">settings</span>
+            </span>
+            <span>Tuning</span>
+        </button>
+        <button id="nav-fpv" data-target="fpv">
+            <span class="material-symbols-outlined">videocam</span>
+            <span>FPV</span>
+        </button>
         <button id="nav-settings" data-target="settings">
             <span class="material-symbols-outlined">settings_ethernet</span>
             <span>More</span>
@@ -1405,6 +1451,26 @@
                     <div>
                         <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">Firmware Version</div>
                         <div id="garageVehicleAboutFirmware" style="color: #666; font-size: 0.92rem;">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Garage Sync Progress Modal -->
+    <div class="modal fade" id="garageSyncModal" tabindex="-1" aria-labelledby="garageSyncTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content garage-sync-modal-content">
+                <div class="modal-header garage-sync-modal-header">
+                    <h5 class="modal-title" id="garageSyncTitle">
+                        <span class="material-symbols-outlined" aria-hidden="true">sync</span>
+                        Syncing Vehicle Data
+                    </h5>
+                </div>
+                <div class="modal-body garage-sync-modal-body">
+                    <div id="garageSyncStatusText" class="garage-sync-status-text">Please wait while we sync your truck data...</div>
+                    <div class="progress garage-sync-progress-wrap" role="progressbar" aria-label="Vehicle sync progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                        <div id="garageSyncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated garage-sync-progress-bar" style="width: 0%;">0%</div>
                     </div>
                 </div>
             </div>

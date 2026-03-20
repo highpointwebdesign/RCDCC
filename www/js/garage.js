@@ -44,6 +44,25 @@ const GarageManager = (() => {
         return !!left && !!right && left === right;
     }
 
+    function isBleSessionActive() {
+        const manager = window.bleManager;
+        if (!manager) return false;
+        if (typeof manager.getConnectionStatus === 'function') {
+            return !!manager.getConnectionStatus();
+        }
+        return !!manager.isConnected;
+    }
+
+    function getActiveBleDeviceId() {
+        if (!isBleSessionActive()) return null;
+
+        const manager = window.bleManager;
+        return manager?.deviceId
+            || manager?.preferredDeviceId
+            || localStorage.getItem('rcdccBlePreferredDeviceId')
+            || null;
+    }
+
     function timeAgo(isoString) {
         if (!isoString) return null;
         const past = new Date(isoString);
@@ -132,7 +151,7 @@ const GarageManager = (() => {
             };
         }
 
-        if (value >= -70) {
+        if (value >= -85) {
             return {
                 icon: 'signal_cellular_3_bar',
                 label: 'Signal Good',
@@ -140,7 +159,7 @@ const GarageManager = (() => {
             };
         }
 
-        if (value >= -85) {
+        if (value >= -95) {
             return {
                 icon: 'signal_cellular_2_bar',
                 label: 'Signal Fair',
@@ -156,9 +175,7 @@ const GarageManager = (() => {
     }
 
     function ensureRssiPollingState() {
-        const activeDeviceId = (window.bleManager && window.bleManager.isConnected)
-            ? window.bleManager.deviceId
-            : null;
+        const activeDeviceId = getActiveBleDeviceId();
 
         if (!activeDeviceId) {
             stopRssiPolling();
@@ -587,8 +604,8 @@ const GarageManager = (() => {
 
         if (empty) empty.style.display = 'none';
 
-        const hasAnyActiveConnection = !!(window.bleManager && window.bleManager.isConnected);
-        const activeDeviceId = hasAnyActiveConnection ? window.bleManager.deviceId : null;
+        const hasAnyActiveConnection = isBleSessionActive();
+        const activeDeviceId = getActiveBleDeviceId();
         if (activeDeviceId && _connectingVehicleId && deviceIdsEqual(_connectingVehicleId, activeDeviceId)) {
             _connectingVehicleId = null;
         }
@@ -597,7 +614,7 @@ const GarageManager = (() => {
         vehicles.sort((a, b) => a.friendlyName.localeCompare(b.friendlyName, undefined, { sensitivity: 'base' }));
 
         list.innerHTML = vehicles.map(v => {
-            const isConnected = !!(window.bleManager && window.bleManager.isConnected && deviceIdsEqual(window.bleManager.deviceId, v.id));
+            const isConnected = !!(hasAnyActiveConnection && activeDeviceId && deviceIdsEqual(activeDeviceId, v.id));
             const hasPendingConnectionForCard = deviceIdsEqual(_connectingVehicleId, v.id) || deviceIdsEqual(_autoReconnectVehicleId, v.id);
             const isConnecting = !hasAnyActiveConnection && !isConnected && hasPendingConnectionForCard;
             const isError = deviceIdsEqual(_connectErrorVehicleId, v.id);
@@ -639,37 +656,36 @@ const GarageManager = (() => {
                                     </button>
                                 </li>`
                             }
-                            <li><hr class="dropdown-divider"></li>
+                            <!-- <li><hr class="dropdown-divider"></li> -->
                             <li>
                                 <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'tuning')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    Suspension
+                                    Tuning
                                 </button>
                             </li>
-                            <li>
+                            <!-- <li>
                                 <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'lights')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     Lights
                                 </button>
-                            </li>
-                            <li>
+                            </li> -->
+                           <!-- <li>
                                 <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'fpv')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     FPV
                                 </button>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
+                            </li> -->
+                            <!-- <li><hr class="dropdown-divider"></li> -->
                             <li>
                                 <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openRenameModal('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     Rename
                                 </button>
                             </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleAbout('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    About
-                                </button>
-                            </li>
                             <li>
                                 <button type="button" class="dropdown-item text-danger" onclick="event.stopPropagation(); GarageManager.confirmDeleteVehicle('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     Delete
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleAbout('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                    About
                                 </button>
                             </li>
                         </ul>
@@ -685,7 +701,7 @@ const GarageManager = (() => {
     }
 
     function isVehicleConnected(deviceId) {
-        return !!(window.bleManager && window.bleManager.isConnected && deviceIdsEqual(window.bleManager.deviceId, deviceId));
+        return !!deviceIdsEqual(getActiveBleDeviceId(), deviceId);
     }
 
     function clearDisconnectLongPressState() {
@@ -852,6 +868,9 @@ const GarageManager = (() => {
             updateLastSeen(deviceId);
             if (window.updateConnectionStatus) updateConnectionStatus(true);
             if (window.updateConnectionMethodDisplay) updateConnectionMethodDisplay();
+            if (typeof window.refreshDashboardCurrentSettingsCard === 'function') {
+                window.refreshDashboardCurrentSettingsCard(vehicle?.friendlyName || null);
+            }
 
             // Run a follow-up refresh once the connection settles so tuning/servo UI hydrates reliably.
             if (typeof window.refreshConfigAfterConnection === 'function') {
@@ -942,7 +961,7 @@ const GarageManager = (() => {
     }
 
     async function toggleVehicleConnection(deviceId) {
-        const alreadyConnected = !!(window.bleManager && window.bleManager.isConnected && deviceIdsEqual(window.bleManager.deviceId, deviceId));
+        const alreadyConnected = isVehicleConnected(deviceId);
         if (alreadyConnected) {
             if (window.disconnectBLE) {
                 await window.disconnectBLE(true);

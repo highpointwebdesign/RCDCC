@@ -57,8 +57,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.203';
-        const BUILD_DATE = '2026-03-19';
+        const APP_VERSION = '1.1.247';
+        const BUILD_DATE = '2026-03-20';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -76,10 +76,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let hasEverBleConnection = false;
         let bleSyncInProgress = false;
         let bleSyncInternalWritesAllowed = false;
+        let garageSyncModalInstance = null;
+        const AUTO_PERSIST_SAVE_DELAY_MS = 1500;
+        let autoPersistSaveTimer = null;
         const GARAGE_STORAGE_KEY = 'rcdcc_garage_vehicles';
         const DEBUG_MODE_STORAGE_KEY = 'settings_debug_mode_enabled';
-        const VEHICLE_QUICK_SECTIONS = ['tuning', 'lights', 'fpv'];
-        const VEHICLE_CONNECTION_REQUIRED_SECTIONS = ['tuning', 'lights', 'fpv'];
+        const VEHICLE_QUICK_SECTIONS = ['tuning', 'fpv'];
+        const VEHICLE_CONNECTION_REQUIRED_SECTIONS = ['tuning', 'fpv'];
 
         // ==================== Phase 6: Dance Mode ====================
         const DANCE_TILT_INTERVAL_MS = 50; // ~20Hz
@@ -117,12 +120,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function getDashboardQuickNavPlaceholderMarkup(type) {
             if (type === 'vehicle') {
-                return '<span class="dashboard-quick-nav-placeholder-icon dashboard-quick-nav-placeholder-icon-combo" aria-hidden="true">--</span>';
+                return '<span class="dashboard-quick-nav-placeholder-icon" aria-hidden="true">--</span>';
             }
             if (type === 'driving') {
                 return '<span class="dashboard-quick-nav-placeholder-icon" aria-hidden="true">--</span>';
             }
-            return '<span class="dashboard-quick-nav-placeholder-icon dashboard-quick-nav-placeholder-icon-combo" aria-hidden="true">--</span>';
+            return '<span class="dashboard-quick-nav-placeholder-icon" aria-hidden="true">--</span>';
         }
 
         function setDashboardQuickNavDisplay(elementId, connectedLabel, placeholderType) {
@@ -151,6 +154,96 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const garageLabel = getGarageVehicleNameById(bleManager?.deviceId);
             setDashboardQuickNavDisplay('activeVehicleDisplay', garageLabel || (name && String(name).trim()) || bleManager?.deviceName || 'RCDCC Truck', 'vehicle');
             updateVehicleQuickNav();
+        }
+
+        function refreshDashboardCurrentSettingsCard(vehicleName = null) {
+            if (!isBleConnected()) {
+                clearDashboardActiveStatus();
+                return;
+            }
+
+            updateDashboardVehicleName(vehicleName);
+            updateDashboardActiveProfile();
+            updateDashboardActiveLightingProfile();
+
+            if (fullConfig && typeof fullConfig === 'object') {
+                updateSuspensionSettings(fullConfig);
+            }
+        }
+
+        function getActiveDrivingProfileConfigSnapshot() {
+            const profile = (typeof getActiveDrivingProfile === 'function') ? getActiveDrivingProfile() : null;
+            if (!profile || !profile.tuning || !profile.servos) {
+                return captureCurrentSliderValues();
+            }
+            return {
+                ...profile.tuning,
+                servos: profile.servos
+            };
+        }
+
+        function scheduleAutoPersistSave(reason = 'kv-update') {
+            if (autoPersistSaveTimer) {
+                clearTimeout(autoPersistSaveTimer);
+                autoPersistSaveTimer = null;
+            }
+
+            autoPersistSaveTimer = setTimeout(async () => {
+                autoPersistSaveTimer = null;
+                if (!isBleConnected()) return;
+                if (!bleManager || typeof bleManager.sendSaveCommandWithTimeout !== 'function') return;
+                if (bleSyncInProgress) return;
+
+                try {
+                    await bleManager.sendSaveCommandWithTimeout(2500);
+                    console.log(`Auto-persist save completed (${reason})`);
+                } catch (error) {
+                    console.warn(`Auto-persist save failed (${reason}):`, error?.message || error);
+                }
+            }, AUTO_PERSIST_SAVE_DELAY_MS);
+        }
+
+        window.refreshDashboardCurrentSettingsCard = refreshDashboardCurrentSettingsCard;
+
+        function getGarageSyncModal() {
+            const modalEl = document.getElementById('garageSyncModal');
+            if (!modalEl || !window.bootstrap || !bootstrap.Modal) return null;
+            if (!garageSyncModalInstance) {
+                garageSyncModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl, {
+                    backdrop: 'static',
+                    keyboard: false
+                });
+            }
+            return { modalEl, modal: garageSyncModalInstance };
+        }
+
+        function updateGarageSyncProgress(percent = 0, statusText = 'Please wait while we sync your truck data...') {
+            const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+            const progressWrap = document.querySelector('#garageSyncModal .progress');
+            const progressBar = document.getElementById('garageSyncProgressBar');
+            const statusEl = document.getElementById('garageSyncStatusText');
+            if (progressWrap) progressWrap.setAttribute('aria-valuenow', String(safePercent));
+            if (progressBar) {
+                progressBar.style.width = `${safePercent}%`;
+                progressBar.textContent = `${safePercent}%`;
+                progressBar.setAttribute('aria-valuenow', String(safePercent));
+            }
+            if (statusEl && statusText) {
+                statusEl.textContent = statusText;
+            }
+        }
+
+        function showGarageSyncModal(vehicleName = null) {
+            const handle = getGarageSyncModal();
+            if (!handle) return;
+            updateGarageSyncProgress(1, 'Connecting to vehicle...');
+            handle.modal.show();
+        }
+
+        function hideGarageSyncModal() {
+            const handle = getGarageSyncModal();
+            if (!handle) return;
+            handle.modal.hide();
         }
 
         function updateVehicleQuickNav(sectionId = null) {
@@ -438,6 +531,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             if (!canUseKv) {
                 await bleManager.writeConfig(payload);
+                scheduleAutoPersistSave('config-write');
                 return { status: 'ok' };
             }
 
@@ -507,6 +601,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 for (const writeOp of writes) {
                     await writeOp;
                 }
+                scheduleAutoPersistSave('kv-batch');
             }
 
             return { status: 'ok' };
@@ -520,6 +615,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         async function pushLightsPayload(payload, signal = null) {
+            if (!lightsWriteGateEnabled) {
+                const msg = '[Lights] pushLightsPayload BLOCKED: master gate closed';
+                console.warn(msg);
+                appendToSettingsConsoleCard(msg, 'warn');
+                return { status: 'blocked' };
+            }
             ensureBleConnectedOrThrow();
             communicationMode = 'ble';
             await bleManager.sendLightsCommand(payload);
@@ -680,11 +781,22 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             try {
                 await bleManager.sendSaveCommandWithTimeout(3000);
                 clearPageDirty(pageKey);
-                // Snapshot the current config as the new saved state
-                try {
-                    const latestBootstrap = await bleManager.readConfig();
-                    bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, latestBootstrap);
-                } catch (_) { /* best effort */ }
+                // App-owned model: use local state as the post-save baseline.
+                bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, fullConfig || {});
+
+                if (pageKey === 'tuning') {
+                    const tuningSnapshot = {
+                        rideHeightOffset: tuningSliderValues.rideHeightOffset,
+                        damping: tuningSliderValues.damping,
+                        stiffness: tuningSliderValues.stiffness,
+                        reactionSpeed: tuningSliderValues.reactionSpeed,
+                        frontRearBalance: tuningSliderValues.frontRearBalance,
+                        sampleRate: tuningSliderValues.sampleRate
+                    };
+                    fullConfig = mergeConfigSnapshots(fullConfig, tuningSnapshot);
+                    updateSuspensionSettings(tuningSnapshot);
+                }
+
                 toast.success('Settings saved');
             } catch (e) {
                 toast.error('Save failed - please try again');
@@ -769,13 +881,22 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             clearPageDirty(pageKey);
         }
 
-        async function runPostConnectFlow(connectionLabel = null, showToast = true) {
+        async function runPostConnectFlow(connectionLabel = null, showToast = true, options = {}) {
             bleSyncInProgress = true;
             bleSyncInternalWritesAllowed = true;
             communicationMode = 'ble';
             hasEverBleConnection = true;
             stopAutoReconnect();
             stopHeartbeat();
+            const showSyncModal = !!options.showSyncModal;
+
+            if (showSyncModal) {
+                const preconnectVehicleName = connectionLabel
+                    || getGarageVehicleNameById(bleManager?.deviceId)
+                    || bleManager?.deviceName
+                    || null;
+                showGarageSyncModal(preconnectVehicleName);
+            }
 
             try {
                 const connectedDeviceId = bleManager?.deviceId;
@@ -797,6 +918,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
                 syncDrivingProfileActionButtons();
 
+                const localProfileSnapshot = getActiveDrivingProfileConfigSnapshot();
+                if (localProfileSnapshot) {
+                    fullConfig = mergeConfigSnapshots(fullConfig, localProfileSnapshot);
+                    updateSuspensionSettings(localProfileSnapshot);
+                    updateTuningSliders(localProfileSnapshot);
+                    updateServoSliders(localProfileSnapshot);
+                }
+
                 const restoredLighting = loadLocalLightingProfiles();
                 lightingProfiles = Array.isArray(restoredLighting.profiles) ? restoredLighting.profiles : [];
                 activeLightingProfileIndex = Number(restoredLighting.activeIndex) || 0;
@@ -804,7 +933,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 syncLightingProfileActionButtons();
 
                 await loadLightGroups();
-                setMasterLightsEnabled(getMasterLightsEnabled(), false);
+                // Core/basic mode: always start with master lights OFF on connect.
+                setMasterLightsEnabled(false, false);
                 lightingGroupsDirty = false;
                 syncLightingProfileActionButtons();
                 updateTotalLEDCountLabel();
@@ -813,38 +943,42 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 updateConnectionMethodDisplay();
 
                 resetSectionDataState();
-                await fetchConfigFromESP32(false, { scope: 'bootstrap' });
+                await fetchConfigFromESP32(false, {
+                    scope: 'bootstrap',
+                    onProgress: showSyncModal
+                        ? ({ percent, done, total, stage }) => {
+                            updateGarageSyncProgress(percent, 'Syncing data...');
+                        }
+                        : null
+                });
                 if (bleManager && bleManager.schemaCompatible === false) {
                     toast.error('Connected, but this truck firmware is not compatible with this app build.');
                     return;
                 }
                 applyFeatureAvailabilityGate();
 
-                // Hard-reset firmware runtime lighting state, then push current app groups.
-                try {
-                    await pushSystemCommand('lights_clear_all', {});
-                } catch (error) {
-                    console.warn('Failed to clear firmware light groups on connect:', error?.message || error);
-                }
-                // Firmware just cleared runtime groups; only push active groups from app state.
-                lastPushedLightGroupCount = 0;
-                lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
+                // Core/basic mode: enforce OFF state after connect before any manual user toggle.
+                await setMasterLightsEnabled(false, true);
                 lastPushedLightsColorOrder = null;
-                lastPushedLightsMasterEnabled = null;
-                await applyLightsHierarchyToHardware();
+
+                // Update basic lights test card status
+                const basicStatus = document.getElementById('basicLightsStatus');
+                if (basicStatus) basicStatus.textContent = 'Connected — tap Master to test LEDs directly.';
 
                 const vehicleName = connectionLabel
                     || getGarageVehicleNameById(bleManager?.deviceId)
                     || bleManager?.deviceName
                     || 'RCDCC Truck (app.js:832)';
-                updateDashboardVehicleName(vehicleName);
-                updateDashboardActiveProfile();
-                updateDashboardActiveLightingProfile();
+                refreshDashboardCurrentSettingsCard(vehicleName);
 
                 if (showToast) {
                     toast.success(`Connected to ${vehicleName}`);
                 }
             } finally {
+                if (showSyncModal) {
+                    updateGarageSyncProgress(100, 'Finalizing...');
+                    setTimeout(() => hideGarageSyncModal(), 180);
+                }
                 bleSyncInternalWritesAllowed = false;
                 bleSyncInProgress = false;
             }
@@ -907,10 +1041,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     return false;
                 }
 
-                await runPostConnectFlow(vehicleName, true);
+                await runPostConnectFlow(vehicleName, true, { showSyncModal: true });
                 return true;
             } catch (error) {
                 console.error('connectBLEToVehicle failed:', error);
+                hideGarageSyncModal();
                 toast.error('Could not connect - make sure vehicle is powered on');
                 setHeaderSearching(false);
                 return false;
@@ -921,6 +1056,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!bleManager) return;
             bleSyncInProgress = false;
             bleSyncInternalWritesAllowed = false;
+            lightsWriteGateEnabled = false; // Reset gate on disconnect
             manualBleDisconnect = !!markManual;
             stopAutoReconnect();
             await bleManager.disconnect();
@@ -940,6 +1076,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (window.GarageManager && typeof window.GarageManager.renderGarage === 'function') {
                 window.GarageManager.renderGarage();
             }
+            // Reset basic lights test UI
+            _resetBasicLightsUI();
+            const basicStatus = document.getElementById('basicLightsStatus');
+            if (basicStatus) basicStatus.textContent = 'Waiting for connection…';
         }
 
         function purgeVehicleLocalData(deviceId) {
@@ -2609,21 +2749,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             // Ensure servo config is available. If not already loaded, fetch tuning scope on demand.
             if (!fullConfig || !fullConfig.servos) {
-                try {
-                    ensureBleConnectedOrThrow();
-                    let tuningConfig = null;
-                    if (bleManager && typeof bleManager.readConfigScoped === 'function') {
-                        tuningConfig = await bleManager.readConfigScoped('tuning');
-                    }
-                    if ((!tuningConfig || !tuningConfig.servos) && bleManager && typeof bleManager.readConfig === 'function') {
-                        tuningConfig = await bleManager.readConfig();
-                    }
-                    if (tuningConfig && tuningConfig.servos) {
-                        fullConfig = mergeConfigSnapshots(fullConfig, tuningConfig);
-                    }
-                } catch (error) {
-                    console.error('Failed to load config before auto calibrate:', error);
-                }
+                fullConfig = mergeConfigSnapshots(fullConfig, buildAutoCalibrateServoConfigFromUi());
             }
 
             if (!fullConfig || !fullConfig.servos || !Object.keys(fullConfig.servos || {}).length) {
@@ -2720,23 +2846,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         await autoLevelDelay(1500);
                     }
                     
-                    console.log('Phase 0: Trim reset complete, fetching updated config from RCDCCC module...');
+                    console.log('Phase 0: Trim reset complete, refreshing from local app state...');
                     setBubbleLevelStatus('Neutral position set. Confirming data saved correctly...');
                     
-                    // Fetch latest config from RCDCCC module to confirm all values were saved
-                    ensureBleConnectedOrThrow();
-                    const updatedConfig = await bleManager.readConfigScoped('tuning');
-                    if (updatedConfig) {
-                        if (updatedConfig && updatedConfig.servos) {
-                            fullConfig = updatedConfig;
-                            servos.forEach(servo => {
-                                if (updatedConfig.servos[servo]) {
-                                    servoState[servo].trim = updatedConfig.servos[servo].trim || 0;
-                                }
-                            });
-                            console.log('Phase 0: Config refreshed from RCDCCC module.');
+                    // App-owned model: trust local UI snapshot after successful writes.
+                    fullConfig = mergeConfigSnapshots(fullConfig, buildAutoCalibrateServoConfigFromUi());
+                    servos.forEach(servo => {
+                        if (fullConfig?.servos?.[servo]) {
+                            servoState[servo].trim = fullConfig.servos[servo].trim || 0;
                         }
-                    }
+                    });
+                    console.log('Phase 0: Config refreshed from local app state.');
                     
                     setBubbleLevelStatus('Neutral confirmed. Let chassis settle...');
                     await autoLevelDelay(SENSOR_SETTLE_MS);
@@ -3302,7 +3422,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 btn.addEventListener('click', async function() {
                     const target = this.dataset.target;
                     if (target) {
-                        await navigateToSection(target);
+                        await navigateToSection(target, {
+                            toastOnVehicleRedirect: VEHICLE_CONNECTION_REQUIRED_SECTIONS.includes(target)
+                        });
                     }
                 });
             });
@@ -3579,9 +3701,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         // Helper function to navigate to a section
-        async function navigateToSection(sectionId) {
+        async function navigateToSection(sectionId, options = {}) {
             const requestedSection = String(sectionId || 'dashboard');
             const requiresBle = VEHICLE_CONNECTION_REQUIRED_SECTIONS.includes(requestedSection);
+            if (requiresBle && !isBleConnected() && options.toastOnVehicleRedirect === true) {
+                toast.info(options.vehicleRedirectMessage || 'Select a vehicle card first. Opening Garage.');
+            }
             const targetSection = (requiresBle && !isBleConnected()) ? 'garage' : requestedSection;
 
             // Dirty guard: check page being navigated away from
@@ -3727,6 +3852,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const LIGHTS_ENGINE_MAX_GROUPS = 15;
         const MAX_LIGHTS_TOTAL_LEDS = 30;
         const MAX_LIGHT_GROUP_LEDS = 15;
+        const BASIC_LIGHTING_TEST_LED_COUNT = 11;
+        const BASIC_LIGHTING_TEST_COLOR = '#0000ff';
         const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'blink', 'strobe', 'breathe', 'fade', 'twinkle', 'sparkle', 'flash_sparkle', 'glitter', 'solid_glitter', 'running', 'larson', 'heartbeat', 'flicker', 'fire_flicker'];
         const LIGHTS_ENGINE_EFFECTS = new Set(['solid', 'blink', 'strobe', 'breathe', 'fade', 'twinkle', 'sparkle', 'flash_sparkle', 'glitter', 'solid_glitter', 'running', 'larson', 'heartbeat', 'flicker', 'fire_flicker']);
         const LIGHT_COLOR_ORDER_OPTIONS = new Set(['grb', 'rgb', 'rbg', 'gbr', 'brg', 'bgr']);
@@ -3809,6 +3936,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
         let lastPushedLightsColorOrder = null;
         let lastPushedLightsMasterEnabled = null;
+        let lightsWriteGateEnabled = false; // Hard gate: prevents ALL lights content writes when master is OFF.
         const expandedLightGroupIds = new Set();
 
         function createLightGroupId() {
@@ -3998,7 +4126,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         window.reloadLightGroupsFromStorage = async function() {
             await loadLightGroups();
-            if (isBleConnected()) {
+            if (isBleConnected() && lightsWriteGateEnabled) {
                 applyLightsHierarchyToHardware();
             }
         };
@@ -4449,13 +4577,70 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return readVehicleScopedStorage(LIGHT_MASTER_STORAGE_KEY, { migrateLegacy: false }) === 'true';
         }
 
+        function buildBasicMasterTestGroupPayload() {
+            const leds = Array.from({ length: BASIC_LIGHTING_TEST_LED_COUNT }, (_, i) => i);
+            return {
+                group: 0,
+                name: 'Master Test Blue',
+                enabled: true,
+                color: BASIC_LIGHTING_TEST_COLOR,
+                color2: '#000000',
+                brightness: 100,
+                effect: 'solid',
+                speed: 128,
+                intensity: 128,
+                leds
+            };
+        }
+
         function setMasterLightsEnabled(isEnabled, applyNow = true) {
+            // HARD GATE: Set electrical gate SYNCHRONOUSLY before any async BLE work.
+            // This prevents any lights writes from being processed while master is OFF.
+            lightsWriteGateEnabled = !!isEnabled;
             writeVehicleScopedStorage(LIGHT_MASTER_STORAGE_KEY, isEnabled ? 'true' : 'false');
             syncMasterLightSwitches(isEnabled);
+            
+            const statusMsg = `[Lights] Master ${isEnabled ? 'ON' : 'OFF'} requested (applyNow=${applyNow}, gate=${lightsWriteGateEnabled})`;
+            console.log(statusMsg);
+            appendToSettingsConsoleCard(statusMsg, isEnabled ? 'info' : 'warn');
+            
             if (applyNow) {
-                return Promise.resolve(pushSystemCommand('lights_master', { enabled: !!isEnabled }))
+                if (!isEnabled) {
+                    // Basic, deterministic OFF path: disable output and clear runtime groups.
+                    return Promise.resolve(pushSystemCommand('lights_master', { enabled: false }))
+                    .then(() => {
+                        appendToSettingsConsoleCard('[Lights] lights_master false submitted', 'info');
+                        return pushSystemCommand('lights_clear_all', {});
+                    })
+                    .then(() => {
+                        appendToSettingsConsoleCard('[Lights] lights_clear_all submitted', 'info');
+                        lastPushedLightsMasterEnabled = false;
+                        lastPushedLightGroupCount = 0;
+                        lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
+                    })
+                    .catch(error => {
+                        const msg = `[Lights] Master OFF failed: ${String(error?.message || error)}`;
+                        console.error(msg, error);
+                        appendToSettingsConsoleCard(msg, 'error');
+                        toast.error('Failed to apply master light switch state.');
+                    });
+                }
+
+                // ON path for core testing: single known blue group on LEDs 0-10.
+                // Gate is already true from above; group write will be allowed.
+                return Promise.resolve(pushSystemCommand('lights_master', { enabled: true }))
+                .then(() => {
+                    appendToSettingsConsoleCard('[Lights] lights_master true submitted', 'info');
+                    return pushLightsPayload(buildBasicMasterTestGroupPayload());
+                })
+                .then(() => {
+                    appendToSettingsConsoleCard('[Lights] Blue test group (LEDs 0-10) submitted', 'info');
+                    lastPushedLightsMasterEnabled = true;
+                    lastPushedLightGroupCount = 1;
+                    lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
+                })
                 .catch(error => {
-                    const msg = `Failed to apply master light state: ${String(error?.message || error)}`;
+                    const msg = `[Lights] Master ON failed: ${String(error?.message || error)}`;
                     console.error(msg, error);
                     appendToSettingsConsoleCard(msg, 'error');
                     toast.error('Failed to apply master light switch state.');
@@ -4463,6 +4648,122 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             return Promise.resolve();
         }
+
+        // ==================== Basic Lights Test (STAGE 1) ====================
+        // Sends lights_basic directly to firmware, bypassing LightsEngine,
+        // pushSystemCommand gates, and the master write gate entirely.
+        // Purpose: diagnose whether the BLE → firmware → NeoPixel chain works.
+
+        let _basicLightsMasterOn = false;
+        let _basicLightsColor = '#0000ff';
+        let _basicLightsBri = 100;
+
+        async function _sendBasicLights() {
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (!bleManager || !bleManager.isConnected) {
+                if (statusEl) statusEl.textContent = 'Not connected.';
+                return;
+            }
+            const hex = (_basicLightsColor || '#0000ff').replace('#', '');
+            const r = parseInt(hex.substring(0, 2), 16) || 0;
+            const g = parseInt(hex.substring(2, 4), 16) || 0;
+            const b = parseInt(hex.substring(4, 6), 16) || 0;
+            try {
+                await bleManager.sendSystemCommand('lights_color_order', { order: 'rgb' });
+                await bleManager.sendSystemCommand('lights_basic', {
+                    on:  _basicLightsMasterOn,
+                    r, g, b,
+                    bri: Number(_basicLightsBri)
+                });
+                const msg = _basicLightsMasterOn
+                    ? `Sent ON — rgb(${r},${g},${b}) @ ${_basicLightsBri}%`
+                    : 'Sent OFF';
+                if (statusEl) statusEl.textContent = msg;
+                console.log('[BasicLights]', msg);
+            } catch (e) {
+                const msg = `Send failed: ${e?.message || e}`;
+                if (statusEl) statusEl.textContent = msg;
+                console.error('[BasicLights]', msg);
+            }
+        }
+
+        window.basicLightsToggle = async function(btn) {
+            _basicLightsMasterOn = !_basicLightsMasterOn;
+            btn.setAttribute('aria-pressed', _basicLightsMasterOn ? 'true' : 'false');
+            const icon = btn.querySelector('.material-symbols-outlined');
+            if (icon) icon.textContent = _basicLightsMasterOn ? 'lightbulb' : 'light_off';
+            btn.classList.toggle('btn-warning', _basicLightsMasterOn);
+            btn.classList.toggle('btn-outline-secondary', !_basicLightsMasterOn);
+            await _sendBasicLights();
+        };
+
+        window.basicLightsColorChange = async function(value) {
+            _basicLightsColor = value;
+            const swatch = document.getElementById('basicLightsColorSwatch');
+            if (swatch) swatch.style.background = value;
+            if (_basicLightsMasterOn) await _sendBasicLights();
+        };
+
+        window.basicLightsBriChange = async function(value) {
+            _basicLightsBri = Number(value);
+            const label = document.getElementById('basicLightsBriLabel');
+            if (label) label.textContent = `${value}%`;
+            if (_basicLightsMasterOn) await _sendBasicLights();
+        };
+
+        window.basicLightsDiagStart = async function() {
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (!bleManager || !bleManager.isConnected) {
+                if (statusEl) statusEl.textContent = 'Not connected.';
+                return;
+            }
+            try {
+                _basicLightsMasterOn = false;
+                await bleManager.sendSystemCommand('lights_color_order', { order: 'rgb' });
+                await bleManager.sendSystemCommand('lights_diag', { on: true, intervalMs: 500 });
+                if (statusEl) statusEl.textContent = 'Diag running: RED -> GREEN -> BLUE -> WHITE -> OFF';
+                console.log('[BasicLights] Diag cycle started');
+            } catch (e) {
+                const msg = `Diag start failed: ${e?.message || e}`;
+                if (statusEl) statusEl.textContent = msg;
+                console.error('[BasicLights]', msg);
+            }
+        };
+
+        window.basicLightsDiagStop = async function() {
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (!bleManager || !bleManager.isConnected) {
+                if (statusEl) statusEl.textContent = 'Not connected.';
+                return;
+            }
+            try {
+                await bleManager.sendSystemCommand('lights_diag', { on: false });
+                await bleManager.sendSystemCommand('lights_basic', { on: false, r: 0, g: 0, b: 0, bri: 0 });
+                if (statusEl) statusEl.textContent = 'Diag stopped. Strip held OFF.';
+                console.log('[BasicLights] Diag cycle stopped');
+            } catch (e) {
+                const msg = `Diag stop failed: ${e?.message || e}`;
+                if (statusEl) statusEl.textContent = msg;
+                console.error('[BasicLights]', msg);
+            }
+        };
+
+        function _resetBasicLightsUI() {
+            _basicLightsMasterOn = false;
+            const btn = document.getElementById('basicLightsMasterToggle');
+            if (btn) {
+                btn.setAttribute('aria-pressed', 'false');
+                btn.classList.remove('btn-warning');
+                btn.classList.add('btn-outline-secondary');
+                const icon = btn.querySelector('.material-symbols-outlined');
+                if (icon) icon.textContent = 'light_off';
+            }
+            if (bleManager && bleManager.isConnected) {
+                bleManager.sendSystemCommand('lights_diag', { on: false }).catch(() => {});
+            }
+        }
+
+        // ==================== Master Light Switch ====================
 
         function syncMasterLightSwitches(isEnabled) {
             const masterToggle = document.getElementById('lightsToggle');
@@ -4690,6 +4991,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!isBleConnected()) {
                 // Startup and offline states can update local light groups before BLE is connected.
                 console.debug('[Lights] Skipping hardware sync: BLE not connected');
+                return;
+            }
+
+            if (!lightsWriteGateEnabled) {
+                console.debug('[Lights] applyLightsHierarchyToHardware: master gate closed, skipping');
                 return;
             }
 
@@ -6421,6 +6727,64 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             setDashboardQuickNavDisplay('activeDrivingProfileDisplay', p ? p.name : '--', 'driving');
         }
 
+        function syncDashboardForDrivingProfile(profileSnapshot = null) {
+            const snapshot = profileSnapshot || getActiveDrivingProfileConfigSnapshot();
+            if (!snapshot) return;
+
+            fullConfig = mergeConfigSnapshots(fullConfig, snapshot);
+            const tuningConfig = snapshot.tuning ? snapshot.tuning : snapshot;
+            updateSuspensionSettings(tuningConfig);
+
+            if (isBleConnected()) {
+                updateDashboardActiveProfile();
+            }
+        }
+
+        async function applyDrivingProfileSelection(profile, options = {}) {
+            const {
+                pushToDevice = isBleConnected(),
+                successMessage = null,
+                disconnectedMessage = null,
+                successStatus = null,
+                disconnectedStatus = null,
+                failureStatus = 'Status: push failed, values applied locally'
+            } = options;
+
+            const selectedProfileConfig = {
+                ...profile.tuning,
+                servos: profile.servos
+            };
+
+            isLoadingTuningConfig = true;
+            try {
+                fullConfig = mergeConfigSnapshots(fullConfig, selectedProfileConfig);
+                updateSuspensionSettings(profile.tuning);
+                updateServoSliders(selectedProfileConfig);
+                await new Promise(r => setTimeout(r, 50));
+                clearPageDirty('tuning');
+                clearPageDirty('servo');
+                clearPageDirty('system');
+            } finally {
+                isLoadingTuningConfig = false;
+            }
+
+            if (pushToDevice) {
+                await runDrivingProfileOperation('applying profile', async () => {
+                    try {
+                        await pushConfigPayload(selectedProfileConfig);
+                        if (successMessage) toast.success(successMessage);
+                        if (successStatus) setDrivingProfileStatus(successStatus, 'ok');
+                    } catch (e) {
+                        toast.warning(`Profile set locally. Push failed: ${e.message}`);
+                        setDrivingProfileStatus(failureStatus, 'warn');
+                    }
+                });
+            } else {
+                if (disconnectedMessage) toast.success(disconnectedMessage);
+                if (disconnectedStatus) setDrivingProfileStatus(disconnectedStatus, 'muted');
+            }
+        }
+
         function setDrivingProfileStatus(message, tone = 'muted') {
             const statusEl = document.getElementById('drvProfileStatus');
             if (!statusEl) return;
@@ -6636,37 +7000,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             activeDrivingProfileIndex = index;
             saveLocalDrivingProfiles();
             populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
-            updateDashboardActiveProfile();
+            syncDashboardForDrivingProfile(profile);
 
-            // Apply stored values to the slider UI.
-            isLoadingTuningConfig = true;
-            try {
-                updateTuningSliders(profile.tuning);
-                updateServoSliders({ servos: profile.servos });
-                await new Promise(r => setTimeout(r, 50));
-                clearPageDirty('tuning');
-                clearPageDirty('servo');
-                clearPageDirty('system');
-            } finally {
-                isLoadingTuningConfig = false;
-            }
-
-            // Push all values to the ESP32 if connected — same path as a manual slider commit.
-            if (isBleConnected()) {
-                await runDrivingProfileOperation('applying profile', async () => {
-                    try {
-                        await pushConfigPayload({ ...profile.tuning, servos: profile.servos });
-                        toast.success(`Loaded profile "${profile.name}"`);
-                        setDrivingProfileStatus(`Status: applied "${profile.name}"`, 'ok');
-                    } catch (e) {
-                        toast.warning(`Profile set locally. Push failed: ${e.message}`);
-                        setDrivingProfileStatus('Status: push failed, values applied locally', 'warn');
-                    }
-                });
-            } else {
-                toast.success(`Profile "${profile.name}" loaded. Connect to apply to truck.`);
-                setDrivingProfileStatus(`Status: "${profile.name}" loaded (not connected)`, 'muted');
-            }
+            await applyDrivingProfileSelection(profile, {
+                successMessage: `Loaded profile "${profile.name}"`,
+                disconnectedMessage: `Profile "${profile.name}" loaded. Connect to apply to truck.`,
+                successStatus: `Status: applied "${profile.name}"`,
+                disconnectedStatus: `Status: "${profile.name}" loaded (not connected)`
+            });
         }
 
         function showProfileNameDialog(existingName = '') {
@@ -6769,7 +7110,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             clearPageDirty('tuning');
             clearPageDirty('servo');
             populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
-            updateDashboardActiveProfile();
+            syncDashboardForDrivingProfile(snapshot);
             toast.success(`Saved profile "${profileName}"`);
             setDrivingProfileStatus(`Status: "${profileName}" saved`, 'ok');
         }
@@ -6791,6 +7132,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             saveLocalDrivingProfiles();
             clearPageDirty('tuning');
             clearPageDirty('servo');
+            syncDashboardForDrivingProfile(snapshot);
             toast.success(`Updated profile "${active.name}"`);
             setDrivingProfileStatus(`Status: "${active.name}" updated`, 'ok');
         }
@@ -6833,14 +7175,28 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             const wasActive = Number(activeDrivingProfileIndex) === Number(index);
             drivingProfiles = drivingProfiles.filter(p => Number(p.index) !== Number(index));
+            let nextActiveProfile = null;
             if (wasActive || !drivingProfiles.some(p => p.index === activeDrivingProfileIndex)) {
                 activeDrivingProfileIndex = drivingProfiles[0].index;
+                nextActiveProfile = drivingProfiles.find(p => Number(p.index) === Number(activeDrivingProfileIndex)) || null;
             }
             saveLocalDrivingProfiles();
             populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
-            updateDashboardActiveProfile();
-            toast.success('Profile deleted');
-            setDrivingProfileStatus('Status: profile deleted', 'ok');
+
+            if (nextActiveProfile) {
+                syncDashboardForDrivingProfile(nextActiveProfile);
+                await applyDrivingProfileSelection(nextActiveProfile, {
+                    successMessage: `Profile deleted. Loaded profile "${nextActiveProfile.name}"`,
+                    disconnectedMessage: `Profile deleted. "${nextActiveProfile.name}" is now active. Connect to apply to truck.`,
+                    successStatus: `Status: deleted profile, applied "${nextActiveProfile.name}"`,
+                    disconnectedStatus: `Status: deleted profile, "${nextActiveProfile.name}" active (not connected)`,
+                    failureStatus: 'Status: deleted profile, replacement applied locally only'
+                });
+            } else {
+                updateDashboardActiveProfile();
+                toast.success('Profile deleted');
+                setDrivingProfileStatus('Status: profile deleted', 'ok');
+            }
         }
 
         // Expose profile functions for HTML onclick / dev console
@@ -6921,6 +7277,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             const scope = options.scope || 'all';
+            const syncScopeLabel = (scope === 'bootstrap') ? 'startup' : scope;
+
+            // Keep the More > data cards explicit during BLE chunk assembly.
+            const configDataEl = document.getElementById('configData');
+            if (configDataEl && isBleConnected()) {
+                configDataEl.textContent = `Please wait - syncing ${syncScopeLabel} data from truck...`;
+            }
+
+            const appDataEl = document.getElementById('tuningConfigData');
+            if (appDataEl && isBleConnected()) {
+                appDataEl.textContent = 'Please wait - syncing and preparing local application data...';
+            }
+
             const applyNoVehiclePlaceholders = () => {
                 hasLoadedConfigFromDevice = false;
                 fullConfig = null;
@@ -6957,23 +7326,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     }
                 }
 
-                // Update suspension settings display
-                updateSuspensionSettings(data);
-
                 // Load settings into Settings page
                 loadSettingsFromConfig(data);
 
-                // Update tuning sliders from config data
-                updateTuningSliders(data);
-
-                // Update servo sliders from config data
-                updateServoSliders(data);
+                const localProfileSnapshot = getActiveDrivingProfileConfigSnapshot();
+                fullConfig = mergeConfigSnapshots(fullConfig, localProfileSnapshot);
+                updateSuspensionSettings(localProfileSnapshot);
+                updateTuningSliders(localProfileSnapshot);
+                updateServoSliders(localProfileSnapshot);
 
                 // Phase 3: Driving profiles are localStorage-only. Always refresh UI from local state.
-                if (data.act_drv_prof != null) {
-                    activeDrivingProfileIndex = Number(data.act_drv_prof);
-                }
-                if (scope === 'tuning' || scope === 'bootstrap' || Array.isArray(data.drv_profiles)) {
+                if (scope === 'tuning' || scope === 'bootstrap') {
                     populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
                     updateDashboardActiveProfile();
                 }
@@ -7006,10 +7369,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
                 if (scope === 'bootstrap') {
                     // Defer full tab hydration until the user opens a section.
-                    if (data.act_drv_prof != null) {
-                        activeDrivingProfileIndex = data.act_drv_prof;
-                        updateDashboardActiveProfile();
-                    }
+                    updateDashboardActiveProfile();
                     // Lighting profiles are localStorage-only — just refresh the display.
                     updateDashboardActiveLightingProfile();
                 }
@@ -7037,9 +7397,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             try {
                 communicationMode = 'ble';
-                const previousSavedState = bleManager?.lastKnownSavedState
-                    ? JSON.parse(JSON.stringify(bleManager.lastKnownSavedState))
-                    : null;
                 const scopeMap = {
                     bootstrap: 'bootstrap',
                     tuning: 'tuning',
@@ -7097,28 +7454,24 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     } catch (lightsIncrementalError) {
                         console.warn('[Lights] Incremental fetch failed, falling back to scoped lights read:', lightsIncrementalError);
                         bleData = (typeof bleManager.readConfigScoped === 'function')
-                            ? await bleManager.readConfigScoped(requestedScope)
+                            ? await bleManager.readConfigScoped(requestedScope, { onProgress: options.onProgress })
                             : await bleManager.readConfig();
                     }
                 } else {
                     bleData = (typeof bleManager.readConfigScoped === 'function')
-                        ? await bleManager.readConfigScoped(requestedScope)
+                        ? await bleManager.readConfigScoped(requestedScope, { onProgress: options.onProgress })
                         : await bleManager.readConfig();
                 }
                 let shouldClearDirtyOnSuccess = true;
 
-                const canEvaluateDirtyState = requestedScope === 'bootstrap';
-                const dirtyAndDifferent = canEvaluateDirtyState
-                    && hasAnyDirtyPages()
-                    && previousSavedState
-                    && !configsEqual(bleData, previousSavedState);
+                const dirtyAndDifferent = false;
 
                 if (dirtyAndDifferent) {
                     const shouldReapply = confirm('The truck rebooted. Re-apply unsaved changes?');
                     if (shouldReapply) {
                         await reapplyDirtyPagesToDevice();
                         const refreshed = (typeof bleManager.readConfigScoped === 'function')
-                            ? await bleManager.readConfigScoped(requestedScope)
+                            ? await bleManager.readConfigScoped(requestedScope, { onProgress: options.onProgress })
                             : await bleManager.readConfig();
                         applyLoadedConfig(refreshed);
                         bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, refreshed);
@@ -7136,7 +7489,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     clearAllDirtyPages();
                 }
                 applyFeatureAvailabilityGate();
-                updateDashboardVehicleName(getGarageVehicleNameById(bleManager?.deviceId));
+                refreshDashboardCurrentSettingsCard(getGarageVehicleNameById(bleManager?.deviceId));
             } catch (error) {
                 console.error('Failed to fetch config:', error);
                 const configData = document.getElementById('configData');

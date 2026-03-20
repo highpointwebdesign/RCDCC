@@ -639,6 +639,11 @@ LightingProfile* LightsEngine::getProfile() {
 void LightsEngine::setMaster(bool on) { _master = on; }
 bool LightsEngine::getMaster() const { return _master; }
 void LightsEngine::setColorOrderByName(const char* orderName) { _colorOrder = colorOrderFromString(orderName); }
+void LightsEngine::setBasicMode(bool on, uint8_t r, uint8_t g, uint8_t b, int count) {
+  // Write data fields before the mode flag so the task sees a consistent state.
+  _basicR = r; _basicG = g; _basicB = b; _basicCount = count;
+  _basicMode = on;
+}
 
 void LightsEngine::clearAllGroups(bool clearPixels) {
   if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(50)) != pdTRUE) return;
@@ -675,6 +680,18 @@ void LightsEngine::_task(void* arg) {
 }
 
 void LightsEngine::_tick() {
+  // Basic diagnostic mode: write solid colour directly, skip all group logic.
+  if (_basicMode) {
+    const int n = (_basicCount < 0) ? 0 : ((_basicCount > (int)_numLeds) ? (int)_numLeds : _basicCount);
+    const uint8_t r = _basicR, g = _basicG, b = _basicB;
+    for (int i = 0; i < (int)_numLeds; i++) {
+      if (i < n) _setPixelColorMapped(i, r, g, b);
+      else _strip.setPixelColor(i, 0);
+    }
+    _strip.show();
+    return;
+  }
+
   if (xSemaphoreTake(_mutex, 0) != pdTRUE) return;
 
   memset(_frameBuffer, 0, _numLeds * sizeof(uint32_t));

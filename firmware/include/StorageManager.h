@@ -1048,83 +1048,24 @@ public:
     String scope = rawScope;
     scope.toLowerCase();
 
-    auto writeServoCompact = [](JsonDocument& doc, const char* name, const RCDCCServoState& servo) {
-      JsonObject s = doc.createNestedObject(name);
-      s["trim"] = servo.trimUs;
-      s["min"] = servo.minUs;
-      s["max"] = servo.maxUs;
-      s["reverse"] = servo.reverse;
-      s["ride_ht"] = servo.rideHeight;
-    };
-
-    auto writeLegacyServos = [&](JsonDocument& doc) {
-      JsonObject servos = doc.createNestedObject("servos");
-      auto writeLegacyServo = [&](const char* key, const ServoCalibration& cal) {
-        JsonObject node = servos.createNestedObject(key);
-        node["trim"] = cal.trim;
-        node["min"] = cal.minLimit;
-        node["max"] = cal.maxLimit;
-        node["reversed"] = cal.reversed;
-      };
-
-      writeLegacyServo("frontLeft", legacyServoConfig.frontLeft);
-      writeLegacyServo("frontRight", legacyServoConfig.frontRight);
-      writeLegacyServo("rearLeft", legacyServoConfig.rearLeft);
-      writeLegacyServo("rearRight", legacyServoConfig.rearRight);
-    };
-
     if (scope == "bootstrap") {
       DynamicJsonDocument doc(768);
       doc["fw_version"] = state.system.firmwareVersion;
       doc["device_nm"] = state.system.deviceName;
-      doc["act_drv_prof"] = state.system.activeDrivingProfile;
+      doc["config_owner"] = "app";
+      doc["executor_mode"] = "kv_only";
       String out;
       serializeJson(doc, out);
       return out;
     }
 
     if (scope == "tuning") {
-      DynamicJsonDocument doc(4096);
-      writeServoCompact(doc, "srv_fl", state.servoFL);
-      writeServoCompact(doc, "srv_fr", state.servoFR);
-      writeServoCompact(doc, "srv_rl", state.servoRL);
-      writeServoCompact(doc, "srv_rr", state.servoRR);
-
-      JsonObject susp = doc.createNestedObject("suspension");
-      susp["damping"] = state.suspension.damping;
-      susp["stiffness"] = state.suspension.stiffness;
-      susp["react_spd"] = state.suspension.reactSpeed;
-      susp["fr_balance"] = state.suspension.frontRearBalance;
-
-      JsonObject imu = doc.createNestedObject("imu");
-      imu["orient"] = state.imu.orient;
-      imu["roll_trim"] = state.imu.rollTrim;
-      imu["pitch_trim"] = state.imu.pitchTrim;
-
-      // Legacy fields still used by existing UI bindings.
-      doc["reactionSpeed"] = legacyConfig.reactionSpeed;
-      doc["rideHeightOffset"] = legacyConfig.rideHeightOffset;
-      doc["damping"] = legacyConfig.damping;
-      doc["stiffness"] = legacyConfig.stiffness;
-      doc["frontRearBalance"] = legacyConfig.frontRearBalance;
-      doc["sampleRate"] = legacyConfig.sampleRate;
-      doc["telemetryRate"] = legacyConfig.telemetryRate;
-      doc["mpuOrientation"] = legacyConfig.mpuOrientation;
-      doc["deviceName"] = legacyConfig.deviceName;
+      DynamicJsonDocument doc(512);
+      doc["scope"] = "tuning";
+      doc["fw_version"] = state.system.firmwareVersion;
+      doc["config_owner"] = "app";
+      doc["executor_mode"] = "kv_only";
       doc["servo_count"] = 4 + servoRegistry.auxCount;
-      writeLegacyServos(doc);
-
-      int profileCount = 0;
-      JsonArray profilesArr = doc.createNestedArray("drv_profiles");
-      for (int i = 0; i < MAX_DRIVING_PROFILES; i++) {
-        if (!drivingProfiles[i].populated) continue;
-        JsonObject pe = profilesArr.createNestedObject();
-        pe["index"] = i;
-        pe["name"] = drivingProfiles[i].name;
-        profileCount++;
-      }
-      doc["drv_profile_count"] = profileCount;
-      doc["act_drv_prof"] = state.system.activeDrivingProfile;
 
       String out;
       serializeJson(doc, out);
@@ -1183,8 +1124,8 @@ public:
       JsonObject system = doc.createNestedObject("system");
       system["device_nm"] = state.system.deviceName;
       system["fw_version"] = state.system.firmwareVersion;
-      system["act_drv_prof"] = state.system.activeDrivingProfile;
-      system["act_lt_prof"] = state.system.activeLightingProfile;
+      system["config_owner"] = "app";
+      system["executor_mode"] = "kv_only";
 
       JsonObject srReg = doc.createNestedObject("servo_registry");
       srReg["count"] = 4 + servoRegistry.auxCount;
@@ -1205,7 +1146,7 @@ public:
       return out;
     }
 
-    return getConfigJSON(false);
+    return getScopedConfigJSON(String("bootstrap"));
   }
 
   void saveConfigFromJSON(const String& jsonStr) {

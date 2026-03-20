@@ -799,8 +799,65 @@
             padding: 0.55rem 0.7rem;
         }
 
+        .garage-card-menu .dropdown-item:active,
+        .garage-card-menu .dropdown-item:focus-visible {
+            background-color: var(--high-impact-color);
+            color: #000;
+        }
+
+        .garage-card-menu .dropdown-item.text-danger:active,
+        .garage-card-menu .dropdown-item.text-danger:focus-visible {
+            background-color: #dc2626;
+            color: #fff;
+        }
+
         .garage-card-menu .dropdown-item.text-danger {
             color: #dc2626;
+        }
+
+        .garage-sync-modal-content {
+            border-radius: 14px;
+            border: 1px solid #111;
+            overflow: hidden;
+            background: #0b0b0b;
+        }
+
+        .garage-sync-modal-header {
+            background: #000;
+            color: var(--high-impact-color);
+            border-bottom: 1px solid rgba(249, 194, 27, 0.35);
+        }
+
+        .garage-sync-modal-header .modal-title {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-weight: 700;
+        }
+
+        .garage-sync-modal-body {
+            color: #f3f4f6;
+            background: linear-gradient(180deg, #0e0e0e 0%, #151515 100%);
+        }
+
+        .garage-sync-status-text {
+            font-size: 0.92rem;
+            margin-bottom: 0.6rem;
+            color: #e5e7eb;
+        }
+
+        .garage-sync-progress-wrap {
+            height: 1.15rem;
+            border-radius: 999px;
+            background-color: #232323;
+            border: 1px solid #2f2f2f;
+        }
+
+        .garage-sync-progress-bar {
+            background: linear-gradient(90deg, #f9c21b 0%, #f6dd7a 100%);
+            color: #000;
+            font-weight: 700;
+            letter-spacing: 0.02em;
         }
 
         @media (max-width: 359px) {
@@ -971,16 +1028,30 @@
         /* Dashboard quick-nav elements */
         .dashboard-quick-nav-text {
             color: var(--text-muted);
-            text-decoration: underline dashed;
-            text-underline-offset: 4px;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.18rem;
+            line-height: 1.1;
+        }
+
+        .dashboard-quick-nav-text::after {
+            content: '';
+            display: block;
+            width: 100%;
+            min-width: 1.6rem;
+            border-bottom: 1px dashed rgba(173, 181, 189, 0.75);
         }
 
         .dashboard-quick-nav-text.dashboard-quick-nav-placeholder {
-            text-decoration: none;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             min-width: 1.5rem;
+        }
+
+        .dashboard-quick-nav-text.dashboard-quick-nav-placeholder::after {
+            display: none;
         }
 
         .dashboard-quick-nav-placeholder-icon {
@@ -2225,6 +2296,30 @@
         .footer-nav .material-symbols-outlined {
             font-size: 1.2rem;
             line-height: 1;
+        }
+
+        .footer-nav-icon-stack {
+            position: relative;
+            display: inline-flex;
+            width: 1.35rem;
+            height: 1.35rem;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .footer-nav-icon-stack .footer-nav-icon-primary {
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+
+        .footer-nav-icon-stack .footer-nav-icon-badge {
+            position: absolute;
+            top: -0.18rem;
+            right: -0.28rem;
+            font-size: 0.72rem;
+            line-height: 1;
+            background: #000;
+            border-radius: 50%;
         }
 
         .footer-nav button span:last-child {

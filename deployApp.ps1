@@ -1,3 +1,8 @@
+[CmdletBinding()]
+param(
+    [string]$TargetDevice
+)
+
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = "C:\Users\Savage Cat Racing\Documents\projects\ai-active-suspension-3"
@@ -12,13 +17,23 @@ Set-Location (Join-Path $projectRoot 'android')
 $apk = Join-Path $projectRoot 'android\app\build\outputs\apk\debug\app-debug.apk'
 $appId = 'com.rcdcc.app'
 
-# Install and launch on all connected devices
+# Install and launch on connected devices, or a specific target when requested.
 $allDeviceLines = adb devices | Select-String 'device$'
 if (-not $allDeviceLines) {
     Write-Warning "No ADB devices connected. Skipping install."
 } else {
-    foreach ($line in $allDeviceLines) {
-        $serial = ($line -split '\s+')[0].Trim()
+    $targetSerials = @($allDeviceLines | ForEach-Object {
+        ($_ -split '\s+')[0].Trim()
+    })
+
+    if ($TargetDevice) {
+        $targetSerials = @($targetSerials | Where-Object { $_ -eq $TargetDevice })
+        if (-not $targetSerials) {
+            throw "Requested target device '$TargetDevice' is not connected via ADB."
+        }
+    }
+
+    foreach ($serial in $targetSerials) {
         Write-Host "Installing on $serial ..."
         adb -s $serial install -r -d -t "$apk"
         adb -s $serial shell monkey -p $appId -c android.intent.category.LAUNCHER 1 | Out-Null
