@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.277';
+        const APP_VERSION = '1.1.279';
         const BUILD_DATE = '2026-03-22';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -1921,6 +1921,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const TRAIL_SESSION_STORAGE_KEY = 'trailSessionState';
         let gpsPollIntervalId = null;
         let trailSessionTimerId = null;
+        let trailBgWatcherId = null;
         const trailSessionState = {
             isRunning: false,
             elapsedMs: 0,
@@ -2111,6 +2112,66 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             persistTrailSessionState();
         }
 
+        // --- Background GPS tracking (screen-off support) -----------------------
+
+        function getBgGeoPlugin() {
+            return (window.Capacitor &&
+                window.Capacitor.Plugins &&
+                window.Capacitor.Plugins.BackgroundGeolocation) || null;
+        }
+
+        async function startTrailBgTracking() {
+            const BgGeo = getBgGeoPlugin();
+            if (!BgGeo) {
+                // Fallback: browser / dev environment — use one-shot GPS poll
+                captureGPSCoordinates();
+                return;
+            }
+            // Remove any stale watcher from a previous session
+            if (trailBgWatcherId !== null) {
+                try { await BgGeo.removeWatcher({ id: trailBgWatcherId }); } catch (_) {}
+                trailBgWatcherId = null;
+            }
+            try {
+                trailBgWatcherId = await BgGeo.addWatcher(
+                    {
+                        backgroundMessage: 'Trail session is actively tracking your route.',
+                        backgroundTitle: 'RCDCC Trail Tracker',
+                        requestPermissions: true,
+                        stale: false,
+                        distanceFilter: 5  // metres — avoid noise from GPS jitter
+                    },
+                    (location, error) => {
+                        if (error) {
+                            console.warn('BgGeo error:', error.message);
+                            return;
+                        }
+                        if (location) {
+                            recordTrailSessionGpsSample(
+                                location.latitude,
+                                location.longitude,
+                                location.altitude
+                            );
+                        }
+                    }
+                );
+            } catch (err) {
+                console.warn('startTrailBgTracking failed:', err);
+                // Fallback so distance still accumulates via regular poll
+                captureGPSCoordinates();
+            }
+        }
+
+        async function stopTrailBgTracking() {
+            const BgGeo = getBgGeoPlugin();
+            if (trailBgWatcherId !== null && BgGeo) {
+                try { await BgGeo.removeWatcher({ id: trailBgWatcherId }); } catch (_) {}
+                trailBgWatcherId = null;
+            }
+        }
+
+        // -------------------------------------------------------------------------
+
         function syncTrailSessionButtons() {
             const startBtn = document.getElementById('trailSessionStartBtn');
             const stopBtn = document.getElementById('trailSessionStopBtn');
@@ -2137,7 +2198,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 persistTrailSessionState();
             }, 1000);
 
-            captureGPSCoordinates();
+            startTrailBgTracking();
             updateTrailSessionDisplay();
             syncTrailSessionButtons();
             persistTrailSessionState();
@@ -2156,6 +2217,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 trailSessionTimerId = null;
             }
 
+            stopTrailBgTracking();
             updateTrailSessionDisplay();
             syncTrailSessionButtons();
             persistTrailSessionState();
@@ -2176,6 +2238,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 trailSessionTimerId = null;
             }
 
+            stopTrailBgTracking();
             updateTrailSessionDisplay();
             syncTrailSessionButtons();
             persistTrailSessionState();
@@ -2207,6 +2270,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     updateTrailSessionDisplay();
                     persistTrailSessionState();
                 }, 1000);
+                // Re-attach background location watcher on restore
+                startTrailBgTracking();
             }
 
             updateTrailSessionDisplay();
