@@ -58,7 +58,7 @@
             </div>
             
             <div class="header-actions">
-                <span class="material-symbols-outlined" title="Reset Gyro" id="setLevelBtn" role="button" tabindex="0" style="color: var(--high-impact-color); cursor: pointer; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center;">camera</span>
+                <span class="material-symbols-outlined" title="Reset Gyro" id="setLevelBtn" role="button" tabindex="0" style="color: var(--high-impact-color); cursor: pointer; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center;">tools_level</span>
                 <span class="material-symbols-outlined" id="wifiIcon" role="button" tabindex="0" style="cursor: pointer; font-size: 1.5rem; padding-left: 5px; display: inline-flex; align-items: center; justify-content: center;">bluetooth_disabled</span>
             </div>
         </div>
@@ -159,7 +159,7 @@
 
             <!-- Trail Session Card -->
             <div class="col-12 col-md-6 col-lg-4">
-                <div class="card" id="trailSessionCard">
+                <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                         <div>
                             <span class="material-symbols-outlined icon-danger">map</span>
@@ -167,31 +167,29 @@
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="trail-session-metrics">
-                            <div class="trail-session-row">
-                                <span>Distance</span>
-                                <span id="trailDistanceValue">1.4 mi</span>
-                            </div>
-                            <div class="trail-session-row">
-                                <span>Elev Gain</span>
-                                <span id="trailElevGainValue">+187 ft</span>
-                            </div>
-                            <div class="trail-session-row">
-                                <span>Elev Loss</span>
-                                <span id="trailElevLossValue">-94 ft</span>
-                            </div>
-                            <div class="trail-session-row">
-                                <span>Duration</span>
-                                <span id="trailDurationValue">0:42:18</span>
-                            </div>
-                            <div class="trail-session-row">
-                                <span>Avg Speed</span>
-                                <span id="trailAvgSpeedValue">2.1 mph</span>
-                            </div>
-                            <div class="trail-session-row">
-                                <span>Max Elevation</span>
-                                <span id="trailMaxElevationValue">1,847 ft</span>
-                            </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Distance</span>
+                            <span id="trailDistanceValue">-- mi</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Elev Gain</span>
+                            <span id="trailElevGainValue">-- ft</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Elev Loss</span>
+                            <span id="trailElevLossValue">-- ft</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Duration</span>
+                            <span id="trailDurationValue">--:--:--</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Avg Speed</span>
+                            <span id="trailAvgSpeedValue">-- mph</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-2">
+                            <span>Max Elevation</span>
+                            <span id="trailMaxElevationValue">-- ft</span>
                         </div>
                         <div class="trail-session-actions mt-3">
                             <button type="button" class="btn btn-sm btn-gold" id="trailSessionStartBtn">Start</button>
@@ -261,6 +259,29 @@
                     </div>
                 </div>
             </div> -->
+
+            <!-- Help: Dashboard Card -->
+            <div class="col-12">
+                <div class="card" id="dashboardHelpCard">
+                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="material-symbols-outlined" style="color: var(--danger);">help</span>
+                            Help: Dashboard
+                        </div>
+                        <span class="material-symbols-outlined icon-action" id="dashboardHelpChevron" title="Collapse help" onclick="toggleCardCollapse('dashboardHelpCard', 'dashboardHelpChevron', 'dashboardHelpCardCollapsed')">keyboard_arrow_down</span>
+                    </div>
+                    <div class="card-body">
+                        <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.85;">
+                            <li><strong>Roll/Pitch/GPS card:</strong> View live roll and pitch plus GPS coordinates (latitude, longitude, elevation, and accuracy). Use the satellite icon to manually refresh sensor values.</li>
+                            <li><strong>Current Settings card:</strong> See the active vehicle, driving profile, and current suspension tuning values at a glance before making changes.</li>
+                            <li><strong>Trail Session card:</strong> Track distance, elevation gain or loss, duration, average speed, and max elevation for your run.</li>
+                            <li><strong>Trail Session controls:</strong> Tap <em>Start</em> to begin logging, <em>Stop</em> to pause the session, and <em>Reset</em> to clear the metrics.</li>
+                            <li><strong>Top-right toolbar:</strong> Use the camera icon to trigger gyro reset or level capture, and use the Bluetooth icon to view connection state and open connection actions.</li>
+                            <li><strong>Bottom navigation:</strong> Jump quickly between Dashboard, Garage, Tuning, FPV, and More while staying connected to your selected vehicle.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
 
         </div>
         </section>

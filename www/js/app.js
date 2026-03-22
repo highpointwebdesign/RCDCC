@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.279';
+        const APP_VERSION = '1.1.297';
         const BUILD_DATE = '2026-03-22';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -3705,6 +3705,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             syncCardCollapseState('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed');
             syncCardCollapseState('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed');
             syncCardCollapseState('manageLightGroupsCard', 'manageLightGroupsChevron', 'manageLightGroupsCardCollapsed');
+            syncCardCollapseState('dashboardHelpCard', 'dashboardHelpChevron', 'dashboardHelpCardCollapsed');
 
             syncDrivingProfilesCardUI();
             syncLightingProfilesCardUI();
@@ -6544,6 +6545,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function updateConnectionStatus(connected) {
             const icon = document.getElementById('wifiIcon');
+            const cameraIcon = document.getElementById('setLevelBtn');
             if (!icon) return;
 
             const bleConnected = !!(bleManager && bleManager.getConnectionStatus && bleManager.getConnectionStatus());
@@ -6553,6 +6555,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 icon.classList.remove('connecting', 'disconnected');
                 icon.textContent = 'bluetooth_connected';
                 icon.style.color = 'var(--bluetooth-blue)';
+                if (cameraIcon) {
+                    cameraIcon.textContent = 'tools_level';
+                    cameraIcon.style.color = 'var(--high-impact-color)';
+                }
                 const status = document.getElementById('telemetryStatus');
                 if (status) status.textContent = 'Live';
                 // Sync the garage card to connected state immediately.
@@ -6570,6 +6576,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             icon.classList.add('disconnected');
             icon.textContent = 'bluetooth_disabled';
             icon.style.color = 'var(--text-muted)';
+            if (cameraIcon) {
+                cameraIcon.textContent = 'graphic_eq_off';
+                cameraIcon.style.color = 'var(--text-muted)';
+            }
             const status = document.getElementById('telemetryStatus');
             if (status) status.textContent = 'Inactive';
             updateDashboardVehicleName(null);
@@ -6586,17 +6596,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             // Only update the header icon when not already fully connected.
             const icon = document.getElementById('wifiIcon');
+            const cameraIcon = document.getElementById('setLevelBtn');
             if (!icon || isBleConnected()) return;
             if (active) {
                 icon.classList.remove('disconnected');
                 icon.classList.add('connecting');
                 icon.textContent = 'bluetooth_searching';
                 icon.style.color = 'var(--text-muted)';
+                if (cameraIcon) {
+                    cameraIcon.textContent = 'graphic_eq_off';
+                    cameraIcon.style.color = 'var(--text-muted)';
+                }
             } else {
                 icon.classList.remove('connecting');
                 icon.classList.add('disconnected');
                 icon.textContent = 'bluetooth_disabled';
                 icon.style.color = 'var(--text-muted)';
+                if (cameraIcon) {
+                    cameraIcon.textContent = 'graphic_eq_off';
+                    cameraIcon.style.color = 'var(--text-muted)';
+                }
             }
         }
 
