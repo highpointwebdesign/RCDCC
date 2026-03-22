@@ -57,8 +57,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.250';
-        const BUILD_DATE = '2026-03-20';
+        const APP_VERSION = '1.1.272';
+        const BUILD_DATE = '2026-03-22';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -173,13 +173,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function getActiveDrivingProfileConfigSnapshot() {
             const profile = (typeof getActiveDrivingProfile === 'function') ? getActiveDrivingProfile() : null;
-            if (!profile || !profile.tuning || !profile.servos) {
-                return captureCurrentSliderValues();
+            if (!profile || !profile.tuning) {
+                return captureCurrentTuningValues();
             }
-            return {
-                ...profile.tuning,
-                servos: profile.servos
-            };
+            return { ...profile.tuning };
         }
 
         function scheduleAutoPersistSave(reason = 'kv-update') {
@@ -240,10 +237,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             handle.modal.show();
         }
 
-        function hideGarageSyncModal() {
+        function hideGarageSyncModal(options = {}) {
+            const { force = false } = options;
             const handle = getGarageSyncModal();
             if (!handle) return;
             handle.modal.hide();
+
+            // Fallback: force cleanup if Bootstrap transition state gets stuck.
+            setTimeout(() => {
+                const modalEl = handle.modalEl;
+                if (!modalEl || (!force && !modalEl.classList.contains('show'))) return;
+
+                modalEl.classList.remove('show');
+                modalEl.style.display = 'none';
+                modalEl.removeAttribute('aria-modal');
+                modalEl.setAttribute('aria-hidden', 'true');
+
+                document.querySelectorAll('.modal-backdrop').forEach((el) => el.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('padding-right');
+            }, 320);
         }
 
         function updateVehicleQuickNav(sectionId = null) {
@@ -278,6 +291,22 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             setDashboardQuickNavDisplay('activeDrivingProfileDisplay', null, 'driving');
             setDashboardQuickNavDisplay('activeLightingProfileDisplay', null, 'lighting');
             updateDashboardVehicleName(null);
+
+            // Reset suspension settings card
+            const suspensionIds = ['rideHeightDisplay', 'dampingDisplay', 'stiffnessDisplay', 'frontRearBalanceDisplay'];
+            suspensionIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '--';
+            });
+            const badge = document.getElementById('reactionSpeedBadge');
+            if (badge) badge.textContent = '--';
+
+            // Reset roll/pitch/GPS card
+            const sensorIds = ['rollPitchRollValue', 'rollPitchPitchValue', 'latitude', 'longitude', 'elevation', 'accuracy'];
+            sensorIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '--';
+            });
         }
 
         function getPreferredReconnectDeviceId() {
@@ -676,6 +705,18 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const dot = document.getElementById(dotId);
             if (dot) dot.style.display = dirty ? 'inline' : 'none';
 
+            // Hardware Configuration Save button lives on the system card but should
+            // enable for both system and servo hardware edits.
+            if (pageKey === 'system' || pageKey === 'servo') {
+                const hardwareSaveBtn = document.getElementById('system-save-btn');
+                if (hardwareSaveBtn) {
+                    const hardwareDirty = isPageDirty('system') || isPageDirty('servo');
+                    hardwareSaveBtn.disabled = !hardwareDirty;
+                    hardwareSaveBtn.classList.toggle('btn-gold', hardwareDirty);
+                    hardwareSaveBtn.classList.toggle('btn-secondary', !hardwareDirty);
+                }
+            }
+
             if ((pageKey === 'tuning' || pageKey === 'servo') && typeof syncDrivingProfileActionButtons === 'function') {
                 syncDrivingProfileActionButtons();
             }
@@ -781,6 +822,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             try {
                 await bleManager.sendSaveCommandWithTimeout(3000);
                 clearPageDirty(pageKey);
+                if (pageKey === 'system') {
+                    // Hardware config Save persists both servo + system state.
+                    clearPageDirty('servo');
+                }
                 // App-owned model: use local state as the post-save baseline.
                 bleManager.lastKnownSavedState = mergeConfigSnapshots(bleManager.lastKnownSavedState, fullConfig || {});
 
@@ -923,7 +968,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     fullConfig = mergeConfigSnapshots(fullConfig, localProfileSnapshot);
                     updateSuspensionSettings(localProfileSnapshot);
                     updateTuningSliders(localProfileSnapshot);
-                    updateServoSliders(localProfileSnapshot);
                 }
 
                 const restoredLighting = loadLocalLightingProfiles();
@@ -934,7 +978,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
                 await loadLightGroups();
                 // Core/basic mode: always start with master lights OFF on connect.
-                setMasterLightsEnabled(false, false);
+                //  setMasterLightsEnabled(false, false);
                 lightingGroupsDirty = false;
                 syncLightingProfileActionButtons();
                 updateTotalLEDCountLabel();
@@ -958,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 applyFeatureAvailabilityGate();
 
                 // Core/basic mode: enforce OFF state after connect before any manual user toggle.
-                await setMasterLightsEnabled(false, true);
+                // await setMasterLightsEnabled(false, true);
                 lastPushedLightsColorOrder = null;
 
                 // Update basic lights test card status
@@ -977,7 +1021,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             } finally {
                 if (showSyncModal) {
                     updateGarageSyncProgress(100, 'Finalizing...');
-                    setTimeout(() => hideGarageSyncModal(), 180);
+                    await delayMs(220);
+                    hideGarageSyncModal({ force: true });
                 }
                 bleSyncInternalWritesAllowed = false;
                 bleSyncInProgress = false;
@@ -1439,7 +1484,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         // Phase 3: Driving profile state
         // Profiles are stored locally in localStorage — no firmware round-trips needed.
-        // Each profile: { index, name, tuning: {...}, servos: { frontLeft, frontRight, rearLeft, rearRight } }
+        // Each profile: { index, name, tuning: {...} }
         const DRIVING_PROFILES_STORAGE_KEY = 'rcdcc_driving_profiles_v2';
 
         function loadLocalDrivingProfiles() {
@@ -1470,22 +1515,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return drivingProfiles[0];
         }
 
-        function captureCurrentSliderValues() {
+        function captureCurrentTuningValues() {
             return {
-                tuning: {
-                    rideHeightOffset: tuningSliderValues.rideHeightOffset ?? 50,
-                    damping: tuningSliderValues.damping ?? 0.8,
-                    stiffness: tuningSliderValues.stiffness ?? 1.0,
-                    reactionSpeed: tuningSliderValues.reactionSpeed ?? 1.0,
-                    frontRearBalance: tuningSliderValues.frontRearBalance ?? 50,
-                    sampleRate: tuningSliderValues.sampleRate ?? 25
-                },
-                servos: {
-                    frontLeft:  { ...servoSliderValues.frontLeft },
-                    frontRight: { ...servoSliderValues.frontRight },
-                    rearLeft:   { ...servoSliderValues.rearLeft },
-                    rearRight:  { ...servoSliderValues.rearRight }
-                }
+                rideHeightOffset: tuningSliderValues.rideHeightOffset ?? 50,
+                damping: tuningSliderValues.damping ?? 0.8,
+                stiffness: tuningSliderValues.stiffness ?? 1.0,
+                reactionSpeed: tuningSliderValues.reactionSpeed ?? 1.0,
+                frontRearBalance: tuningSliderValues.frontRearBalance ?? 50,
+                sampleRate: tuningSliderValues.sampleRate ?? 25
             };
         }
 
@@ -1906,7 +1943,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const latEl = document.getElementById('latitude');
                 const lonEl = document.getElementById('longitude');
                 const accEl = document.getElementById('accuracy');
-                const altEl = document.getElementById('altitude');
+                const altEl = document.getElementById('elevation');
                 if (latEl) latEl.textContent = '--';
                 if (lonEl) lonEl.textContent = '--';
                 if (accEl) accEl.textContent = '--';
@@ -1920,27 +1957,28 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const lon = position.coords.longitude.toFixed(6);
                     const accMeters = position.coords.accuracy.toFixed(1);
                     const accFeet = (accMeters * 3.28084).toFixed(1);
-                    const altMeters = position.coords.altitude ? position.coords.altitude.toFixed(1) : null;
-                    const altFeet = altMeters ? (altMeters * 3.28084).toFixed(1) : 'N/A';
+                    const altitudeMeters = Number(position.coords.altitude);
+                    const hasAltitude = Number.isFinite(altitudeMeters);
+                    const altFeet = hasAltitude ? (altitudeMeters * 3.28084).toFixed(1) : null;
                     
                     const latEl = document.getElementById('latitude');
                     const lonEl = document.getElementById('longitude');
                     const accEl = document.getElementById('accuracy');
-                    const altEl = document.getElementById('altitude');
+                    const altEl = document.getElementById('elevation');
                     
                     if (latEl) latEl.textContent = lat + '°';
                     if (lonEl) lonEl.textContent = lon + '°';
                     if (accEl) accEl.textContent = '±' + accFeet + ' ft';
-                    if (altEl) altEl.textContent = altFeet + ' ft';
+                    if (altEl) altEl.textContent = hasAltitude ? (altFeet + ' ft') : '--';
                     
-                    console.log(`GPS captured: Lat ${lat}, Lon ${lon}, Acc ±${accFeet}ft, Alt ${altFeet}ft`);
+                    console.log(`GPS captured: Lat ${lat}, Lon ${lon}, Acc ±${accFeet}ft, Alt ${hasAltitude ? `${altFeet}ft` : 'N/A'}`);
                 },
                 error => {
                     console.warn('GPS capture failed:', error.message);
                     const latEl = document.getElementById('latitude');
                     const lonEl = document.getElementById('longitude');
                     const accEl = document.getElementById('accuracy');
-                    const altEl = document.getElementById('altitude');
+                    const altEl = document.getElementById('elevation');
                     if (latEl) latEl.innerHTML = '<span class="material-symbols-outlined">sync</span>';
                     if (lonEl) lonEl.innerHTML = '<span class="material-symbols-outlined">sync</span>';
                     if (accEl) accEl.innerHTML = '<span class="material-symbols-outlined">sync</span>';
@@ -3598,6 +3636,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             document.body.removeChild(textarea);
         }
 
+        function syncFooterNavActiveState(sectionId = null) {
+            const resolvedSection = sectionId
+                || document.querySelector('.page-section.active')?.id
+                || localStorage.getItem('currentPage')
+                || 'dashboard';
+
+            document.querySelectorAll('.footer-nav button').forEach((button) => {
+                const isActive = button.dataset.target === resolvedSection;
+                button.classList.toggle('active', isActive);
+                button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
+        }
+
         let ledColorDiagnosticInFlight = false;
 
         function setLedColorDiagnosticPreview(colorName = null) {
@@ -3750,9 +3801,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 }
             }
 
-            document.querySelectorAll('.footer-nav button').forEach(b => b.classList.remove('active'));
-            const navBtn = document.querySelector(`.footer-nav button[data-target="${targetSection}"]`);
-            if (navBtn) navBtn.classList.add('active');
+            syncFooterNavActiveState(targetSection);
             
             document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
             const section = document.getElementById(targetSection);
@@ -3777,9 +3826,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (willLoadTuningSection && profileList && profileList.children.length <= 1 && drivingProfiles.length === 0) {
                     profileList.innerHTML = '<div class="text-muted text-center py-2" style="font-size:0.875rem;">Loading profiles...</div>';
                 }
-                if (willLoadTuningSection && typeof setDrivingProfileStatus === 'function' && !drivingProfileBusy) {
-                    setDrivingProfileStatus('Status: loading profile data...', 'muted');
-                }
             }
 
             if (SECTION_LOAD_KEYS.includes(targetSection)) {
@@ -3787,11 +3833,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     console.warn(`Lazy load failed for ${targetSection}:`, error?.message || error);
                     if (targetSection === 'tuning') {
                         populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
-                        setDrivingProfileStatus('Status: failed to load profile data', 'warn');
                     }
                 });
             }
 
+            syncFooterNavActiveState(section?.id || targetSection);
             updateVehicleQuickNav(targetSection);
         }
 
@@ -3811,6 +3857,86 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 return;
             }
             await navigateToSection(targetSection);
+        }
+
+        function showDashboardDrivingProfilePicker() {
+            const selectableProfiles = drivingProfiles.filter((profile) => Number(profile.index) !== Number(activeDrivingProfileIndex) && profile.tuning);
+            if (selectableProfiles.length === 0) {
+                toast.info('No alternate driving profiles available.');
+                return Promise.resolve(null);
+            }
+
+            return new Promise((resolve) => {
+                const existing = document.getElementById('dashboard-driving-profile-picker');
+                if (existing) existing.remove();
+
+                const overlay = document.createElement('div');
+                overlay.id = 'dashboard-driving-profile-picker';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:calc(24px + env(safe-area-inset-top, 0px)) 20px 20px;';
+
+                const optionsHtml = selectableProfiles.map((profile) => `
+                    <button class="dashboard-profile-picker-option" data-profile-index="${profile.index}" style="display:block;width:100%;text-align:left;padding:12px 14px;margin-bottom:8px;border:1px solid #444;border-radius:10px;background:#2a2a2a;color:#fff;cursor:pointer;">
+                        <strong style="display:block;font-size:0.95rem;">${String(profile.name || 'Unnamed Profile').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</strong>
+                        <span style="display:block;color:#aaa;font-size:0.8rem;margin-top:4px;">Tap to apply this profile</span>
+                    </button>`).join('');
+
+                const activeProfile = getActiveDrivingProfile();
+                const activeName = activeProfile?.name || '--';
+
+                overlay.innerHTML = `
+                  <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:360px;width:100%;color:#fff;max-height:80vh;overflow-y:auto;box-sizing:border-box;">
+                    <h5 style="margin:0 0 8px;color:#f9c21b;"><span class="material-symbols-outlined" aria-hidden="true">sync</span> Switch Driving Profile</h5>
+                    <p style="margin:0 0 16px;color:#aaa;font-size:0.875rem;">Current profile: <strong style="color:#fff;">${String(activeName).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</strong></p>
+                    ${optionsHtml}
+                    <button id="dashboard-profile-picker-cancel" style="width:100%;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;margin-top:4px;">Cancel</button>
+                  </div>`;
+
+                const cleanup = (selectedIndex = null) => {
+                    document.removeEventListener('keydown', handleKeyDown);
+                    overlay.remove();
+                    resolve(selectedIndex);
+                };
+
+                const handleKeyDown = (event) => {
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        cleanup(null);
+                    }
+                };
+
+                overlay.addEventListener('click', (event) => {
+                    if (event.target === overlay) {
+                        cleanup(null);
+                    }
+                });
+
+                document.addEventListener('keydown', handleKeyDown);
+                document.body.appendChild(overlay);
+
+                overlay.querySelectorAll('.dashboard-profile-picker-option').forEach((button) => {
+                    button.addEventListener('click', () => cleanup(Number(button.dataset.profileIndex)));
+                });
+
+                const cancelBtn = overlay.querySelector('#dashboard-profile-picker-cancel');
+                if (cancelBtn) cancelBtn.addEventListener('click', () => cleanup(null));
+
+                const firstOption = overlay.querySelector('.dashboard-profile-picker-option');
+                if (firstOption) firstOption.focus();
+            });
+        }
+
+        async function handleDashboardDrivingProfilePickerNav(event) {
+            event?.preventDefault?.();
+            if (!isBleConnected()) {
+                toast.info('Connect to a vehicle first. Opening Garage.');
+                await navigateToSection('garage');
+                return;
+            }
+
+            const selectedIndex = await showDashboardDrivingProfilePicker();
+            if (selectedIndex == null) return;
+
+            await selectDrivingProfile(selectedIndex);
         }
 
         function bindDashboardCurrentSettingsQuickNav() {
@@ -3833,7 +3959,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             };
 
             bindNavBadge('activeVehicleDisplay', handleDashboardVehicleBadgeNav);
-            bindNavBadge('activeDrivingProfileDisplay', (event) => handleDashboardProfileBadgeNav(event, 'tuning'));
+            bindNavBadge('activeDrivingProfileDisplay', handleDashboardDrivingProfilePickerNav);
             bindNavBadge('activeLightingProfileDisplay', (event) => handleDashboardProfileBadgeNav(event, 'lights'));
         }
 
@@ -4801,7 +4927,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         return;
                     }
                     masterLightToggleInFlight = true;
-                    await setMasterLightsEnabled(!getMasterLightsEnabled(), true);
+                    // await setMasterLightsEnabled(!getMasterLightsEnabled(), true);
                 } catch (error) {
                     const msg = `Master switch click failed: ${String(error?.message || error)}`;
                     console.error(msg, error);
@@ -5068,7 +5194,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }));
 
             saveLightGroups(false);
-            setMasterLightsEnabled(masterStateBeforeModal, false);
+            //setMasterLightsEnabled(masterStateBeforeModal, false);
             applyLightsHierarchyToHardware();
 
             lightGroupsStateBeforeModal = null;
@@ -5990,7 +6116,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Load light groups and color presets
             await loadLightGroups();
             loadColorPresets();
-            setMasterLightsEnabled(getMasterLightsEnabled(), false);
+            // setMasterLightsEnabled(getMasterLightsEnabled(), false);
             applyLightsHierarchyToHardware();
 
             // Populate both profile selectors from localStorage on startup — no BLE needed.
@@ -6747,58 +6873,56 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 disconnectedMessage = null,
                 successStatus = null,
                 disconnectedStatus = null,
-                failureStatus = 'Status: push failed, values applied locally'
+                failureStatus = 'Status: push failed, values applied locally',
+                useGarageSyncModalForSwitch = false
             } = options;
 
             const selectedProfileConfig = {
-                ...profile.tuning,
-                servos: profile.servos
+                ...profile.tuning
             };
 
             isLoadingTuningConfig = true;
             try {
                 fullConfig = mergeConfigSnapshots(fullConfig, selectedProfileConfig);
                 updateSuspensionSettings(profile.tuning);
-                updateServoSliders(selectedProfileConfig);
                 await new Promise(r => setTimeout(r, 50));
                 clearPageDirty('tuning');
-                clearPageDirty('servo');
                 clearPageDirty('system');
             } finally {
                 isLoadingTuningConfig = false;
             }
 
             if (pushToDevice) {
-                await runDrivingProfileOperation('applying profile', async () => {
-                    try {
-                        await pushConfigPayload(selectedProfileConfig);
-                        if (successMessage) toast.success(successMessage);
-                        if (successStatus) setDrivingProfileStatus(successStatus, 'ok');
-                    } catch (e) {
-                        toast.warning(`Profile set locally. Push failed: ${e.message}`);
-                        setDrivingProfileStatus(failureStatus, 'warn');
+                if (useGarageSyncModalForSwitch) {
+                    showGarageSyncModal();
+                    updateGarageSyncProgress(20, `Applying profile "${profile.name}"...`);
+                }
+
+                try {
+                    await runDrivingProfileOperation('applying profile', async () => {
+                        try {
+                            await pushConfigPayload(selectedProfileConfig);
+                            if (successMessage) toast.success(successMessage);
+                            if (useGarageSyncModalForSwitch) {
+                                updateGarageSyncProgress(100, `Profile "${profile.name}" applied`);
+                            }
+                        } catch (e) {
+                            toast.warning(`Profile set locally. Push failed: ${e.message}`);
+                            if (useGarageSyncModalForSwitch) {
+                                updateGarageSyncProgress(100, 'Applied locally (device push failed)');
+                            }
+                        }
+                    }, { suppressStatus: useGarageSyncModalForSwitch });
+                } finally {
+                    if (useGarageSyncModalForSwitch) {
+                        await delayMs(220);
+                        hideGarageSyncModal({ force: true });
                     }
-                });
+                }
             } else {
                 if (disconnectedMessage) toast.success(disconnectedMessage);
-                if (disconnectedStatus) setDrivingProfileStatus(disconnectedStatus, 'muted');
-            }
-        }
 
-        function setDrivingProfileStatus(message, tone = 'muted') {
-            const statusEl = document.getElementById('drvProfileStatus');
-            if (!statusEl) return;
-            const showSpinner = tone === 'busy';
-            statusEl.innerHTML = showSpinner
-                ? `<small><span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${message}</small>`
-                : `<small>${message}</small>`;
-            statusEl.style.color = tone === 'warn'
-                ? '#f59e0b'
-                : tone === 'error'
-                    ? '#f87171'
-                    : tone === 'ok'
-                        ? '#4ade80'
-                        : '#aaa';
+            }
         }
 
         function delayMs(ms) {
@@ -6818,18 +6942,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             });
         }
 
-        function setDrivingProfileBusy(isBusy, context = '') {
+        function setDrivingProfileBusy(isBusy, context = '', options = {}) {
             drivingProfileBusy = !!isBusy;
             const saveBtn = document.getElementById('saveNewProfileBtn');
             if (saveBtn) {
                 saveBtn.disabled = drivingProfileBusy || drivingProfilesLocked;
             }
             syncDrivingProfileActionButtons();
-            if (drivingProfileBusy) {
-                setDrivingProfileStatus(`Status: syncing ${context || 'profile'}...`, 'busy');
-            } else {
-                setDrivingProfileStatus('Status: idle', 'muted');
-            }
         }
 
         // Refresh profile UI from local state (profiles are stored in localStorage, not on device).
@@ -6850,7 +6969,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!updateBtn) return;
 
             const activeProfile = getActiveDrivingProfile();
-            const showUpdate = !!activeProfile && (isPageDirty('tuning') || isPageDirty('servo'));
+            const showUpdate = !!activeProfile && isPageDirty('tuning');
             updateBtn.classList.toggle('profile-update-needs-save', showUpdate);
             updateBtn.disabled = !showUpdate || drivingProfileBusy || drivingProfilesLocked;
         }
@@ -6890,23 +7009,25 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             syncDrivingProfilesCardUI();
         }
 
-        async function runDrivingProfileOperation(context, action) {
+        async function runDrivingProfileOperation(context, action, options = {}) {
+            const { suppressStatus = false } = options;
             if (drivingProfileBusy) {
                 toast.info('A profile action is already in progress');
                 return null;
             }
 
-            setDrivingProfileBusy(true, context);
+            setDrivingProfileBusy(true, context, { suppressStatus });
             try {
                 const timeoutMs = String(context || '').includes('loading') ? 12000 : 9000;
                 return await withTimeout(Promise.resolve().then(() => action()), timeoutMs, `Profile ${context || 'operation'}`);
             } finally {
-                setDrivingProfileBusy(false);
-                populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+                setDrivingProfileBusy(false, '', { suppressStatus });
+                populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex, { suppressStatus });
             }
         }
 
-        function populateDrivingProfileSelector(profiles, activeIndex) {
+        function populateDrivingProfileSelector(profiles, activeIndex, options = {}) {
+            const { suppressStatus = false } = options;
             const container = document.getElementById('drvProfileList');
             if (!container) return;
             container.innerHTML = '';
@@ -6917,9 +7038,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 msg.style.fontSize = '0.875rem';
                 msg.textContent = 'No profiles saved yet';
                 container.appendChild(msg);
-                if (!drivingProfileBusy) {
-                    setDrivingProfileStatus('Status: no profiles found', 'warn');
-                }
                 syncDrivingProfilesCardUI();
                 return;
             }
@@ -6974,10 +7092,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (saveBtn) saveBtn.disabled = drivingProfileBusy || drivingProfilesLocked;
             syncDrivingProfileActionButtons();
 
-            if (!drivingProfileBusy) {
-                setDrivingProfileStatus('Status: ready', 'muted');
-            }
-
             syncDrivingProfilesCardUI();
         }
 
@@ -6991,7 +7105,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 toast.warning('Profile not found');
                 return;
             }
-            if (!profile.tuning || !profile.servos) {
+            if (!profile.tuning) {
                 toast.warning(`"${profile.name}" has no saved values yet. Update the profile first.`);
                 return;
             }
@@ -6999,14 +7113,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Update active index and persist immediately so UI reflects change even if BLE push fails.
             activeDrivingProfileIndex = index;
             saveLocalDrivingProfiles();
-            populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
+            populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex, { suppressStatus: true });
             syncDashboardForDrivingProfile(profile);
 
             await applyDrivingProfileSelection(profile, {
                 successMessage: `Loaded profile "${profile.name}"`,
                 disconnectedMessage: `Profile "${profile.name}" loaded. Connect to apply to truck.`,
                 successStatus: `Status: applied "${profile.name}"`,
-                disconnectedStatus: `Status: "${profile.name}" loaded (not connected)`
+                disconnectedStatus: `Status: "${profile.name}" loaded (not connected)`,
+                useGarageSyncModalForSwitch: true
             });
         }
 
@@ -7097,22 +7212,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             if (!profileName) return;
 
-            const snapshot = captureCurrentSliderValues();
+            const snapshot = captureCurrentTuningValues();
             const existingIdx = drivingProfiles.findIndex(p => Number(p.index) === Number(targetSlot));
             if (existingIdx >= 0) {
-                drivingProfiles[existingIdx] = { index: targetSlot, name: profileName, ...snapshot };
+                drivingProfiles[existingIdx] = { index: targetSlot, name: profileName, tuning: snapshot };
             } else {
-                drivingProfiles.push({ index: targetSlot, name: profileName, ...snapshot });
+                drivingProfiles.push({ index: targetSlot, name: profileName, tuning: snapshot });
                 drivingProfiles.sort((a, b) => a.index - b.index);
             }
             activeDrivingProfileIndex = targetSlot;
             saveLocalDrivingProfiles();
             clearPageDirty('tuning');
-            clearPageDirty('servo');
             populateDrivingProfileSelector(drivingProfiles, activeDrivingProfileIndex);
-            syncDashboardForDrivingProfile(snapshot);
+            syncDashboardForDrivingProfile({ tuning: snapshot });
             toast.success(`Saved profile "${profileName}"`);
-            setDrivingProfileStatus(`Status: "${profileName}" saved`, 'ok');
         }
 
         async function updateActiveDrivingProfile() {
@@ -7126,15 +7239,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 return;
             }
 
-            const snapshot = captureCurrentSliderValues();
+            const snapshot = captureCurrentTuningValues();
             const idx = drivingProfiles.indexOf(active);
-            drivingProfiles[idx] = { ...active, ...snapshot };
+            drivingProfiles[idx] = { ...active, tuning: snapshot };
             saveLocalDrivingProfiles();
             clearPageDirty('tuning');
-            clearPageDirty('servo');
-            syncDashboardForDrivingProfile(snapshot);
+            syncDashboardForDrivingProfile({ tuning: snapshot });
             toast.success(`Updated profile "${active.name}"`);
-            setDrivingProfileStatus(`Status: "${active.name}" updated`, 'ok');
         }
 
         async function confirmDeleteDrivingProfile(index) {
@@ -7195,7 +7306,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             } else {
                 updateDashboardActiveProfile();
                 toast.success('Profile deleted');
-                setDrivingProfileStatus('Status: profile deleted', 'ok');
             }
         }
 
@@ -7333,7 +7443,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 fullConfig = mergeConfigSnapshots(fullConfig, localProfileSnapshot);
                 updateSuspensionSettings(localProfileSnapshot);
                 updateTuningSliders(localProfileSnapshot);
-                updateServoSliders(localProfileSnapshot);
 
                 // Phase 3: Driving profiles are localStorage-only. Always refresh UI from local state.
                 if (scope === 'tuning' || scope === 'bootstrap') {
