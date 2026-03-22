@@ -1,6 +1,6 @@
 {
   "name": "rcdcc-app",
-  "version": "1.1.272",
+  "version": "1.1.279",
   "description": "R/C Dynamic Chassis Control - Native Android App",
   "main": "index.js",
   "scripts": {
@@ -10,6 +10,7 @@
     "run:android": "node build-version.js && npx cap run android"
   },
   "dependencies": {
+    "@capacitor-community/background-geolocation": "^1.2.26",
     "@capacitor-community/bluetooth-le": "^7.0.0",
     "@capacitor/android": "^7.0.0",
     "@capacitor/core": "^7.0.0",

@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.272';
+        const APP_VERSION = '1.1.279';
         const BUILD_DATE = '2026-03-22';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -1918,7 +1918,366 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         const GPS_POLL_INTERVAL_MS = 60000;
+        const TRAIL_SESSION_STORAGE_KEY = 'trailSessionState';
         let gpsPollIntervalId = null;
+        let trailSessionTimerId = null;
+        let trailBgWatcherId = null;
+        const trailSessionState = {
+            isRunning: false,
+            elapsedMs: 0,
+            startedAtMs: 0,
+            distanceMiles: 0,
+            elevationGainFt: 0,
+            elevationLossFt: 0,
+            maxElevationFt: null,
+            lastSample: null
+        };
+
+        function persistTrailSessionState() {
+            const snapshot = {
+                isRunning: !!trailSessionState.isRunning,
+                elapsedMs: Math.max(0, Number(trailSessionState.elapsedMs) || 0),
+                startedAtMs: Math.max(0, Number(trailSessionState.startedAtMs) || 0),
+                distanceMiles: Math.max(0, Number(trailSessionState.distanceMiles) || 0),
+                elevationGainFt: Math.max(0, Number(trailSessionState.elevationGainFt) || 0),
+                elevationLossFt: Math.max(0, Number(trailSessionState.elevationLossFt) || 0),
+                maxElevationFt: Number.isFinite(Number(trailSessionState.maxElevationFt))
+                    ? Number(trailSessionState.maxElevationFt)
+                    : null,
+                lastSample: trailSessionState.lastSample
+                    ? {
+                        latitude: Number(trailSessionState.lastSample.latitude),
+                        longitude: Number(trailSessionState.lastSample.longitude),
+                        altitudeFeet: Number.isFinite(Number(trailSessionState.lastSample.altitudeFeet))
+                            ? Number(trailSessionState.lastSample.altitudeFeet)
+                            : null,
+                        timestampMs: Math.max(0, Number(trailSessionState.lastSample.timestampMs) || 0)
+                    }
+                    : null
+            };
+
+            writeVehicleScopedStorage(TRAIL_SESSION_STORAGE_KEY, JSON.stringify(snapshot));
+        }
+
+        function restoreTrailSessionState() {
+            const raw = readVehicleScopedStorage(TRAIL_SESSION_STORAGE_KEY, { migrateLegacy: false });
+            if (!raw) return;
+
+            try {
+                const parsed = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object') return;
+
+                trailSessionState.isRunning = !!parsed.isRunning;
+                trailSessionState.elapsedMs = Math.max(0, Number(parsed.elapsedMs) || 0);
+                trailSessionState.startedAtMs = Math.max(0, Number(parsed.startedAtMs) || 0);
+                trailSessionState.distanceMiles = Math.max(0, Number(parsed.distanceMiles) || 0);
+                trailSessionState.elevationGainFt = Math.max(0, Number(parsed.elevationGainFt) || 0);
+                trailSessionState.elevationLossFt = Math.max(0, Number(parsed.elevationLossFt) || 0);
+                trailSessionState.maxElevationFt = Number.isFinite(Number(parsed.maxElevationFt))
+                    ? Number(parsed.maxElevationFt)
+                    : null;
+
+                const restoredSample = parsed.lastSample && typeof parsed.lastSample === 'object'
+                    ? {
+                        latitude: Number(parsed.lastSample.latitude),
+                        longitude: Number(parsed.lastSample.longitude),
+                        altitudeFeet: Number.isFinite(Number(parsed.lastSample.altitudeFeet))
+                            ? Number(parsed.lastSample.altitudeFeet)
+                            : null,
+                        timestampMs: Math.max(0, Number(parsed.lastSample.timestampMs) || 0)
+                    }
+                    : null;
+
+                trailSessionState.lastSample = (restoredSample
+                    && Number.isFinite(restoredSample.latitude)
+                    && Number.isFinite(restoredSample.longitude))
+                    ? restoredSample
+                    : null;
+
+                if (trailSessionState.isRunning && trailSessionState.startedAtMs <= 0) {
+                    trailSessionState.startedAtMs = Date.now();
+                }
+            } catch (error) {
+                console.warn('Failed to restore trail session state:', error?.message || error);
+            }
+        }
+
+        function formatTrailDuration(totalMs) {
+            const safeMs = Math.max(0, Number(totalMs) || 0);
+            const totalSeconds = Math.floor(safeMs / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function getTrailSessionElapsedMs() {
+            const runningElapsed = trailSessionState.isRunning
+                ? Math.max(0, Date.now() - trailSessionState.startedAtMs)
+                : 0;
+            return Math.max(0, trailSessionState.elapsedMs + runningElapsed);
+        }
+
+        function formatTrailDistance(miles) {
+            return `${Math.max(0, Number(miles) || 0).toFixed(1)} mi`;
+        }
+
+        function formatTrailFeet(feet, options = {}) {
+            const value = Math.max(0, Number(feet) || 0);
+            const rounded = Math.round(value).toLocaleString();
+            if (options.signed === true) {
+                return `${options.positivePrefix || '+'}${rounded} ft`;
+            }
+            return `${rounded} ft`;
+        }
+
+        function updateTrailSessionStatsDisplay() {
+            const distanceEl = document.getElementById('trailDistanceValue');
+            const gainEl = document.getElementById('trailElevGainValue');
+            const lossEl = document.getElementById('trailElevLossValue');
+            const avgSpeedEl = document.getElementById('trailAvgSpeedValue');
+            const maxElevationEl = document.getElementById('trailMaxElevationValue');
+
+            const elapsedMs = getTrailSessionElapsedMs();
+            const elapsedHours = elapsedMs / 3600000;
+            const avgSpeed = elapsedHours > 0
+                ? trailSessionState.distanceMiles / elapsedHours
+                : 0;
+
+            if (distanceEl) distanceEl.textContent = formatTrailDistance(trailSessionState.distanceMiles);
+            if (gainEl) gainEl.textContent = formatTrailFeet(trailSessionState.elevationGainFt, { signed: true, positivePrefix: '+' });
+            if (lossEl) lossEl.textContent = formatTrailFeet(trailSessionState.elevationLossFt, { signed: true, positivePrefix: '-' });
+            if (avgSpeedEl) avgSpeedEl.textContent = `${Math.max(0, avgSpeed).toFixed(1)} mph`;
+            if (maxElevationEl) {
+                maxElevationEl.textContent = Number.isFinite(trailSessionState.maxElevationFt)
+                    ? formatTrailFeet(trailSessionState.maxElevationFt)
+                    : '--';
+            }
+        }
+
+        function updateTrailSessionDurationDisplay() {
+            const durationEl = document.getElementById('trailDurationValue');
+            if (!durationEl) return;
+            durationEl.textContent = formatTrailDuration(getTrailSessionElapsedMs());
+        }
+
+        function updateTrailSessionDisplay() {
+            updateTrailSessionDurationDisplay();
+            updateTrailSessionStatsDisplay();
+        }
+
+        function recordTrailSessionGpsSample(latitude, longitude, altitudeMeters) {
+            if (!trailSessionState.isRunning) return;
+
+            const lat = Number(latitude);
+            const lon = Number(longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+            const altitudeFeet = Number.isFinite(Number(altitudeMeters))
+                ? (Number(altitudeMeters) * 3.28084)
+                : null;
+
+            const sample = {
+                latitude: lat,
+                longitude: lon,
+                altitudeFeet,
+                timestampMs: Date.now()
+            };
+
+            const prev = trailSessionState.lastSample;
+            if (prev) {
+                const distanceDelta = haversineDistance(prev.latitude, prev.longitude, sample.latitude, sample.longitude);
+                if (Number.isFinite(distanceDelta) && distanceDelta > 0) {
+                    trailSessionState.distanceMiles += distanceDelta;
+                }
+
+                if (Number.isFinite(prev.altitudeFeet) && Number.isFinite(sample.altitudeFeet)) {
+                    const elevationDelta = sample.altitudeFeet - prev.altitudeFeet;
+                    if (elevationDelta > 0) {
+                        trailSessionState.elevationGainFt += elevationDelta;
+                    } else if (elevationDelta < 0) {
+                        trailSessionState.elevationLossFt += Math.abs(elevationDelta);
+                    }
+                }
+            }
+
+            if (Number.isFinite(sample.altitudeFeet)) {
+                trailSessionState.maxElevationFt = Number.isFinite(trailSessionState.maxElevationFt)
+                    ? Math.max(trailSessionState.maxElevationFt, sample.altitudeFeet)
+                    : sample.altitudeFeet;
+            }
+
+            trailSessionState.lastSample = sample;
+            updateTrailSessionDisplay();
+            persistTrailSessionState();
+        }
+
+        // --- Background GPS tracking (screen-off support) -----------------------
+
+        function getBgGeoPlugin() {
+            return (window.Capacitor &&
+                window.Capacitor.Plugins &&
+                window.Capacitor.Plugins.BackgroundGeolocation) || null;
+        }
+
+        async function startTrailBgTracking() {
+            const BgGeo = getBgGeoPlugin();
+            if (!BgGeo) {
+                // Fallback: browser / dev environment — use one-shot GPS poll
+                captureGPSCoordinates();
+                return;
+            }
+            // Remove any stale watcher from a previous session
+            if (trailBgWatcherId !== null) {
+                try { await BgGeo.removeWatcher({ id: trailBgWatcherId }); } catch (_) {}
+                trailBgWatcherId = null;
+            }
+            try {
+                trailBgWatcherId = await BgGeo.addWatcher(
+                    {
+                        backgroundMessage: 'Trail session is actively tracking your route.',
+                        backgroundTitle: 'RCDCC Trail Tracker',
+                        requestPermissions: true,
+                        stale: false,
+                        distanceFilter: 5  // metres — avoid noise from GPS jitter
+                    },
+                    (location, error) => {
+                        if (error) {
+                            console.warn('BgGeo error:', error.message);
+                            return;
+                        }
+                        if (location) {
+                            recordTrailSessionGpsSample(
+                                location.latitude,
+                                location.longitude,
+                                location.altitude
+                            );
+                        }
+                    }
+                );
+            } catch (err) {
+                console.warn('startTrailBgTracking failed:', err);
+                // Fallback so distance still accumulates via regular poll
+                captureGPSCoordinates();
+            }
+        }
+
+        async function stopTrailBgTracking() {
+            const BgGeo = getBgGeoPlugin();
+            if (trailBgWatcherId !== null && BgGeo) {
+                try { await BgGeo.removeWatcher({ id: trailBgWatcherId }); } catch (_) {}
+                trailBgWatcherId = null;
+            }
+        }
+
+        // -------------------------------------------------------------------------
+
+        function syncTrailSessionButtons() {
+            const startBtn = document.getElementById('trailSessionStartBtn');
+            const stopBtn = document.getElementById('trailSessionStopBtn');
+
+            if (startBtn) {
+                startBtn.disabled = trailSessionState.isRunning;
+                startBtn.setAttribute('aria-disabled', trailSessionState.isRunning ? 'true' : 'false');
+            }
+            if (stopBtn) {
+                stopBtn.disabled = !trailSessionState.isRunning;
+                stopBtn.setAttribute('aria-disabled', trailSessionState.isRunning ? 'false' : 'true');
+            }
+        }
+
+        function startTrailSession() {
+            if (trailSessionState.isRunning) return;
+            trailSessionState.isRunning = true;
+            trailSessionState.startedAtMs = Date.now();
+            trailSessionState.lastSample = null;
+
+            if (trailSessionTimerId) clearInterval(trailSessionTimerId);
+            trailSessionTimerId = setInterval(() => {
+                updateTrailSessionDisplay();
+                persistTrailSessionState();
+            }, 1000);
+
+            startTrailBgTracking();
+            updateTrailSessionDisplay();
+            syncTrailSessionButtons();
+            persistTrailSessionState();
+        }
+
+        function stopTrailSession() {
+            if (!trailSessionState.isRunning) return;
+
+            trailSessionState.elapsedMs += Math.max(0, Date.now() - trailSessionState.startedAtMs);
+            trailSessionState.startedAtMs = 0;
+            trailSessionState.isRunning = false;
+            trailSessionState.lastSample = null;
+
+            if (trailSessionTimerId) {
+                clearInterval(trailSessionTimerId);
+                trailSessionTimerId = null;
+            }
+
+            stopTrailBgTracking();
+            updateTrailSessionDisplay();
+            syncTrailSessionButtons();
+            persistTrailSessionState();
+        }
+
+        function resetTrailSession() {
+            trailSessionState.elapsedMs = 0;
+            trailSessionState.startedAtMs = 0;
+            trailSessionState.isRunning = false;
+            trailSessionState.distanceMiles = 0;
+            trailSessionState.elevationGainFt = 0;
+            trailSessionState.elevationLossFt = 0;
+            trailSessionState.maxElevationFt = null;
+            trailSessionState.lastSample = null;
+
+            if (trailSessionTimerId) {
+                clearInterval(trailSessionTimerId);
+                trailSessionTimerId = null;
+            }
+
+            stopTrailBgTracking();
+            updateTrailSessionDisplay();
+            syncTrailSessionButtons();
+            persistTrailSessionState();
+        }
+
+        function bindTrailSessionControls() {
+            const startBtn = document.getElementById('trailSessionStartBtn');
+            const stopBtn = document.getElementById('trailSessionStopBtn');
+            const resetBtn = document.getElementById('trailSessionResetBtn');
+
+            if (startBtn && startBtn.dataset.bound !== 'true') {
+                startBtn.dataset.bound = 'true';
+                startBtn.addEventListener('click', startTrailSession);
+            }
+            if (stopBtn && stopBtn.dataset.bound !== 'true') {
+                stopBtn.dataset.bound = 'true';
+                stopBtn.addEventListener('click', stopTrailSession);
+            }
+            if (resetBtn && resetBtn.dataset.bound !== 'true') {
+                resetBtn.dataset.bound = 'true';
+                resetBtn.addEventListener('click', resetTrailSession);
+            }
+
+            restoreTrailSessionState();
+
+            if (trailSessionState.isRunning) {
+                if (trailSessionTimerId) clearInterval(trailSessionTimerId);
+                trailSessionTimerId = setInterval(() => {
+                    updateTrailSessionDisplay();
+                    persistTrailSessionState();
+                }, 1000);
+                // Re-attach background location watcher on restore
+                startTrailBgTracking();
+            }
+
+            updateTrailSessionDisplay();
+            syncTrailSessionButtons();
+            persistTrailSessionState();
+        }
 
         function setButtonBusy(button, busyText) {
             if (!button) return;
@@ -1953,8 +2312,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             navigator.geolocation.getCurrentPosition(
                 position => {
-                    const lat = position.coords.latitude.toFixed(6);
-                    const lon = position.coords.longitude.toFixed(6);
+                    const latNum = Number(position.coords.latitude);
+                    const lonNum = Number(position.coords.longitude);
+                    const lat = latNum.toFixed(6);
+                    const lon = lonNum.toFixed(6);
                     const accMeters = position.coords.accuracy.toFixed(1);
                     const accFeet = (accMeters * 3.28084).toFixed(1);
                     const altitudeMeters = Number(position.coords.altitude);
@@ -1970,6 +2331,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     if (lonEl) lonEl.textContent = lon + '°';
                     if (accEl) accEl.textContent = '±' + accFeet + ' ft';
                     if (altEl) altEl.textContent = hasAltitude ? (altFeet + ' ft') : '--';
+
+                    recordTrailSessionGpsSample(latNum, lonNum, altitudeMeters);
                     
                     console.log(`GPS captured: Lat ${lat}, Lon ${lon}, Acc ±${accFeet}ft, Alt ${hasAltitude ? `${altFeet}ft` : 'N/A'}`);
                 },
@@ -3514,6 +3877,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     fetchRollPitchSnapshot();
                 });
             }
+
+            bindTrailSessionControls();
 
             // ==================== Light Hierarchy Controls ====================
             const lightsToggle = document.getElementById('lightsToggle');

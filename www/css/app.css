@@ -972,6 +972,48 @@
             cursor: not-allowed;
         }
 
+        .trail-session-metrics {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .trail-session-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.95rem;
+        }
+
+        .trail-session-row span:first-child {
+            color: var(--text-primary);
+            /* font-weight: 600; */
+        }
+
+        .trail-session-row span:last-child {
+            color: #0f172a;
+            /* font-weight: 700; */
+            letter-spacing: 0.01em;
+        }
+
+        .trail-session-actions {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.5rem;
+        }
+
+        .trail-session-actions .btn {
+            /* font-weight: 700; */
+            letter-spacing: 0.01em;
+        }
+
+        #trailSessionStartBtn{
+            background-color: var(--high-impact-color);
+            border-color: var(--high-impact-color);
+            color: #000;
+            font-weight: bold;
+        }
+
         /* Dashboard BLE-disconnected muted state */
         .ble-data-off span,
         .ble-data-off small {

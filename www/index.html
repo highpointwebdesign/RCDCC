@@ -156,6 +156,51 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Trail Session Card -->
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card" id="trailSessionCard">
+                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                        <div>
+                            <span class="material-symbols-outlined icon-danger">map</span>
+                            Trail Session
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="trail-session-metrics">
+                            <div class="trail-session-row">
+                                <span>Distance</span>
+                                <span id="trailDistanceValue">1.4 mi</span>
+                            </div>
+                            <div class="trail-session-row">
+                                <span>Elev Gain</span>
+                                <span id="trailElevGainValue">+187 ft</span>
+                            </div>
+                            <div class="trail-session-row">
+                                <span>Elev Loss</span>
+                                <span id="trailElevLossValue">-94 ft</span>
+                            </div>
+                            <div class="trail-session-row">
+                                <span>Duration</span>
+                                <span id="trailDurationValue">0:42:18</span>
+                            </div>
+                            <div class="trail-session-row">
+                                <span>Avg Speed</span>
+                                <span id="trailAvgSpeedValue">2.1 mph</span>
+                            </div>
+                            <div class="trail-session-row">
+                                <span>Max Elevation</span>
+                                <span id="trailMaxElevationValue">1,847 ft</span>
+                            </div>
+                        </div>
+                        <div class="trail-session-actions mt-3">
+                            <button type="button" class="btn btn-sm btn-gold" id="trailSessionStartBtn">Start</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="trailSessionStopBtn">Stop</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="trailSessionResetBtn">Reset</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         
             <!-- Connection Card (temporarily disabled)
             <div class="col-12 col-md-6 col-lg-4">
