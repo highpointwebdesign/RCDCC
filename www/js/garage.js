@@ -646,7 +646,7 @@ const GarageManager = (() => {
                         <ul class="dropdown-menu dropdown-menu-end garage-card-menu" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                             ${isConnected
                                 ? `<li>
-                                    <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.disconnectConnectedVehicle()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                    <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.toggleVehicleConnection('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                         Disconnect
                                     </button>
                                 </li>`
@@ -678,14 +678,15 @@ const GarageManager = (() => {
                                     Rename
                                 </button>
                             </li>
+                             <li>
+                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleAbout('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                    About
+                                </button>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
                             <li>
                                 <button type="button" class="dropdown-item text-danger" onclick="event.stopPropagation(); GarageManager.confirmDeleteVehicle('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     Delete
-                                </button>
-                            </li>
-                            <li>
-                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleAbout('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    About
                                 </button>
                             </li>
                         </ul>
