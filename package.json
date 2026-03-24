@@ -1,6 +1,6 @@
 {
   "name": "rcdcc-app",
-  "version": "1.1.364",
+  "version": "1.1.383",
   "description": "R/C Dynamic Chassis Control - Native Android App",
   "main": "index.js",
   "scripts": {

@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.364';
+        const APP_VERSION = '1.1.383';
         const BUILD_DATE = '2026-03-24';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -3050,20 +3050,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             if (abbrev) {
                 const trimSliderId = `servo${abbrev}TrimSlider`;
-                const trimDisplay = document.getElementById(`servo${abbrev}TrimDisplay`);
                 
                 if (rSliders[trimSliderId]) {
                     const trimOffset = value;
                     
-                    // Update slider (this will trigger the display update via the 'update' event)
+                    // Update slider and keep thumb label as the visible trim value.
                     console.log(`Updating ${servo} trim slider: offset=${trimOffset}`);
                     setRSliderValue(trimSliderId, formatSliderValue(trimOffset), { silent: true });
-                    
-                    // Also manually update the display in case the event doesn't fire
-                    if (trimDisplay) {
-                        const roundedOffset = Math.round(trimOffset);
-                        trimDisplay.textContent = roundedOffset >= 0 ? `+${roundedOffset}°` : `${roundedOffset}°`;
-                    }
                 } else {
                     console.warn(`Trim slider not found or not initialized: servo${abbrev}TrimSlider`);
                 }
@@ -7871,11 +7864,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     if (el) el.textContent = value;
                 });
 
-                ['servoFLTrimDisplay', 'servoFRTrimDisplay', 'servoRLTrimDisplay', 'servoRRTrimDisplay'].forEach((id) => {
-                    const el = document.getElementById(id);
-                    if (el) el.textContent = '--';
-                });
-
                 clearDashboardActiveStatus();
             };
 
@@ -8392,7 +8380,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 value: [0, 50],
                 min: 0,
                 max: 100,
-                step: 2,
+                step: 1,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -8403,6 +8391,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         markPageDirty('tuning');
                         tuningSliderPendingSave.rideHeight = true;
                     }
+                    syncTuningStepperButtons();
                 }
             });
             tuningSliderInstances.rideHeight = { element: rideHeightElement, instance: rideHeightInstance };
@@ -8415,7 +8404,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 value: [0.1, 0.8],
                 min: 0.1,
                 max: 2.0,
-                step: 0.2,
+                step: 0.1,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -8425,6 +8414,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         markPageDirty('tuning');
                         tuningSliderPendingSave.damping = true;
                     }
+                    syncTuningStepperButtons();
                 }
             });
             tuningSliderInstances.damping = { element: dampingElement, instance: dampingInstance };
@@ -8437,7 +8427,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 value: [0.5, 1.0],
                 min: 0.5,
                 max: 3.0,
-                step: 0.2,
+                step: 0.1,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -8447,6 +8437,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         markPageDirty('tuning');
                         tuningSliderPendingSave.stiffness = true;
                     }
+                    syncTuningStepperButtons();
                 }
             });
             tuningSliderInstances.stiffness = { element: stiffnessElement, instance: stiffnessInstance };
@@ -8459,7 +8450,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 value: [0.1, 1.0],
                 min: 0.1,
                 max: 5.0,
-                step: 0.2,
+                step: 0.1,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -8469,6 +8460,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         markPageDirty('tuning');
                         tuningSliderPendingSave.reactionSpeed = true;
                     }
+                    syncTuningStepperButtons();
                 }
             });
             tuningSliderInstances.reactionSpeed = { element: reactionElement, instance: reactionInstance };
@@ -8481,7 +8473,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 value: [0, 50],
                 min: 0,
                 max: 100,
-                step: 2,
+                step: 1,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -8491,11 +8483,50 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         markPageDirty('tuning');
                         tuningSliderPendingSave.balance = true;
                     }
+                    syncTuningStepperButtons();
                 }
             });
             tuningSliderInstances.balance = { element: balanceElement, instance: balanceInstance };
             updateTuningThumbLabel('sliderBalance', 50, 0);
             attachReleaseSaveHandler(balanceElement, 'balance');
+
+            function setTuningSliderElementValue(sliderKey, minVal, newValue) {
+                const store = tuningSliderInstances[sliderKey];
+                if (!store || !store.element || !store.instance) return;
+
+                const normalizedValue = normalizeTuningStepperValue(sliderKey, newValue);
+                const inputs = store.element.querySelectorAll('input[type="range"]');
+                if (inputs.length >= 2) {
+                    inputs[0].value = minVal;
+                    inputs[1].value = normalizedValue;
+                }
+
+                store.instance.value([minVal, normalizedValue]);
+                store.element.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            function bindTuningStepperButtons() {
+                document.querySelectorAll('.slider-stepper-control[data-slider-key]').forEach(control => {
+                    if (control.dataset.bound === 'true') return;
+                    control.dataset.bound = 'true';
+
+                    const sliderKey = control.dataset.sliderKey;
+                    const config = tuningStepperConfigs[sliderKey];
+                    if (!config) return;
+
+                    control.querySelectorAll('.slider-stepper-btn').forEach(button => {
+                        button.addEventListener('click', () => {
+                            if (tuningSliderLocks[sliderKey] || localStorage.getItem('tuningParametersLocked') === 'true') return;
+                            const current = normalizeTuningStepperValue(sliderKey, getTuningStepperCurrentValue(sliderKey));
+                            const nextValue = normalizeTuningStepperValue(sliderKey, current + (Number(button.dataset.direction) || 0) * config.step);
+                            if (nextValue === current) return;
+                            setTuningSliderElementValue(sliderKey, config.min, nextValue);
+                            commitTuningSliderSave(sliderKey);
+                            syncTuningStepperButtons();
+                        });
+                    });
+                });
+            }
 
             // Initialize Sensor Refresh Rate - Horizontal slider (5-50 Hz)
             // Note: sampleRate has no RCDCC_KEY; always uses legacy path on connected devices.
@@ -8504,7 +8535,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 value: [5, 25],
                 min: 5,
                 max: 50,
-                step: 2,
+                step: 1,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -8514,11 +8545,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         markPageDirty('tuning');
                         tuningSliderPendingSave.sensorRate = true;
                     }
+                    syncTuningStepperButtons();
                 }
             });
             tuningSliderInstances.sensorRate = { element: sensorElement, instance: sensorInstance };
             updateTuningThumbLabel('sliderSensorRate', 25, 0);
             attachReleaseSaveHandler(sensorElement, 'sensorRate');
+            bindTuningStepperButtons();
+            syncTuningStepperButtons();
         }
 
         // Track locked state for each slider
@@ -8712,7 +8746,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     value: [-20, 0],
                     min: -20,
                     max: 20,
-                    step: 2,
+                    step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
@@ -8722,6 +8756,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                             markPageDirty('servo');
                             servoPendingSave.frontLeft.trim = true;
                         }
+                        syncServoTrimStepperButtons();
                     }
                 });
                 servoSliderInstances.frontLeft.trimElement = frontLeftTrimElement;
@@ -8761,7 +8796,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     value: [-20, 0],
                     min: -20,
                     max: 20,
-                    step: 2,
+                    step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
@@ -8771,6 +8806,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                             markPageDirty('servo');
                             servoPendingSave.frontRight.trim = true;
                         }
+                        syncServoTrimStepperButtons();
                     }
                 });
                 servoSliderInstances.frontRight.trimElement = frontRightTrimElement;
@@ -8810,7 +8846,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     value: [-20, 0],
                     min: -20,
                     max: 20,
-                    step: 2,
+                    step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
@@ -8820,6 +8856,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                             markPageDirty('servo');
                             servoPendingSave.rearLeft.trim = true;
                         }
+                        syncServoTrimStepperButtons();
                     }
                 });
                 servoSliderInstances.rearLeft.trimElement = rearLeftTrimElement;
@@ -8859,7 +8896,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     value: [-20, 0],
                     min: -20,
                     max: 20,
-                    step: 2,
+                    step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
@@ -8869,6 +8906,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                             markPageDirty('servo');
                             servoPendingSave.rearRight.trim = true;
                         }
+                        syncServoTrimStepperButtons();
                     }
                 });
                 servoSliderInstances.rearRight.trimElement = rearRightTrimElement;
@@ -8876,6 +8914,40 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 updateTrimThumbLabel('sliderRearRightTrim', 0);
                 attachServoReleaseSaveHandler(rearRightTrimElement, 'rearRight', 'trim');
             }
+
+            function setServoTrimSliderElementValue(servoName, newValue) {
+                const sliderData = servoSliderInstances[servoName];
+                if (!sliderData || !sliderData.trimInstance || !sliderData.trimElement) return;
+                const normalizedValue = normalizeServoTrimStepperValue(servoName, newValue);
+                sliderData.trimInstance.value([-20, normalizedValue]);
+                sliderData.trimElement.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            function bindServoTrimStepperButtons() {
+                document.querySelectorAll('.slider-stepper-control[data-servo-trim]').forEach(control => {
+                    if (control.dataset.bound === 'true') return;
+                    control.dataset.bound = 'true';
+
+                    const servoName = control.dataset.servoTrim;
+                    const config = servoTrimStepperConfigs[servoName];
+                    if (!config) return;
+
+                    control.querySelectorAll('.slider-stepper-btn').forEach(button => {
+                        button.addEventListener('click', () => {
+                            if (servoTrimLocked) return;
+                            const current = normalizeServoTrimStepperValue(servoName, servoSliderValues?.[servoName]?.trim);
+                            const nextValue = normalizeServoTrimStepperValue(servoName, current + (Number(button.dataset.direction) || 0) * config.step);
+                            if (nextValue === current) return;
+                            setServoTrimSliderElementValue(servoName, nextValue);
+                            commitServoSliderSave(servoName, 'trim');
+                            syncServoTrimStepperButtons();
+                        });
+                    });
+                });
+            }
+
+            bindServoTrimStepperButtons();
+            syncServoTrimStepperButtons();
 
             // Force layout recalculation to render slider colors correctly
             setTimeout(() => {
@@ -8909,6 +8981,74 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             balance: null,
             sensorRate: null
         };
+
+        const tuningStepperConfigs = {
+            rideHeight: { min: 0, max: 100, step: 1, decimals: 0, valueKey: 'rideHeightOffset' },
+            damping: { min: 0.1, max: 2.0, step: 0.1, decimals: 1, valueKey: 'damping' },
+            stiffness: { min: 0.5, max: 3.0, step: 0.1, decimals: 1, valueKey: 'stiffness' },
+            reactionSpeed: { min: 0.1, max: 5.0, step: 0.1, decimals: 1, valueKey: 'reactionSpeed' },
+            balance: { min: 0, max: 100, step: 1, decimals: 0, valueKey: 'frontRearBalance' },
+            sensorRate: { min: 5, max: 50, step: 1, decimals: 0, valueKey: 'sampleRate' }
+        };
+
+        function getTuningStepperCurrentValue(sliderKey) {
+            const config = tuningStepperConfigs[sliderKey];
+            if (!config) return null;
+            return tuningSliderValues[config.valueKey];
+        }
+
+        function normalizeTuningStepperValue(sliderKey, value) {
+            const config = tuningStepperConfigs[sliderKey];
+            if (!config) return value;
+            const stepped = config.min + Math.round((Number(value) - config.min) / config.step) * config.step;
+            const clamped = Math.max(config.min, Math.min(config.max, stepped));
+            return config.decimals > 0 ? Number(clamped.toFixed(config.decimals)) : Math.round(clamped);
+        }
+
+        function syncTuningStepperButtons() {
+            const tuningLocked = localStorage.getItem('tuningParametersLocked') === 'true';
+            document.querySelectorAll('.slider-stepper-control[data-slider-key]').forEach(control => {
+                const sliderKey = control.dataset.sliderKey;
+                const config = tuningStepperConfigs[sliderKey];
+                if (!config) return;
+                const current = normalizeTuningStepperValue(sliderKey, getTuningStepperCurrentValue(sliderKey));
+                control.querySelectorAll('.slider-stepper-btn').forEach(button => {
+                    const direction = Number(button.dataset.direction) || 0;
+                    const atMin = direction < 0 && current <= config.min;
+                    const atMax = direction > 0 && current >= config.max;
+                    button.disabled = tuningLocked || !!tuningSliderLocks[sliderKey] || atMin || atMax;
+                });
+            });
+        }
+
+        const servoTrimStepperConfigs = {
+            frontLeft: { min: -20, max: 20, step: 1 },
+            frontRight: { min: -20, max: 20, step: 1 },
+            rearLeft: { min: -20, max: 20, step: 1 },
+            rearRight: { min: -20, max: 20, step: 1 }
+        };
+
+        function normalizeServoTrimStepperValue(servoName, value) {
+            const config = servoTrimStepperConfigs[servoName];
+            if (!config) return Math.round(Number(value) || 0);
+            const stepped = config.min + Math.round((Number(value) - config.min) / config.step) * config.step;
+            return Math.max(config.min, Math.min(config.max, Math.round(stepped)));
+        }
+
+        function syncServoTrimStepperButtons() {
+            document.querySelectorAll('.slider-stepper-control[data-servo-trim]').forEach(control => {
+                const servoName = control.dataset.servoTrim;
+                const config = servoTrimStepperConfigs[servoName];
+                if (!config) return;
+                const current = normalizeServoTrimStepperValue(servoName, servoSliderValues?.[servoName]?.trim);
+                control.querySelectorAll('.slider-stepper-btn').forEach(button => {
+                    const direction = Number(button.dataset.direction) || 0;
+                    const atMin = direction < 0 && current <= config.min;
+                    const atMax = direction > 0 && current >= config.max;
+                    button.disabled = !!servoTrimLocked || atMin || atMax;
+                });
+            });
+        }
 
         function updateTuningSliders(config) {
             if (!config) return;
@@ -8985,6 +9125,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 updateThumbnailLabel('sliderSensorRate', tuningSliderValues.sampleRate, 0);
             }
             
+            syncTuningStepperButtons();
             isLoadingTuningConfig = false;
         }
 
@@ -9065,6 +9206,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     console.warn(`No trimInstance for ${servoName}`);
                 }
             }
+
+            syncServoTrimStepperButtons();
             
             // Clear flag after updating all sliders
             isLoadingTuningConfig = false;
@@ -9106,6 +9249,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     tuningSliderLocks[key] = false;
                 });
             }
+
+            syncTuningStepperButtons();
         }
         
         function toggleFormulasCard() {
@@ -9271,6 +9416,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 lockIcon.style.color = allLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
                 lockIcon.title = allLocked ? 'Unlock trim and direction controls' : 'Lock trim and direction controls';
             }
+            syncServoTrimStepperButtons();
         }
 
         function toggleServoSettingsLock(iconElement) {
@@ -9595,12 +9741,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         labels: false,
                         tooltip: false,
                         onChange: function (value) {
-                            const trimDisplay = document.getElementById(`servo${abbrev}TrimDisplay`);
                             const trimVal = Math.round(parseRSliderValue(value)[0] ?? 0);
-
-                            if (trimDisplay) {
-                                trimDisplay.textContent = trimVal >= 0 ? `+${trimVal}°` : `${trimVal}°`;
-                            }
 
                             if (canSaveRSlider(trimSliderId)) {
                                 const rangeValues = getRSliderValue(rangeSliderId);

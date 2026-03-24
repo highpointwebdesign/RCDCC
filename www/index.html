@@ -58,7 +58,7 @@
             </div>
             
             <div class="header-actions">
-                <span class="material-symbols-outlined" title="Reset Gyro" id="setLevelBtn" role="button" tabindex="0" style="color: var(--high-impact-color); cursor: pointer; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center;">tools_level</span>
+                <span class="material-symbols-outlined" title="Reset Gyro" id="setLevelBtn" role="button" tabindex="0" style="color: var(--high-impact-color); cursor: pointer; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center;">tools_installation_kit</span>
                 <span class="material-symbols-outlined" id="wifiIcon" role="button" tabindex="0" style="cursor: pointer; font-size: 1.5rem; padding-left: 5px; display: inline-flex; align-items: center; justify-content: center;">bluetooth_disabled</span>
             </div>
         </div>
@@ -617,7 +617,7 @@
                 </div>
 
                 <!-- Parameters Card -->
-                <div class="<div class="col-12 col-md-6">">
+                <div class="col-12 col-md-6">
                     <div class="card" id="tuningParametersCard">
                         <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                             <div>
@@ -636,7 +636,11 @@
                                     </span>
                                 Ride Height</h6>
                                 <div class="slider-section">
-                                    <div id="sliderRideHeight"></div>
+                                    <div class="slider-stepper-control" data-slider-key="rideHeight">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease ride height">-</button>
+                                        <div id="sliderRideHeight" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase ride height">+</button>
+                                    </div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                         <span>Min</span>
                                         <span>Mid</span>
@@ -649,7 +653,11 @@
                             <div class="tuning-slider-group">
                                 <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">airwave</span> Damping</h6>
                                 <div class="slider-section">
-                                    <div id="sliderDamping"></div>
+                                    <div class="slider-stepper-control" data-slider-key="damping">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease damping">-</button>
+                                        <div id="sliderDamping" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase damping">+</button>
+                                    </div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                         <span>Soft</span>
                                         <span>Normal</span>
@@ -662,7 +670,11 @@
                             <div class="tuning-slider-group">
                                 <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">compress</span> Stiffness</h6>
                                 <div class="slider-section">
-                                    <div id="sliderStiffness"></div>
+                                    <div class="slider-stepper-control" data-slider-key="stiffness">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease stiffness">-</button>
+                                        <div id="sliderStiffness" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase stiffness">+</button>
+                                    </div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                         <span>Soft</span>
                                         <span>Normal</span>
@@ -675,7 +687,11 @@
                             <div class="tuning-slider-group">
                                 <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">speed</span> Reaction Speed</h6>
                                 <div class="slider-section">
-                                    <div id="sliderReactionSpeed"></div>
+                                    <div class="slider-stepper-control" data-slider-key="reactionSpeed">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease reaction speed">-</button>
+                                        <div id="sliderReactionSpeed" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase reaction speed">+</button>
+                                    </div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                         <span>Slow</span>
                                         <span>Balanced</span>
@@ -688,7 +704,11 @@
                             <div class="tuning-slider-group">
                                 <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">balance</span> Balance (Rear/Front)</h6>
                                 <div class="slider-section">
-                                    <div id="sliderBalance"></div>
+                                    <div class="slider-stepper-control" data-slider-key="balance">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Shift balance toward rear">-</button>
+                                        <div id="sliderBalance" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Shift balance toward front">+</button>
+                                    </div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                         <span>Rear</span>
                                         <span>Balanced</span>
@@ -701,7 +721,11 @@
                                 <div class="tuning-slider-group mb-0">
                                     <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">memory</span> Sensor Refresh Rate</h6>
                                     <div class="slider-section">
-                                        <div id="sliderSensorRate"></div>
+                                        <div class="slider-stepper-control" data-slider-key="sensorRate">
+                                            <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease sensor refresh rate">-</button>
+                                            <div id="sliderSensorRate" class="slider-stepper-track"></div>
+                                            <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase sensor refresh rate">+</button>
+                                        </div>
                                         <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                             <span>Low</span>
                                             <span>Balanced</span>
@@ -716,7 +740,7 @@
                 </div>
 
                 <!-- RCDCC Configuration Card -->
-                <div class="<div class="col-12 col-md-6">">
+                <div class="col-12 col-md-6">
                     <div class="card" id="rcdccConfigurationCard">
                         <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                             <div>
@@ -871,10 +895,14 @@
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div class="servo-settings-slider-labels">
+                                            <!-- <div class="servo-settings-slider-labels">
                                                 <span id="servoFLTrimDisplay"></span>
+                                            </div> -->
+                                            <div class="slider-stepper-control" data-servo-trim="frontLeft">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease front left trim">-</button>
+                                                <div id="sliderFrontLeftTrim" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase front left trim">+</button>
                                             </div>
-                                            <div id="sliderFrontLeftTrim"></div>
                                             <div class="servo-settings-value-labels">
                                                 <span>Left</span>
                                                 <span>Center</span>
@@ -898,10 +926,14 @@
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div class="servo-settings-slider-labels">
+                                            <!-- <div class="servo-settings-slider-labels">
                                                 <span id="servoFRTrimDisplay"></span>
+                                            </div> -->
+                                            <div class="slider-stepper-control" data-servo-trim="frontRight">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease front right trim">-</button>
+                                                <div id="sliderFrontRightTrim" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase front right trim">+</button>
                                             </div>
-                                            <div id="sliderFrontRightTrim"></div>
                                             <div class="servo-settings-value-labels">
                                                 <span>Left</span>
                                                 <span>Center</span>
@@ -925,10 +957,14 @@
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div class="servo-settings-slider-labels">
+                                            <!-- <div class="servo-settings-slider-labels">
                                                 <span id="servoRLTrimDisplay"></span>
+                                            </div> -->
+                                            <div class="slider-stepper-control" data-servo-trim="rearLeft">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease rear left trim">-</button>
+                                                <div id="sliderRearLeftTrim" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase rear left trim">+</button>
                                             </div>
-                                            <div id="sliderRearLeftTrim"></div>
                                             <div class="servo-settings-value-labels">
                                                 <span>Left</span>
                                                 <span>Center</span>
@@ -952,10 +988,14 @@
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div class="servo-settings-slider-labels">
+                                            <!-- <div class="servo-settings-slider-labels">
                                                 <span id="servoRRTrimDisplay"></span>
+                                            </div> -->
+                                            <div class="slider-stepper-control" data-servo-trim="rearRight">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease rear right trim">-</button>
+                                                <div id="sliderRearRightTrim" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase rear right trim">+</button>
                                             </div>
-                                            <div id="sliderRearRightTrim"></div>
                                             <div class="servo-settings-value-labels">
                                                 <span>Left</span>
                                                 <span>Center</span>
@@ -1004,7 +1044,7 @@
                 </div>
            
             <!-- Help Card -->
-                <div class="<div class="col-12 col-md-6">">
+                <div class="col-12 col-md-6">
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center card-header-dark" onclick="toggleFormulasCard()">
                             <div>
@@ -1397,7 +1437,7 @@
             </div>
             <div class="row g-3">
                 <!-- Features Card -->
-                <div class="<div class="col-12 col-md-6">">
+                <div class="col-12 col-md-6">
                     <div class="card">
                         <div class="card-header" style="background-color: black; color: white;">
                             <span class="material-symbols-outlined" style="color: var(--danger);">videocam</span>
