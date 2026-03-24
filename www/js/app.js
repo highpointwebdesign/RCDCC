@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.383';
+        const APP_VERSION = '1.1.390';
         const BUILD_DATE = '2026-03-24';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -734,9 +734,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     <h5 style="margin:0 0 12px;color:#fff;">Unsaved Changes</h5>
                     <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">You have unsaved changes. Save before leaving?</p>
                     <div style="display:flex;gap:8px;">
-                      <button id="ddc-save"    style="flex:1;padding:10px;border:none;border-radius:8px;background:#c8a800;color:#000;font-weight:600;cursor:pointer;">Save</button>
-                      <button id="ddc-discard" style="flex:1;padding:10px;border:none;border-radius:8px;background:#555;color:#fff;cursor:pointer;">Discard</button>
                       <button id="ddc-cancel"  style="flex:1;padding:10px;border:none;border-radius:8px;background:#222;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
+                                            <button id="ddc-discard" style="flex:1;padding:10px;border:none;border-radius:8px;background:#555;color:#fff;cursor:pointer;">Discard</button>
+                                            <button id="ddc-save"    style="flex:1;padding:10px;border:none;border-radius:8px;background:#c8a800;color:#000;font-weight:600;cursor:pointer;">Save</button>
                     </div>
                   </div>`;
                 document.body.appendChild(overlay);
@@ -7587,8 +7587,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                            style="width:100%;padding:10px;border-radius:8px;border:1px solid #555;background:#2a2a2a;color:#fff;margin-bottom:16px;box-sizing:border-box;"
                            value="${existingName.replace(/"/g, '&quot;')}">
                     <div style="display:flex;gap:8px;">
-                      <button id="pnd-save"   style="flex:1;padding:10px;border:none;border-radius:8px;background:#c8a800;color:#000;font-weight:600;cursor:pointer;">Save</button>
                       <button id="pnd-cancel" style="flex:1;padding:10px;border:none;border-radius:8px;background:#333;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
+                                            <button id="pnd-save"   style="flex:1;padding:10px;border:none;border-radius:8px;background:#c8a800;color:#000;font-weight:600;cursor:pointer;">Save</button>
                     </div>
                   </div>`;
                 document.body.appendChild(overlay);

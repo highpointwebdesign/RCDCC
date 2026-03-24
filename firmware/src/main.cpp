@@ -34,26 +34,6 @@ Adafruit_NeoPixel statusLED(STATUS_LED_COUNT, STATUS_LED_PIN, NEO_GRB + NEO_KHZ8
 uint32_t currentLEDColor = 0;
 bool legacyStatusLedEnabled = true;
 
-// Emergency light state variables
-struct PatternStep {
-  uint32_t led0Color;
-  uint32_t led1Color;
-  uint16_t duration;  // milliseconds
-};
-
-const uint8_t MAX_PATTERN_STEPS = 20;
-struct EmergencyLightPattern {
-  PatternStep steps[MAX_PATTERN_STEPS];
-  uint8_t stepCount;
-  bool isLooping;
-};
-
-bool emergencyLightsEnabled = false;
-EmergencyLightPattern currentPattern = {};
-uint8_t currentPatternStep = 0;
-unsigned long patternStepStartTime = 0;
-unsigned long emergencyLightLastUpdate = 0;
-
 // ==================== Phase 6: Dance Mode ====================
 DanceMode gDanceMode = { false, 0.0f, 0.0f };
 
@@ -168,47 +148,8 @@ void updateStatusLEDColor() {
 
 // Function to flash the alert LED (LED index 2)
 void flashStatusLED() {
-  if (!legacyStatusLedEnabled) return;
-  statusLED.setPixelColor(2, currentLEDColor);
-  statusLED.show();
-}
-
-// Function to update emergency lights with generic pattern sequencer
-void updateEmergencyLights() {
-  if (!legacyStatusLedEnabled) return;
-  if (!emergencyLightsEnabled || currentPattern.stepCount == 0) {
-    // Turn off emergency lights
-    statusLED.setPixelColor(0, 0);
-    statusLED.setPixelColor(1, 0);
-    statusLED.show();
-    return;
-  }
-
-  unsigned long now = millis();
-  if (now - emergencyLightLastUpdate < 50) {
-    return;  // Update at ~20Hz minimum
-  }
-  emergencyLightLastUpdate = now;
-
-  // Check if current step has timed out
-  if (now - patternStepStartTime >= currentPattern.steps[currentPatternStep].duration) {
-    currentPatternStep++;
-    
-    // Loop or stop
-    if (currentPatternStep >= currentPattern.stepCount) {
-      if (currentPattern.isLooping) {
-        currentPatternStep = 0;
-      } else {
-        currentPatternStep = currentPattern.stepCount - 1;  // Stay on last frame
-      }
-    }
-    patternStepStartTime = now;
-  }
-
-  // Set current step colors
-  statusLED.setPixelColor(0, currentPattern.steps[currentPatternStep].led0Color);
-  statusLED.setPixelColor(1, currentPattern.steps[currentPatternStep].led1Color);
-  statusLED.show();
+  // Status flashes should use the ESP32 onboard LED (GPIO2), not strip pixels.
+  digitalWrite(LED_PIN, ledBleOn ? LOW : HIGH);
 }
 
 // Timing variables
@@ -230,8 +171,7 @@ float currentAccelZ = 0.0f;
 // Function to start LED blink (250ms); stays on after if BLE connected
 void startLedBlink() {
   // Pulse opposite the steady BLE state so the 250ms flash is visible.
-  digitalWrite(LED_PIN, ledBleOn ? LOW : HIGH);
-  flashStatusLED(); // Flash addressable LED too
+  flashStatusLED();
   ledBlinkEndTime = millis() + 250;
 }
 
@@ -724,10 +664,7 @@ void loop() {
     }
   }
   
-  // Update emergency light patterns (non-blocking)
-  updateEmergencyLights();
-  
-  // Dynamic light groups are updated in the dedicated LEDEffects task.
+  // Lights are app-driven; firmware should not own hardcoded legacy groups.
   
   // Read MPU6050 sensor data at specified rate
   // Skip I2C read if sensor not connected to avoid 5s timeout blocking

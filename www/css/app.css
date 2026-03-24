@@ -1648,17 +1648,17 @@
 
         @media (max-width: 768px) {
             .light-group-editor-dialog {
-                margin: 0 10px;
+                margin: 75px 10px calc(75px + var(--sab, 0px));
                 max-width: calc(100% - 20px);
                 display: flex;
-                align-items: flex-end;
-                min-height: 100%;
+                align-items: flex-start;
+                min-height: auto;
             }
 
             .light-group-editor-dialog .modal-content {
-                border-radius: 1rem 1rem 0 0;
-                border-bottom: none;
-                max-height: 88vh;
+                margin-bottom: 0;
+                border-radius: 1rem;
+                max-height: calc(100vh - 150px - var(--sab, 0px));
                 overflow-y: auto;
             }
         }
