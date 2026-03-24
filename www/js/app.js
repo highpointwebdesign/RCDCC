@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.390';
+        const APP_VERSION = '1.1.395';
         const BUILD_DATE = '2026-03-24';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const GARAGE_STORAGE_KEY = 'rcdcc_garage_vehicles';
         const DEBUG_MODE_STORAGE_KEY = 'settings_debug_mode_enabled';
         const VEHICLE_QUICK_SECTIONS = ['tuning', 'fpv'];
-        const VEHICLE_CONNECTION_REQUIRED_SECTIONS = ['tuning', 'fpv'];
+        const VEHICLE_CONNECTION_REQUIRED_SECTIONS = ['tuning', 'lights', 'fpv'];
 
         // ==================== Phase 6: Dance Mode ====================
         const DANCE_TILT_INTERVAL_MS = 50; // ~20Hz
@@ -4210,8 +4210,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         async function handleDashboardProfileBadgeNav(event, targetSection) {
             event?.preventDefault?.();
-            const allowOffline = targetSection === 'lights';
-            if (!allowOffline && !isBleConnected()) {
+            if (!isBleConnected()) {
                 toast.info('Connect to a vehicle first. Opening Garage.');
                 await navigateToSection('garage');
                 return;
@@ -4658,13 +4657,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function syncLightingProfileActionButtons() {
             const saveBtn = document.getElementById('saveNewLightingProfileBtn');
-            if (saveBtn) saveBtn.disabled = lightingProfileBusy || lightingProfilesLocked;
+            if (saveBtn) saveBtn.disabled = lightingProfileBusy || lightingProfilesLocked || !isBleConnected();
             const updateBtn = document.getElementById('ltProfileUpdateBtn');
             if (!updateBtn) return;
             const activeProfile = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
             const showUpdate = !!activeProfile && lightingGroupsDirty;
             updateBtn.classList.toggle('profile-update-needs-save', showUpdate);
-            updateBtn.disabled = !showUpdate || lightingProfileBusy || lightingProfilesLocked;
+            updateBtn.disabled = !showUpdate || lightingProfileBusy || lightingProfilesLocked || !isBleConnected();
         }
 
         function syncLightingProfilesCardUI() {
@@ -4709,7 +4708,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const addGroupBtn = document.getElementById('addLightGroupBtn');
             const totalLedInput = document.getElementById('totalLEDCount');
             const colorOrderInput = document.getElementById('lightColorOrder');
-            const controlsLocked = manageLightGroupsLocked || lightStripConfigLocked;
+            const controlsLocked = manageLightGroupsLocked || lightStripConfigLocked || !isBleConnected();
 
             if (card) card.classList.toggle('profile-card-locked', manageLightGroupsLocked);
             if (lockIcon) {
@@ -4720,14 +4719,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     : 'Lock light group controls';
             }
             if (masterToggle) {
-                masterToggle.disabled = manageLightGroupsLocked;
-                masterToggle.setAttribute('aria-disabled', manageLightGroupsLocked ? 'true' : 'false');
+                masterToggle.disabled = controlsLocked;
+                masterToggle.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
             }
             if (addGroupBtn) {
-                if (manageLightGroupsLocked) {
-                    addGroupBtn.disabled = true;
-                }
-                addGroupBtn.setAttribute('aria-disabled', manageLightGroupsLocked ? 'true' : 'false');
+                addGroupBtn.disabled = controlsLocked;
+                addGroupBtn.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
             }
             if (totalLedInput) {
                 totalLedInput.disabled = controlsLocked;
@@ -5561,7 +5558,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         Array.isArray(group.indices) ? group.indices : group.leds
                     );
                     const ledCount = assignedIndices.length;
-                    const ledDisplay = ledCount > 0 ? formatLedRanges(assignedIndices) : 'No LEDs assigned';
+                    const ledDisplay = ledCount > 0 ? formatLedRanges(assignedIndices) : '--';
                     const brightnessPercent = group.brightness !== undefined ?
                         Math.round(group.brightness * 100 / 255) : 100;
                     const color = group.color || '#ff0000';
@@ -5574,15 +5571,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const detailsExpanded = expandedLightGroupIds.has(group.id);
                     const hasSecondaryColor = color2 !== '#000000' && color2 !== '#00000000';
                     const warningIcon = !isConfigured
-                        ? '<button type="button" class="light-group-warning-btn" aria-label="No LEDs assigned" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top" data-bs-content="No LED lights assigned in this group."><span class="material-symbols-outlined light-group-warning-icon" aria-hidden="true">warning</span></button>'
+                        ? '<button type="button" class="light-group-warning-btn" aria-label="No LEDs assigned" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top" data-bs-content="No LED lights assigned."><span class="material-symbols-outlined light-group-warning-icon" aria-hidden="true">warning</span></button>'
                         : '';
                     
                     item.innerHTML = `
                         <div class="light-group-leading-controls" aria-label="Reorder group">
-                            <button type="button" class="light-group-order-btn" aria-label="Move group up" title="Move up" onclick="moveLightGroup(${index}, -1)" ${(index === 0 || manageLightGroupsLocked) ? 'disabled' : ''}>
+                            <button type="button" class="light-group-order-btn" aria-label="Move group up" title="Move up" onclick="moveLightGroup(${index}, -1)" ${(index === 0 || manageLightGroupsLocked || !isBleConnected()) ? 'disabled' : ''}>
                                 <span class="material-symbols-outlined">keyboard_arrow_up</span>
                             </button>
-                            <button type="button" class="light-group-order-btn" aria-label="Move group down" title="Move down" onclick="moveLightGroup(${index}, 1)" ${(index === lightGroups.length - 1 || manageLightGroupsLocked) ? 'disabled' : ''}>
+                            <button type="button" class="light-group-order-btn" aria-label="Move group down" title="Move down" onclick="moveLightGroup(${index}, 1)" ${(index === lightGroups.length - 1 || manageLightGroupsLocked || !isBleConnected()) ? 'disabled' : ''}>
                                 <span class="material-symbols-outlined">keyboard_arrow_down</span>
                             </button>
                         </div>
@@ -5592,7 +5589,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                             </div>
                             <div class="light-group-meta-row">
                                 <div class="form-check form-switch m-0 light-group-enabled-toggle-wrap" title="Toggle this light group on or off">
-                                    <input class="form-check-input light-group-enabled-toggle" type="checkbox" ${group.enabled ? 'checked' : ''} ${manageLightGroupsLocked ? 'disabled' : ''} aria-label="Toggle ${group.name} on or off">
+                                    <input class="form-check-input light-group-enabled-toggle" type="checkbox" ${group.enabled ? 'checked' : ''} ${(manageLightGroupsLocked || !isBleConnected()) ? 'disabled' : ''} aria-label="Toggle ${group.name} on or off">
                                 </div>
                                 <div class="light-group-swatch-row" aria-label="Group colors">
                                     <span class="light-group-swatch" style="background-color: ${color};" title="Primary color"></span>
@@ -5615,10 +5612,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end garage-card-menu" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     <li>
-                                        <button type="button" class="dropdown-item" ${manageLightGroupsLocked ? 'disabled' : ''} onclick="event.stopPropagation(); editLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Edit</button>
+                                        <button type="button" class="dropdown-item" ${(manageLightGroupsLocked || !isBleConnected()) ? 'disabled' : ''} onclick="event.stopPropagation(); editLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Edit</button>
                                     </li>
                                     <li>
-                                        <button type="button" class="dropdown-item text-danger" ${manageLightGroupsLocked ? 'disabled' : ''} onclick="event.stopPropagation(); deleteLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Delete</button>
+                                        <button type="button" class="dropdown-item text-danger" ${(manageLightGroupsLocked || !isBleConnected()) ? 'disabled' : ''} onclick="event.stopPropagation(); deleteLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Delete</button>
                                     </li>
                                 </ul>
                             </div>
@@ -5628,6 +5625,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const enabledInput = item.querySelector('.light-group-enabled-toggle');
                     if (enabledInput) {
                         enabledInput.addEventListener('change', () => {
+                            if (!isBleConnected()) {
+                                enabledInput.checked = !enabledInput.checked;
+                                toast.warning('Connect to Bluetooth before editing light groups.');
+                                return;
+                            }
                             if (manageLightGroupsLocked) {
                                 enabledInput.checked = !enabledInput.checked;
                                 toast.warning('Manage Light Groups is locked. Unlock to make changes.');
@@ -5700,6 +5702,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function moveLightGroup(index, delta) {
+            if (!isBleConnected()) {
+                toast.warning('Connect to Bluetooth before editing light groups.');
+                return;
+            }
             if (manageLightGroupsLocked) {
                 toast.warning('Manage Light Groups is locked. Unlock to make changes.');
                 return;
@@ -6004,6 +6010,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function addLightGroup() {
+            if (!isBleConnected()) {
+                toast.warning('Connect to Bluetooth before editing light groups.');
+                return;
+            }
             if (manageLightGroupsLocked) {
                 toast.warning('Manage Light Groups is locked. Unlock to make changes.');
                 return;
@@ -6012,6 +6022,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function editLightGroup(index) {
+            if (!isBleConnected()) {
+                toast.warning('Connect to Bluetooth before editing light groups.');
+                return;
+            }
             if (manageLightGroupsLocked) {
                 toast.warning('Manage Light Groups is locked. Unlock to make changes.');
                 return;
@@ -6142,6 +6156,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         async function saveLightGroupFromModal() {
+            if (!isBleConnected()) {
+                toast.warning('Connect to Bluetooth before editing light groups.');
+                return;
+            }
             const nameInput = document.getElementById('lightGroupNameInput');
             const name = normalizeLightGroupName(nameInput?.value);
             if (nameInput) nameInput.value = name;
@@ -6268,6 +6286,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function deleteLightGroup(index) {
+            if (!isBleConnected()) {
+                toast.warning('Connect to Bluetooth before editing light groups.');
+                return;
+            }
             if (manageLightGroupsLocked) {
                 toast.warning('Manage Light Groups is locked. Unlock to make changes.');
                 return;
