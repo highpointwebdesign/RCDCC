@@ -754,11 +754,10 @@
         .garage-card-overflow {
             position: relative;
             flex-shrink: 0;
-            z-index: 21;
         }
 
         .garage-card-overflow.dropdown.show {
-            z-index: 30;
+            z-index: 1050;
         }
 
         .garage-card-overflow-btn {
@@ -972,7 +971,7 @@
             cursor: not-allowed;
         }
 
-        .trail-session-metrics {
+        /* .trail-session-metrics {
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
@@ -1000,7 +999,7 @@
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 0.5rem;
-        }
+        } */
 
         .trail-session-actions .btn {
             /* font-weight: 700; */
@@ -1017,16 +1016,16 @@
         /* Dashboard BLE-disconnected muted state */
         .ble-data-off span,
         .ble-data-off small {
-            color: var(--text-muted) !important;
+            /* color: var(--text-muted) !important; */
         }
         .ble-data-off .badge {
             background-color: transparent !important;
-            color: var(--text-muted) !important;
+            /* color: var(--text-muted) !important; */
         }
         .ble-data-off .metric-pill {
             background-color: transparent !important;
             border: 1px solid transparent !important;
-            color: var(--text-muted) !important;
+            /* color: var(--text-muted) !important; */
         }
 
         /* Favorite color target toggle: active matches Save Group, inactive is inverted */
@@ -1398,6 +1397,44 @@
             box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
         }
 
+        .light-group-config-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background-color: #f9fafb;
+        }
+
+        .light-group-config-item .form-label {
+            min-width: 0;
+        }
+
+        .light-group-form-item {
+            display: block;
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            margin-bottom: 0.75rem;
+            background-color: #f9fafb;
+        }
+
+        .light-group-form-item:last-child {
+            margin-bottom: 0;
+        }
+
+        #lightGroupColorRow {
+            display: grid;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        #lightGroupColorRow .light-group-form-item {
+            margin-bottom: 0;
+        }
+
         .light-group-info {
             flex: 1;
             min-width: 0;
@@ -1588,19 +1625,97 @@
             }
         }
 
-        .light-group-color-row {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 0.75rem;
-            align-items: start;
+        .factory-preset-group {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            background: #f9fafb;
         }
 
-        .light-group-color-row.single-color {
-            grid-template-columns: 1fr;
-        }
-
-        .light-group-color-col {
+        .factory-preset-header-row {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
             min-width: 0;
+        }
+
+        .factory-preset-header-row .form-label {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .factory-preset-chevron-btn {
+            border: none;
+            background: transparent;
+            padding: 0.15rem;
+            width: 2rem;
+            height: 2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            color: #6b7280;
+            flex: 0 0 auto;
+        }
+
+        .factory-preset-chevron-btn:hover,
+        .factory-preset-chevron-btn:focus {
+            background: #eef2ff;
+            color: #374151;
+            outline: none;
+        }
+
+        .factory-preset-chevron {
+            font-size: 1.15rem;
+            line-height: 1;
+        }
+
+        .factory-preset-body {
+            margin-top: 0.5rem;
+        }
+
+        .factory-preset-header-row .form-control-color {
+            flex: 0 0 auto;
+        }
+
+        .factory-preset-body.collapsed {
+            display: none;
+        }
+
+        .factory-preset-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 0.4rem;
+        }
+
+        .color-hex-input {
+            font-family: monospace;
+            font-weight: 600;
+            font-size: 0.85rem;
+            width: 6.5rem;
+            padding: 0.2rem 0.4rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.4rem;
+            background: #fff;
+            color: #111827;
+            text-align: center;
+        }
+
+        .color-hex-input:focus {
+            outline: none;
+            border-color: var(--primary, #6366f1);
+            box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+        }
+
+        .factory-preset-swatch {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            border: 1px solid #c8c8c8;
+            border-radius: 0.35rem;
+            cursor: pointer;
+            padding: 0;
         }
 
         /* LED Grid Selector */
@@ -1634,6 +1749,18 @@
             background-color: #000;
             border-color: #000;
             box-shadow: 0 0 12px rgba(37, 99, 235, 0.7);
+        }
+
+        @media (orientation: portrait) and (max-width: 600px) {
+            #colorPresetsContainer {
+                display: grid !important;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+                gap: 0.5rem !important;
+            }
+
+            #colorPresetsContainer > div {
+                justify-self: center;
+            }
         }
 
         @media (max-width: 767.98px) {
@@ -2405,7 +2532,9 @@
         #sliderFrontRightTrim .range-slider__thumb[data-lower],
         #sliderRearLeftTrim .range-slider__thumb[data-lower],
         #sliderRearRightTrim .range-slider__thumb[data-lower],
-        #lightGroupBrightnessSlider .range-slider__thumb[data-lower] {
+        #lightGroupBrightnessSlider .range-slider__thumb[data-lower],
+        #lightGroupIntensitySlider .range-slider__thumb[data-lower],
+        #lightGroupSpeedSlider .range-slider__thumb[data-lower] {
             width: 0;
             height: 0;
             display: none;
@@ -2421,7 +2550,9 @@
         #sliderFrontRightTrim .range-slider__range,
         #sliderRearLeftTrim .range-slider__range,
         #sliderRearRightTrim .range-slider__range,
-        #lightGroupBrightnessSlider .range-slider__range {
+        #lightGroupBrightnessSlider .range-slider__range,
+        #lightGroupIntensitySlider .range-slider__range,
+        #lightGroupSpeedSlider .range-slider__range {
             background: transparent;
         }
 
@@ -2643,7 +2774,9 @@
         #sliderFrontRightTrim .range-slider__thumb,
         #sliderRearLeftTrim .range-slider__thumb,
         #sliderRearRightTrim .range-slider__thumb,
-        #lightGroupBrightnessSlider .range-slider__thumb {
+        #lightGroupBrightnessSlider .range-slider__thumb,
+        #lightGroupIntensitySlider .range-slider__thumb,
+        #lightGroupSpeedSlider .range-slider__thumb {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2675,7 +2808,9 @@
         #sliderFrontRightTrim .range-slider__thumb[data-upper],
         #sliderRearLeftTrim .range-slider__thumb[data-upper],
         #sliderRearRightTrim .range-slider__thumb[data-upper],
-        #lightGroupBrightnessSlider .range-slider__thumb[data-upper] {
+        #lightGroupBrightnessSlider .range-slider__thumb[data-upper],
+        #lightGroupIntensitySlider .range-slider__thumb[data-upper],
+        #lightGroupSpeedSlider .range-slider__thumb[data-upper] {
             width: 32px;
             height: 32px;
         }

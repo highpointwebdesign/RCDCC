@@ -662,11 +662,11 @@ const GarageManager = (() => {
                                     Tuning
                                 </button>
                             </li>
-                            <!-- <li>
+                            <li>
                                 <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'lights')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     Lights
                                 </button>
-                            </li> -->
+                            </li>
                            <!-- <li>
                                 <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'fpv')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     FPV

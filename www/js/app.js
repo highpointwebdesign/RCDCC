@@ -57,8 +57,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.297';
-        const BUILD_DATE = '2026-03-22';
+        const APP_VERSION = '1.1.364';
+        const BUILD_DATE = '2026-03-24';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -4217,7 +4217,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         async function handleDashboardProfileBadgeNav(event, targetSection) {
             event?.preventDefault?.();
-            if (!isBleConnected()) {
+            const allowOffline = targetSection === 'lights';
+            if (!allowOffline && !isBleConnected()) {
                 toast.info('Connect to a vehicle first. Opening Garage.');
                 await navigateToSection('garage');
                 return;
@@ -4336,8 +4337,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const LIGHT_MASTER_STORAGE_KEY = 'lightsMasterEnabled';
         const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
         const LIGHT_COLOR_ORDER_KEY = 'lightColorOrder';
-        const COLOR_PRESETS_KEY = 'lightGroupColorPresets';
         const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
+        const LIGHT_GROUP_PRESET_SECTION_STATE_KEY = 'lightGroupPresetSectionState';
         const LIGHT_GROUP_DEFAULT_PATTERN = 'solid';
         const LIGHT_GROUP_CYCLE_INTERVAL_SECONDS = 30;
         const MAX_LIGHT_GROUP_NAME_LENGTH = 12;
@@ -4346,8 +4347,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const MAX_LIGHT_GROUP_LEDS = 15;
         const BASIC_LIGHTING_TEST_LED_COUNT = 11;
         const BASIC_LIGHTING_TEST_COLOR = '#0000ff';
-        const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'blink', 'strobe', 'breathe', 'fade', 'twinkle', 'sparkle', 'flash_sparkle', 'glitter', 'solid_glitter', 'running', 'larson', 'heartbeat', 'flicker', 'fire_flicker'];
-        const LIGHTS_ENGINE_EFFECTS = new Set(['solid', 'blink', 'strobe', 'breathe', 'fade', 'twinkle', 'sparkle', 'flash_sparkle', 'glitter', 'solid_glitter', 'running', 'larson', 'heartbeat', 'flicker', 'fire_flicker']);
+        const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'glitter', 'police'];
+        const LIGHTS_ENGINE_EFFECTS = new Set(['solid', 'glitter', 'police']);
+        const FACTORY_COLOR_PRESETS = [
+            '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff',
+            '#007FFF', '#ff8800', '#8800ff', '#ffe0a0', '#ffffff'
+        ];
         const LIGHT_COLOR_ORDER_OPTIONS = new Set(['grb', 'rgb', 'rbg', 'gbr', 'brg', 'bgr']);
         const DEFAULT_LIGHT_COLOR_ORDER = 'grb';
 
@@ -4363,7 +4368,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // Phase 5: Lighting profiles stored in localStorage (mirrors driving profile architecture)
         // The ESP32 receives individual light group commands — it has no knowledge of profiles.
         const LIGHTING_PROFILES_STORAGE_KEY = 'rcdcc_lighting_profiles_v1';
-        const MAX_LIGHTING_PROFILES = 10;
+        const MAX_LIGHTING_PROFILES = 5;
 
         function loadLocalLightingProfiles() {
             try {
@@ -4403,22 +4408,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             { name: 'Turn Signals Left', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'blink', enabled: false, isPredefined: true },
             { name: 'Turn Signals Right', indices: [], brightness: 255, color: '#ffa500', color2: '#000000', pattern: 'blink', enabled: false, isPredefined: true }
         ];
-        const DEFAULT_COLOR_PRESETS = [
-            '#ff0000', // Red
-            '#00ff00', // Green
-            '#0000ff', // Blue
-            '#ffff00', // Yellow
-            '#ff00ff', // Magenta
-            '#00ffff', // Cyan
-            '#ff8800', // Orange
-            '#8800ff', // Purple
-            '#ffffff', // White
-            '#ffc107'  // Amber
-        ];
         let lightGroups = [];
-        let colorPresets = [];
         let currentColor2 = '#000000'; // Second color for dual-color patterns
-        let activeFavoriteColorTarget = 'primary';
         let lightGroupsStateBeforeModal = null;
         let masterStateBeforeModal = false;
         let lightGroupModalSaved = false;
@@ -4457,9 +4448,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const source = group && typeof group === 'object' ? group : {};
             const { leds, ...rest } = source;
             const indexSource = Array.isArray(rest.indices) ? rest.indices : leds;
+            const normalizedPattern = LIGHTS_ENGINE_EFFECTS.has(String(rest.pattern || '').toLowerCase())
+                ? String(rest.pattern).toLowerCase()
+                : LIGHT_GROUP_DEFAULT_PATTERN;
+            const normalizedIntensity = Number.isFinite(Number(rest.intensity))
+                ? Math.max(0, Math.min(255, Math.round(Number(rest.intensity))))
+                : 128; // Default mid-range intensity
+            const normalizedSpeed = Number.isFinite(Number(rest.speed))
+                ? Math.max(0, Math.min(255, Math.round(Number(rest.speed))))
+                : 128; // Default mid-range speed
 
             return {
                 ...rest,
+                pattern: normalizedPattern,
+                intensity: normalizedIntensity,
+                speed: normalizedSpeed,
                 indices: normalizeLedIndices(indexSource).slice(0, MAX_LIGHT_GROUP_LEDS),
                 enabled: !!rest.enabled
             };
@@ -4477,94 +4480,90 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 brightness: Number(payload.brightness) || 0,
                 effect: String(payload.effect || ''),
                 speed: Number(payload.speed) || 0,
+                intensity: Number(payload.intensity) || 0,
                 leds: normalizeLedIndices(payload.leds)
             });
         }
 
-        // Load color presets from localStorage or use defaults
-        function loadColorPresets() {
-            const stored = localStorage.getItem(COLOR_PRESETS_KEY);
-            colorPresets = stored ? JSON.parse(stored) : [...DEFAULT_COLOR_PRESETS];
-            // Keep compatibility with older saved arrays that had fewer slots.
-            if (!Array.isArray(colorPresets)) {
-                colorPresets = [...DEFAULT_COLOR_PRESETS];
-            }
-            while (colorPresets.length < DEFAULT_COLOR_PRESETS.length) {
-                colorPresets.push(DEFAULT_COLOR_PRESETS[colorPresets.length]);
-            }
-            if (colorPresets.length > DEFAULT_COLOR_PRESETS.length) {
-                colorPresets = colorPresets.slice(0, DEFAULT_COLOR_PRESETS.length);
-            }
-            renderColorPresets();
+        function applyFactoryPreset(target, color) {
+            const normalizedTarget = target === 'secondary' ? 'secondary' : 'primary';
+            setLightGroupColor(String(color || '#000000'), normalizedTarget);
         }
 
-        // Save color presets to localStorage
-        function saveColorPresets() {
-            localStorage.setItem(COLOR_PRESETS_KEY, JSON.stringify(colorPresets));
-            renderColorPresets();
-        }
-
-        // Render color preset buttons
-        function renderColorPresets() {
-            const container = document.getElementById('colorPresetsContainer');
-            if (!container) return;
-            
-            container.innerHTML = '';
-            
-            colorPresets.forEach((color, index) => {
-                const presetBtn = document.createElement('div');
-                presetBtn.style.cssText = 'position: relative; display: inline-block;';
-                
-                const colorBtn = document.createElement('button');
-                colorBtn.type = 'button';
-                colorBtn.className = 'btn btn-sm';
-                colorBtn.style.cssText = `background-color: ${color}; width: 40px; height: 40px; border: 2px solid #ddd; position: relative;`;
-                colorBtn.title = `Use ${color} (${activeFavoriteColorTarget})`;
-                colorBtn.onclick = () => setLightGroupColor(color, activeFavoriteColorTarget);
-                
-                const editIcon = document.createElement('span');
-                editIcon.className = 'material-symbols-outlined';
-                editIcon.textContent = 'edit';
-                editIcon.style.cssText = 'position: absolute; top: -8px; right: -8px; font-size: 16px; background: white; border-radius: 50%; padding: 2px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.3);';
-                editIcon.title = 'Save current color to this slot';
-                editIcon.onclick = (e) => {
-                    e.stopPropagation();
-                    updateColorPreset(index);
+        function getLightGroupPresetSectionState() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(LIGHT_GROUP_PRESET_SECTION_STATE_KEY) || '{}');
+                return {
+                    primary: parsed.primary !== false,
+                    secondary: parsed.secondary !== false
                 };
-                
-                presetBtn.appendChild(colorBtn);
-                presetBtn.appendChild(editIcon);
-                container.appendChild(presetBtn);
+            } catch (error) {
+                return { primary: true, secondary: true };
+            }
+        }
+
+        function setLightGroupPresetSectionState(nextState) {
+            localStorage.setItem(LIGHT_GROUP_PRESET_SECTION_STATE_KEY, JSON.stringify({
+                primary: nextState.primary !== false,
+                secondary: nextState.secondary !== false
+            }));
+        }
+
+        function applyLightGroupPresetSectionState(target, isExpanded) {
+            const normalizedTarget = target === 'secondary' ? 'secondary' : 'primary';
+            const body = document.getElementById(`${normalizedTarget}PresetBody`);
+            const chevron = document.getElementById(`${normalizedTarget}PresetChevron`);
+            const toggle = document.getElementById(`${normalizedTarget}PresetToggle`);
+            if (!body || !chevron || !toggle) return;
+
+            body.classList.toggle('collapsed', !isExpanded);
+            chevron.textContent = isExpanded ? 'expand_less' : 'expand_more';
+            toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        }
+
+        function initializeLightGroupPresetSections() {
+            const state = getLightGroupPresetSectionState();
+            applyLightGroupPresetSectionState('primary', state.primary);
+            applyLightGroupPresetSectionState('secondary', state.secondary);
+        }
+
+        function toggleLightGroupPresetSection(target) {
+            const normalizedTarget = target === 'secondary' ? 'secondary' : 'primary';
+            const state = getLightGroupPresetSectionState();
+            const nextExpanded = !state[normalizedTarget];
+            const nextState = {
+                ...state,
+                [normalizedTarget]: nextExpanded
+            };
+
+            applyLightGroupPresetSectionState(normalizedTarget, nextExpanded);
+            setLightGroupPresetSectionState(nextState);
+        }
+
+        function renderFactoryPresetGrid(containerId, target) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            container.innerHTML = '';
+            FACTORY_COLOR_PRESETS.forEach((color) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'factory-preset-swatch';
+                button.style.backgroundColor = color;
+                button.title = `Set ${target} color to ${color.toUpperCase()}`;
+                button.addEventListener('click', () => applyFactoryPreset(target, color));
+                container.appendChild(button);
             });
         }
 
-        function getActiveFavoriteColor() {
-            return activeFavoriteColorTarget === 'secondary' ? currentColor2 : currentColor;
+        function renderFactoryPresets() {
+            renderFactoryPresetGrid('primaryFactoryPresets', 'primary');
+            renderFactoryPresetGrid('secondaryFactoryPresets', 'secondary');
+            initializeLightGroupPresetSections();
         }
 
-        // Update a specific preset slot with the currently selected target color
-        function updateColorPreset(index) {
-            const selectedColor = getActiveFavoriteColor();
-            colorPresets[index] = selectedColor;
-            saveColorPresets();
-            window.toast.success(`Preset ${index + 1} updated to ${selectedColor.toUpperCase()}`);
-        }
-
-        // Reset presets to defaults
-        async function resetColorPresets() {
-            const confirmed = await showActionConfirmDialog(
-                'Reset Favorite Colors',
-                'Reset all favorite colors to defaults?',
-                'Reset',
-                'Cancel',
-                'favorite-colors-reset-overlay'
-            );
-            if (confirmed) {
-                colorPresets = [...DEFAULT_COLOR_PRESETS];
-                saveColorPresets();
-                window.toast.success('Color presets reset to defaults!');
-            }
-        }
+        window.applyFactoryPreset = applyFactoryPreset;
+        window.toggleLightGroupPresetSection = toggleLightGroupPresetSection;
 
         function firmwareColorToHex(value, fallback = '#000000') {
             if (typeof value === 'string') {
@@ -4639,18 +4638,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             const hit = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
             setDashboardQuickNavDisplay('activeLightingProfileDisplay', hit ? (hit.name || `Profile ${hit.index}`) : '--', 'lighting');
-        }
-
-        function setLightingProfileStatus(message, tone = 'muted') {
-            const el = document.getElementById('ltProfileStatus');
-            if (!el) return;
-            el.innerHTML = tone === 'busy'
-                ? `<small><span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${message}</small>`
-                : `<small>${message}</small>`;
-            el.style.color = tone === 'warn' ? '#f59e0b'
-                : tone === 'error' ? '#f87171'
-                : tone === 'ok' ? '#4ade80'
-                : '#aaa';
         }
 
         function getVehicleScopedTotalLEDCount() {
@@ -4812,7 +4799,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 msg.style.fontSize = '0.875rem';
                 msg.textContent = 'No profiles saved yet';
                 container.appendChild(msg);
-                setLightingProfileStatus('Status: no profiles found', 'warn');
                 syncLightingProfileActionButtons();
                 syncLightingProfilesCardUI();
                 return;
@@ -4861,8 +4847,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 row.appendChild(delBtn);
                 container.appendChild(row);
             });
-
-            setLightingProfileStatus('Status: ready', 'muted');
             syncLightingProfileActionButtons();
             syncLightingProfilesCardUI();
             updateDashboardActiveLightingProfile();
@@ -4913,14 +4897,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     await pushAllLightGroupsToESP32(lightGroups);
                     await pushSystemCommand('lights_master', { enabled: getMasterLightsEnabled() });
                     toast.success(`Loaded lighting profile "${profile.name}"`);
-                    setLightingProfileStatus(`Status: applied "${profile.name}"`, 'ok');
                 } catch (e) {
                     toast.warning(`Profile set locally. Push failed: ${e.message}`);
-                    setLightingProfileStatus('Status: push failed, groups applied locally', 'warn');
                 }
             } else {
                 toast.success(`Profile "${profile.name}" loaded. Connect to apply to truck.`);
-                setLightingProfileStatus(`Status: "${profile.name}" loaded (not connected)`, 'muted');
             }
         }
 
@@ -4962,7 +4943,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             lightingGroupsDirty = false;
             syncLightingProfileActionButtons();
             toast.success(`Saved lighting profile "${profileName}"`);
-            setLightingProfileStatus(`Status: "${profileName}" saved`, 'ok');
         }
 
         async function updateActiveLightingProfile() {
@@ -4981,7 +4961,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             lightingGroupsDirty = false;
             syncLightingProfileActionButtons();
             toast.success(`Updated lighting profile "${active.name}"`);
-            setLightingProfileStatus(`Status: "${active.name}" updated`, 'ok');
         }
 
         async function discardLightingProfileChanges() {
@@ -5002,7 +4981,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             lightingGroupsDirty = false;
             syncLightingProfileActionButtons();
-            setLightingProfileStatus('Status: unsaved lighting changes discarded', 'muted');
         }
 
         async function confirmDeleteLightingProfile(index) {
@@ -5045,7 +5023,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             populateLightingProfileSelector();
             updateDashboardActiveLightingProfile();
             toast.success('Lighting profile deleted');
-            setLightingProfileStatus('Status: profile deleted', 'ok');
         }
 
         window.selectLightingProfile = selectLightingProfile;
@@ -5308,7 +5285,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function getPatternMode(patternName) {
             const value = (patternName || '').toLowerCase();
             if (!value) return 1;
-            if (value === 'blink' || value === 'strobe') return 2;
+            if (value === 'blink' || value === 'strobe' || value === 'police') return 2;
             if (value === 'breathe' || value === 'fade' || value === 'heartbeat') return 3;
             if (value === 'running' || value === 'larson') return 4;
             if (value === 'twinkle' || value === 'sparkle' || value === 'flash_sparkle' || value === 'glitter' || value === 'solid_glitter') return 5;
@@ -5320,6 +5297,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const value = (patternName || '').toLowerCase();
             if (value === 'strobe') return 80;
             if (value === 'blink') return 220;
+            if (value === 'police') return 220;
             if (value === 'flicker' || value === 'fire_flicker' || value === 'sparkle' || value === 'glitter' || value === 'solid_glitter' || value === 'flash_sparkle') return 120;
             if (value === 'running' || value === 'larson') return 180;
             if (value === 'breathe' || value === 'fade' || value === 'heartbeat') return 650;
@@ -5380,7 +5358,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 color2: toHexColor(normalized.color2, '#000000'),
                 brightness: Math.max(0, Math.min(100, brightness100)),
                 effect: normalizeEffectNameForEngine(normalized.pattern),
-                speed: 128,
+                speed: Number(normalized.speed ?? 128),
                 leds: normalizeLedIndices(normalized.indices)
             };
         }
@@ -5464,6 +5442,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     name: group.name || 'Unnamed Group',
                     enabled: !!group.enabled,
                     brightness,
+                    speed: Number(group.speed ?? 128),
                     color: colorStr,
                     color2: color2Str,
                     indices: normalizeLedIndices(group.indices),
@@ -5760,34 +5739,44 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let currentBrightness = 80; // Default 80% (preserve LED longevity)
         let currentColor = '#ff0000'; // Default red
         let currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
+        let currentIntensity = 128; // Default mid-range intensity (0-255)
+        let currentSpeed = 128; // Default mid-range effect speed (0-255)
         let lightGroupBrightnessSliderInstance = null;
+        let lightGroupIntensitySliderInstance = null;
+        let lightGroupSpeedSliderInstance = null;
 
         function updateLightGroupBrightnessThumbLabel(value) {
             const sliderElement = document.querySelector('#lightGroupBrightnessSlider');
             if (!sliderElement) return;
             const thumb = sliderElement.querySelector('.range-slider__thumb[data-upper]');
             if (thumb) {
-                thumb.textContent = String(Math.round(value));
+                thumb.textContent = '';
+            }
+        }
+
+        function updateLightGroupIntensityThumbLabel(value) {
+            const sliderElement = document.querySelector('#lightGroupIntensitySlider');
+            if (!sliderElement) return;
+            const thumb = sliderElement.querySelector('.range-slider__thumb[data-upper]');
+            if (thumb) {
+                thumb.textContent = '';
+            }
+        }
+
+        function updateLightGroupSpeedThumbLabel(value) {
+            const sliderElement = document.querySelector('#lightGroupSpeedSlider');
+            if (!sliderElement) return;
+            const thumb = sliderElement.querySelector('.range-slider__thumb[data-upper]');
+            if (thumb) {
+                thumb.textContent = '';
             }
         }
 
         // Pattern metadata: which patterns need dual colors
         const PATTERN_METADATA = {
-            solid: { needsDualColor: false },
-            blink: { needsDualColor: true },
-            strobe: { needsDualColor: false },
-            breathe: { needsDualColor: true },
-            fade: { needsDualColor: true },
-            twinkle: { needsDualColor: true },
-            sparkle: { needsDualColor: false },
-            flash_sparkle: { needsDualColor: true },
-            glitter: { needsDualColor: false },
-            solid_glitter: { needsDualColor: false },
-            running: { needsDualColor: true },
-            larson: { needsDualColor: false },
-            flicker: { needsDualColor: false },
-            fire_flicker: { needsDualColor: false },
-            heartbeat: { needsDualColor: true }
+            solid:   { needsDualColor: false, hasIntensity: false, hasSpeed: false, secondaryLabel: null },
+            glitter: { needsDualColor: true,  hasIntensity: true,  hasSpeed: false, secondaryLabel: 'Glitter Color' },
+            police:  { needsDualColor: true,  hasIntensity: false, hasSpeed: true,  secondaryLabel: 'Alternating Color' }
         };
 
         function getLightGroupPatternNames() {
@@ -5804,10 +5793,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             patterns.forEach(patternName => {
                 const option = document.createElement('option');
                 option.value = patternName;
-                // Add asterisk for dual-color patterns
-                const metadata = PATTERN_METADATA[patternName];
-                const displayName = metadata?.needsDualColor ? `${patternName} *` : patternName;
-                option.textContent = displayName;
+                option.textContent = patternName;
                 patternSelect.appendChild(option);
             });
 
@@ -5822,30 +5808,37 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function toggleSecondaryColorVisibility(pattern) {
             const secondaryColorContainer = document.getElementById('secondaryColorPickerContainer');
             const colorRow = document.getElementById('lightGroupColorRow');
-            const secondaryTargetBtn = document.getElementById('favoriteColorTargetSecondary')?.closest('label');
-            const secondaryTargetInput = document.getElementById('favoriteColorTargetSecondary');
+            const intensityContainer = document.getElementById('lightGroupIntensityContainer');
+            const speedContainer = document.getElementById('lightGroupSpeedContainer');
+            const secondaryLabel = document.getElementById('secondaryColorLabel');
             
             if (!secondaryColorContainer) return;
 
             const metadata = PATTERN_METADATA[pattern];
             const needsDualColor = metadata?.needsDualColor ?? false;
+            const hasIntensity = metadata?.hasIntensity ?? false;
+            const hasSpeed = metadata?.hasSpeed ?? false;
+
+            // Update dynamic secondary color label
+            if (secondaryLabel) {
+                secondaryLabel.textContent = metadata?.secondaryLabel || 'Secondary Color';
+            }
 
             if (needsDualColor) {
                 secondaryColorContainer.style.display = 'block';
                 if (colorRow) colorRow.classList.remove('single-color');
-                if (secondaryTargetBtn) secondaryTargetBtn.style.display = '';
             } else {
                 secondaryColorContainer.style.display = 'none';
                 if (colorRow) colorRow.classList.add('single-color');
-                if (secondaryTargetBtn) secondaryTargetBtn.style.display = 'none';
-                // Switch to primary target if secondary was selected
-                if (secondaryTargetInput && secondaryTargetInput.checked) {
-                    const primaryInput = document.getElementById('favoriteColorTargetPrimary');
-                    if (primaryInput) {
-                        primaryInput.checked = true;
-                        activeFavoriteColorTarget = 'primary';
-                    }
-                }
+            }
+
+            // Toggle intensity visibility based on pattern support
+            if (intensityContainer) {
+                intensityContainer.style.display = hasIntensity ? 'block' : 'none';
+            }
+
+            if (speedContainer) {
+                speedContainer.style.display = hasSpeed ? 'block' : 'none';
             }
         }
 
@@ -5872,9 +5865,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const colorHex2 = document.getElementById('lightGroupColorHex2');
             
             if (colorPicker) colorPicker.value = currentColor;
-            if (colorHex) colorHex.textContent = currentColor.toUpperCase();
+            if (colorHex) colorHex.value = currentColor.toUpperCase();
             if (colorPicker2) colorPicker2.value = currentColor2;
-            if (colorHex2) colorHex2.textContent = currentColor2.toUpperCase();
+            if (colorHex2) colorHex2.value = currentColor2.toUpperCase();
         }
 
         function openLightGroupModal(index = null) {
@@ -5896,12 +5889,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const colorHex = document.getElementById('lightGroupColorHex');
             const totalLEDCount = parseInt(document.getElementById('totalLEDCount').value) || 20;
             
-            // Update modal title and total LED count display
-            const modalTotalLedsSpan = document.getElementById('modalTotalLeds');
-            if (modalTotalLedsSpan) {
-                modalTotalLedsSpan.textContent = totalLEDCount;
-            }
-            
             if (index !== null) {
                 // Edit mode
                 const group = lightGroups[index];
@@ -5920,6 +5907,30 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 updateLightGroupBrightnessThumbLabel(brightnessPercent);
                 brightnessValue.textContent = brightnessPercent + '%';
 
+                // Set intensity (0-255 range)
+                const intensity = group.intensity !== undefined ? group.intensity : 128;
+                currentIntensity = intensity;
+                const intensityValue = document.getElementById('lightGroupIntensityValue');
+                if (lightGroupIntensitySliderInstance) {
+                    lightGroupIntensitySliderInstance.value([0, intensity]);
+                }
+                updateLightGroupIntensityThumbLabel(intensity);
+                if (intensityValue) {
+                    intensityValue.textContent = String(intensity);
+                }
+
+                // Set speed (0-255 range)
+                const speed = group.speed !== undefined ? group.speed : 128;
+                currentSpeed = speed;
+                const speedValue = document.getElementById('lightGroupSpeedValue');
+                if (lightGroupSpeedSliderInstance) {
+                    lightGroupSpeedSliderInstance.value([0, speed]);
+                }
+                updateLightGroupSpeedThumbLabel(speed);
+                if (speedValue) {
+                    speedValue.textContent = String(speed);
+                }
+
                 // Set pattern
                 currentPattern = group.pattern || LIGHT_GROUP_DEFAULT_PATTERN;
                 populateLightGroupPatternOptions(currentPattern);
@@ -5933,12 +5944,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 currentColor = color;
                 currentColor2 = color2;
                 colorPicker.value = color;
-                colorHex.textContent = color.toUpperCase();
+                colorHex.value = color.toUpperCase();
                 
                 const colorPicker2 = document.getElementById('lightGroupColorPicker2');
                 const colorHex2 = document.getElementById('lightGroupColorHex2');
                 if (colorPicker2) colorPicker2.value = color2;
-                if (colorHex2) colorHex2.textContent = color2.toUpperCase();
+                if (colorHex2) colorHex2.value = color2.toUpperCase();
             } else {
                 // Add mode
                 titleSpan.textContent = 'Add';
@@ -5949,6 +5960,27 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 }
                 updateLightGroupBrightnessThumbLabel(80);
                 brightnessValue.textContent = '80%';
+                
+                currentIntensity = 128;
+                const intensityValue = document.getElementById('lightGroupIntensityValue');
+                if (lightGroupIntensitySliderInstance) {
+                    lightGroupIntensitySliderInstance.value([0, 128]);
+                }
+                updateLightGroupIntensityThumbLabel(128);
+                if (intensityValue) {
+                    intensityValue.textContent = '128';
+                }
+
+                currentSpeed = 128;
+                const speedValue = document.getElementById('lightGroupSpeedValue');
+                if (lightGroupSpeedSliderInstance) {
+                    lightGroupSpeedSliderInstance.value([0, 128]);
+                }
+                updateLightGroupSpeedThumbLabel(128);
+                if (speedValue) {
+                    speedValue.textContent = '128';
+                }
+                
                 currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
                 populateLightGroupPatternOptions(LIGHT_GROUP_DEFAULT_PATTERN);
                 if (patternSelect) {
@@ -5957,17 +5989,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 currentColor = '#ff0000';
                 currentColor2 = '#000000';
                 colorPicker.value = '#ff0000';
-                colorHex.textContent = '#FF0000';
+                colorHex.value = '#FF0000';
                 
                 const colorPicker2 = document.getElementById('lightGroupColorPicker2');
                 const colorHex2 = document.getElementById('lightGroupColorHex2');
                 if (colorPicker2) colorPicker2.value = '#000000';
-                if (colorHex2) colorHex2.textContent = '#000000';
+                if (colorHex2) colorHex2.value = '#000000';
             }
             
             renderLedGrid(totalLEDCount);
-            updateSelectionSummary();
-            renderColorPresets();
 
             // While editing, isolate only this group for visual feedback.
             if (index !== null) {
@@ -5996,11 +6026,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             openLightGroupModal(index);
         }
 
+        function getLedGridColumns() {
+            const isPortraitMobile = window.matchMedia('(orientation: portrait) and (max-width: 600px)').matches;
+            return isPortraitMobile ? 5 : 10;
+        }
+
         function renderLedGrid(totalCount = 20) {
             const gridContainer = document.getElementById('ledGrid');
             gridContainer.innerHTML = '';
             gridContainer.style.display = 'grid';
-            gridContainer.style.gridTemplateColumns = 'repeat(10, 1fr)';
+            gridContainer.style.gridTemplateColumns = `repeat(${getLedGridColumns()}, 1fr)`;
             gridContainer.style.gap = '0.5rem';
             
             const maxLEDs = Math.min(totalCount, MAX_LIGHTS_TOTAL_LEDS);
@@ -6009,7 +6044,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'led-grid-button';
-                button.textContent = String(i); // Zero-based display: LED 0 is first LED
+                button.textContent = String(i + 1); // Human-friendly display (1-based)
+                button.setAttribute('aria-label', `LED ${i + 1}`);
+                button.title = `LED ${i + 1}`;
                 
                 // Check if this LED is already selected
                 if (currentSelectedLEDs.has(i)) {
@@ -6038,31 +6075,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 buttons[ledIndex].classList.toggle('selected');
             }
             
-            updateSelectionSummary();
             attemptAutoPreviewFromModal();
-        }
-
-        function updateSelectionSummary() {
-            const summaryDiv = document.getElementById('lightGroupSelectedSummary');
-            const countDiv = document.querySelector('[id="lightGroupSelectedCount"]');
-            const indices = Array.from(currentSelectedLEDs).sort((a, b) => a - b);
-            const count = indices.length;
-            
-            if (countDiv) {
-                countDiv.textContent = count;
-            }
-            
-            let summaryText = '';
-            if (count === 0) {
-                summaryText = 'No LEDs selected';
-            } else {
-                const ranges = formatLedRanges(indices);
-                summaryText = ranges;
-            }
-            
-            if (summaryDiv) {
-                summaryDiv.textContent = summaryText;
-            }
         }
 
         function formatLedRanges(indices) {
@@ -6076,26 +6089,22 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 if (indices[i] === rangeEnd + 1) {
                     rangeEnd = indices[i];
                 } else {
+                    const displayStart = rangeStart + 1;
+                    const displayEnd = rangeEnd + 1;
                     ranges.push(rangeStart === rangeEnd ? 
-                        String(rangeStart) : 
-                        `${rangeStart}-${rangeEnd}`);
+                        String(displayStart) : 
+                        `${displayStart}-${displayEnd}`);
                     rangeStart = indices[i];
                     rangeEnd = indices[i];
                 }
             }
+            const displayStart = rangeStart + 1;
+            const displayEnd = rangeEnd + 1;
             ranges.push(rangeStart === rangeEnd ? 
-                String(rangeStart) : 
-                `${rangeStart}-${rangeEnd}`);
+                String(displayStart) : 
+                `${displayStart}-${displayEnd}`);
             
             return ranges.join(', ');
-        }
-
-        function clearLedSelection() {
-            currentSelectedLEDs.clear();
-            document.querySelectorAll('.led-grid-button.selected').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            updateSelectionSummary();
         }
 
         function getLightGroupDraftFromModal() {
@@ -6111,6 +6120,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 color: currentColor,
                 color2: currentColor2,
                 pattern: selectedPattern,
+                speed: currentSpeed,
                 cycleIntervalSeconds: (selectedPattern === 'Cycle' || selectedPattern === 'Cycle Favorites') ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined,
                 enabled: true
             };
@@ -6184,6 +6194,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     color: currentColor,
                     color2: currentColor2,
                     pattern: selectedPattern,
+                    intensity: currentIntensity,
+                    speed: currentSpeed,
                     cycleIntervalSeconds,
                     enabled: wasEnabled
                 };
@@ -6214,6 +6226,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     color: currentColor,
                     color2: currentColor2,
                     pattern: selectedPattern,
+                    intensity: currentIntensity,
+                    speed: currentSpeed,
                     cycleIntervalSeconds,
                     enabled: false
                 });
@@ -6238,6 +6252,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             currentColor = '#ff0000';
             currentColor2 = '#000000';
             currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
+            currentIntensity = 128;
+            currentSpeed = 128;
         }
 
         function setLightGroupColor(color, target = 'primary') {
@@ -6246,13 +6262,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const colorPicker2 = document.getElementById('lightGroupColorPicker2');
                 const colorHex2 = document.getElementById('lightGroupColorHex2');
                 if (colorPicker2) colorPicker2.value = color;
-                if (colorHex2) colorHex2.textContent = color.toUpperCase();
+                if (colorHex2) colorHex2.value = color.toUpperCase();
             } else {
                 currentColor = color;
                 const colorPicker = document.getElementById('lightGroupColorPicker');
                 const colorHex = document.getElementById('lightGroupColorHex');
                 if (colorPicker) colorPicker.value = color;
-                if (colorHex) colorHex.textContent = color.toUpperCase();
+                if (colorHex) colorHex.value = color.toUpperCase();
             }
 
             attemptAutoPreviewFromModal();
@@ -6394,10 +6410,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const brightnessSliderElement = document.querySelector('#lightGroupBrightnessSlider');
             if (brightnessSliderElement && brightnessValue) {
                 lightGroupBrightnessSliderInstance = rangeSlider(brightnessSliderElement, {
-                    value: [0, 80],
+                    value: [0, 80],     //initial slider thumb positions. First value (0) is the lower thumb. Second value (80) is the upper thumb (the one you actually move)
                     min: 0,
                     max: 100,
-                    step: 10,
+                    step: 5,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
@@ -6412,6 +6428,52 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 updateLightGroupBrightnessThumbLabel(80);
             }
 
+            // Initialize intensity slider
+            const intensityValue = document.getElementById('lightGroupIntensityValue');
+            const intensitySliderElement = document.querySelector('#lightGroupIntensitySlider');
+            if (intensitySliderElement && intensityValue) {
+                lightGroupIntensitySliderInstance = rangeSlider(intensitySliderElement, {
+                    value: [0, 128],    //initial slider thumb positions. First value (0) is the lower thumb. Second value (128) is the upper thumb (the one you actually move)
+                    min: 0,
+                    max: 255,
+                    step: 5,
+                    thumbsDisabled: [true, false],
+                    rangeSlideDisabled: true,
+                    onInput: function(value) {
+                        const intensity = Array.isArray(value) ? parseInt(value[1], 10) : parseInt(value, 10);
+                        if (Number.isNaN(intensity)) return;
+                        currentIntensity = intensity;
+                        intensityValue.textContent = String(intensity);
+                        updateLightGroupIntensityThumbLabel(intensity);
+                        attemptAutoPreviewFromModal();
+                    }
+                });
+                updateLightGroupIntensityThumbLabel(128);
+            }
+
+            // Initialize speed slider
+            const speedValue = document.getElementById('lightGroupSpeedValue');
+            const speedSliderElement = document.querySelector('#lightGroupSpeedSlider');
+            if (speedSliderElement && speedValue) {
+                lightGroupSpeedSliderInstance = rangeSlider(speedSliderElement, {
+                    value: [0, 128],
+                    min: 0,
+                    max: 255,
+                    step: 1,
+                    thumbsDisabled: [true, false],
+                    rangeSlideDisabled: true,
+                    onInput: function(value) {
+                        const speed = Array.isArray(value) ? parseInt(value[1], 10) : parseInt(value, 10);
+                        if (Number.isNaN(speed)) return;
+                        currentSpeed = speed;
+                        speedValue.textContent = String(speed);
+                        updateLightGroupSpeedThumbLabel(speed);
+                        attemptAutoPreviewFromModal();
+                    }
+                });
+                updateLightGroupSpeedThumbLabel(128);
+            }
+
             const lightGroupPatternSelect = document.getElementById('lightGroupPatternSelect');
             populateLightGroupPatternOptions(LIGHT_GROUP_DEFAULT_PATTERN);
             if (lightGroupPatternSelect) {
@@ -6424,24 +6486,23 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 });
             }
 
-            const favoriteTargetInputs = document.querySelectorAll('input[name="favoriteColorTarget"]');
-            favoriteTargetInputs.forEach(input => {
-                input.addEventListener('change', function() {
-                    if (this.checked) {
-                        activeFavoriteColorTarget = this.value === 'secondary' ? 'secondary' : 'primary';
-                        renderColorPresets();
-                    }
-                });
-            });
-            
             // Color picker event listeners
             const colorPicker = document.getElementById('lightGroupColorPicker');
             const colorHex = document.getElementById('lightGroupColorHex');
             if (colorPicker && colorHex) {
                 colorPicker.addEventListener('input', function() {
                     currentColor = this.value;
-                    colorHex.textContent = this.value.toUpperCase();
+                    colorHex.value = this.value.toUpperCase();
                     attemptAutoPreviewFromModal();
+                });
+                colorHex.addEventListener('input', function() {
+                    const raw = this.value.trim();
+                    const hex = raw.startsWith('#') ? raw : '#' + raw;
+                    if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                        currentColor = hex.toLowerCase();
+                        colorPicker.value = currentColor;
+                        attemptAutoPreviewFromModal();
+                    }
                 });
             }
             
@@ -6451,8 +6512,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (colorPicker2 && colorHex2) {
                 colorPicker2.addEventListener('input', function() {
                     currentColor2 = this.value;
-                    colorHex2.textContent = this.value.toUpperCase();
+                    colorHex2.value = this.value.toUpperCase();
                     attemptAutoPreviewFromModal();
+                });
+                colorHex2.addEventListener('input', function() {
+                    const raw = this.value.trim();
+                    const hex = raw.startsWith('#') ? raw : '#' + raw;
+                    if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                        currentColor2 = hex.toLowerCase();
+                        colorPicker2.value = currentColor2;
+                        attemptAutoPreviewFromModal();
+                    }
                 });
             }
 
@@ -6481,7 +6551,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             
             // Load light groups and color presets
             await loadLightGroups();
-            loadColorPresets();
+            renderFactoryPresets();
             // setMasterLightsEnabled(getMasterLightsEnabled(), false);
             applyLightsHierarchyToHardware();
 
@@ -7699,7 +7769,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         window.updateActiveDrivingProfile = updateActiveDrivingProfile;
         window.confirmDeleteDrivingProfile = confirmDeleteDrivingProfile;
 
-        const MAX_DRIVING_PROFILES = 10;
+        const MAX_DRIVING_PROFILES = 5;
 
         // ==================== Config Fetching ====================
         let hasShownInitialConfigToast = false;

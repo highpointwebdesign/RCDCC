@@ -600,14 +600,16 @@
                             <div id="drvProfileList" style="display:flex;flex-direction:column;gap:4px;">
                                 <div class="text-muted text-center py-2" style="font-size:0.875rem;">Connect to load profiles</div>
                             </div>
-                            <div class="d-grid gap-2 mt-2">
+                            <div class="d-flex gap-2 mt-2">
                                 <button type="button" class="btn btn-sm btn-outline-warning profile-update-btn" id="drvProfileUpdateBtn" disabled
+                                        style="flex:1;"
                                         onclick="updateActiveDrivingProfile()">
-                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">sync</span> Update Active Profile
+                                    Save Changes
                                 </button>
                                 <button type="button" class="btn btn-sm btn-gold" id="saveNewProfileBtn" disabled
+                                        style="flex:1;"
                                         onclick="saveAsNewDrivingProfile()">
-                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">add</span> Save as New
+                                    Save as New
                                 </button>
                             </div>
                         </div>
@@ -1161,55 +1163,6 @@
                 <h2 class="section-title">Lights</h2>
             </div>
             <div class="row g-3">
-
-                <!-- Basic Lights Test / STAGE 1 -->
-                <div class="col-12">
-                    <div class="card" id="basicLightsTestCard" style="border:2px solid gold;">
-                        <div class="card-header card-header-dark d-flex align-items-center gap-2">
-                            <span class="material-symbols-outlined" style="color:gold;font-size:1.2rem;">bolt</span>
-                            <span style="color:gold;font-weight:700;letter-spacing:.03em;">Basic Lights Test / STAGE 1</span>
-                        </div>
-                        <div class="card-body">
-                            <div class="d-flex align-items-center gap-3 mb-3">
-                                <span class="fw-semibold" style="min-width:80px;">Master</span>
-                                <button type="button" id="basicLightsMasterToggle"
-                                        class="btn btn-outline-secondary"
-                                        aria-pressed="false"
-                                        onclick="basicLightsToggle(this)">
-                                    <span class="material-symbols-outlined" style="vertical-align:middle;">light_off</span>
-                                </button>
-                            </div>
-                            <div class="d-flex align-items-center gap-3 mb-3">
-                                <span class="fw-semibold" style="min-width:80px;">Color</span>
-                                <div id="basicLightsColorSwatch"
-                                     style="width:42px;height:42px;border-radius:6px;background:#0000ff;cursor:pointer;border:2px solid #555;"
-                                     onclick="document.getElementById('basicLightsColorInput').click()"></div>
-                                <input type="color" id="basicLightsColorInput" value="#0000ff"
-                                       style="opacity:0;width:0;height:0;position:absolute;pointer-events:none;"
-                                       oninput="basicLightsColorChange(this.value)">
-                            </div>
-                            <div class="d-flex align-items-center gap-3 mb-3">
-                                <span class="fw-semibold" style="min-width:80px;">Brightness</span>
-                                <input type="range" class="form-range flex-grow-1" id="basicLightsBriSlider"
-                                       min="0" max="100" value="100"
-                                       oninput="basicLightsBriChange(this.value)">
-                                <span id="basicLightsBriLabel" style="min-width:44px;text-align:right;">100%</span>
-                            </div>
-                            <div class="d-flex align-items-center gap-2 mb-2">
-                                <button type="button" class="btn btn-outline-warning btn-sm" id="basicLightsDiagStartBtn"
-                                        onclick="basicLightsDiagStart()">
-                                    Start Diag Cycle
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" id="basicLightsDiagStopBtn"
-                                        onclick="basicLightsDiagStop()">
-                                    Stop Diag
-                                </button>
-                            </div>
-                            <div id="basicLightsStatus" class="text-muted small mt-1">Waiting for connection…</div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Lighting Profiles Card -->
                 <div class="col-12">
                     <div class="card" id="lightingProfilesCard">
@@ -1230,15 +1183,16 @@
                             <div id="ltProfileList" style="display:flex;flex-direction:column;gap:4px;">
                                 <div class="text-muted text-center py-2" style="font-size:0.875rem;">No profiles saved yet</div>
                             </div>
-                            <div id="ltProfileStatus" class="form-text mt-2"><small style="color:#aaa;">Status: idle</small></div>
-                            <div class="d-grid gap-2 mt-2">
+                            <div class="d-flex gap-2 mt-2">
                                 <button type="button" class="btn btn-sm btn-outline-warning profile-update-btn" id="ltProfileUpdateBtn" disabled
+                                        style="flex:1;"
                                         onclick="updateActiveLightingProfile()">
-                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">sync</span> Update Active Profile
+                                    Save Changes
                                 </button>
                                 <button type="button" class="btn btn-sm btn-gold" id="saveNewLightingProfileBtn"
+                                        style="flex:1;"
                                         onclick="saveAsNewLightingProfile()">
-                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">add</span> Save as New
+                                    Save as New
                                 </button>
                             </div>
                         </div>
@@ -1246,7 +1200,7 @@
                 </div>
 
                 <!-- Manage Light Groups Card -->
-                <div class="<div class="col-12 col-md-6">">
+                <div class="col-12 col-md-6">
                     <div class="card" id="manageLightGroupsCard">
                         <div class="card-header card-header-dark d-flex justify-content-between align-items-center">
                             <div>
@@ -1259,15 +1213,14 @@
                             </div>
                         </div>
                         <div class="card-body" id="manageLightGroupsCardBody">
-                            <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+                            <div class="light-group-config-item mb-3">
                                 <label for="totalLEDCount" class="form-label mb-0" style="flex:1;">
                                     <strong>Total LEDs in your strip<span id="totalLEDCountVehicleLabel" class="ms-1 fw-normal text-muted" style="font-size:0.85em; display:none;"></span></strong>
                                     <div class="form-text mt-0"><small>Minimum: 1, Maximum: 30</small></div>
                                 </label>
                                 <input type="number" class="form-control text-center" id="totalLEDCount" min="1" max="30" value="20" placeholder="20" style="width:80px;flex-shrink:0;">
                             </div>
-                            <hr class="my-3">
-                            <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+                            <div class="light-group-config-item mb-3">
                                 <label for="lightColorOrder" class="form-label mb-0" style="flex:1;">
                                     <strong>LED Color Order</strong>
                                     <div class="form-text mt-0"><small>Match your strip channel order to fix swapped colors.</small></div>
@@ -1487,6 +1440,10 @@
             <span class="material-symbols-outlined">videocam</span>
             <span>FPV</span>
         </button>
+        <button id="nav-lights" data-target="lights">
+            <span class="material-symbols-outlined">lightbulb</span>
+            <span>Lights</span>
+        </button>
         <button id="nav-settings" data-target="settings">
             <span class="material-symbols-outlined">settings_ethernet</span>
             <span>More</span>
@@ -1621,18 +1578,26 @@
                 </div>
                 <div class="modal-body" style="color: #000;">
                     <!-- Group Name Input -->
-                    <div class="mb-4">
+                    <div class="light-group-form-item">
                         <label for="lightGroupNameInput" class="form-label"><strong>Group Name</strong></label>
                         <input type="text" class="form-control" id="lightGroupNameInput" maxlength="12" placeholder="e.g., Headlights">
                     </div>
 
+                    <!-- Fx Selection -->
+                    <div class="light-group-form-item">
+                        <label for="lightGroupPatternSelect" class="form-label"><strong>Fx</strong></label>
+                        <select class="form-select" id="lightGroupPatternSelect">
+                            <!-- Options populated by JavaScript -->
+                        </select>
+                    </div>
+
                     <!-- Brightness Slider -->
-                    <div class="mb-4">
-                        <label for="lightGroupBrightnessSlider" class="form-label"><strong>Brightness</strong></label>
-                        <div class="d-flex align-items-center gap-3 mb-2">
-                            <div id="lightGroupBrightnessSlider" class="servo-trim-slider" style="flex: 1;"></div>
-                            <span id="lightGroupBrightnessValue" style="min-width: 50px; font-weight: 600; font-size: 1.1rem;">80%</span>
+                    <div class="light-group-form-item">
+                        <div class="d-flex align-items-center gap-1 mb-2">
+                            <label for="lightGroupBrightnessSlider" class="form-label mb-0"><strong>Brightness:</strong></label>
+                            <span id="lightGroupBrightnessValue" style="font-weight: 600; font-size: 1.05rem;">80%</span>
                         </div>
+                        <div id="lightGroupBrightnessSlider" class="servo-trim-slider" style="flex: 1;"></div>
                         <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                             <span>0%</span>
                             <span>50%</span>
@@ -1640,74 +1605,75 @@
                         </div>
                     </div>
 
-                    <!-- Pattern Selection -->
-                    <div class="mb-4">
-                        <label for="lightGroupPatternSelect" class="form-label"><strong>Pattern</strong></label>
-                        <select class="form-select" id="lightGroupPatternSelect">
-                            <!-- Options populated by JavaScript -->
-                        </select>
-                        <div class="form-text">
-                            Patterns marked with an asterisk (*) use both primary and secondary colors.
+                    <!-- Effect Intensity Slider (Shown only for patterns that support it) -->
+                    <div class="light-group-form-item" id="lightGroupIntensityContainer" style="display: none;">
+                        <div class="d-flex align-items-center gap-1 mb-2">
+                            <label for="lightGroupIntensitySlider" class="form-label mb-0"><strong>Effect Intensity:</strong></label>
+                            <span id="lightGroupIntensityValue" style="font-weight: 600; font-size: 1.05rem;">128</span>
+                        </div>
+                        <div id="lightGroupIntensitySlider" class="servo-trim-slider" style="flex: 1;"></div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                            <span>0</span>
+                            <span>128</span>
+                            <span>255</span>
+                        </div>
+                    </div>
+
+                    <!-- Effect Speed Slider (Shown only for patterns that support it) -->
+                    <div class="light-group-form-item" id="lightGroupSpeedContainer" style="display: none;">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <label for="lightGroupSpeedSlider" class="form-label mb-0"><strong>Effect Speed:</strong></label>
+                            <span id="lightGroupSpeedValue" style="font-weight: 600; font-size: 1.05rem;">128</span>
+                        </div>
+                        <div id="lightGroupSpeedSlider" class="servo-trim-slider" style="flex: 1;"></div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                            <span>0</span>
+                            <span>128</span>
+                            <span>255</span>
                         </div>
                     </div>
 
                     <!-- Color Pickers -->
-                    <div class="mb-4 light-group-color-row" id="lightGroupColorRow">
-                        <div class="light-group-color-col" id="primaryColorPickerContainer">
-                            <label for="lightGroupColorPicker" class="form-label"><strong>Primary Color</strong></label>
-                            <div class="d-flex align-items-center gap-3 mb-2">
-                                <input type="color" class="form-control form-control-color" id="lightGroupColorPicker" value="#ff0000" title="Choose primary color">
-                                <span id="lightGroupColorHex" style="font-family: monospace; font-weight: 600;">#FF0000</span>
+                    <div id="lightGroupColorRow">
+                        <div id="primaryColorPickerContainer">
+                            <div class="factory-preset-group light-group-form-item" id="primaryPresetGroup">
+                                <div class="factory-preset-header-row">
+                                    <label for="lightGroupColorPicker" class="form-label mb-0"><strong>Main Color</strong></label>
+                                    <input type="text" id="lightGroupColorHex" class="color-hex-input" value="#FF0000" maxlength="7" spellcheck="false" autocomplete="off">
+                                    <input type="color" class="form-control form-control-color" id="lightGroupColorPicker" value="#ff0000" title="Choose primary color">
+                                    <button type="button" class="factory-preset-chevron-btn" id="primaryPresetToggle" onclick="toggleLightGroupPresetSection('primary')" aria-expanded="true" aria-controls="primaryPresetBody" aria-label="Toggle main color presets">
+                                        <span class="material-symbols-outlined factory-preset-chevron" id="primaryPresetChevron" aria-hidden="true">expand_less</span>
+                                    </button>
+                                </div>
+                                <div id="primaryPresetBody" class="factory-preset-body">
+                                    <div id="primaryFactoryPresets" class="factory-preset-grid"></div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="light-group-color-col" id="secondaryColorPickerContainer">
-                            <label for="lightGroupColorPicker2" class="form-label"><strong>Secondary Color</strong></label>
-                            <div class="d-flex align-items-center gap-3 mb-2">
-                                <input type="color" class="form-control form-control-color" id="lightGroupColorPicker2" value="#000000" title="Choose secondary color">
-                                <span id="lightGroupColorHex2" style="font-family: monospace; font-weight: 600;">#000000</span>
+                        <div id="secondaryColorPickerContainer">
+                            <div class="factory-preset-group light-group-form-item" id="secondaryPresetGroup">
+                                <div class="factory-preset-header-row">
+                                    <label for="lightGroupColorPicker2" class="form-label mb-0"><strong id="secondaryColorLabel">Accent Color</strong></label>
+                                    <input type="text" id="lightGroupColorHex2" class="color-hex-input" value="#000000" maxlength="7" spellcheck="false" autocomplete="off">
+                                    <input type="color" class="form-control form-control-color" id="lightGroupColorPicker2" value="#000000" title="Choose secondary color">
+                                    <button type="button" class="factory-preset-chevron-btn" id="secondaryPresetToggle" onclick="toggleLightGroupPresetSection('secondary')" aria-expanded="true" aria-controls="secondaryPresetBody" aria-label="Toggle accent color presets">
+                                        <span class="material-symbols-outlined factory-preset-chevron" id="secondaryPresetChevron" aria-hidden="true">expand_less</span>
+                                    </button>
+                                </div>
+                                <div id="secondaryPresetBody" class="factory-preset-body">
+                                    <div id="secondaryFactoryPresets" class="factory-preset-grid"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Favorite Color Presets (Always Visible) -->
-                    <div class="mb-4">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <small class="text-muted"><strong>Favorite Colors:</strong></small>
-                            <button type="button" class="btn btn-sm btn-gold" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;" onclick="resetColorPresets()">Reset to Defaults</button>
-                        </div>
-                        <div class="btn-group btn-group-sm mb-2 favorite-target-toggle" role="group" aria-label="Favorite color target">
-                            <input type="radio" class="btn-check" name="favoriteColorTarget" id="favoriteColorTargetPrimary" value="primary" autocomplete="off" checked>
-                            <label class="btn favorite-target-btn" for="favoriteColorTargetPrimary">Apply to Primary</label>
-
-                            <input type="radio" class="btn-check" name="favoriteColorTarget" id="favoriteColorTargetSecondary" value="secondary" autocomplete="off">
-                            <label class="btn favorite-target-btn" for="favoriteColorTargetSecondary">Apply to Secondary</label>
-                        </div>
-                        <div id="colorPresetsContainer" class="d-flex gap-2 flex-wrap">
-                            <!-- Presets will be rendered here by JavaScript -->
-                        </div>
-                    </div>
-
                     <!-- LED Selection Section -->
-                    <div class="mb-4">
+                    <div class="light-group-form-item">
                         <label class="form-label"><strong>Select LED Positions</strong></label>
-                        <div class="form-text mb-3">Click any LED number to toggle it on or off. Your total LED count is set to <strong id="modalTotalLeds">20</strong>.</div>
                         
                         <!-- LED Grid -->
-                        <div id="ledGridContainer" style="background-color: #f9fafb; padding: 1.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb; max-height: 400px; overflow-y: auto;">
-                            <div id="ledGrid" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 0.5rem;"></div>
-                        </div>
-
-                        <!-- Selection Summary -->
-                        <div style="margin-top: 1rem; padding: 0.75rem; background-color: #f0f9ff; border: 1px solid #bfdbfe; border-radius: 0.375rem;">
-                            <div style="font-size: 0.875rem; color: #0369a1;"><strong>Selected:</strong> <span id="lightGroupSelectedCount">0</span> LED(s)</div>
-                            <div style="font-size: 0.875rem; color: #0369a1; margin-top: 0.25rem;" id="lightGroupSelectedSummary">None selected yet</div>
-                        </div>
-
-                        <!-- Clear Selection Button -->
-                        <button type="button" class="btn btn-sm btn-gold mt-2" onclick="clearLedSelection()">
-                            Clear Selection
-                        </button>
+                        <div id="ledGrid" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 0.5rem;"></div>
                     </div>
                 </div>
                 <div class="modal-footer">

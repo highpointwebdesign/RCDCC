@@ -457,6 +457,10 @@ const char* const EFFECT_NAMES[FX_COUNT] = {
   "fire_flicker"
 };
 
+// TODO(Future Effects): Track planned additions in one place.
+// - theater (WLED "Theater"): alternating odd/even style cadence
+// - theater_rainbow (WLED "Theater Rainbow")
+
 static const FxMetadata EFFECT_METADATA[FX_COUNT] = {
   { "solid", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: none." },
   { "blink", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls duty cycle; secondary color is the off-state/background." },

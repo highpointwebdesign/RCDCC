@@ -3,13 +3,11 @@
 #include <Wire.h>
 #include <MPU6050.h>
 #include <Adafruit_NeoPixel.h>
-#include <driver/gpio.h>
 #include "Config.h"
 #include "SensorFusion.h"
 #include "SuspensionSimulator.h"
 #include "StorageManager.h"
 #include "PWMOutputs.h"
-#include "LightsEngine.h"
 #include "BluetoothService.h"
 
 // Global instances
@@ -18,7 +16,6 @@ SensorFusion sensorFusion;
 SuspensionSimulator suspensionSimulator;
 StorageManager storageManager;
 PWMOutputs pwmOutputs;
-LightsEngine* lightsEngine = nullptr;  // Initialize as pointer in setup()
 BluetoothService* bluetoothService = nullptr;  // Initialize in setup()
 
 // LED feedback pin
@@ -35,12 +32,7 @@ static constexpr bool LIGHTS_ENTRYPOINT_ENABLED = false;
 // Addressable LED (NeoPixel) - kept for backward compatibility
 Adafruit_NeoPixel statusLED(STATUS_LED_COUNT, STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
 uint32_t currentLEDColor = 0;
-bool legacyStatusLedEnabled = false;
-static bool basicLightsModeActive = false; // lights_basic diagnostic mode state
-static bool lightsDiagActive = false;
-static uint32_t lightsDiagLastStepMs = 0;
-static uint8_t lightsDiagStep = 0;
-static uint16_t lightsDiagIntervalMs = 500;
+bool legacyStatusLedEnabled = true;
 
 // Emergency light state variables
 struct PatternStep {
@@ -64,8 +56,6 @@ unsigned long emergencyLightLastUpdate = 0;
 
 // ==================== Phase 6: Dance Mode ====================
 DanceMode gDanceMode = { false, 0.0f, 0.0f };
-volatile bool gFlashCancelRequested = false;
-static int32_t gLightsReadCursor = 0;
 
 static float clampNorm(float value) {
   if (value < -1.0f) return -1.0f;
@@ -365,119 +355,8 @@ bool applyServoConfigPayload(const String& payload) {
 }
 
 bool applyLightsPayload(const String& payload) {
-  if (!LIGHTS_ENTRYPOINT_ENABLED) {
-    Serial.println("BLE lights payload ignored: lights entrypoint disabled");
-    return true;
-  }
-
-  DynamicJsonDocument doc(4096);
-  DeserializationError error = deserializeJson(doc, payload);
-  if (error) {
-    Serial.printf("BLE lights JSON parse error: %s\n", error.c_str());
-    return false;
-  }
-
-  // New path: single-group updates for low-latency effect edits.
-  if (doc.containsKey("group")) {
-    if (lightsEngine) {
-      const bool ok = lightsEngine->updateGroupFromJson(payload);
-      if (!ok) {
-        Serial.println("BLE lights single-group update rejected");
-        return false;
-      }
-    }
-    startLedBlink();
-    return true;
-  }
-
-  NewLightsConfig config;
-  memset(&config, 0, sizeof(NewLightsConfig));
-
-  if (doc.containsKey("lightGroupsArray")) {
-    JsonArray groupsArray = doc["lightGroupsArray"];
-    config.useLegacyMode = false;
-    config.groupCount = 0;
-
-    for (JsonObject groupObj : groupsArray) {
-      if (config.groupCount >= MAX_DYNAMIC_LIGHT_GROUPS) break;
-
-      ExtendedLightGroup& group = config.groups[config.groupCount];
-      memset(&group, 0, sizeof(ExtendedLightGroup));
-
-      if (groupObj.containsKey("name")) {
-        strncpy(group.name, groupObj["name"], sizeof(group.name) - 1);
-        group.name[sizeof(group.name) - 1] = '\0';
-      }
-
-      const char* pattern = groupObj["pattern"] | "Steady";
-      strncpy(group.pattern, pattern, sizeof(group.pattern) - 1);
-      group.pattern[sizeof(group.pattern) - 1] = '\0';
-
-      group.enabled = groupObj["enabled"] | false;
-      group.brightness = groupObj["brightness"] | 255;
-      group.mode = groupObj["mode"] | LIGHT_MODE_SOLID;
-      group.blinkRate = groupObj["blinkRate"] | 500;
-
-      if (groupObj.containsKey("color")) {
-        if (groupObj["color"].is<const char*>()) {
-          group.color = parseHexColor(groupObj["color"].as<String>());
-        } else {
-          group.color = groupObj["color"].as<uint32_t>();
-        }
-      }
-      if (groupObj.containsKey("color2")) {
-        if (groupObj["color2"].is<const char*>()) {
-          group.color2 = parseHexColor(groupObj["color2"].as<String>());
-        } else {
-          group.color2 = groupObj["color2"].as<uint32_t>();
-        }
-      }
-
-      if (groupObj.containsKey("indices")) {
-        JsonArray indicesArray = groupObj["indices"];
-        for (uint16_t idx : indicesArray) {
-          if (group.ledCount >= MAX_DYNAMIC_GROUP_LEDS) break;
-          group.ledIndices[group.ledCount++] = idx;
-        }
-      }
-
-      config.groupCount++;
-    }
-  } else if (doc.containsKey("lightGroups")) {
-    JsonObject groups = doc["lightGroups"];
-    config.useLegacyMode = true;
-    config.groupCount = 0;
-
-    if (groups.containsKey("headlights")) {
-      JsonObject hl = groups["headlights"];
-      config.legacy.headlights.enabled = hl["enabled"] | false;
-      config.legacy.headlights.brightness = hl["brightness"] | 255;
-      config.legacy.headlights.mode = hl["mode"] | LIGHT_MODE_SOLID;
-      config.legacy.headlights.blinkRate = hl["blinkRate"] | 500;
-    }
-    if (groups.containsKey("tailLights")) {
-      JsonObject tl = groups["tailLights"];
-      config.legacy.tailLights.enabled = tl["enabled"] | false;
-      config.legacy.tailLights.brightness = tl["brightness"] | 255;
-      config.legacy.tailLights.mode = tl["mode"] | LIGHT_MODE_SOLID;
-      config.legacy.tailLights.blinkRate = tl["blinkRate"] | 500;
-    }
-    if (groups.containsKey("emergencyLights")) {
-      JsonObject el = groups["emergencyLights"];
-      config.legacy.emergencyLights.enabled = el["enabled"] | false;
-      config.legacy.emergencyLights.brightness = el["brightness"] | 255;
-      config.legacy.emergencyLights.mode = el["mode"] | LIGHT_MODE_SOLID;
-      config.legacy.emergencyLights.blinkRate = el["blinkRate"] | 500;
-    }
-  } else {
-    return false;
-  }
-
-  storageManager.setNewLightsConfig(config);
-  if (lightsEngine) {
-    lightsEngine->updateFromPayload(config);
-  }
-
+  (void)payload;
+  Serial.println("BLE lights payload ignored: lights engine removed from firmware");
   return true;
 }
 
@@ -514,52 +393,6 @@ bool applySystemCommandPayload(const String& payload) {
     return true;
   }
 
-  if (command == "lights_group_index") {
-    if (!bluetoothService) return false;
-
-    String payloadOut;
-    const bool ok = storageManager.getActiveLightingGroupIndexJSON(payloadOut);
-    bluetoothService->setDirectConfigReadResponse(payloadOut);
-    gLightsReadCursor = 0;
-    if (!ok) {
-      Serial.println("BLE: lights_group_index active profile missing");
-    }
-    return true;
-  }
-
-  if (command == "lights_group_detail") {
-    if (!bluetoothService) return false;
-
-    int32_t requestedCursor = -1;
-    if (doc.containsKey("cursor")) {
-      requestedCursor = doc["cursor"] | -1;
-    } else if (doc.containsKey("index")) {
-      requestedCursor = doc["index"] | -1;
-    }
-
-    if (requestedCursor < 0) {
-      requestedCursor = gLightsReadCursor;
-    }
-
-    String payloadOut;
-    int nextCursor = 0;
-    bool done = true;
-    const bool ok = storageManager.getActiveLightingGroupDetailJSON(
-      static_cast<int>(requestedCursor),
-      payloadOut,
-      nextCursor,
-      done
-    );
-
-    bluetoothService->setDirectConfigReadResponse(payloadOut);
-    gLightsReadCursor = nextCursor;
-
-    if (!ok) {
-      Serial.printf("BLE: lights_group_detail failed at cursor=%d\n", static_cast<int>(requestedCursor));
-    }
-    return true;
-  }
-
   if (command == "autolevel" || command == "resetgyro" || command == "calibrate") {
     if (mpuConnected) {
       sensorFusion.calibrate(mpu, [](const String& msg) {
@@ -580,54 +413,8 @@ bool applySystemCommandPayload(const String& payload) {
     return true;
   }
 
-  if (command == "lights_master") {
-    const bool on = doc["enabled"] | true;
-    if (lightsEngine) {
-      lightsEngine->setMaster(on);
-    }
-    return true;
-  }
-
-  if (command == "lights_color_order") {
-    String order = doc["order"] | String("grb");
-    order.toLowerCase();
-    if (lightsEngine) {
-      lightsEngine->setColorOrderByName(order.c_str());
-    }
-    return true;
-  }
-
-  if (command == "lights_clear_all") {
-    if (lightsEngine) {
-      lightsEngine->clearAllGroups(true);
-    }
-    return true;
-  }
-
   if (command == "flash") {
-    String color = doc["color"] | String("white");
-    color.toLowerCase();
-    int count = doc["count"] | 1;
-    int onMs = doc["onMs"] | 200;
-    int offMs = doc["offMs"] | 200;
-    count = constrain(count, 1, 10);
-    onMs = constrain(onMs, 0, 5000);
-    offMs = constrain(offMs, 0, 5000);
-
-    uint32_t rgb = 0xFFFFFF;
-    if (color == "red") rgb = 0xFF0000;
-    else if (color == "green") rgb = 0x00FF00;
-    else if (color == "blue") rgb = 0x0000FF;
-    else if (color == "yellow") rgb = 0xFFFF00;
-    else if (color == "cyan") rgb = 0x00FFFF;
-    else if (color == "magenta") rgb = 0xFF00FF;
-
-    if (lightsEngine) {
-      // Defaults remain 200ms on / 200ms off unless overridden by command payload.
-      gFlashCancelRequested = false;
-      lightsEngine->flashAllBlocking(rgb, static_cast<uint8_t>(count), static_cast<uint16_t>(onMs), static_cast<uint16_t>(offMs), &gFlashCancelRequested);
-      gFlashCancelRequested = false;
-    }
+    startLedBlink();
     return true;
   }
 
@@ -735,214 +522,8 @@ bool applySystemCommandPayload(const String& payload) {
     return true;
   }
 
-  // ==================== Phase 5: Lighting Profile Commands ====================
-  
-  // load_lt_profile: Load a lighting profile from LittleFS
-  if (command == "load_lt_profile") {
-    int index = doc["index"] | 0;
-    if (index < 0 || index >= MAX_LIGHTING_PROFILES) {
-      DynamicJsonDocument resp(128);
-      resp["status"] = "error";
-      resp["reason"] = "invalid_index";
-      String out;
-      serializeJson(resp, out);
-      Serial.println(out);
-      Serial.printf("[BLE] Lighting profile load error: invalid index %d\n", index);
-      return true;
-    }
-
-    LightingProfile profile = {};
-    if (!storageManager.loadLightingProfile(index, profile)) {
-      DynamicJsonDocument resp(128);
-      resp["status"] = "error";
-      resp["reason"] = "not_found";
-      String out;
-      serializeJson(resp, out);
-      Serial.println(out);
-      Serial.printf("[BLE] Lighting profile %d not found\n", index);
-      return true;
-    }
-
-    // Update active profile index in NVS
-    Preferences pref;
-    if (pref.begin("system", false)) {
-      pref.putInt("act_lt_prof", index);
-      pref.end();
-    }
-
-    // Load profile into LightsEngine
-    if (lightsEngine) {
-      lightsEngine->loadProfile(profile);
-    }
-
-    DynamicJsonDocument resp(128);
-    resp["status"] = "ok";
-    resp["profile"] = index;
-    String out;
-    serializeJson(resp, out);
-    Serial.println(out);
-    Serial.printf("[BLE] Loaded lighting profile %d: %s\n", index, profile.name);
-    return true;
-  }
-
-  // save_lt_profile: Save current lighting state to a profile
-  if (command == "save_lt_profile") {
-    int index = doc["index"] | 0;
-    String name = doc["name"] | String("Unnamed Profile");
-    
-    if (index < 0 || index >= MAX_LIGHTING_PROFILES) {
-      DynamicJsonDocument resp(128);
-      resp["status"] = "error";
-      resp["reason"] = "invalid_index";
-      String out;
-      serializeJson(resp, out);
-      Serial.println(out);
-      return true;
-    }
-
-    // Get current profile from LightsEngine and save to LittleFS
-    if (lightsEngine) {
-      LightingProfile* current = lightsEngine->getProfile();
-      if (current) {
-        strncpy(current->name, name.c_str(), sizeof(current->name) - 1);
-        if (storageManager.saveLightingProfile(index, *current)) {
-          // Update active profile index in NVS
-          Preferences pref;
-          if (pref.begin("system", false)) {
-            pref.putInt("act_lt_prof", index);
-            pref.end();
-          }
-          
-          DynamicJsonDocument resp(128);
-          resp["status"] = "saved";
-          resp["profile"] = index;
-          String out;
-          serializeJson(resp, out);
-          Serial.println(out);
-          Serial.printf("[BLE] Saved lighting profile %d: %s\n", index, name.c_str());
-          return true;
-        }
-      }
-    }
-
-    DynamicJsonDocument resp(128);
-    resp["status"] = "error";
-    resp["reason"] = "save_failed";
-    String out;
-    serializeJson(resp, out);
-    Serial.println(out);
-    return true;
-  }
-
-  // lights_basic: Stage-1 diagnostic mode.
-  // Runs inside LightsEngine task context so RMT writes stay deterministic.
-  if (command == "lights_basic") {
-    const bool on = doc["on"] | false;
-    const int r   = constrain((int)(doc["r"]   | 0),   0, 255);
-    const int g   = constrain((int)(doc["g"]   | 0),   0, 255);
-    const int b   = constrain((int)(doc["b"]   | 0),   0, 255);
-    const int bri = constrain((int)(doc["bri"] | 100), 0, 100);
-
-    Serial.printf("[lights_basic] received on=%d r=%d g=%d b=%d bri=%d\n", on, r, g, b, bri);
-    lightsDiagActive = false;
-    if (on) {
-      const float scale = bri / 100.0f;
-      const uint8_t sr = (uint8_t)(r * scale);
-      const uint8_t sg = (uint8_t)(g * scale);
-      const uint8_t sb = (uint8_t)(b * scale);
-      if (lightsEngine) lightsEngine->setBasicMode(true, sr, sg, sb, 11);
-      basicLightsModeActive = true;
-      Serial.printf("[lights_basic] ON sr=%d sg=%d sb=%d\n", sr, sg, sb);
-    } else {
-      // Keep stage-1 active with zero active LEDs so OFF is truly dark (no profile fallback flicker).
-      if (lightsEngine) lightsEngine->setBasicMode(true, 0, 0, 0, 0);
-      basicLightsModeActive = false;
-      Serial.println("[lights_basic] OFF");
-    }
-    return true;
-  }
-
-  // lights_diag: deterministic hardware diagnostic sequence for signal-integrity testing.
-  // Sequence: red -> green -> blue -> white -> off (repeats).
-  if (command == "lights_diag") {
-    const bool on = doc["on"] | false;
-    lightsDiagIntervalMs = constrain((int)(doc["intervalMs"] | 500), 100, 2000);
-    if (on) {
-      lightsDiagActive = true;
-      lightsDiagStep = 0;
-      lightsDiagLastStepMs = 0;
-      Serial.printf("[lights_diag] START interval=%u ms\n", lightsDiagIntervalMs);
-    } else {
-      lightsDiagActive = false;
-      lightsDiagStep = 0;
-      if (lightsEngine) lightsEngine->setBasicMode(true, 0, 0, 0, 0);
-      Serial.println("[lights_diag] STOP");
-    }
-    return true;
-  }
-
-  // delete_lt_profile: Delete a lighting profile
-  if (command == "delete_lt_profile") {
-    int index = doc["index"] | 0;
-    
-    if (index < 0 || index >= MAX_LIGHTING_PROFILES) {
-      DynamicJsonDocument resp(128);
-      resp["status"] = "error";
-      resp["reason"] = "invalid_index";
-      String out;
-      serializeJson(resp, out);
-      Serial.println(out);
-      return true;
-    }
-
-    // Check if this is the last remaining profile
-    int profileCount = storageManager.getLightingProfileCount();
-    if (profileCount <= 1) {
-      DynamicJsonDocument resp(128);
-      resp["status"] = "error";
-      resp["reason"] = "last_profile";
-      String out;
-      serializeJson(resp, out);
-      Serial.println(out);
-      Serial.println("[BLE] Cannot delete last remaining lighting profile");
-      return true;
-    }
-
-    // Delete the profile
-    if (storageManager.deleteLightingProfile(index)) {
-      // If the deleted profile was active, switch to profile 0
-      Preferences pref;
-      if (pref.begin("system", false)) {
-        int active = pref.getInt("act_lt_prof", 0);
-        if (active == index) {
-          // Find the lowest available profile
-          for (int i = 0; i < MAX_LIGHTING_PROFILES; i++) {
-            if (i != index && LittleFS.exists(String("/lt_p") + i + ".json")) {
-              pref.putInt("act_lt_prof", i);
-              Serial.printf("[BLE] Switched active profile from %d to %d\n", index, i);
-              break;
-            }
-          }
-        }
-        pref.end();
-      }
-      
-      DynamicJsonDocument resp(128);
-      resp["status"] = "deleted";
-      resp["profile"] = index;
-      String out;
-      serializeJson(resp, out);
-      Serial.println(out);
-      Serial.printf("[BLE] Deleted lighting profile %d\n", index);
-      return true;
-    }
-
-    DynamicJsonDocument resp(128);
-    resp["status"] = "error";
-    resp["reason"] = "delete_failed";
-    String out;
-    serializeJson(resp, out);
-    Serial.println(out);
+  if (command == "load_lt_profile" || command == "save_lt_profile" || command == "delete_lt_profile") {
+    Serial.printf("BLE system command ignored (lights profiles removed): %s\n", command.c_str());
     return true;
   }
 
@@ -958,18 +539,8 @@ void setup() {
   // Load configuration from storage
   storageManager.init();
 
-  // Initialize LightsEngine after storage init. begin() starts the Core 0 task.
-  lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
-  if (lightsEngine) {
-    lightsEngine->begin();
-    gpio_set_drive_capability((gpio_num_t)STATUS_LED_PIN, GPIO_DRIVE_CAP_3);
-    Serial.printf("LightsEngine initialized: %d LED capacity\n", STATUS_LED_COUNT);
-    Serial.printf("WS2812 data pin GPIO%d drive strength set to max\n", STATUS_LED_PIN);
-  } else {
-    Serial.println("LightsEngine allocation failed; falling back to legacy status LED control");
-  }
-  // Never drive the same WS2812 strip from both statusLED and LightsEngine.
-  legacyStatusLedEnabled = (lightsEngine == nullptr);
+  // LightsEngine removed; legacy status LED path remains active.
+  legacyStatusLedEnabled = true;
 
   storageManager.loadConfig();
   storageManager.loadLights();
@@ -1034,8 +605,6 @@ void setup() {
     statusLED.show();
     updateStatusLEDColor(); // Load color from config
     Serial.println("Status LED initialized");
-  } else {
-    Serial.println("Status LED disabled while LightsEngine owns LED strip");
   }
   
   // Calibrate to current position as level
@@ -1052,41 +621,11 @@ void setup() {
   pwmOutputs.init();
   pwmOutputs.initAux();
 
-  // ==================== Phase 5: Lighting Profiles ====================
-  
-  // Create default lighting profiles on first boot
-  storageManager.createDefaultLightingProfiles();
-  
-  // Load active lighting profile
-  {
-    Preferences pref;
-    int activeLtProf = 0;
-    if (pref.begin("system", false)) {
-      activeLtProf = pref.getInt("act_lt_prof", 0);
-      pref.end();
-    }
-
-    static LightingProfile profile = {};
-    if (storageManager.loadLightingProfile(activeLtProf, profile)) {
-      if (lightsEngine) {
-        lightsEngine->loadProfile(profile);
-        Serial.printf("Loaded active lighting profile %d: %s\n", activeLtProf, profile.name);
-      }
-    } else {
-      Serial.printf("Warning: Could not load lighting profile %d\n", activeLtProf);
-    }
-  }
-
-  Serial.println("LED effects task started by LightsEngine::begin() on Core 0");
-  
   // Initialize Bluetooth Low Energy service
   bluetoothService = new BluetoothService(&storageManager);
   bluetoothService->setConfigWriteHandler(applyConfigUpdatePayload);
   bluetoothService->setKVWriteHandler(applyKVWritePayload);
   bluetoothService->setServoWriteHandler(applyServoConfigPayload);
-  if (LIGHTS_ENTRYPOINT_ENABLED) {
-    bluetoothService->setLightsWriteHandler(applyLightsPayload);
-  }
   bluetoothService->setSystemWriteHandler(applySystemCommandPayload);
   bluetoothService->setConnectionStateHandler([](bool connected) {
     ledBleOn = connected;
@@ -1115,36 +654,6 @@ void loop() {
     bluetoothService->update();
   }
 
-  // Deterministic lighting diagnostics to expose electrical/data integrity issues.
-  if (lightsDiagActive && lightsEngine) {
-    if (lightsDiagLastStepMs == 0 || (uint32_t)(currentTime - lightsDiagLastStepMs) >= lightsDiagIntervalMs) {
-      lightsDiagLastStepMs = currentTime;
-      switch (lightsDiagStep) {
-        case 0:
-          lightsEngine->setBasicMode(true, 255, 0, 0, 11);
-          Serial.println("[lights_diag] RED");
-          break;
-        case 1:
-          lightsEngine->setBasicMode(true, 0, 255, 0, 11);
-          Serial.println("[lights_diag] GREEN");
-          break;
-        case 2:
-          lightsEngine->setBasicMode(true, 0, 0, 255, 11);
-          Serial.println("[lights_diag] BLUE");
-          break;
-        case 3:
-          lightsEngine->setBasicMode(true, 255, 255, 255, 11);
-          Serial.println("[lights_diag] WHITE");
-          break;
-        default:
-          lightsEngine->setBasicMode(true, 0, 0, 0, 0);
-          Serial.println("[lights_diag] OFF");
-          break;
-      }
-      lightsDiagStep = (lightsDiagStep + 1) % 5;
-    }
-  }
-  
   // Detect genuinely slow single loop iterations (>100ms each).
   // lastLoopTime tracks the START of the previous iteration for per-iteration timing.
   if (firstLoop) {
@@ -1187,9 +696,6 @@ void loop() {
     gDanceMode.last_pitch = 0.0f;
     writeTrimToAllSuspensionServos();
     Serial.println("[DanceMode] Auto-disabled due to BLE disconnect");
-  }
-  if (previousBleConnected && !bleConnected) {
-    gFlashCancelRequested = true;
   }
   previousBleConnected = bleConnected;
 
