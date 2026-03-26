@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.425';
+        const APP_VERSION = '1.1.437';
         const BUILD_DATE = '2026-03-26';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -5487,6 +5487,86 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Basic Lights Test — Step 4 Real Scenarios ====================
 
         var _basicScenarioActiveMode = '';
+        const BASIC_SCENARIO_CONFIG_KEY = 'basicScenarioConfigV1';
+        const BASIC_SCENARIO_BRIGHTNESS_MAX = 200;
+        var _basicScenarioConfig = null;
+        var _basicScenarioLedPickerTargetId = '';
+        var _basicScenarioLedPickerSelected = new Set();
+
+        function _basicScenarioPercentToBrightness(percent) {
+            const safePercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+            return Math.round((safePercent / 100) * BASIC_SCENARIO_BRIGHTNESS_MAX);
+        }
+
+        function _basicScenarioBrightnessToPercent(brightness) {
+            const safeBrightness = Math.max(0, Math.min(BASIC_SCENARIO_BRIGHTNESS_MAX, Math.round(Number(brightness) || 0)));
+            return Math.round((safeBrightness / BASIC_SCENARIO_BRIGHTNESS_MAX) * 100);
+        }
+
+        function _syncBasicScenarioBrightnessUI(percent) {
+            const safePercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+            const slider = document.getElementById('basicScenarioBrightness');
+            const label = document.getElementById('basicScenarioBrightnessLabel');
+            if (slider) slider.value = String(safePercent);
+            if (label) label.textContent = `${safePercent}% (${_basicScenarioPercentToBrightness(safePercent)})`;
+        }
+
+        function _basicScenarioIndicesToCompactString(indices) {
+            const values = Array.from(new Set((Array.isArray(indices) ? indices : [])
+                .map(v => parseInt(v, 10))
+                .filter(v => Number.isFinite(v) && v >= 0)
+            )).sort((a, b) => a - b);
+            if (!values.length) return '';
+
+            const ranges = [];
+            let start = values[0];
+            let prev = values[0];
+            for (let i = 1; i < values.length; i++) {
+                const curr = values[i];
+                if (curr === prev + 1) {
+                    prev = curr;
+                    continue;
+                }
+                ranges.push(start === prev ? String(start) : `${start}-${prev}`);
+                start = curr;
+                prev = curr;
+            }
+            ranges.push(start === prev ? String(start) : `${start}-${prev}`);
+            return ranges.join(',');
+        }
+
+        function _sanitizeBasicScenarioHexColor(value, fallback) {
+            const v = String(value || '').trim().toLowerCase();
+            if (/^#[0-9a-f]{6}$/.test(v)) return v;
+            return String(fallback || '#ffffff').toLowerCase();
+        }
+
+        function _parseBasicScenarioLedList(value, maxExclusive, fallback = []) {
+            const parsed = parseLEDIndices(String(value || ''))
+                .filter(n => Number.isFinite(n) && n >= 0 && n < maxExclusive);
+            if (parsed.length > 0) return Array.from(new Set(parsed)).sort((a, b) => a - b);
+            return Array.from(new Set((Array.isArray(fallback) ? fallback : [])
+                .filter(n => Number.isFinite(n) && n >= 0 && n < maxExclusive)
+            )).sort((a, b) => a - b);
+        }
+
+        function _getBasicScenarioLedFieldValue(id) {
+            const el = document.getElementById(id);
+            if (!el) return '';
+            if (typeof el.value === 'string') return el.value;
+            return String(el.textContent || '').trim();
+        }
+
+        function _setBasicScenarioLedFieldValue(id, value) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const text = String(value || '');
+            if (typeof el.value === 'string') {
+                el.value = text;
+                return;
+            }
+            el.textContent = text;
+        }
 
         function _basicScenarioLedBuckets() {
             const total = Math.max(1, Math.floor(Number(BASIC_LED_GRID_COUNT) || 9));
@@ -5507,43 +5587,246 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return { total, left, center, right, rear };
         }
 
-        function _buildBasicScenarioGroups(mode) {
+        function _getDefaultBasicScenarioConfig() {
             const buckets = _basicScenarioLedBuckets();
             const allIndices = Array.from({ length: buckets.total }, (_, i) => i);
             const evenIndices = allIndices.filter(i => i % 2 === 0);
             const oddIndices = allIndices.filter(i => i % 2 !== 0);
+            const hazardLeds = Array.from(new Set([...(buckets.left || []), ...(buckets.right || [])])).sort((a, b) => a - b);
+
+            return {
+                brightnessPercent: 100,
+                brake: { color: '#ff0000', leds: buckets.rear.length ? buckets.rear : allIndices },
+                turn_left: { color: '#ff8c00', leds: buckets.left },
+                turn_right: { color: '#ff8c00', leds: buckets.right },
+                hazards: { color: '#ff8c00', leds: hazardLeds },
+                reverse: { color: '#ffffff', leds: buckets.center.length ? buckets.center : buckets.rear },
+                emergency_red: { color: '#ff0000', leds: evenIndices },
+                emergency_blue: { color: '#003bff', leds: oddIndices }
+            };
+        }
+
+        function _normalizeBasicScenarioConfig(rawConfig) {
+            const defaults = _getDefaultBasicScenarioConfig();
+            const total = _basicScenarioLedBuckets().total;
+            const raw = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
+
+            return {
+                brightnessPercent: Math.max(0, Math.min(100, Math.round(
+                    Number(raw.brightnessPercent ?? _basicScenarioBrightnessToPercent(raw.brightness ?? _basicScenarioPercentToBrightness(defaults.brightnessPercent))) || defaults.brightnessPercent
+                ))),
+                brake: {
+                    color: _sanitizeBasicScenarioHexColor(raw.brake?.color, defaults.brake.color),
+                    leds: _parseBasicScenarioLedList(raw.brake?.leds, total, defaults.brake.leds)
+                },
+                turn_left: {
+                    color: _sanitizeBasicScenarioHexColor(raw.turn_left?.color, defaults.turn_left.color),
+                    leds: _parseBasicScenarioLedList(raw.turn_left?.leds, total, defaults.turn_left.leds)
+                },
+                turn_right: {
+                    color: _sanitizeBasicScenarioHexColor(raw.turn_right?.color, defaults.turn_right.color),
+                    leds: _parseBasicScenarioLedList(raw.turn_right?.leds, total, defaults.turn_right.leds)
+                },
+                hazards: {
+                    color: _sanitizeBasicScenarioHexColor(raw.hazards?.color, defaults.hazards.color),
+                    leds: _parseBasicScenarioLedList(raw.hazards?.leds, total, defaults.hazards.leds)
+                },
+                reverse: {
+                    color: _sanitizeBasicScenarioHexColor(raw.reverse?.color, defaults.reverse.color),
+                    leds: _parseBasicScenarioLedList(raw.reverse?.leds, total, defaults.reverse.leds)
+                },
+                emergency_red: {
+                    color: _sanitizeBasicScenarioHexColor(raw.emergency_red?.color, defaults.emergency_red.color),
+                    leds: _parseBasicScenarioLedList(raw.emergency_red?.leds, total, defaults.emergency_red.leds)
+                },
+                emergency_blue: {
+                    color: _sanitizeBasicScenarioHexColor(raw.emergency_blue?.color, defaults.emergency_blue.color),
+                    leds: _parseBasicScenarioLedList(raw.emergency_blue?.leds, total, defaults.emergency_blue.leds)
+                }
+            };
+        }
+
+        function _readBasicScenarioConfigFromUI() {
+            const defaults = _getDefaultBasicScenarioConfig();
+            const total = _basicScenarioLedBuckets().total;
+
+            const readColor = (id, fallback) => _sanitizeBasicScenarioHexColor(document.getElementById(id)?.value, fallback);
+            const readLeds = (id, fallback) => _parseBasicScenarioLedList(_getBasicScenarioLedFieldValue(id), total, fallback);
+            const brightnessPercent = Math.max(0, Math.min(100, Math.round(Number(document.getElementById('basicScenarioBrightness')?.value) || defaults.brightnessPercent)));
+
+            return {
+                brightnessPercent,
+                brake: { color: readColor('basicScenarioBrakeColor', defaults.brake.color), leds: readLeds('basicScenarioBrakeLeds', defaults.brake.leds) },
+                turn_left: { color: readColor('basicScenarioTurnLeftColor', defaults.turn_left.color), leds: readLeds('basicScenarioTurnLeftLeds', defaults.turn_left.leds) },
+                turn_right: { color: readColor('basicScenarioTurnRightColor', defaults.turn_right.color), leds: readLeds('basicScenarioTurnRightLeds', defaults.turn_right.leds) },
+                hazards: { color: readColor('basicScenarioHazardsColor', defaults.hazards.color), leds: readLeds('basicScenarioHazardsLeds', defaults.hazards.leds) },
+                reverse: { color: readColor('basicScenarioReverseColor', defaults.reverse.color), leds: readLeds('basicScenarioReverseLeds', defaults.reverse.leds) },
+                emergency_red: { color: readColor('basicScenarioEmergencyRedColor', defaults.emergency_red.color), leds: readLeds('basicScenarioEmergencyRedLeds', defaults.emergency_red.leds) },
+                emergency_blue: { color: readColor('basicScenarioEmergencyBlueColor', defaults.emergency_blue.color), leds: readLeds('basicScenarioEmergencyBlueLeds', defaults.emergency_blue.leds) }
+            };
+        }
+
+        function _writeBasicScenarioConfigToUI(config) {
+            const set = (id, value) => {
+                const el = document.getElementById(id);
+                if (el) el.value = String(value || '');
+            };
+            const setLedText = (id, value) => _setBasicScenarioLedFieldValue(id, value);
+            _syncBasicScenarioBrightnessUI(config.brightnessPercent);
+            set('basicScenarioBrakeColor', config.brake.color);
+            setLedText('basicScenarioBrakeLeds', _basicScenarioIndicesToCompactString(config.brake.leds));
+            set('basicScenarioTurnLeftColor', config.turn_left.color);
+            setLedText('basicScenarioTurnLeftLeds', _basicScenarioIndicesToCompactString(config.turn_left.leds));
+            set('basicScenarioTurnRightColor', config.turn_right.color);
+            setLedText('basicScenarioTurnRightLeds', _basicScenarioIndicesToCompactString(config.turn_right.leds));
+            set('basicScenarioHazardsColor', config.hazards.color);
+            setLedText('basicScenarioHazardsLeds', _basicScenarioIndicesToCompactString(config.hazards.leds));
+            set('basicScenarioReverseColor', config.reverse.color);
+            setLedText('basicScenarioReverseLeds', _basicScenarioIndicesToCompactString(config.reverse.leds));
+            set('basicScenarioEmergencyRedColor', config.emergency_red.color);
+            setLedText('basicScenarioEmergencyRedLeds', _basicScenarioIndicesToCompactString(config.emergency_red.leds));
+            set('basicScenarioEmergencyBlueColor', config.emergency_blue.color);
+            setLedText('basicScenarioEmergencyBlueLeds', _basicScenarioIndicesToCompactString(config.emergency_blue.leds));
+        }
+
+        function _saveBasicScenarioConfig(config) {
+            writeVehicleScopedStorage(BASIC_SCENARIO_CONFIG_KEY, JSON.stringify(config));
+        }
+
+        function _renderBasicScenarioLedPickerGrid(total) {
+            const grid = document.getElementById('basicScenarioLedPickerGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            grid.style.gridTemplateColumns = total > 12 ? 'repeat(10,minmax(0,1fr))' : 'repeat(9,minmax(0,1fr))';
+
+            for (let i = 0; i < total; i++) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'basic-scenario-led-chip' + (_basicScenarioLedPickerSelected.has(i) ? ' is-active' : '');
+                btn.textContent = String(i);
+                btn.onclick = () => {
+                    if (_basicScenarioLedPickerSelected.has(i)) _basicScenarioLedPickerSelected.delete(i);
+                    else _basicScenarioLedPickerSelected.add(i);
+                    _renderBasicScenarioLedPickerGrid(total);
+                };
+                grid.appendChild(btn);
+            }
+        }
+
+        window.basicScenarioOpenLedPicker = function(targetInputId) {
+            const modal = document.getElementById('basicScenarioLedPickerModal');
+            const targetInput = document.getElementById(targetInputId);
+            if (!modal || !targetInput) return;
+
+            const total = _basicScenarioLedBuckets().total;
+            const parsed = parseLEDIndices(_getBasicScenarioLedFieldValue(targetInputId))
+                .filter(n => Number.isFinite(n) && n >= 0 && n < total);
+            _basicScenarioLedPickerTargetId = String(targetInputId);
+            _basicScenarioLedPickerSelected = new Set(parsed);
+
+            const meta = document.getElementById('basicScenarioLedPickerMeta');
+            if (meta) meta.textContent = `${total} LEDs available (0-${Math.max(0, total - 1)})`;
+
+            _renderBasicScenarioLedPickerGrid(total);
+            modal.style.display = 'flex';
+        };
+
+        window.basicScenarioCloseLedPicker = function() {
+            const modal = document.getElementById('basicScenarioLedPickerModal');
+            if (modal) modal.style.display = 'none';
+            _basicScenarioLedPickerTargetId = '';
+            _basicScenarioLedPickerSelected = new Set();
+        };
+
+        window.basicScenarioLedPickerSelectAll = function() {
+            const total = _basicScenarioLedBuckets().total;
+            _basicScenarioLedPickerSelected = new Set(Array.from({ length: total }, (_, i) => i));
+            _renderBasicScenarioLedPickerGrid(total);
+        };
+
+        window.basicScenarioLedPickerClear = function() {
+            const total = _basicScenarioLedBuckets().total;
+            _basicScenarioLedPickerSelected = new Set();
+            _renderBasicScenarioLedPickerGrid(total);
+        };
+
+        window.basicScenarioLedPickerSave = function() {
+            const target = document.getElementById(_basicScenarioLedPickerTargetId);
+            if (!target) {
+                basicScenarioCloseLedPicker();
+                return;
+            }
+            const selected = Array.from(_basicScenarioLedPickerSelected).sort((a, b) => a - b);
+            _setBasicScenarioLedFieldValue(_basicScenarioLedPickerTargetId, _basicScenarioIndicesToCompactString(selected));
+            basicScenarioConfigChanged();
+            basicScenarioCloseLedPicker();
+        };
+
+        window.basicScenarioBrightnessChange = function(value) {
+            _syncBasicScenarioBrightnessUI(value);
+            basicScenarioConfigChanged();
+        };
+
+        function _loadBasicScenarioConfig() {
+            const defaults = _getDefaultBasicScenarioConfig();
+            try {
+                const raw = readVehicleScopedStorage(BASIC_SCENARIO_CONFIG_KEY, { migrateLegacy: true });
+                if (!raw) return _normalizeBasicScenarioConfig(defaults);
+                return _normalizeBasicScenarioConfig(JSON.parse(raw));
+            } catch (_) {
+                return _normalizeBasicScenarioConfig(defaults);
+            }
+        }
+
+        window.basicScenarioConfigChanged = function() {
+            _basicScenarioConfig = _normalizeBasicScenarioConfig(_readBasicScenarioConfigFromUI());
+            _writeBasicScenarioConfigToUI(_basicScenarioConfig);
+            _saveBasicScenarioConfig(_basicScenarioConfig);
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (statusEl) statusEl.textContent = `Scenario mapping updated. Brightness ${_basicScenarioConfig.brightnessPercent}% (${_basicScenarioPercentToBrightness(_basicScenarioConfig.brightnessPercent)} max).`;
+        };
+
+        window.basicScenarioConfigResetDefaults = function() {
+            _basicScenarioConfig = _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            _writeBasicScenarioConfigToUI(_basicScenarioConfig);
+            _saveBasicScenarioConfig(_basicScenarioConfig);
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (statusEl) statusEl.textContent = 'Scenario mapping reset to defaults.';
+        };
+
+        function _buildBasicScenarioGroups(mode) {
+            const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            const brightness = _basicScenarioPercentToBrightness(config.brightnessPercent);
 
             if (mode === 'brake') {
                 return [
-                    { group: 10, name: 'Brake', color: '#ff0000', leds: buckets.rear.length ? buckets.rear : allIndices }
+                    { group: 10, name: 'Brake', color: config.brake.color, brightness, leds: config.brake.leds }
                 ];
             }
             if (mode === 'turn_left') {
                 return [
-                    { group: 10, name: 'Turn Left', color: '#ff8c00', leds: buckets.left }
+                    { group: 10, name: 'Turn Left', color: config.turn_left.color, brightness, leds: config.turn_left.leds }
                 ];
             }
             if (mode === 'turn_right') {
                 return [
-                    { group: 10, name: 'Turn Right', color: '#ff8c00', leds: buckets.right }
+                    { group: 10, name: 'Turn Right', color: config.turn_right.color, brightness, leds: config.turn_right.leds }
                 ];
             }
             if (mode === 'hazards') {
-                const hazardLeds = Array.from(new Set([...(buckets.left || []), ...(buckets.right || [])]));
                 return [
-                    { group: 10, name: 'Hazards', color: '#ff8c00', leds: hazardLeds }
+                    { group: 10, name: 'Hazards', color: config.hazards.color, brightness, leds: config.hazards.leds }
                 ];
             }
             if (mode === 'reverse') {
-                const reverseLeds = buckets.center.length ? buckets.center : buckets.rear;
                 return [
-                    { group: 10, name: 'Reverse', color: '#ffffff', leds: reverseLeds }
+                    { group: 10, name: 'Reverse', color: config.reverse.color, brightness, leds: config.reverse.leds }
                 ];
             }
             if (mode === 'emergency') {
                 return [
-                    { group: 10, name: 'Emergency Red', color: '#ff0000', leds: evenIndices },
-                    { group: 11, name: 'Emergency Blue', color: '#003bff', leds: oddIndices }
+                    { group: 10, name: 'Emergency Red', color: config.emergency_red.color, brightness, leds: config.emergency_red.leds },
+                    { group: 11, name: 'Emergency Blue', color: config.emergency_blue.color, brightness, leds: config.emergency_blue.leds }
                 ];
             }
 
@@ -5605,7 +5888,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         enabled: true,
                         color: group.color,
                         color2: '#000000',
-                        brightness: 100,
+                        brightness: Math.max(0, Math.min(BASIC_SCENARIO_BRIGHTNESS_MAX, Math.round(Number(group.brightness) || 0))),
                         effect: 'solid',
                         speed: 128,
                         intensity: 128,
@@ -5644,7 +5927,18 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // Initialise the LED grid on page load
         (function _initBasicLedGrid() {
             _renderBasicLedGrid();
+            _basicScenarioConfig = _loadBasicScenarioConfig();
+            _writeBasicScenarioConfigToUI(_basicScenarioConfig);
             _syncBasicScenarioButtons();
+
+            const ledPickerModal = document.getElementById('basicScenarioLedPickerModal');
+            if (ledPickerModal) {
+                ledPickerModal.addEventListener('click', function(e) {
+                    if (e.target === ledPickerModal) {
+                        basicScenarioCloseLedPicker();
+                    }
+                });
+            }
         })();
 
         // ==================== Step 6: Stability Soak Test ====================
@@ -5717,7 +6011,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                             enabled: true,
                             color: group.color,
                             color2: '#000000',
-                            brightness: 100,
+                            brightness: Math.max(0, Math.min(BASIC_SCENARIO_BRIGHTNESS_MAX, Math.round(Number(group.brightness) || 0))),
                             effect: 'solid',
                             speed: 128,
                             intensity: 128,

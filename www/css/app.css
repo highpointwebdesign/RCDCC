@@ -8,6 +8,7 @@
             --light-bg: #f3f4f6;
             --card-bg: #ffffff;
             --text-primary: #111827;
+            --text-secondary: #cbd5e1;
             --text-muted: #6b7280;
             --border-color: #000;
             --high-impact-color: #f9c21b;
@@ -1024,12 +1025,12 @@
 
         .trail-session-row span:first-child {
             color: var(--text-primary);
-            /* font-weight: 600; */
+            font-weight: 600;
         }
 
         .trail-session-row span:last-child {
             color: #0f172a;
-            /* font-weight: 700; */
+            font-weight: 700;
             letter-spacing: 0.01em;
         }
 
@@ -2555,6 +2556,68 @@
             overflow-y: auto;
             white-space: pre-wrap;
             word-break: break-all;
+        }
+
+        /* Step 4.1/4.2 scenario mapping readability on dark panel */
+        #basicScenarioMappingPanel .form-label {
+            color: #dbe5ff;
+        }
+
+        #basicScenarioMappingPanel .basic-scenario-mapping-subtitle {
+            color: #cbd5e1;
+        }
+
+        #basicScenarioMappingPanel .basic-scenario-led-display {
+            min-height: 31px;
+            padding: 0.375rem 0.75rem;
+            border: 1px solid #334155;
+            border-radius: 0.25rem;
+            background: #0f172a;
+            color: #f8fafc;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #basicScenarioMappingPanel input[type="text"] {
+            background: #0f172a;
+            color: #f8fafc;
+            border-color: #334155;
+        }
+
+        #basicScenarioMappingPanel input[type="text"]::placeholder {
+            color: #94a3b8;
+            opacity: 1;
+        }
+
+        #basicScenarioMappingPanel input[type="text"]:focus {
+            background: #0f172a;
+            color: #f8fafc;
+            border-color: #f9c21b;
+            box-shadow: 0 0 0 0.15rem rgba(249, 194, 27, 0.25);
+        }
+
+        #basicScenarioLedPickerGrid .basic-scenario-led-chip {
+            border: 1px solid #334155;
+            border-radius: 8px;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 8px 0;
+            font-size: 0.78rem;
+            text-align: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        #basicScenarioLedPickerGrid .basic-scenario-led-chip.is-active {
+            background: #f9c21b;
+            border-color: #f9c21b;
+            color: #111827;
+            font-weight: 700;
         }
 
         /* Tuning Page Slider Customization */
