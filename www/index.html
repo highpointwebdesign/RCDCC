@@ -754,8 +754,11 @@
                         </div>
                         <div class="card-body" id="rcdccConfigurationCardBody">
 
-                            <!-- Select Orientation -->
-                            <label for="mpuOrientation" class="form-label"><strong>Select Orientation</strong></label>
+                            <!-- Select Orientation
+                            <label for="mpuOrientation" class="form-label">
+                                <span class="material-symbols-outlined icon-danger">flip_camera_android</span>
+                                <strong>Select Orientation</strong>
+                            </label>
                             <select class="form-select" id="mpuOrientation">
                                 <option value="0">Arrow Forward, Chip Up (Default)</option>
                                 <option value="1">Arrow Up, Chip Forward</option>
@@ -763,7 +766,44 @@
                                 <option value="3">Arrow Down, Chip Forward</option>
                                 <option value="4">Arrow Right, Chip Up</option>
                                 <option value="5">Arrow Left, Chip Up</option>
-                            </select>
+                            </select> -->
+
+                            <!-- RCDCC Orientation sub-section -->
+                            <!-- <hr class="mt-4 mb-3"> -->
+                            <div id="mpuOrientationCard">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">
+                                        <span class="material-symbols-outlined icon-danger">mobile_rotate</span>
+                                        RCDCC Orientation
+                                    </h6>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="material-symbols-outlined icon-action" id="mpuOrientationChevron" title="Collapse RCDCC orientation" onclick="toggleCardCollapse('mpuOrientationCard', 'mpuOrientationChevron', 'mpuOrientationCardCollapsed')">keyboard_arrow_down</span>
+                                    </div>
+                                </div>
+                                <div class="card-body p-0" id="mpuOrientationCardBody">
+                                    <div class="row g-3">
+                                        <div class="col-12 col-md-6">
+                                            <div class="tuning-slider-group mb-0">
+                                                <h6 class="mb-3">
+                                                    <!-- transform: rotate(-45deg);  -->
+                                                    <span class="material-symbols-outlined" style="color: var(--danger);">qr_code</span>
+                                                    Select Orientation 
+                                                </h6>
+                                                <div class="slider-section">
+                                                    <select class="form-select" id="mpuOrientation">
+                                                        <option value="0">Arrow Forward, Chip Up (Default)</option>
+                                                        <option value="1">Arrow Up, Chip Forward</option>
+                                                        <option value="2">Arrow Backward, Chip Up</option>
+                                                        <option value="3">Arrow Down, Chip Forward</option>
+                                                        <option value="4">Arrow Right, Chip Up</option>
+                                                        <option value="5">Arrow Left, Chip Up</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
                             <!-- Servo Range sub-section -->
                             <hr class="mt-4 mb-3">
@@ -1198,11 +1238,173 @@
         </section>
 
         <!-- Lights Section -->
+                <!-- Simple 5-LED Blue Test -->
+                <section id="simpleLedTest" class="page-section">
+                    <div class="col-12">
+                        <div class="card" id="simpleLedTestCard">
+                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
+                                    Simple 5-LED Blue Test
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-2 text-muted" style="font-size:0.9rem;">
+                                    Turns LEDs 0-4 blue (on) or off, bypassing the light engine.
+                                </p>
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <button type="button" class="btn btn-sm btn-primary" id="simpleLedOnBtn" onclick="simpleLedTestOn()">
+                                        Turn ON (Blue)
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-secondary" id="simpleLedOffBtn" onclick="simpleLedTestOff()">
+                                        Turn OFF
+                                    </button>
+                                </div>
+                                <small id="simpleLedTestStatus" class="text-muted">Ready.</small>
+                            </div>
+                        </div>
+                    </div>
+                </section>
         <section id="lights" class="page-section">
             <div class="section-title-row">
                 <h2 class="section-title">Lights</h2>
             </div>
             <div class="row g-3">
+                <!-- Basic Lights Test (Stage 1) -->
+                <div class="col-12">
+                    <div class="card" id="basicLightsTestCard">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">science</span>
+                                Basic Lights Test (Stage 1)
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-2 text-muted" style="font-size:0.9rem;">
+                                Quick BLE-to-strip test path. Use this before profile effects.
+                            </p>
+
+                            <!-- Solid Color + Diag (existing) -->
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="basicLightsMasterToggle" aria-pressed="false" onclick="basicLightsToggle(this)">
+                                    <span class="material-symbols-outlined">light_off</span>
+                                    Toggle
+                                </button>
+                                <input type="color" id="basicLightsColorPicker" value="#0000ff" onchange="basicLightsColorChange(this.value)">
+                                <span id="basicLightsColorSwatch" style="width:18px;height:18px;border-radius:50%;display:inline-block;background:#0000ff;border:1px solid #555;"></span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <label for="basicLightsBri" class="form-label mb-0">Brightness</label>
+                                <input type="range" id="basicLightsBri" min="0" max="100" value="100" oninput="basicLightsBriChange(this.value)" style="flex:1;">
+                                <span id="basicLightsBriLabel" style="min-width:46px;text-align:right;">100%</span>
+                            </div>
+                            <div class="d-flex gap-2 mb-2">
+                                <button type="button" class="btn btn-sm btn-outline-warning" onclick="basicLightsDiagStart()">Start Diag</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="basicLightsDiagStop()">Stop Diag</button>
+                            </div>
+
+                            <hr class="my-3">
+
+                            <!-- Per-LED Color Grid -->
+                            <div class="mb-1" style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);">Per-LED Colors</div>
+                            <p class="mb-2 text-muted" style="font-size:0.8rem;">Click a square to select it, pick a color, then apply.</p>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <input type="color" id="basicLedGridColorPicker" value="#ff0000" onchange="basicLedGridPickerChange(this.value)">
+                                <span id="basicLedGridColorSwatch" style="width:18px;height:18px;border-radius:50%;display:inline-block;background:#ff0000;border:1px solid #555;"></span>
+                                <span id="basicLedGridSelectedLabel" class="text-muted" style="font-size:0.8rem;">LED 0 selected</span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="basicLedGridApplyAll()">Fill All</button>
+                            </div>
+                            <div id="basicLedGrid" style="display:grid;grid-template-columns:repeat(9,1fr);gap:5px;margin-bottom:8px;"></div>
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100 mb-1" onclick="basicLedGridSend()">Apply Per-LED Colors to Strip</button>
+
+                            <hr class="my-3">
+
+                            <!-- Two-Group Test -->
+                            <div class="mb-1" style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);">Two-Group Test</div>
+                            <p class="mb-2 text-muted" style="font-size:0.8rem;">Assign non-overlapping LED indices and different colors to two groups.</p>
+
+                            <!-- Group A -->
+                            <div class="mb-2 p-2 rounded" style="background:#1a1a2e;border:1px solid #2b3142;">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span style="font-size:0.8rem;font-weight:600;min-width:64px;">Group A</span>
+                                    <input type="color" id="basicGroupAColor" value="#ff0000" onchange="basicGroupAColorChange(this.value)">
+                                    <span id="basicGroupAColorSwatch" style="width:16px;height:16px;border-radius:50%;display:inline-block;background:#ff0000;border:1px solid #555;"></span>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <label style="font-size:0.78rem;min-width:64px;">LED indices</label>
+                                    <input type="text" class="form-control form-control-sm" id="basicGroupALeds" placeholder="0,1,2,3" value="0,1,2,3" style="font-size:0.8rem;">
+                                </div>
+                            </div>
+
+                            <!-- Group B -->
+                            <div class="mb-2 p-2 rounded" style="background:#1a1a2e;border:1px solid #2b3142;">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span style="font-size:0.8rem;font-weight:600;min-width:64px;">Group B</span>
+                                    <input type="color" id="basicGroupBColor" value="#0000ff" onchange="basicGroupBColorChange(this.value)">
+                                    <span id="basicGroupBColorSwatch" style="width:16px;height:16px;border-radius:50%;display:inline-block;background:#0000ff;border:1px solid #555;"></span>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <label style="font-size:0.78rem;min-width:64px;">LED indices</label>
+                                    <input type="text" class="form-control form-control-sm" id="basicGroupBLeds" placeholder="5,6,7,8" value="5,6,7,8" style="font-size:0.8rem;">
+                                </div>
+                            </div>
+
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100 mb-1" onclick="basicGroupsSend()">Apply Both Groups to Strip</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="basicGroupsClear()">Clear Groups</button>
+
+                            <hr class="my-3">
+
+                            <!-- Step 4: Real Group Scenarios -->
+                            <div class="mb-1" style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);">Step 4: Real Group Scenarios</div>
+                            <p class="mb-2 text-muted" style="font-size:0.8rem;">Toggle brake, turn, hazards, reverse, and emergency profiles with auto-clear between modes.</p>
+
+                            <div class="row g-2 mb-2">
+                                <div class="col-6 col-md-4">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-basic-scenario-mode="brake" aria-pressed="false" onclick="basicScenarioToggle('brake')">Brake</button>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-basic-scenario-mode="turn_left" aria-pressed="false" onclick="basicScenarioToggle('turn_left')">Turn Left</button>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-basic-scenario-mode="turn_right" aria-pressed="false" onclick="basicScenarioToggle('turn_right')">Turn Right</button>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-basic-scenario-mode="hazards" aria-pressed="false" onclick="basicScenarioToggle('hazards')">Hazards</button>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-basic-scenario-mode="reverse" aria-pressed="false" onclick="basicScenarioToggle('reverse')">Reverse</button>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-basic-scenario-mode="emergency" aria-pressed="false" onclick="basicScenarioToggle('emergency')">Emergency</button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="basicScenarioClear()">Clear Scenario Output</button>
+
+                            <hr class="my-3">
+
+                            <!-- Step 6: Stability Soak Test -->
+                            <div class="mb-1" style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);">Step 6: Stability Soak Test</div>
+                            <p class="mb-2 text-muted" style="font-size:0.8rem;">Auto-cycles all 6 scenarios for 5&nbsp;minutes logging BLE latency and errors. Start it, walk away, then copy the log to review.</p>
+                            <div class="row g-2 mb-2">
+                                <div class="col-4">
+                                    <button type="button" id="soakStartBtn" class="btn btn-sm btn-outline-success w-100" onclick="soakStart()">Start Soak</button>
+                                </div>
+                                <div class="col-4">
+                                    <button type="button" id="soakStopBtn" class="btn btn-sm btn-outline-danger w-100" onclick="soakStop()" disabled>Stop</button>
+                                </div>
+                                <div class="col-4">
+                                    <button type="button" id="soakCopyBtn" class="btn btn-sm btn-outline-secondary w-100" onclick="soakCopyLog()" disabled>Copy Log</button>
+                                </div>
+                            </div>
+                            <div id="soakLiveStatus" class="text-muted" style="font-size:0.8rem;min-height:1.4em;padding:4px 0;">Idle. Connect device, then press Start Soak.</div>
+
+                            <hr class="my-3">
+
+                            <small id="basicLightsStatus" class="text-muted">Ready.</small>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Lighting Profiles Card -->
                 <div class="col-12">
                     <div class="card" id="lightingProfilesCard">
@@ -1392,8 +1594,8 @@
                                 <div class="text-muted mb-3" id="garageRenameCurrentName">--</div>
                                 <div class="garage-rename-device-id mb-3" id="garageRenameDeviceId">MAC ID: --</div>
                                 <label for="garageRenameInput" class="form-label"><strong>New Name</strong></label>
-                                <input type="text" class="form-control" id="garageRenameInput" maxlength="10" placeholder="Vehicle name">
-                                <div class="form-text"><small>Up to 10 characters.</small></div>
+                                <input type="text" class="form-control" id="garageRenameInput" maxlength="12" placeholder="Vehicle name">
+                                <div class="form-text"><small>Up to 12 characters.</small></div>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -1504,15 +1706,19 @@
                 <div class="modal-body" style="padding: 1rem 1rem 1.2rem;">
                     <div style="margin-bottom: 0.9rem;">
                         <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">Vehicle</div>
-                        <div id="garageVehicleAboutName" style="color: #666; font-size: 0.92rem;">-</div>
+                        <div id="garageVehicleAboutName" style="color: #666; font-size: 0.92rem;">--</div>
                     </div>
                     <div style="margin-bottom: 0.9rem;">
                         <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">MAC ID</div>
-                        <div id="garageVehicleAboutMac" style="color: #666; font-size: 0.85rem;">-</div>
+                        <div id="garageVehicleAboutMac" style="color: #666; font-size: 0.85rem;">--</div>
                     </div>
                     <div>
                         <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">Firmware Version</div>
-                        <div id="garageVehicleAboutFirmware" style="color: #666; font-size: 0.92rem;">Loading...</div>
+                        <div id="garageVehicleAboutFirmware" style="color: #666; font-size: 0.92rem;">--</div>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">Bluetooth Strength</div>
+                        <div id="garageVehicleAboutBluetooth" style="color: #666; font-size: 0.92rem;">--</div>
                     </div>
                 </div>
             </div>

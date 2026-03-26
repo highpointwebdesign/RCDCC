@@ -28,6 +28,9 @@ const GarageManager = (() => {
     let _rssiPollTimer = null;
     let _rssiPollDeviceId = null;
     let _rssiPollInFlight = false;
+    let _aboutRssiPollTimer = null;
+    let _aboutRssiPollInFlight = false;
+    let _aboutModalVehicleId = null;
     const LONG_PRESS_DISCONNECT_MS = 650;
     const MAX_LABEL_LENGTH = 12;
 
@@ -143,7 +146,7 @@ const GarageManager = (() => {
             };
         }
 
-        if (value >= -55) {
+        if (value >= -80) {
             return {
                 icon: 'signal_cellular_4_bar',
                 label: '',
@@ -151,7 +154,7 @@ const GarageManager = (() => {
             };
         }
 
-        if (value >= -85) {
+        if (value >= -90) {
             return {
                 icon: 'signal_cellular_3_bar',
                 label: '',
@@ -159,7 +162,7 @@ const GarageManager = (() => {
             };
         }
 
-        if (value >= -95) {
+        if (value >= -100) {
             return {
                 icon: 'signal_cellular_2_bar',
                 label: '',
@@ -167,11 +170,65 @@ const GarageManager = (() => {
             };
         }
 
+
         return {
             icon: 'signal_cellular_1_bar',
             label: '',
             toneClass: 'garage-card-signal-poor'
         };
+    }
+
+    function renderAboutBluetoothStrength(rssi) {
+        const bluetoothEl = document.getElementById('garageVehicleAboutBluetooth');
+        if (!bluetoothEl) return;
+
+        const value = Number(rssi);
+        if (!Number.isFinite(value)) {
+            bluetoothEl.textContent = 'Not available';
+            return;
+        }
+
+        const signalPresentation = getSignalStrengthPresentation(value);
+        bluetoothEl.innerHTML = `<span class="material-symbols-outlined garage-card-signal-icon ${signalPresentation.toneClass}" style="vertical-align:middle; margin-right:0.3rem;">${signalPresentation.icon}</span>${Math.round(value)} dBm`;
+    }
+
+    function stopAboutRssiPolling() {
+        if (_aboutRssiPollTimer) {
+            clearInterval(_aboutRssiPollTimer);
+            _aboutRssiPollTimer = null;
+        }
+        _aboutRssiPollInFlight = false;
+        _aboutModalVehicleId = null;
+    }
+
+    async function refreshAboutRssi() {
+        if (_aboutRssiPollInFlight) return;
+        if (!_aboutModalVehicleId) return;
+        if (!window.bleManager || !window.bleManager.isConnected || typeof window.bleManager.readRssi !== 'function') {
+            renderAboutBluetoothStrength(null);
+            return;
+        }
+
+        _aboutRssiPollInFlight = true;
+        try {
+            const nextRssi = await window.bleManager.readRssi();
+            if (Number.isFinite(nextRssi)) {
+                _connectedVehicleRssi = Number(nextRssi);
+            }
+            renderAboutBluetoothStrength(_connectedVehicleRssi);
+        } catch (error) {
+            console.warn('Vehicle about RSSI read failed:', error?.message || error);
+            renderAboutBluetoothStrength(_connectedVehicleRssi);
+        } finally {
+            _aboutRssiPollInFlight = false;
+        }
+    }
+
+    function startAboutRssiPolling(deviceId) {
+        stopAboutRssiPolling();
+        _aboutModalVehicleId = deviceId;
+        refreshAboutRssi();
+        _aboutRssiPollTimer = setInterval(refreshAboutRssi, 4000);
     }
 
     function ensureRssiPollingState() {
@@ -626,10 +683,6 @@ const GarageManager = (() => {
             const cardIcon = isConnecting ? 'modeling' : 'bluetooth_drive';
             const iconClass = isConnecting ? 'material-symbols-outlined pulsating' : 'material-symbols-outlined';
             const lastConnectedStr = isConnected ? null : timeAgo(v.lastSeen);
-            const signalPresentation = isConnected ? getSignalStrengthPresentation(_connectedVehicleRssi) : null;
-            const signalStrengthMarkup = isConnected
-                ? `<div class="garage-card-signal ${signalPresentation.toneClass}"><span class="material-symbols-outlined garage-card-signal-icon">${signalPresentation.icon}</span><span>${signalPresentation.label}</span></div>`
-                : '';
             return `
             <div class="garage-card ${isConnected ? 'connected' : ''} ${isConnecting ? 'connecting' : ''} ${isError ? 'connect-error' : ''}" data-vehicle-id="${v.id}" role="button" tabindex="0" aria-label="${accessibilityLabel}" onclick="GarageManager.handleCardTap('${v.id}')" onkeydown="GarageManager.handleCardKeydown(event, '${v.id}')" onpointerdown="GarageManager.handleCardPointerDown(event, '${v.id}')" onpointerup="GarageManager.handleCardPointerUp(event)" onpointerleave="GarageManager.handleCardPointerCancel()" onpointercancel="GarageManager.handleCardPointerCancel()">
                 <div class="garage-card-top">
@@ -694,7 +747,6 @@ const GarageManager = (() => {
                 </div>
                 <div class="garage-card-meta">
                     <div class="garage-card-hint">${interactionHint}</div>
-                    ${signalStrengthMarkup}
                     ${lastConnectedStr ? `<div class="garage-card-last-seen">Last connected: ${lastConnectedStr}</div>` : ''}
                 </div>
             </div>`;
@@ -1057,6 +1109,7 @@ const GarageManager = (() => {
         if (titleTextEl) titleTextEl.textContent = `About ${vehicleName}`;
         if (macEl) macEl.textContent = deviceId;
         if (fwEl) fwEl.textContent = 'Loading...';
+        renderAboutBluetoothStrength(_connectedVehicleRssi);
 
         try {
             const data = await window.bleManager.readConfigScoped('bootstrap');
@@ -1070,6 +1123,7 @@ const GarageManager = (() => {
         if (window.bootstrap && window.bootstrap.Modal) {
             const modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
             modal.show();
+            startAboutRssiPolling(deviceId);
         }
     }
 
@@ -1090,6 +1144,11 @@ const GarageManager = (() => {
 
         bindRenameModal();
         bindGarageTransferButtons();
+
+        const aboutModal = document.getElementById('garageVehicleAboutModal');
+        if (aboutModal) {
+            aboutModal.addEventListener('hidden.bs.modal', stopAboutRssiPolling);
+        }
 
         // Auto-add vehicle after successful BLE connect (hook into disconnect callback)
         // This is called from app.js after a successful connectBLE()

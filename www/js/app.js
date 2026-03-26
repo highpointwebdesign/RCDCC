@@ -1,3 +1,31 @@
+// ==================== Simple 5-LED Blue Test ====================
+window.simpleLedTestOn = async function() {
+    const statusEl = document.getElementById('simpleLedTestStatus');
+    if (!bleManager || !bleManager.isConnected) {
+        if (statusEl) statusEl.textContent = 'Not connected.';
+        return;
+    }
+    try {
+        await bleManager.sendSystemCommand('leds_simple_onoff', { on: true });
+        if (statusEl) statusEl.textContent = 'LEDs 0-4 ON (Blue)';
+    } catch (e) {
+        if (statusEl) statusEl.textContent = 'Send failed: ' + (e?.message || e);
+    }
+};
+
+window.simpleLedTestOff = async function() {
+    const statusEl = document.getElementById('simpleLedTestStatus');
+    if (!bleManager || !bleManager.isConnected) {
+        if (statusEl) statusEl.textContent = 'Not connected.';
+        return;
+    }
+    try {
+        await bleManager.sendSystemCommand('leds_simple_onoff', { on: false });
+        if (statusEl) statusEl.textContent = 'LEDs 0-4 OFF';
+    } catch (e) {
+        if (statusEl) statusEl.textContent = 'Send failed: ' + (e?.message || e);
+    }
+};
 window.addEventListener('unhandledrejection', function(event) {
     console.error('UNHANDLED REJECTION:', event.reason);
     event.preventDefault(); // prevents crash
@@ -57,8 +85,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.395';
-        const BUILD_DATE = '2026-03-24';
+        const APP_VERSION = '1.1.425';
+        const BUILD_DATE = '2026-03-26';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -675,6 +703,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Phase 2: Dirty State System ====================
         // pageKey: 'tuning' | 'servo' | 'system'
         const dirtyPages = new Set();
+        const DIRTY_PAGE_LABELS = {
+            tuning: 'Suspension',
+            servo: 'Trim / Rotation',
+            system: 'Hardware Configuration'
+        };
 
         function markPageDirty(pageKey) {
             dirtyPages.add(pageKey);
@@ -722,10 +755,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
         }
 
-        function showDirtyConfirmDialog() {
+                function showDirtyConfirmDialog(dirtyPageKeys = []) {
             return new Promise((resolve) => {
                 const existing = document.getElementById('dirty-confirm-overlay');
                 if (existing) existing.remove();
+                                const keys = Array.isArray(dirtyPageKeys) ? dirtyPageKeys.filter(Boolean) : [];
+                                const labels = keys.map((k) => DIRTY_PAGE_LABELS[k] || k);
+                                const details = labels.length
+                                        ? `<div style="margin:0 0 14px;color:#bbb;font-size:0.82rem;line-height:1.5;"><strong>Unsaved:</strong> ${labels.join(', ')}</div>`
+                                        : '';
                 const overlay = document.createElement('div');
                 overlay.id = 'dirty-confirm-overlay';
                 overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -733,6 +771,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                   <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
                     <h5 style="margin:0 0 12px;color:#fff;">Unsaved Changes</h5>
                     <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">You have unsaved changes. Save before leaving?</p>
+                                        ${details}
                     <div style="display:flex;gap:8px;">
                       <button id="ddc-cancel"  style="flex:1;padding:10px;border:none;border-radius:8px;background:#222;color:#aaa;border:1px solid #555;cursor:pointer;">Cancel</button>
                                             <button id="ddc-discard" style="flex:1;padding:10px;border:none;border-radius:8px;background:#555;color:#fff;cursor:pointer;">Discard</button>
@@ -744,6 +783,42 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 overlay.querySelector('#ddc-discard').onclick = () => { overlay.remove(); resolve('discard'); };
                 overlay.querySelector('#ddc-cancel').onclick  = () => { overlay.remove(); resolve('cancel'); };
             });
+        }
+
+        async function resolveDirtyPagesForChoice(pageKeys, choice) {
+            const keys = Array.from(new Set((pageKeys || []).filter((k) => isPageDirty(k))));
+            if (!keys.length) return true;
+
+            if (choice === 'save') {
+                const remainingKeys = new Set(keys);
+                if (keys.includes('system')) {
+                    await savePage('system');
+                    if (isPageDirty('system') || isPageDirty('servo')) return false;
+                    remainingKeys.delete('system');
+                    // system save persists hardware (system + servo)
+                    remainingKeys.delete('servo');
+                }
+
+                for (const key of remainingKeys) {
+                    await savePage(key);
+                    if (isPageDirty(key)) return false;
+                }
+                return true;
+            }
+
+            if (choice === 'discard') {
+                for (const key of keys) {
+                    try {
+                        await discardPage(key);
+                    } catch (error) {
+                        console.warn('Discard failed, continuing navigation:', error?.message || error);
+                        clearPageDirty(key);
+                    }
+                }
+                return true;
+            }
+
+            return false;
         }
 
                 function showSimpleNoticeDialog(title, message, okLabel = 'OK', overlayId = 'simple-notice-overlay') {
@@ -3694,6 +3769,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             syncCardCollapseState('tuningParametersCard', 'tuningParametersChevron', 'tuningParametersCardCollapsed');
+            syncCardCollapseState('mpuOrientationCard', 'mpuOrientationChevron', 'mpuOrientationCardCollapsed');
             syncCardCollapseState('servoRangeCard', 'servoRangeChevron', 'servoRangeCardCollapsed');
             syncCardCollapseState('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed');
             syncCardCollapseState('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed');
@@ -4122,28 +4198,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Dirty guard: check page being navigated away from
             const currentSection = localStorage.getItem('currentPage') || 'dashboard';
             if (currentSection !== targetSection) {
-                let dirtyKeys = [];
-                if (currentSection === 'tuning') dirtyKeys = ['tuning'];
-                else if (currentSection === 'settings') dirtyKeys = ['servo', 'system'];
-                const dirtyKey = dirtyKeys.find(k => isPageDirty(k));
-                if (dirtyKey) {
-                    const choice = await showDirtyConfirmDialog();
+                const activeDirtyKeys = ['tuning', 'servo', 'system'].filter((k) => isPageDirty(k));
+                if (activeDirtyKeys.length) {
+                    const choice = await showDirtyConfirmDialog(activeDirtyKeys);
                     if (choice === 'cancel') return;
-                    if (choice === 'save') {
-                        await savePage(dirtyKey);
-                        if (isPageDirty(dirtyKey)) return; // save failed, abort
-                    } else if (choice === 'discard') {
-                        try {
-                            await discardPage(dirtyKey);
-                        } catch (error) {
-                            console.warn('Discard failed, continuing navigation:', error?.message || error);
-                            clearPageDirty(dirtyKey);
-                        }
-                    }
+                    const resolved = await resolveDirtyPagesForChoice(activeDirtyKeys, choice);
+                    if (!resolved) return;
                 }
 
                 if (currentSection === 'lights' && lightingGroupsDirty) {
-                    const choice = await showDirtyConfirmDialog();
+                    const choice = await showDirtyConfirmDialog(['lights']);
                     if (choice === 'cancel') return;
                     if (choice === 'save') {
                         await updateActiveLightingProfile();
@@ -4337,7 +4401,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const LIGHTS_ENGINE_MAX_GROUPS = 15;
         const MAX_LIGHTS_TOTAL_LEDS = 30;
         const MAX_LIGHT_GROUP_LEDS = 15;
-        const BASIC_LIGHTING_TEST_LED_COUNT = 11;
+        const BASIC_LIGHTING_TEST_LED_COUNT = 9;
         const BASIC_LIGHTING_TEST_COLOR = '#0000ff';
         const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'glitter', 'police'];
         const LIGHTS_ENGINE_EFFECTS = new Set(['solid', 'glitter', 'police']);
@@ -4708,7 +4772,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const addGroupBtn = document.getElementById('addLightGroupBtn');
             const totalLedInput = document.getElementById('totalLEDCount');
             const colorOrderInput = document.getElementById('lightColorOrder');
-            const controlsLocked = manageLightGroupsLocked || lightStripConfigLocked || !isBleConnected();
+            const controlsLocked = manageLightGroupsLocked || !isBleConnected();
 
             if (card) card.classList.toggle('profile-card-locked', manageLightGroupsLocked);
             if (lockIcon) {
@@ -4750,7 +4814,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const lockIcon = document.getElementById('lightStripConfigLockIcon');
             const totalLedInput = document.getElementById('totalLEDCount');
             const colorOrderInput = document.getElementById('lightColorOrder');
-            const controlsLocked = manageLightGroupsLocked || lightStripConfigLocked;
+            const controlsLocked = manageLightGroupsLocked;
 
             if (card) card.classList.toggle('profile-card-locked', lightStripConfigLocked);
             if (lockIcon) {
@@ -4773,9 +4837,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function toggleLightStripConfigLock() {
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
             clickSound.play().catch(e => console.log('Sound play failed:', e));
-            lightStripConfigLocked = !lightStripConfigLocked;
-            localStorage.setItem('lightStripConfigLocked', lightStripConfigLocked.toString());
-            syncLightStripConfigLockUI();
+            // Light Strip Config card removed; function now does nothing.
         }
 
         function populateLightingProfileSelector() {
@@ -5093,7 +5155,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     return pushLightsPayload(buildBasicMasterTestGroupPayload());
                 })
                 .then(() => {
-                    appendToSettingsConsoleCard('[Lights] Blue test group (LEDs 0-10) submitted', 'info');
+                    appendToSettingsConsoleCard('[Lights] Blue test group (LEDs 0-8) submitted', 'info');
                     lastPushedLightsMasterEnabled = true;
                     lastPushedLightGroupCount = 1;
                     lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
@@ -5128,14 +5190,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const g = parseInt(hex.substring(2, 4), 16) || 0;
             const b = parseInt(hex.substring(4, 6), 16) || 0;
             try {
-                await bleManager.sendSystemCommand('lights_color_order', { order: 'rgb' });
+                // Get color order from dropdown
+                let colorOrder = 'grb';
+                const colorOrderInput = document.getElementById('lightColorOrder');
+                if (colorOrderInput && colorOrderInput.value) {
+                    colorOrder = colorOrderInput.value;
+                }
+                await bleManager.sendSystemCommand('lights_color_order', { order: colorOrder });
                 await bleManager.sendSystemCommand('lights_basic', {
                     on:  _basicLightsMasterOn,
                     r, g, b,
                     bri: Number(_basicLightsBri)
                 });
                 const msg = _basicLightsMasterOn
-                    ? `Sent ON — rgb(${r},${g},${b}) @ ${_basicLightsBri}%`
+                    ? `Sent ON — ${colorOrder}(${r},${g},${b}) @ ${_basicLightsBri}%`
                     : 'Sent OFF';
                 if (statusEl) statusEl.textContent = msg;
                 console.log('[BasicLights]', msg);
@@ -5217,10 +5285,551 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const icon = btn.querySelector('.material-symbols-outlined');
                 if (icon) icon.textContent = 'light_off';
             }
+            _basicScenarioActiveMode = '';
+            _syncBasicScenarioButtons();
             if (bleManager && bleManager.isConnected) {
                 bleManager.sendSystemCommand('lights_diag', { on: false }).catch(() => {});
             }
         }
+
+        // ==================== Basic Lights Test — Per-LED Grid ====================
+
+        const BASIC_LED_GRID_COUNT = 9;
+        const _basicLedColors = Array(BASIC_LED_GRID_COUNT).fill('#ffffff');
+        let _basicLedGridSelected = 0;
+
+        function _renderBasicLedGrid() {
+            const grid = document.getElementById('basicLedGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            for (let i = 0; i < BASIC_LED_GRID_COUNT; i++) {
+                const cell = document.createElement('div');
+                const isSelected = i === _basicLedGridSelected;
+                cell.style.cssText = [
+                    'aspect-ratio:1/1',
+                    'border-radius:6px',
+                    'cursor:pointer',
+                    'position:relative',
+                    'min-height:28px',
+                    `background:${_basicLedColors[i]}`,
+                    `border:2px solid ${isSelected ? '#f9b233' : '#3e455a'}`,
+                    isSelected ? 'box-shadow:0 0 0 2px rgba(249,178,51,0.35)' : ''
+                ].join(';');
+                cell.title = `LED ${i}`;
+                cell.onclick = (function(idx) { return function() { _basicLedGridSelectLed(idx); }; })(i);
+                const lbl = document.createElement('span');
+                lbl.textContent = i;
+                lbl.style.cssText = 'position:absolute;bottom:2px;right:4px;font-size:10px;font-weight:bold;color:#111;text-shadow:0 0 2px rgba(255,255,255,0.8);';
+                cell.appendChild(lbl);
+                grid.appendChild(cell);
+            }
+        }
+
+        function _basicLedGridSelectLed(index) {
+            _basicLedGridSelected = index;
+            const picker = document.getElementById('basicLedGridColorPicker');
+            if (picker) picker.value = _basicLedColors[index];
+            const swatch = document.getElementById('basicLedGridColorSwatch');
+            if (swatch) swatch.style.background = _basicLedColors[index];
+            const label = document.getElementById('basicLedGridSelectedLabel');
+            if (label) label.textContent = `LED ${index} selected`;
+            _renderBasicLedGrid();
+        }
+
+        window.basicLedGridPickerChange = function(value) {
+            _basicLedColors[_basicLedGridSelected] = value;
+            const swatch = document.getElementById('basicLedGridColorSwatch');
+            if (swatch) swatch.style.background = value;
+            _renderBasicLedGrid();
+        };
+
+        window.basicLedGridApplyAll = function() {
+            const picker = document.getElementById('basicLedGridColorPicker');
+            const color = picker ? picker.value : '#ffffff';
+            for (let i = 0; i < BASIC_LED_GRID_COUNT; i++) _basicLedColors[i] = color;
+            _renderBasicLedGrid();
+        };
+
+        window.basicLedGridSend = async function() {
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (!bleManager || !bleManager.isConnected) {
+                if (statusEl) statusEl.textContent = 'Not connected.';
+                return;
+            }
+            try {
+                // Open the app-side gate and enable master output on device
+                lightsWriteGateEnabled = true;
+                await bleManager.sendSystemCommand('lights_master', { enabled: true });
+                // Small delay to let firmware process
+                await new Promise(r => setTimeout(r, 50));
+                // Send each LED as its own group slot so they coexist on the strip
+                for (let i = 0; i < BASIC_LED_GRID_COUNT; i++) {
+                    const hex = (_basicLedColors[i] || '#ffffff').replace('#', '');
+                    const r = parseInt(hex.substring(0, 2), 16) || 0;
+                    const g = parseInt(hex.substring(2, 4), 16) || 0;
+                    const b = parseInt(hex.substring(4, 6), 16) || 0;
+                    await pushLightsPayload({
+                        group: i,
+                        name: `LED${i}`,
+                        enabled: true,
+                        color: _basicLedColors[i],
+                        color2: '#000000',
+                        brightness: 100,
+                        effect: 'solid',
+                        speed: 128,
+                        intensity: 128,
+                        leds: [i]
+                    });
+                    // Small delay between groups to avoid overwhelming the firmware
+                    if (i < BASIC_LED_GRID_COUNT - 1) {
+                        await new Promise(r => setTimeout(r, 20));
+                    }
+                }
+                if (statusEl) statusEl.textContent = `Per-LED colors applied to strip (${BASIC_LED_GRID_COUNT} LEDs).`;
+            } catch (e) {
+                const msg = `Per-LED send failed: ${e?.message || e}`;
+                if (statusEl) statusEl.textContent = msg;
+                console.error('[BasicLights]', msg);
+            }
+        };
+
+        // ==================== Basic Lights Test — Two-Group Test ====================
+
+        let _basicGroupAColor = '#ff0000';
+        let _basicGroupBColor = '#0000ff';
+
+        function _parseGroupLedIndices(inputId) {
+            const input = document.getElementById(inputId);
+            if (!input || !input.value.trim()) return [];
+            return input.value.split(',')
+                .map(s => parseInt(s.trim(), 10))
+                .filter(n => Number.isFinite(n) && n >= 0 && n < MAX_LIGHTS_TOTAL_LEDS);
+        }
+
+        window.basicGroupAColorChange = function(value) {
+            _basicGroupAColor = value;
+            const swatch = document.getElementById('basicGroupAColorSwatch');
+            if (swatch) swatch.style.background = value;
+        };
+
+        window.basicGroupBColorChange = function(value) {
+            _basicGroupBColor = value;
+            const swatch = document.getElementById('basicGroupBColorSwatch');
+            if (swatch) swatch.style.background = value;
+        };
+
+        window.basicGroupsSend = async function() {
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (!bleManager || !bleManager.isConnected) {
+                if (statusEl) statusEl.textContent = 'Not connected.';
+                return;
+            }
+            const ledsA = _parseGroupLedIndices('basicGroupALeds');
+            const ledsB = _parseGroupLedIndices('basicGroupBLeds');
+            if (!ledsA.length && !ledsB.length) {
+                if (statusEl) statusEl.textContent = 'No valid LED indices in either group.';
+                return;
+            }
+            // Overlap check — warn but don't block
+            const setA = new Set(ledsA);
+            const overlap = ledsB.filter(n => setA.has(n));
+            if (overlap.length > 0) {
+                console.warn('[BasicGroups] Overlapping LED indices detected:', overlap);
+                appendToSettingsConsoleCard(`[Lights] Warning: overlapping LEDs between groups: ${overlap.join(', ')}`, 'warn');
+            }
+            try {
+                // Open the app-side gate and enable master output on device
+                lightsWriteGateEnabled = true;
+                await bleManager.sendSystemCommand('lights_master', { enabled: true });
+                if (ledsA.length) {
+                    await pushLightsPayload({
+                        group: 0, name: 'Group A', enabled: true,
+                        color: _basicGroupAColor, color2: '#000000',
+                        brightness: 100, effect: 'solid', speed: 128, intensity: 128,
+                        leds: ledsA
+                    });
+                }
+                if (ledsB.length) {
+                    await pushLightsPayload({
+                        group: 1, name: 'Group B', enabled: true,
+                        color: _basicGroupBColor, color2: '#000000',
+                        brightness: 100, effect: 'solid', speed: 128, intensity: 128,
+                        leds: ledsB
+                    });
+                }
+                const msg = `Groups sent — A: [${ledsA}] ${_basicGroupAColor}  B: [${ledsB}] ${_basicGroupBColor}${overlap.length ? ' ⚠ overlap' : ''}`;
+                if (statusEl) statusEl.textContent = msg;
+                appendToSettingsConsoleCard('[Lights] ' + msg, overlap.length ? 'warn' : 'info');
+            } catch (e) {
+                const msg = `Groups send failed: ${e?.message || e}`;
+                if (statusEl) statusEl.textContent = msg;
+                console.error('[BasicLights]', msg);
+            }
+        };
+
+        window.basicGroupsClear = async function() {
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (!bleManager || !bleManager.isConnected) {
+                if (statusEl) statusEl.textContent = 'Not connected.';
+                return;
+            }
+            try {
+                await bleManager.sendSystemCommand('lights_master', { enabled: false });
+                await bleManager.sendSystemCommand('lights_clear_all', {});
+                _basicScenarioActiveMode = '';
+                _syncBasicScenarioButtons();
+                if (statusEl) statusEl.textContent = 'Groups cleared. Strip off.';
+            } catch (e) {
+                if (statusEl) statusEl.textContent = `Clear failed: ${e?.message || e}`;
+            }
+        };
+
+        // ==================== Basic Lights Test — Step 4 Real Scenarios ====================
+
+        var _basicScenarioActiveMode = '';
+
+        function _basicScenarioLedBuckets() {
+            const total = Math.max(1, Math.floor(Number(BASIC_LED_GRID_COUNT) || 9));
+            const splitA = Math.max(1, Math.ceil(total / 3));
+            const splitB = Math.max(splitA + 1, Math.ceil((2 * total) / 3));
+            const left = [];
+            const center = [];
+            const right = [];
+            const rear = [];
+
+            for (let i = 0; i < total; i++) {
+                if (i < splitA) left.push(i);
+                else if (i < splitB) center.push(i);
+                else right.push(i);
+                if (i >= Math.floor(total / 2)) rear.push(i);
+            }
+
+            return { total, left, center, right, rear };
+        }
+
+        function _buildBasicScenarioGroups(mode) {
+            const buckets = _basicScenarioLedBuckets();
+            const allIndices = Array.from({ length: buckets.total }, (_, i) => i);
+            const evenIndices = allIndices.filter(i => i % 2 === 0);
+            const oddIndices = allIndices.filter(i => i % 2 !== 0);
+
+            if (mode === 'brake') {
+                return [
+                    { group: 10, name: 'Brake', color: '#ff0000', leds: buckets.rear.length ? buckets.rear : allIndices }
+                ];
+            }
+            if (mode === 'turn_left') {
+                return [
+                    { group: 10, name: 'Turn Left', color: '#ff8c00', leds: buckets.left }
+                ];
+            }
+            if (mode === 'turn_right') {
+                return [
+                    { group: 10, name: 'Turn Right', color: '#ff8c00', leds: buckets.right }
+                ];
+            }
+            if (mode === 'hazards') {
+                const hazardLeds = Array.from(new Set([...(buckets.left || []), ...(buckets.right || [])]));
+                return [
+                    { group: 10, name: 'Hazards', color: '#ff8c00', leds: hazardLeds }
+                ];
+            }
+            if (mode === 'reverse') {
+                const reverseLeds = buckets.center.length ? buckets.center : buckets.rear;
+                return [
+                    { group: 10, name: 'Reverse', color: '#ffffff', leds: reverseLeds }
+                ];
+            }
+            if (mode === 'emergency') {
+                return [
+                    { group: 10, name: 'Emergency Red', color: '#ff0000', leds: evenIndices },
+                    { group: 11, name: 'Emergency Blue', color: '#003bff', leds: oddIndices }
+                ];
+            }
+
+            return [];
+        }
+
+        function _syncBasicScenarioButtons() {
+            const modeButtons = document.querySelectorAll('[data-basic-scenario-mode]');
+            modeButtons.forEach(btn => {
+                const mode = String(btn.dataset.basicScenarioMode || '');
+                const isActive = !!mode && mode === _basicScenarioActiveMode;
+                btn.classList.toggle('btn-warning', isActive);
+                btn.classList.toggle('btn-outline-secondary', !isActive);
+                btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+        }
+
+        async function _clearScenarioOutput() {
+            lightsWriteGateEnabled = true;
+            await bleManager.sendSystemCommand('lights_master', { enabled: false });
+            await new Promise(r => setTimeout(r, 25));
+            await bleManager.sendSystemCommand('lights_clear_all', {});
+            await new Promise(r => setTimeout(r, 25));
+        }
+
+        window.basicScenarioToggle = async function(mode) {
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (!bleManager || !bleManager.isConnected) {
+                if (statusEl) statusEl.textContent = 'Not connected.';
+                return;
+            }
+
+            try {
+                await _clearScenarioOutput();
+
+                if (_basicScenarioActiveMode === mode) {
+                    _basicScenarioActiveMode = '';
+                    _syncBasicScenarioButtons();
+                    if (statusEl) statusEl.textContent = 'Scenario OFF. Strip cleared.';
+                    return;
+                }
+
+                const groups = _buildBasicScenarioGroups(mode).filter(group => Array.isArray(group.leds) && group.leds.length > 0);
+                if (!groups.length) {
+                    _basicScenarioActiveMode = '';
+                    _syncBasicScenarioButtons();
+                    if (statusEl) statusEl.textContent = 'Scenario has no valid LEDs for current strip size.';
+                    return;
+                }
+
+                await bleManager.sendSystemCommand('lights_master', { enabled: true });
+                await new Promise(r => setTimeout(r, 35));
+
+                for (let i = 0; i < groups.length; i++) {
+                    const group = groups[i];
+                    await pushLightsPayload({
+                        group: group.group,
+                        name: group.name,
+                        enabled: true,
+                        color: group.color,
+                        color2: '#000000',
+                        brightness: 100,
+                        effect: 'solid',
+                        speed: 128,
+                        intensity: 128,
+                        leds: group.leds
+                    });
+                }
+
+                _basicScenarioActiveMode = mode;
+                _syncBasicScenarioButtons();
+                if (statusEl) statusEl.textContent = `Scenario active: ${String(mode).replace('_', ' ').toUpperCase()}.`; 
+            } catch (e) {
+                _basicScenarioActiveMode = '';
+                _syncBasicScenarioButtons();
+                const msg = `Scenario toggle failed: ${e?.message || e}`;
+                if (statusEl) statusEl.textContent = msg;
+                console.error('[BasicLights]', msg);
+            }
+        };
+
+        window.basicScenarioClear = async function() {
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (!bleManager || !bleManager.isConnected) {
+                if (statusEl) statusEl.textContent = 'Not connected.';
+                return;
+            }
+            try {
+                await _clearScenarioOutput();
+                _basicScenarioActiveMode = '';
+                _syncBasicScenarioButtons();
+                if (statusEl) statusEl.textContent = 'Scenarios cleared. Strip off.';
+            } catch (e) {
+                if (statusEl) statusEl.textContent = `Scenario clear failed: ${e?.message || e}`;
+            }
+        };
+
+        // Initialise the LED grid on page load
+        (function _initBasicLedGrid() {
+            _renderBasicLedGrid();
+            _syncBasicScenarioButtons();
+        })();
+
+        // ==================== Step 6: Stability Soak Test ====================
+
+        var _soakRunning = false;
+        var _soakAbort = null;
+        var _soakLog = [];
+        var _soakStats = { cycles: 0, cmds: 0, errors: 0, totalLatency: 0, maxLatency: 0 };
+        var _soakStartTime = 0;
+        var _soakUiTimer = null;
+        var _SOAK_DURATION_MS = 5 * 60 * 1000;  // 5 minutes
+        var _SOAK_HOLD_MS = 3000;                // hold each scenario 3 s
+        var _SOAK_CLEAR_GAP_MS = 800;            // pause between scenarios
+        var _SOAK_MODES = ['brake', 'turn_left', 'turn_right', 'hazards', 'reverse', 'emergency'];
+
+        function _soakAppendEntry(entry) {
+            _soakLog.push(entry);
+            if (_soakLog.length > 2000) _soakLog.shift();
+        }
+
+        async function _soakTimedBle(label, fn) {
+            const t0 = performance.now();
+            try {
+                await fn();
+                const ms = Math.round(performance.now() - t0);
+                _soakStats.cmds++;
+                _soakStats.totalLatency += ms;
+                if (ms > _soakStats.maxLatency) _soakStats.maxLatency = ms;
+                const isLag = ms > 500;
+                if (isLag) _soakStats.errors++;
+                _soakAppendEntry({ ts: Date.now(), type: isLag ? 'lag' : 'ok', cmd: label, latency_ms: ms });
+            } catch (err) {
+                const ms = Math.round(performance.now() - t0);
+                _soakStats.cmds++;
+                _soakStats.errors++;
+                _soakAppendEntry({ ts: Date.now(), type: 'error', cmd: label, latency_ms: ms, detail: String(err?.message || err) });
+            }
+        }
+
+        async function _soakRunLoop(signal) {
+            let modeIdx = 0;
+            while (!signal.aborted && (Date.now() - _soakStartTime) < _SOAK_DURATION_MS) {
+                const mode = _SOAK_MODES[modeIdx % _SOAK_MODES.length];
+
+                // Clear output before each scenario
+                lightsWriteGateEnabled = true;
+                await _soakTimedBle('lights_master:off', () =>
+                    bleManager.sendSystemCommand('lights_master', { enabled: false }));
+                if (signal.aborted) break;
+                await new Promise(r => setTimeout(r, 25));
+                await _soakTimedBle('lights_clear_all', () =>
+                    bleManager.sendSystemCommand('lights_clear_all', {}));
+                if (signal.aborted) break;
+                await new Promise(r => setTimeout(r, _SOAK_CLEAR_GAP_MS));
+                if (signal.aborted) break;
+
+                // Apply scenario
+                await _soakTimedBle('lights_master:on', () =>
+                    bleManager.sendSystemCommand('lights_master', { enabled: true }));
+                if (signal.aborted) break;
+                await new Promise(r => setTimeout(r, 35));
+
+                const groups = _buildBasicScenarioGroups(mode).filter(g => Array.isArray(g.leds) && g.leds.length > 0);
+                for (const group of groups) {
+                    if (signal.aborted) break;
+                    await _soakTimedBle(`payload:${mode}:g${group.group}`, () =>
+                        pushLightsPayload({
+                            group: group.group,
+                            name: group.name,
+                            enabled: true,
+                            color: group.color,
+                            color2: '#000000',
+                            brightness: 100,
+                            effect: 'solid',
+                            speed: 128,
+                            intensity: 128,
+                            leds: group.leds
+                        }));
+                }
+                if (signal.aborted) break;
+
+                // Hold scenario visible
+                const holdStart = Date.now();
+                while (!signal.aborted && (Date.now() - holdStart) < _SOAK_HOLD_MS) {
+                    await new Promise(r => setTimeout(r, 200));
+                }
+
+                modeIdx++;
+                if (modeIdx % _SOAK_MODES.length === 0) {
+                    _soakStats.cycles++;
+                    _soakAppendEntry({ ts: Date.now(), type: 'cycle', cmd: 'cycle_complete', latency_ms: 0, cycle: _soakStats.cycles });
+                }
+            }
+
+            // Final clear
+            lightsWriteGateEnabled = true;
+            await _soakTimedBle('lights_master:off:final', () =>
+                bleManager.sendSystemCommand('lights_master', { enabled: false }));
+            await new Promise(r => setTimeout(r, 25));
+            await _soakTimedBle('lights_clear_all:final', () =>
+                bleManager.sendSystemCommand('lights_clear_all', {}));
+        }
+
+        function _soakRefreshStatusUI() {
+            const el = document.getElementById('soakLiveStatus');
+            if (!el || !_soakRunning) return;
+            const remaining = Math.max(0, _SOAK_DURATION_MS - (Date.now() - _soakStartTime));
+            const mm = String(Math.floor(remaining / 60000)).padStart(2, '0');
+            const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0');
+            const avg = _soakStats.cmds > 0 ? Math.round(_soakStats.totalLatency / _soakStats.cmds) : 0;
+            el.textContent = `Running — ${mm}:${ss} left | Cycles: ${_soakStats.cycles} | Cmds: ${_soakStats.cmds} | Errors/Lag: ${_soakStats.errors} | Avg: ${avg}ms | Max: ${_soakStats.maxLatency}ms`;
+            el.className = _soakStats.errors > 0 ? 'text-warning' : 'text-success';
+            el.style.fontSize = '0.8rem';
+        }
+
+        window.soakStart = async function() {
+            if (_soakRunning) return;
+            if (!bleManager || !bleManager.isConnected) {
+                const el = document.getElementById('soakLiveStatus');
+                if (el) { el.textContent = 'Not connected.'; el.className = 'text-danger'; el.style.fontSize = '0.8rem'; }
+                return;
+            }
+            _soakLog = [];
+            _soakStats = { cycles: 0, cmds: 0, errors: 0, totalLatency: 0, maxLatency: 0 };
+            _soakStartTime = Date.now();
+            _soakRunning = true;
+            _soakAbort = new AbortController();
+
+            const startBtn = document.getElementById('soakStartBtn');
+            const stopBtn  = document.getElementById('soakStopBtn');
+            const copyBtn  = document.getElementById('soakCopyBtn');
+            if (startBtn) { startBtn.disabled = true; startBtn.textContent = 'Running\u2026'; }
+            if (stopBtn)  stopBtn.disabled = false;
+            if (copyBtn)  copyBtn.disabled = true;
+
+            _soakAppendEntry({ ts: Date.now(), type: 'start', cmd: 'soak_start', latency_ms: 0, detail: `duration=${_SOAK_DURATION_MS}ms modes=${_SOAK_MODES.join(',')}` });
+            _soakUiTimer = setInterval(_soakRefreshStatusUI, 1000);
+
+            try {
+                await _soakRunLoop(_soakAbort.signal);
+                _soakAppendEntry({ ts: Date.now(), type: 'end', cmd: 'soak_end', latency_ms: 0, detail: _soakAbort.signal.aborted ? 'stopped_by_user' : 'completed' });
+            } catch (e) {
+                _soakAppendEntry({ ts: Date.now(), type: 'fatal', cmd: 'soak_fatal', latency_ms: 0, detail: String(e?.message || e) });
+            }
+
+            clearInterval(_soakUiTimer);
+            _soakRunning = false;
+            if (startBtn) { startBtn.disabled = false; startBtn.textContent = 'Start Soak'; }
+            if (stopBtn)  stopBtn.disabled = true;
+            if (copyBtn)  copyBtn.disabled = false;
+
+            const avg = _soakStats.cmds > 0 ? Math.round(_soakStats.totalLatency / _soakStats.cmds) : 0;
+            const outcome = _soakAbort.signal.aborted ? 'Stopped early' : 'Complete';
+            const el = document.getElementById('soakLiveStatus');
+            if (el) {
+                el.textContent = `${outcome} — Cycles: ${_soakStats.cycles} | Cmds: ${_soakStats.cmds} | Errors/Lag: ${_soakStats.errors} | Avg: ${avg}ms | Max: ${_soakStats.maxLatency}ms`;
+                el.className = _soakStats.errors === 0 ? 'text-success' : 'text-warning';
+                el.style.fontSize = '0.8rem';
+            }
+        };
+
+        window.soakStop = function() {
+            if (_soakAbort) _soakAbort.abort();
+        };
+
+        window.soakCopyLog = async function() {
+            if (!_soakLog.length) return;
+            const avg = _soakStats.cmds > 0 ? Math.round(_soakStats.totalLatency / _soakStats.cmds) : 0;
+            const report = {
+                generated: new Date().toISOString(),
+                durationActualMs: _soakLog.length > 1 ? _soakLog[_soakLog.length - 1].ts - _soakLog[0].ts : 0,
+                stats: { ..._soakStats, avgLatency_ms: avg },
+                log: _soakLog
+            };
+            const text = JSON.stringify(report, null, 2);
+            const copyBtn = document.getElementById('soakCopyBtn');
+            try {
+                await navigator.clipboard.writeText(text);
+                if (copyBtn) { copyBtn.textContent = 'Copied!'; setTimeout(() => { if (copyBtn) copyBtn.textContent = 'Copy Log'; }, 2500); }
+            } catch (_) {
+                // Fallback: emit to in-app console
+                console.info('[SoakLog]', text);
+                if (copyBtn) { copyBtn.textContent = 'See Console'; setTimeout(() => { if (copyBtn) copyBtn.textContent = 'Copy Log'; }, 2500); }
+            }
+        };
 
         // ==================== Master Light Switch ====================
 
@@ -8736,6 +9345,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             // Safe defaults: min=10, max=170 to prevent mechanical damage
             const defaultMin = 10;
             const defaultMax = 170;
+            const SERVO_RANGE_MIN_GAP_DEG = 2;
+
+            function normalizeServoRangePair(minValue, maxValue) {
+                let nextMin = Math.round(Number(minValue) || 0);
+                let nextMax = Math.round(Number(maxValue) || 0);
+
+                nextMin = Math.max(0, Math.min(180, nextMin));
+                nextMax = Math.max(0, Math.min(180, nextMax));
+
+                if (nextMax - nextMin < SERVO_RANGE_MIN_GAP_DEG) {
+                    if (nextMin + SERVO_RANGE_MIN_GAP_DEG <= 180) {
+                        nextMax = nextMin + SERVO_RANGE_MIN_GAP_DEG;
+                    } else {
+                        nextMin = Math.max(0, 180 - SERVO_RANGE_MIN_GAP_DEG);
+                        nextMax = 180;
+                    }
+                }
+
+                return [nextMin, nextMax];
+            }
 
             // Front Left Servo
             let frontLeftElement = document.querySelector('#sliderFrontLeft');
@@ -8746,6 +9375,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     max: 180,
                     step: 2,
                     onInput: function(value) {
+                        const normalizedRange = normalizeServoRangePair(value[0], value[1]);
+                        if (normalizedRange[0] !== Math.round(value[0]) || normalizedRange[1] !== Math.round(value[1])) {
+                            frontLeftInstance.value(normalizedRange);
+                            return;
+                        }
                         updateThumbLabels('sliderFrontLeft', value);
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
                             servoSliderValues.frontLeft.min = Math.round(value[0]);
@@ -8796,6 +9430,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     max: 180,
                     step: 2,
                     onInput: function(value) {
+                        const normalizedRange = normalizeServoRangePair(value[0], value[1]);
+                        if (normalizedRange[0] !== Math.round(value[0]) || normalizedRange[1] !== Math.round(value[1])) {
+                            frontRightInstance.value(normalizedRange);
+                            return;
+                        }
                         updateThumbLabels('sliderFrontRight', value);
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
                             servoSliderValues.frontRight.min = Math.round(value[0]);
@@ -8846,6 +9485,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     max: 180,
                     step: 2,
                     onInput: function(value) {
+                        const normalizedRange = normalizeServoRangePair(value[0], value[1]);
+                        if (normalizedRange[0] !== Math.round(value[0]) || normalizedRange[1] !== Math.round(value[1])) {
+                            rearLeftInstance.value(normalizedRange);
+                            return;
+                        }
                         updateThumbLabels('sliderRearLeft', value);
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
                             servoSliderValues.rearLeft.min = Math.round(value[0]);
@@ -8896,6 +9540,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     max: 180,
                     step: 2,
                     onInput: function(value) {
+                        const normalizedRange = normalizeServoRangePair(value[0], value[1]);
+                        if (normalizedRange[0] !== Math.round(value[0]) || normalizedRange[1] !== Math.round(value[1])) {
+                            rearRightInstance.value(normalizedRange);
+                            return;
+                        }
                         updateThumbLabels('sliderRearRight', value);
                         if (!isLoadingTuningConfig && !servoRangeLocked) {
                             servoSliderValues.rearRight.min = Math.round(value[0]);
@@ -9621,10 +10270,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // Update LED Color
         // Update gyro orientation
         function updateGyroOrientation(value) {
+            markPageDirty('system');
             // Phase 2: use writeValue() for KV firmware, legacy path otherwise
             const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
             if (canUseKv) {
-                markPageDirty('system');
                 bleManager.writeValue(window.RCDCC_KEYS.IMU_ORIENT, parseInt(value))
                     .catch(e => {
                         console.error('KV write IMU_ORIENT failed:', e);
@@ -10159,15 +10808,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const nextDirtyPage = dirtyPageForTab(tabName);
 
                     // Dirty guard for tab switching
-                    if (currentTab !== tabName && isPageDirty(currentDirtyPage) && currentDirtyPage !== nextDirtyPage) {
-                        const choice = await showDirtyConfirmDialog();
+                    const dirtySettingsPages = ['servo', 'system']
+                        .filter((k) => isPageDirty(k))
+                        .filter((k) => k !== nextDirtyPage);
+                    if (currentTab !== tabName && currentDirtyPage !== nextDirtyPage && dirtySettingsPages.length) {
+                        const choice = await showDirtyConfirmDialog(dirtySettingsPages);
                         if (choice === 'cancel') return;
-                        if (choice === 'save') {
-                            await savePage(currentDirtyPage);
-                            if (isPageDirty(currentDirtyPage)) return; // save failed, abort
-                        } else if (choice === 'discard') {
-                            await discardPage(currentDirtyPage);
-                        }
+                        const resolved = await resolveDirtyPagesForChoice(dirtySettingsPages, choice);
+                        if (!resolved) return;
                     }
 
                     // Remove active class from all tabs and panes
