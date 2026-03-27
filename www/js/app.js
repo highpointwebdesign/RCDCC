@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.495';
+        const APP_VERSION = '1.1.496';
         const BUILD_DATE = '2026-03-27';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -5498,6 +5498,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         var _basicLedMapActiveScenario = 'brake';
         var _basicLedMapDraftAssignment = {}; // { ledIndex: mode }
         var _basicLedMapDraftColors = {};     // { mode: hex }
+        var _basicLedMapDraftNames = {};      // { mode: customName }
 
         const _BASIC_SCENARIO_CARD_DEFS = [
             { mode: 'brake',      label: 'Brake',      keys: ['brake'] },
@@ -5616,8 +5617,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     turn_left:  '#ff8c00',
                     turn_right: '#ff8c00',
                     hazards:    '#ff8c00',
-                    reverse:    '#ffffff'
-                }
+                    reverse:    '#f5f5f5'
+                },
+                customNames: {}
             };
         }
 
@@ -5660,6 +5662,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 colors[mode] = _sanitizeBasicScenarioHexColor(candidate, defaults.colors[mode]);
             });
 
+            // Custom names — stored in localStorage
+            const customNames = raw.customNames && typeof raw.customNames === 'object' ? Object.assign({}, raw.customNames) : {};
+
             return {
                 brightnessPercent: Math.max(0, Math.min(100, Math.round(
                     Number(raw.brightnessPercent ?? _basicScenarioBrightnessToPercent(
@@ -5667,7 +5672,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     )) || defaults.brightnessPercent
                 ))),
                 assignment,
-                colors
+                colors,
+                customNames
             };
         }
 
@@ -5702,20 +5708,27 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const color = config.colors?.[card.mode] || '#888';
                 const ledCount = Object.entries(config.assignment || {}).filter(([, m]) => m === card.mode).length;
                 const ledMeta = `${ledCount} LED${ledCount === 1 ? '' : 's'}`;
-                const swatches = `<span class="light-group-swatch" style="background-color:${color};"></span>`;
+                const displayName = (config.customNames && config.customNames[card.mode]) || card.label;
 
                 item.innerHTML = `
                     <div class="basic-scenario-card" data-basic-scenario-mode="${card.mode}">
                     <div class="light-group-info">
                         <div class="light-group-name-row">
-                            <div class="light-group-name">${card.label}</div>
+                            <div class="light-group-name">${displayName}</div>
                         </div>
                         <div class="light-group-meta-row">
-                            <div class="light-group-swatch-row">${swatches}</div>
-                            <span class="light-group-detail-line" style="margin-left:0.5rem;">${ledMeta}</span>
+                            <span class="light-group-detail-line">${ledMeta}</span>
                         </div>
                     </div>
                     <div class="light-group-controls">
+                        <input
+                            type="color"
+                            class="light-group-color-input"
+                            title="Set ${card.label} color"
+                            aria-label="Set ${card.label} color"
+                            value="${color}"
+                            onclick="event.stopPropagation();"
+                            oninput="event.stopPropagation(); basicScenarioSetColor('${card.mode}', this.value)">
                         <button type="button" class="light-group-details-toggle" title="Configure LEDs for ${card.label}" onclick="event.stopPropagation(); basicOpenLedMapModal('${card.mode}')">
                             <span class="material-symbols-outlined">edit</span>
                         </button>
@@ -5739,6 +5752,40 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return (r * 299 + g * 587 + b * 114) / 1000 < 140;
         }
 
+        function _renderLedMapGroupSettings() {
+            const settingsEl = document.getElementById('basicLedMapGroupSettings');
+            if (!settingsEl || !_basicLedMapActiveScenario) {
+                if (settingsEl) settingsEl.innerHTML = '';
+                return;
+            }
+
+            const card = _BASIC_SCENARIO_CARD_DEFS.find(c => c.mode === _basicLedMapActiveScenario);
+            if (!card) {
+                settingsEl.innerHTML = '';
+                return;
+            }
+
+            const current = _basicLedMapDraftNames[card.mode] || card.label;
+            settingsEl.innerHTML = `
+                <div style="border-top:1px solid #e5e7eb; padding-top:1rem; margin-top:1rem;">
+                    <label style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:0.5rem;">
+                        Group Name
+                    </label>
+                    <input
+                        type="text"
+                        id="basicLedMapGroupNameInput"
+                        value="${current}"
+                        placeholder="${card.label}"
+                        maxlength="24"
+                        style="width:100%; padding:0.5rem; border:1px solid #d1d5db; border-radius:0.375rem; font-size:0.9rem;"
+                        oninput="basicLedMapSetGroupName('${card.mode}', this.value)">
+                    <div style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
+                        Leave empty to use default name
+                    </div>
+                </div>
+            `;
+        }
+
         function _renderLedMapPalette() {
             const palette = document.getElementById('basicLedMapPalette');
             if (!palette) return;
@@ -5750,7 +5797,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             clearPill.className = 'basic-led-map-pill' + (_basicLedMapActiveScenario === null ? ' is-active' : '');
             clearPill.title = 'Tap LEDs to unassign them';
             clearPill.innerHTML = `<span class="basic-led-map-pill-swatch" style="background:#e5e7eb;border-color:#9ca3af;"></span><span class="basic-led-map-pill-name">Clear</span>`;
-            clearPill.onclick = () => { _basicLedMapActiveScenario = null; _renderLedMapPalette(); };
+            clearPill.onclick = () => { _basicLedMapActiveScenario = null; _renderLedMapPalette(); _renderLedMapGroupSettings(); };
             palette.appendChild(clearPill);
 
             _BASIC_SCENARIO_CARD_DEFS.forEach(card => {
@@ -5761,36 +5808,31 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const pill = document.createElement('div');
                 pill.className = 'basic-led-map-pill' + (isActive ? ' is-active' : '');
 
-                // Color swatch — wraps a hidden color input
-                const swatchLabel = document.createElement('label');
-                swatchLabel.className = 'basic-led-map-pill-swatch-wrap';
-                swatchLabel.title = `Edit ${card.label} color`;
-                const swatch = document.createElement('span');
-                swatch.className = 'basic-led-map-pill-swatch';
-                swatch.style.background = color;
+                // Direct color input (reliable on mobile/desktop)
                 const colorInput = document.createElement('input');
                 colorInput.type = 'color';
                 colorInput.value = color;
-                colorInput.className = 'basic-led-map-color-input';
+                colorInput.className = 'basic-led-map-pill-color';
+                colorInput.title = `Edit ${card.label} color`;
+                colorInput.setAttribute('aria-label', `Edit ${card.label} color`);
                 colorInput.oninput = (e) => {
                     _basicLedMapDraftColors[card.mode] = e.target.value;
-                    swatch.style.background = e.target.value;
                     _renderLedMapGrid();
                 };
-                swatchLabel.appendChild(swatch);
-                swatchLabel.appendChild(colorInput);
 
                 // Name + count — clicking this activates the scenario for painting
                 const nameBtn = document.createElement('button');
                 nameBtn.type = 'button';
                 nameBtn.className = 'basic-led-map-pill-name';
-                nameBtn.onclick = () => { _basicLedMapActiveScenario = card.mode; _renderLedMapPalette(); };
+                nameBtn.onclick = () => { _basicLedMapActiveScenario = card.mode; _renderLedMapPalette(); _renderLedMapGroupSettings(); };
                 nameBtn.innerHTML = `${card.label} <span class="basic-led-map-pill-count">${count}</span>`;
 
-                pill.appendChild(swatchLabel);
+                pill.appendChild(colorInput);
                 pill.appendChild(nameBtn);
                 palette.appendChild(pill);
             });
+
+            _renderLedMapGroupSettings();
         }
 
         function _renderLedMapGrid() {
@@ -5849,12 +5891,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             _basicLedMapDraftAssignment = Object.assign({}, config.assignment || {});
             _basicLedMapDraftColors = Object.assign({}, config.colors || {});
+            _basicLedMapDraftNames = Object.assign({}, config.customNames || {});
 
             // Ensure every scenario has a color in the draft
             const defaults = _getDefaultBasicScenarioConfig();
             _BASIC_SCENARIO_CARD_DEFS.forEach(card => {
                 if (!_basicLedMapDraftColors[card.mode]) {
-                    _basicLedMapDraftColors[card.mode] = defaults.colors[card.mode] || '#ffffff';
+                    _basicLedMapDraftColors[card.mode] = defaults.colors[card.mode] || '#f5f5f5';
                 }
             });
 
@@ -5864,6 +5907,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             _renderLedMapPalette();
             _renderLedMapGrid();
+            _renderLedMapGroupSettings();
 
             if (window.bootstrap && bootstrap.Modal) {
                 _basicLedMapModalInstance = bootstrap.Modal.getOrCreateInstance(modal);
@@ -5894,12 +5938,56 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             config.assignment = Object.assign({}, _basicLedMapDraftAssignment);
             config.colors = Object.assign({}, _basicLedMapDraftColors);
+            config.customNames = Object.assign({}, _basicLedMapDraftNames);
             _basicScenarioConfig = _normalizeBasicScenarioConfig(config);
             _saveBasicScenarioConfig(_basicScenarioConfig);
             renderBasicScenarioList();
             basicCloseLedMapModal();
             const statusEl = document.getElementById('basicLightsStatus');
             if (statusEl) statusEl.textContent = 'LED strip map saved.';
+        };
+
+        window.basicScenarioSetColor = async function(mode, value) {
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (!_BASIC_SCENARIO_CARD_DEFS.some(card => card.mode === mode)) return;
+
+            const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            const nextColor = _sanitizeBasicScenarioHexColor(value, config.colors?.[mode] || '#ffffff');
+            config.colors = Object.assign({}, config.colors || {}, { [mode]: nextColor });
+
+            _basicScenarioConfig = _normalizeBasicScenarioConfig(config);
+            _saveBasicScenarioConfig(_basicScenarioConfig);
+            renderBasicScenarioList();
+
+            if (!_basicScenarioStripEnabled) {
+                if (statusEl) statusEl.textContent = `${_BASIC_SCENARIO_KEY_LABELS[mode] || mode} color updated.`;
+                return;
+            }
+
+            if (!bleManager || !bleManager.isConnected) {
+                if (statusEl) statusEl.textContent = `${_BASIC_SCENARIO_KEY_LABELS[mode] || mode} color saved. Connect BLE to apply output.`;
+                return;
+            }
+
+            try {
+                const result = await _applyBasicScenarioOutput();
+                if (statusEl) statusEl.textContent = result.groups.length
+                    ? `${_BASIC_SCENARIO_KEY_LABELS[mode] || mode} color applied. Configured scenarios: ${result.labels.join(', ')}.`
+                    : `${_BASIC_SCENARIO_KEY_LABELS[mode] || mode} color saved.`;
+            } catch (e) {
+                if (statusEl) statusEl.textContent = `Color apply failed: ${e?.message || e}`;
+            }
+        };
+
+        window.basicLedMapSetGroupName = function(mode, value) {
+            if (!_BASIC_SCENARIO_CARD_DEFS.some(card => card.mode === mode)) return;
+            const trimmed = value.trim();
+            if (trimmed.length === 0) {
+                delete _basicLedMapDraftNames[mode];
+            } else {
+                _basicLedMapDraftNames[mode] = trimmed;
+            }
+            _renderLedMapGroupSettings();
         };
 
         window.basicScenarioBrightnessChange = function(value) {
