@@ -85,8 +85,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.437';
-        const BUILD_DATE = '2026-03-26';
+        const APP_VERSION = '1.1.495';
+        const BUILD_DATE = '2026-03-27';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -3606,6 +3606,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }, { passive: true });
             
             document.addEventListener('touchmove', function(e) {
+                const target = e.target;
+                if (target && target.closest && target.closest('input[type="range"]')) {
+                    return;
+                }
                 const currentY = e.touches[0].clientY;
                 // Prevent pull-to-refresh (scroll down from top)
                 if (currentY > lastY && window.scrollY === 0) {
@@ -5285,7 +5289,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const icon = btn.querySelector('.material-symbols-outlined');
                 if (icon) icon.textContent = 'light_off';
             }
-            _basicScenarioActiveMode = '';
+            _basicScenarioStripEnabled = false;
             _syncBasicScenarioButtons();
             if (bleManager && bleManager.isConnected) {
                 bleManager.sendSystemCommand('lights_diag', { on: false }).catch(() => {});
@@ -5476,7 +5480,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             try {
                 await bleManager.sendSystemCommand('lights_master', { enabled: false });
                 await bleManager.sendSystemCommand('lights_clear_all', {});
-                _basicScenarioActiveMode = '';
+                _basicScenarioStripEnabled = false;
                 _syncBasicScenarioButtons();
                 if (statusEl) statusEl.textContent = 'Groups cleared. Strip off.';
             } catch (e) {
@@ -5486,12 +5490,37 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         // ==================== Basic Lights Test — Step 4 Real Scenarios ====================
 
-        var _basicScenarioActiveMode = '';
+        var _basicScenarioStripEnabled = false;
         const BASIC_SCENARIO_CONFIG_KEY = 'basicScenarioConfigV1';
         const BASIC_SCENARIO_BRIGHTNESS_MAX = 200;
         var _basicScenarioConfig = null;
-        var _basicScenarioLedPickerTargetId = '';
-        var _basicScenarioLedPickerSelected = new Set();
+        var _basicLedMapModalInstance = null;
+        var _basicLedMapActiveScenario = 'brake';
+        var _basicLedMapDraftAssignment = {}; // { ledIndex: mode }
+        var _basicLedMapDraftColors = {};     // { mode: hex }
+
+        const _BASIC_SCENARIO_CARD_DEFS = [
+            { mode: 'brake',      label: 'Brake',      keys: ['brake'] },
+            { mode: 'turn_left',  label: 'Turn Left',  keys: ['turn_left'] },
+            { mode: 'turn_right', label: 'Turn Right', keys: ['turn_right'] },
+            { mode: 'hazards',    label: 'Hazards',    keys: ['hazards'] },
+            { mode: 'reverse',    label: 'Reverse',    keys: ['reverse'] },
+        ];
+
+        const _BASIC_SCENARIO_KEY_LABELS = {
+            brake:       'Brake',
+            turn_left:   'Turn Left',
+            turn_right:  'Turn Right',
+            hazards:     'Hazards',
+            reverse:     'Reverse',
+        };
+
+        const _BASIC_SCENARIO_GROUP_NUMS = {
+            brake: 10, turn_left: 12, turn_right: 13, hazards: 14, reverse: 11
+            // NOTE: firmware LIGHT_GROUP_SLOT_COUNT = 15, so valid slot indices are 0–14.
+            // reverse uses 11 (not 15) to stay in-bounds. Out-of-range indices fall through
+            // to setIndexedStripLeds() which calls statusLED.clear() and wipes all other groups.
+        };
 
         function _basicScenarioPercentToBrightness(percent) {
             const safePercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
@@ -5508,7 +5537,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const slider = document.getElementById('basicScenarioBrightness');
             const label = document.getElementById('basicScenarioBrightnessLabel');
             if (slider) slider.value = String(safePercent);
-            if (label) label.textContent = `${safePercent}% (${_basicScenarioPercentToBrightness(safePercent)})`;
+            if (label) label.textContent = `${safePercent}%`;
         }
 
         function _basicScenarioIndicesToCompactString(indices) {
@@ -5550,24 +5579,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             )).sort((a, b) => a - b);
         }
 
-        function _getBasicScenarioLedFieldValue(id) {
-            const el = document.getElementById(id);
-            if (!el) return '';
-            if (typeof el.value === 'string') return el.value;
-            return String(el.textContent || '').trim();
-        }
-
-        function _setBasicScenarioLedFieldValue(id, value) {
-            const el = document.getElementById(id);
-            if (!el) return;
-            const text = String(value || '');
-            if (typeof el.value === 'string') {
-                el.value = text;
-                return;
-            }
-            el.textContent = text;
-        }
-
         function _basicScenarioLedBuckets() {
             const total = Math.max(1, Math.floor(Number(BASIC_LED_GRID_COUNT) || 9));
             const splitA = Math.max(1, Math.ceil(total / 3));
@@ -5589,20 +5600,24 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function _getDefaultBasicScenarioConfig() {
             const buckets = _basicScenarioLedBuckets();
-            const allIndices = Array.from({ length: buckets.total }, (_, i) => i);
-            const evenIndices = allIndices.filter(i => i % 2 === 0);
-            const oddIndices = allIndices.filter(i => i % 2 !== 0);
-            const hazardLeds = Array.from(new Set([...(buckets.left || []), ...(buckets.right || [])])).sort((a, b) => a - b);
-
+            // Non-overlapping defaults: brake=rear, turn_left=left, turn_right=right, reverse=center
+            // hazards starts empty so the user assigns deliberately
+            const assignment = {};
+            const addGroup = (mode, indices) => indices.forEach(i => { if (!(i in assignment)) assignment[i] = mode; });
+            addGroup('brake',      buckets.rear.length   ? buckets.rear   : []);
+            addGroup('turn_left',  buckets.left);
+            addGroup('turn_right', buckets.right);
+            addGroup('reverse',    buckets.center);
             return {
                 brightnessPercent: 100,
-                brake: { color: '#ff0000', leds: buckets.rear.length ? buckets.rear : allIndices },
-                turn_left: { color: '#ff8c00', leds: buckets.left },
-                turn_right: { color: '#ff8c00', leds: buckets.right },
-                hazards: { color: '#ff8c00', leds: hazardLeds },
-                reverse: { color: '#ffffff', leds: buckets.center.length ? buckets.center : buckets.rear },
-                emergency_red: { color: '#ff0000', leds: evenIndices },
-                emergency_blue: { color: '#003bff', leds: oddIndices }
+                assignment,
+                colors: {
+                    brake:      '#ff0000',
+                    turn_left:  '#ff8c00',
+                    turn_right: '#ff8c00',
+                    hazards:    '#ff8c00',
+                    reverse:    '#ffffff'
+                }
             };
         }
 
@@ -5610,156 +5625,281 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const defaults = _getDefaultBasicScenarioConfig();
             const total = _basicScenarioLedBuckets().total;
             const raw = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
+            const validModes = new Set(_BASIC_SCENARIO_CARD_DEFS.map(c => c.mode));
+
+            // Build assignment map — support both new format (raw.assignment) and old
+            // per-scenario format (raw.brake.leds, raw.turn_left.leds, ...)
+            const assignment = {};
+            if (raw.assignment && typeof raw.assignment === 'object') {
+                Object.entries(raw.assignment).forEach(([k, v]) => {
+                    const idx = parseInt(k, 10);
+                    if (Number.isFinite(idx) && idx >= 0 && idx < total && validModes.has(v)) {
+                        assignment[idx] = v;
+                    }
+                });
+            } else {
+                // Migrate from old per-scenario format; first-listed scenario wins on overlap
+                ['brake', 'turn_left', 'turn_right', 'hazards', 'reverse'].forEach(mode => {
+                    const entry = raw[mode];
+                    if (entry && Array.isArray(entry.leds)) {
+                        entry.leds.forEach(idx => {
+                            if (Number.isFinite(idx) && idx >= 0 && idx < total && !(idx in assignment)) {
+                                assignment[idx] = mode;
+                            }
+                        });
+                    }
+                });
+            }
+
+            // Colors — prefer new raw.colors, fall back to old per-scenario color values
+            const rawColors = raw.colors && typeof raw.colors === 'object' ? raw.colors : {};
+            const colors = {};
+            _BASIC_SCENARIO_CARD_DEFS.forEach(card => {
+                const mode = card.mode;
+                const candidate = rawColors[mode] || raw[mode]?.color || defaults.colors[mode];
+                colors[mode] = _sanitizeBasicScenarioHexColor(candidate, defaults.colors[mode]);
+            });
 
             return {
                 brightnessPercent: Math.max(0, Math.min(100, Math.round(
-                    Number(raw.brightnessPercent ?? _basicScenarioBrightnessToPercent(raw.brightness ?? _basicScenarioPercentToBrightness(defaults.brightnessPercent))) || defaults.brightnessPercent
+                    Number(raw.brightnessPercent ?? _basicScenarioBrightnessToPercent(
+                        raw.brightness ?? _basicScenarioPercentToBrightness(defaults.brightnessPercent)
+                    )) || defaults.brightnessPercent
                 ))),
-                brake: {
-                    color: _sanitizeBasicScenarioHexColor(raw.brake?.color, defaults.brake.color),
-                    leds: _parseBasicScenarioLedList(raw.brake?.leds, total, defaults.brake.leds)
-                },
-                turn_left: {
-                    color: _sanitizeBasicScenarioHexColor(raw.turn_left?.color, defaults.turn_left.color),
-                    leds: _parseBasicScenarioLedList(raw.turn_left?.leds, total, defaults.turn_left.leds)
-                },
-                turn_right: {
-                    color: _sanitizeBasicScenarioHexColor(raw.turn_right?.color, defaults.turn_right.color),
-                    leds: _parseBasicScenarioLedList(raw.turn_right?.leds, total, defaults.turn_right.leds)
-                },
-                hazards: {
-                    color: _sanitizeBasicScenarioHexColor(raw.hazards?.color, defaults.hazards.color),
-                    leds: _parseBasicScenarioLedList(raw.hazards?.leds, total, defaults.hazards.leds)
-                },
-                reverse: {
-                    color: _sanitizeBasicScenarioHexColor(raw.reverse?.color, defaults.reverse.color),
-                    leds: _parseBasicScenarioLedList(raw.reverse?.leds, total, defaults.reverse.leds)
-                },
-                emergency_red: {
-                    color: _sanitizeBasicScenarioHexColor(raw.emergency_red?.color, defaults.emergency_red.color),
-                    leds: _parseBasicScenarioLedList(raw.emergency_red?.leds, total, defaults.emergency_red.leds)
-                },
-                emergency_blue: {
-                    color: _sanitizeBasicScenarioHexColor(raw.emergency_blue?.color, defaults.emergency_blue.color),
-                    leds: _parseBasicScenarioLedList(raw.emergency_blue?.leds, total, defaults.emergency_blue.leds)
-                }
+                assignment,
+                colors
             };
         }
 
         function _readBasicScenarioConfigFromUI() {
-            const defaults = _getDefaultBasicScenarioConfig();
-            const total = _basicScenarioLedBuckets().total;
-
-            const readColor = (id, fallback) => _sanitizeBasicScenarioHexColor(document.getElementById(id)?.value, fallback);
-            const readLeds = (id, fallback) => _parseBasicScenarioLedList(_getBasicScenarioLedFieldValue(id), total, fallback);
-            const brightnessPercent = Math.max(0, Math.min(100, Math.round(Number(document.getElementById('basicScenarioBrightness')?.value) || defaults.brightnessPercent)));
-
-            return {
-                brightnessPercent,
-                brake: { color: readColor('basicScenarioBrakeColor', defaults.brake.color), leds: readLeds('basicScenarioBrakeLeds', defaults.brake.leds) },
-                turn_left: { color: readColor('basicScenarioTurnLeftColor', defaults.turn_left.color), leds: readLeds('basicScenarioTurnLeftLeds', defaults.turn_left.leds) },
-                turn_right: { color: readColor('basicScenarioTurnRightColor', defaults.turn_right.color), leds: readLeds('basicScenarioTurnRightLeds', defaults.turn_right.leds) },
-                hazards: { color: readColor('basicScenarioHazardsColor', defaults.hazards.color), leds: readLeds('basicScenarioHazardsLeds', defaults.hazards.leds) },
-                reverse: { color: readColor('basicScenarioReverseColor', defaults.reverse.color), leds: readLeds('basicScenarioReverseLeds', defaults.reverse.leds) },
-                emergency_red: { color: readColor('basicScenarioEmergencyRedColor', defaults.emergency_red.color), leds: readLeds('basicScenarioEmergencyRedLeds', defaults.emergency_red.leds) },
-                emergency_blue: { color: readColor('basicScenarioEmergencyBlueColor', defaults.emergency_blue.color), leds: readLeds('basicScenarioEmergencyBlueLeds', defaults.emergency_blue.leds) }
-            };
+            const current = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            const brightnessPercent = Math.max(0, Math.min(100, Math.round(
+                Number(document.getElementById('basicScenarioBrightness')?.value) || current.brightnessPercent
+            )));
+            return Object.assign({}, current, { brightnessPercent });
         }
 
         function _writeBasicScenarioConfigToUI(config) {
-            const set = (id, value) => {
-                const el = document.getElementById(id);
-                if (el) el.value = String(value || '');
-            };
-            const setLedText = (id, value) => _setBasicScenarioLedFieldValue(id, value);
             _syncBasicScenarioBrightnessUI(config.brightnessPercent);
-            set('basicScenarioBrakeColor', config.brake.color);
-            setLedText('basicScenarioBrakeLeds', _basicScenarioIndicesToCompactString(config.brake.leds));
-            set('basicScenarioTurnLeftColor', config.turn_left.color);
-            setLedText('basicScenarioTurnLeftLeds', _basicScenarioIndicesToCompactString(config.turn_left.leds));
-            set('basicScenarioTurnRightColor', config.turn_right.color);
-            setLedText('basicScenarioTurnRightLeds', _basicScenarioIndicesToCompactString(config.turn_right.leds));
-            set('basicScenarioHazardsColor', config.hazards.color);
-            setLedText('basicScenarioHazardsLeds', _basicScenarioIndicesToCompactString(config.hazards.leds));
-            set('basicScenarioReverseColor', config.reverse.color);
-            setLedText('basicScenarioReverseLeds', _basicScenarioIndicesToCompactString(config.reverse.leds));
-            set('basicScenarioEmergencyRedColor', config.emergency_red.color);
-            setLedText('basicScenarioEmergencyRedLeds', _basicScenarioIndicesToCompactString(config.emergency_red.leds));
-            set('basicScenarioEmergencyBlueColor', config.emergency_blue.color);
-            setLedText('basicScenarioEmergencyBlueLeds', _basicScenarioIndicesToCompactString(config.emergency_blue.leds));
+            renderBasicScenarioList();
         }
 
         function _saveBasicScenarioConfig(config) {
             writeVehicleScopedStorage(BASIC_SCENARIO_CONFIG_KEY, JSON.stringify(config));
         }
 
-        function _renderBasicScenarioLedPickerGrid(total) {
-            const grid = document.getElementById('basicScenarioLedPickerGrid');
+        function renderBasicScenarioList() {
+            const container = document.getElementById('basicScenarioList');
+            if (!container) return;
+            const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            container.innerHTML = '';
+
+            _BASIC_SCENARIO_CARD_DEFS.forEach(card => {
+                const item = document.createElement('div');
+                item.className = 'basic-scenario-card-wrap';
+                item.setAttribute('data-scenario-card', card.mode);
+
+                const color = config.colors?.[card.mode] || '#888';
+                const ledCount = Object.entries(config.assignment || {}).filter(([, m]) => m === card.mode).length;
+                const ledMeta = `${ledCount} LED${ledCount === 1 ? '' : 's'}`;
+                const swatches = `<span class="light-group-swatch" style="background-color:${color};"></span>`;
+
+                item.innerHTML = `
+                    <div class="basic-scenario-card" data-basic-scenario-mode="${card.mode}">
+                    <div class="light-group-info">
+                        <div class="light-group-name-row">
+                            <div class="light-group-name">${card.label}</div>
+                        </div>
+                        <div class="light-group-meta-row">
+                            <div class="light-group-swatch-row">${swatches}</div>
+                            <span class="light-group-detail-line" style="margin-left:0.5rem;">${ledMeta}</span>
+                        </div>
+                    </div>
+                    <div class="light-group-controls">
+                        <button type="button" class="light-group-details-toggle" title="Configure LEDs for ${card.label}" onclick="event.stopPropagation(); basicOpenLedMapModal('${card.mode}')">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                    </div>
+                    </div>
+                `;
+
+                container.appendChild(item);
+            });
+
+            _syncBasicScenarioStripSwitch();
+        }
+
+        // ==================== LED Strip Map Modal ====================
+
+        function _isColorDark(hex) {
+            const h = (hex || '#000').replace('#', '');
+            const r = parseInt(h.substring(0, 2), 16) || 0;
+            const g = parseInt(h.substring(2, 4), 16) || 0;
+            const b = parseInt(h.substring(4, 6), 16) || 0;
+            return (r * 299 + g * 587 + b * 114) / 1000 < 140;
+        }
+
+        function _renderLedMapPalette() {
+            const palette = document.getElementById('basicLedMapPalette');
+            if (!palette) return;
+            palette.innerHTML = '';
+
+            // "Clear" (unassign) pill
+            const clearPill = document.createElement('button');
+            clearPill.type = 'button';
+            clearPill.className = 'basic-led-map-pill' + (_basicLedMapActiveScenario === null ? ' is-active' : '');
+            clearPill.title = 'Tap LEDs to unassign them';
+            clearPill.innerHTML = `<span class="basic-led-map-pill-swatch" style="background:#e5e7eb;border-color:#9ca3af;"></span><span class="basic-led-map-pill-name">Clear</span>`;
+            clearPill.onclick = () => { _basicLedMapActiveScenario = null; _renderLedMapPalette(); };
+            palette.appendChild(clearPill);
+
+            _BASIC_SCENARIO_CARD_DEFS.forEach(card => {
+                const color = _basicLedMapDraftColors[card.mode] || '#888';
+                const count = Object.values(_basicLedMapDraftAssignment).filter(m => m === card.mode).length;
+                const isActive = _basicLedMapActiveScenario === card.mode;
+
+                const pill = document.createElement('div');
+                pill.className = 'basic-led-map-pill' + (isActive ? ' is-active' : '');
+
+                // Color swatch — wraps a hidden color input
+                const swatchLabel = document.createElement('label');
+                swatchLabel.className = 'basic-led-map-pill-swatch-wrap';
+                swatchLabel.title = `Edit ${card.label} color`;
+                const swatch = document.createElement('span');
+                swatch.className = 'basic-led-map-pill-swatch';
+                swatch.style.background = color;
+                const colorInput = document.createElement('input');
+                colorInput.type = 'color';
+                colorInput.value = color;
+                colorInput.className = 'basic-led-map-color-input';
+                colorInput.oninput = (e) => {
+                    _basicLedMapDraftColors[card.mode] = e.target.value;
+                    swatch.style.background = e.target.value;
+                    _renderLedMapGrid();
+                };
+                swatchLabel.appendChild(swatch);
+                swatchLabel.appendChild(colorInput);
+
+                // Name + count — clicking this activates the scenario for painting
+                const nameBtn = document.createElement('button');
+                nameBtn.type = 'button';
+                nameBtn.className = 'basic-led-map-pill-name';
+                nameBtn.onclick = () => { _basicLedMapActiveScenario = card.mode; _renderLedMapPalette(); };
+                nameBtn.innerHTML = `${card.label} <span class="basic-led-map-pill-count">${count}</span>`;
+
+                pill.appendChild(swatchLabel);
+                pill.appendChild(nameBtn);
+                palette.appendChild(pill);
+            });
+        }
+
+        function _renderLedMapGrid() {
+            const grid = document.getElementById('basicLedMapGrid');
+            const metaEl = document.getElementById('basicLedMapMeta');
             if (!grid) return;
+
+            const total = _basicScenarioLedBuckets().total;
+            if (metaEl) {
+                const assigned = Object.keys(_basicLedMapDraftAssignment)
+                    .filter(k => { const i = parseInt(k, 10); return Number.isFinite(i) && i >= 0 && i < total && _basicLedMapDraftAssignment[k]; })
+                    .length;
+                const activeLabel = _basicLedMapActiveScenario
+                    ? (_BASIC_SCENARIO_KEY_LABELS[_basicLedMapActiveScenario] || _basicLedMapActiveScenario)
+                    : 'Clear';
+                metaEl.textContent = `${total} LEDs · ${assigned} assigned · ${total - assigned} free — painting: ${activeLabel}`;
+            }
+
             grid.innerHTML = '';
-            grid.style.gridTemplateColumns = total > 12 ? 'repeat(10,minmax(0,1fr))' : 'repeat(9,minmax(0,1fr))';
+            const cols = total > 15 ? 10 : total > 8 ? 9 : total;
+            grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
 
             for (let i = 0; i < total; i++) {
+                const mode = _basicLedMapDraftAssignment[i];
+                const color = mode ? (_basicLedMapDraftColors[mode] || '#888') : null;
+
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'basic-scenario-led-chip' + (_basicScenarioLedPickerSelected.has(i) ? ' is-active' : '');
+                btn.className = 'basic-led-map-chip' + (mode ? ' is-assigned' : ' is-unassigned');
+                btn.title = mode ? `LED ${i} → ${_BASIC_SCENARIO_KEY_LABELS[mode] || mode}` : `LED ${i} (unassigned)`;
                 btn.textContent = String(i);
+                if (color) {
+                    btn.style.backgroundColor = color;
+                    btn.style.borderColor = color;
+                    btn.style.color = _isColorDark(color) ? '#fff' : '#111';
+                }
                 btn.onclick = () => {
-                    if (_basicScenarioLedPickerSelected.has(i)) _basicScenarioLedPickerSelected.delete(i);
-                    else _basicScenarioLedPickerSelected.add(i);
-                    _renderBasicScenarioLedPickerGrid(total);
+                    if (_basicLedMapActiveScenario === null) {
+                        delete _basicLedMapDraftAssignment[i];
+                    } else if (mode === _basicLedMapActiveScenario) {
+                        delete _basicLedMapDraftAssignment[i];
+                    } else {
+                        _basicLedMapDraftAssignment[i] = _basicLedMapActiveScenario;
+                    }
+                    _renderLedMapPalette();
+                    _renderLedMapGrid();
                 };
                 grid.appendChild(btn);
             }
         }
 
-        window.basicScenarioOpenLedPicker = function(targetInputId) {
-            const modal = document.getElementById('basicScenarioLedPickerModal');
-            const targetInput = document.getElementById(targetInputId);
-            if (!modal || !targetInput) return;
+        window.basicOpenLedMapModal = function(preSelectMode) {
+            const modal = document.getElementById('basicLedMapModal');
+            if (!modal) return;
 
-            const total = _basicScenarioLedBuckets().total;
-            const parsed = parseLEDIndices(_getBasicScenarioLedFieldValue(targetInputId))
-                .filter(n => Number.isFinite(n) && n >= 0 && n < total);
-            _basicScenarioLedPickerTargetId = String(targetInputId);
-            _basicScenarioLedPickerSelected = new Set(parsed);
+            const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            _basicLedMapDraftAssignment = Object.assign({}, config.assignment || {});
+            _basicLedMapDraftColors = Object.assign({}, config.colors || {});
 
-            const meta = document.getElementById('basicScenarioLedPickerMeta');
-            if (meta) meta.textContent = `${total} LEDs available (0-${Math.max(0, total - 1)})`;
+            // Ensure every scenario has a color in the draft
+            const defaults = _getDefaultBasicScenarioConfig();
+            _BASIC_SCENARIO_CARD_DEFS.forEach(card => {
+                if (!_basicLedMapDraftColors[card.mode]) {
+                    _basicLedMapDraftColors[card.mode] = defaults.colors[card.mode] || '#ffffff';
+                }
+            });
 
-            _renderBasicScenarioLedPickerGrid(total);
-            modal.style.display = 'flex';
-        };
+            _basicLedMapActiveScenario = _BASIC_SCENARIO_CARD_DEFS.some(c => c.mode === preSelectMode)
+                ? preSelectMode
+                : (_BASIC_SCENARIO_CARD_DEFS[0]?.mode || 'brake');
 
-        window.basicScenarioCloseLedPicker = function() {
-            const modal = document.getElementById('basicScenarioLedPickerModal');
-            if (modal) modal.style.display = 'none';
-            _basicScenarioLedPickerTargetId = '';
-            _basicScenarioLedPickerSelected = new Set();
-        };
+            _renderLedMapPalette();
+            _renderLedMapGrid();
 
-        window.basicScenarioLedPickerSelectAll = function() {
-            const total = _basicScenarioLedBuckets().total;
-            _basicScenarioLedPickerSelected = new Set(Array.from({ length: total }, (_, i) => i));
-            _renderBasicScenarioLedPickerGrid(total);
-        };
-
-        window.basicScenarioLedPickerClear = function() {
-            const total = _basicScenarioLedBuckets().total;
-            _basicScenarioLedPickerSelected = new Set();
-            _renderBasicScenarioLedPickerGrid(total);
-        };
-
-        window.basicScenarioLedPickerSave = function() {
-            const target = document.getElementById(_basicScenarioLedPickerTargetId);
-            if (!target) {
-                basicScenarioCloseLedPicker();
-                return;
+            if (window.bootstrap && bootstrap.Modal) {
+                _basicLedMapModalInstance = bootstrap.Modal.getOrCreateInstance(modal);
+                _basicLedMapModalInstance.show();
             }
-            const selected = Array.from(_basicScenarioLedPickerSelected).sort((a, b) => a - b);
-            _setBasicScenarioLedFieldValue(_basicScenarioLedPickerTargetId, _basicScenarioIndicesToCompactString(selected));
-            basicScenarioConfigChanged();
-            basicScenarioCloseLedPicker();
+        };
+
+        window.basicCloseLedMapModal = function() {
+            if (_basicLedMapModalInstance) _basicLedMapModalInstance.hide();
+        };
+
+        window.basicLedMapClearScenario = function() {
+            if (_basicLedMapActiveScenario === null) return;
+            Object.keys(_basicLedMapDraftAssignment).forEach(k => {
+                if (_basicLedMapDraftAssignment[k] === _basicLedMapActiveScenario) delete _basicLedMapDraftAssignment[k];
+            });
+            _renderLedMapPalette();
+            _renderLedMapGrid();
+        };
+
+        window.basicLedMapClearAll = function() {
+            _basicLedMapDraftAssignment = {};
+            _renderLedMapPalette();
+            _renderLedMapGrid();
+        };
+
+        window.basicLedMapSave = function() {
+            const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            config.assignment = Object.assign({}, _basicLedMapDraftAssignment);
+            config.colors = Object.assign({}, _basicLedMapDraftColors);
+            _basicScenarioConfig = _normalizeBasicScenarioConfig(config);
+            _saveBasicScenarioConfig(_basicScenarioConfig);
+            renderBasicScenarioList();
+            basicCloseLedMapModal();
+            const statusEl = document.getElementById('basicLightsStatus');
+            if (statusEl) statusEl.textContent = 'LED strip map saved.';
         };
 
         window.basicScenarioBrightnessChange = function(value) {
@@ -5797,51 +5937,49 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function _buildBasicScenarioGroups(mode) {
             const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             const brightness = _basicScenarioPercentToBrightness(config.brightnessPercent);
-
-            if (mode === 'brake') {
-                return [
-                    { group: 10, name: 'Brake', color: config.brake.color, brightness, leds: config.brake.leds }
-                ];
-            }
-            if (mode === 'turn_left') {
-                return [
-                    { group: 10, name: 'Turn Left', color: config.turn_left.color, brightness, leds: config.turn_left.leds }
-                ];
-            }
-            if (mode === 'turn_right') {
-                return [
-                    { group: 10, name: 'Turn Right', color: config.turn_right.color, brightness, leds: config.turn_right.leds }
-                ];
-            }
-            if (mode === 'hazards') {
-                return [
-                    { group: 10, name: 'Hazards', color: config.hazards.color, brightness, leds: config.hazards.leds }
-                ];
-            }
-            if (mode === 'reverse') {
-                return [
-                    { group: 10, name: 'Reverse', color: config.reverse.color, brightness, leds: config.reverse.leds }
-                ];
-            }
-            if (mode === 'emergency') {
-                return [
-                    { group: 10, name: 'Emergency Red', color: config.emergency_red.color, brightness, leds: config.emergency_red.leds },
-                    { group: 11, name: 'Emergency Blue', color: config.emergency_blue.color, brightness, leds: config.emergency_blue.leds }
-                ];
-            }
-
-            return [];
+            const color = config.colors?.[mode] || '#ffffff';
+            const assignment = config.assignment || {};
+            const leds = Object.entries(assignment)
+                .filter(([, m]) => m === mode)
+                .map(([k]) => parseInt(k, 10))
+                .filter(n => Number.isFinite(n))
+                .sort((a, b) => a - b);
+            return [{
+                group: _BASIC_SCENARIO_GROUP_NUMS[mode] ?? 10,
+                name:  _BASIC_SCENARIO_KEY_LABELS[mode]  ?? mode,
+                color, brightness, leds
+            }];
         }
 
         function _syncBasicScenarioButtons() {
-            const modeButtons = document.querySelectorAll('[data-basic-scenario-mode]');
-            modeButtons.forEach(btn => {
-                const mode = String(btn.dataset.basicScenarioMode || '');
-                const isActive = !!mode && mode === _basicScenarioActiveMode;
-                btn.classList.toggle('btn-warning', isActive);
-                btn.classList.toggle('btn-outline-secondary', !isActive);
-                btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            renderBasicScenarioList();
+        }
+
+        function _syncBasicScenarioStripSwitch() {
+            const switchEl = document.getElementById('basicScenarioStripSwitch');
+            if (!switchEl) return;
+            switchEl.checked = !!_basicScenarioStripEnabled;
+        }
+
+        function _buildActiveBasicScenarioGroups() {
+            const allGroups = [];
+            _BASIC_SCENARIO_CARD_DEFS.forEach(card => {
+                const groups = _buildBasicScenarioGroups(card.mode);
+                for (let i = 0; i < groups.length; i++) allGroups.push(groups[i]);
             });
+            return allGroups;
+        }
+
+        function _activeScenarioModeLabels() {
+            const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            const assignment = config.assignment || {};
+            return _BASIC_SCENARIO_CARD_DEFS
+                .filter(card => Object.values(assignment).some(mode => mode === card.mode))
+                .map(card => card.label);
+        }
+
+        function _selectedScenarioModeLabels() {
+            return _activeScenarioModeLabels();
         }
 
         async function _clearScenarioOutput() {
@@ -5852,57 +5990,70 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             await new Promise(r => setTimeout(r, 25));
         }
 
-        window.basicScenarioToggle = async function(mode) {
+        async function _applyBasicScenarioOutput() {
+            const groups = _buildActiveBasicScenarioGroups().filter(group => Array.isArray(group.leds) && group.leds.length > 0);
+
+            await _clearScenarioOutput();
+            if (!_basicScenarioStripEnabled || !groups.length) {
+                return { groups: [], labels: _selectedScenarioModeLabels() };
+            }
+
+            await bleManager.sendSystemCommand('lights_master', { enabled: true });
+            await new Promise(r => setTimeout(r, 35));
+
+            for (let i = 0; i < groups.length; i++) {
+                const group = groups[i];
+                await pushLightsPayload({
+                    group: group.group,
+                    name: group.name,
+                    enabled: true,
+                    color: group.color,
+                    color2: '#000000',
+                    brightness: Math.max(0, Math.min(BASIC_SCENARIO_BRIGHTNESS_MAX, Math.round(Number(group.brightness) || 0))),
+                    effect: 'solid',
+                    speed: 128,
+                    intensity: 128,
+                    leds: group.leds
+                });
+            }
+
+            return { groups, labels: _selectedScenarioModeLabels() };
+        }
+
+        function _basicScenarioSelectionStatus(labels) {
+            if (!labels.length) return 'No Step 4 scenarios have assigned LEDs.';
+            return `Configured scenarios: ${labels.join(', ')}.`;
+        }
+
+        window.basicScenarioStripToggle = async function(forceEnabled) {
             const statusEl = document.getElementById('basicLightsStatus');
-            if (!bleManager || !bleManager.isConnected) {
-                if (statusEl) statusEl.textContent = 'Not connected.';
+            const nextEnabled = typeof forceEnabled === 'boolean' ? forceEnabled : !_basicScenarioStripEnabled;
+            const labels = _selectedScenarioModeLabels();
+
+            if (nextEnabled && (!bleManager || !bleManager.isConnected)) {
+                _basicScenarioStripEnabled = false;
+                _syncBasicScenarioButtons();
+                if (statusEl) statusEl.textContent = `${_basicScenarioSelectionStatus(labels)} Not connected.`;
                 return;
             }
 
             try {
-                await _clearScenarioOutput();
-
-                if (_basicScenarioActiveMode === mode) {
-                    _basicScenarioActiveMode = '';
-                    _syncBasicScenarioButtons();
-                    if (statusEl) statusEl.textContent = 'Scenario OFF. Strip cleared.';
-                    return;
-                }
-
-                const groups = _buildBasicScenarioGroups(mode).filter(group => Array.isArray(group.leds) && group.leds.length > 0);
-                if (!groups.length) {
-                    _basicScenarioActiveMode = '';
-                    _syncBasicScenarioButtons();
-                    if (statusEl) statusEl.textContent = 'Scenario has no valid LEDs for current strip size.';
-                    return;
-                }
-
-                await bleManager.sendSystemCommand('lights_master', { enabled: true });
-                await new Promise(r => setTimeout(r, 35));
-
-                for (let i = 0; i < groups.length; i++) {
-                    const group = groups[i];
-                    await pushLightsPayload({
-                        group: group.group,
-                        name: group.name,
-                        enabled: true,
-                        color: group.color,
-                        color2: '#000000',
-                        brightness: Math.max(0, Math.min(BASIC_SCENARIO_BRIGHTNESS_MAX, Math.round(Number(group.brightness) || 0))),
-                        effect: 'solid',
-                        speed: 128,
-                        intensity: 128,
-                        leds: group.leds
-                    });
-                }
-
-                _basicScenarioActiveMode = mode;
+                _basicScenarioStripEnabled = nextEnabled;
+                const result = await _applyBasicScenarioOutput();
                 _syncBasicScenarioButtons();
-                if (statusEl) statusEl.textContent = `Scenario active: ${String(mode).replace('_', ' ').toUpperCase()}.`; 
+
+                if (!_basicScenarioStripEnabled) {
+                    if (statusEl) statusEl.textContent = `${_basicScenarioSelectionStatus(labels)} Strip output off.`;
+                    return;
+                }
+
+                if (statusEl) statusEl.textContent = result.groups.length
+                    ? `Strip on. Configured scenarios: ${result.labels.join(', ')}.`
+                    : 'Strip on, but no valid LEDs are assigned to any Step 4 scenario.';
             } catch (e) {
-                _basicScenarioActiveMode = '';
+                _basicScenarioStripEnabled = false;
                 _syncBasicScenarioButtons();
-                const msg = `Scenario toggle failed: ${e?.message || e}`;
+                const msg = `Scenario strip toggle failed: ${e?.message || e}`;
                 if (statusEl) statusEl.textContent = msg;
                 console.error('[BasicLights]', msg);
             }
@@ -5916,7 +6067,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             try {
                 await _clearScenarioOutput();
-                _basicScenarioActiveMode = '';
+                _basicScenarioStripEnabled = false;
                 _syncBasicScenarioButtons();
                 if (statusEl) statusEl.textContent = 'Scenarios cleared. Strip off.';
             } catch (e) {
@@ -5929,15 +6080,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _renderBasicLedGrid();
             _basicScenarioConfig = _loadBasicScenarioConfig();
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);
-            _syncBasicScenarioButtons();
+            _syncBasicScenarioStripSwitch();
 
-            const ledPickerModal = document.getElementById('basicScenarioLedPickerModal');
-            if (ledPickerModal) {
-                ledPickerModal.addEventListener('click', function(e) {
-                    if (e.target === ledPickerModal) {
-                        basicScenarioCloseLedPicker();
-                    }
-                });
+            const ledMapModal = document.getElementById('basicLedMapModal');
+            if (ledMapModal && window.bootstrap && bootstrap.Modal) {
+                _basicLedMapModalInstance = bootstrap.Modal.getOrCreateInstance(ledMapModal);
             }
         })();
 

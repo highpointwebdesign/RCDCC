@@ -1662,6 +1662,14 @@
                 max-height: calc(100vh - 150px - var(--sab, 0px));
                 overflow-y: auto;
             }
+
+            #basicScenarioEditModal .modal-dialog {
+                margin-top: 150px;
+            }
+        }
+
+        #basicScenarioEditModal .modal-dialog {
+            margin-top: 50px;
         }
 
         .factory-preset-group {
@@ -2558,51 +2566,157 @@
             word-break: break-all;
         }
 
-        /* Step 4.1/4.2 scenario mapping readability on dark panel */
-        #basicScenarioMappingPanel .form-label {
-            color: #dbe5ff;
+        /* Step 4 scenario cards */
+        .basic-scenario-strip-toggle-row .form-check-input {
+            width: 3rem;
+            height: 1.6rem;
+            cursor: pointer;
         }
 
-        #basicScenarioMappingPanel .basic-scenario-mapping-subtitle {
-            color: #cbd5e1;
+        .basic-scenario-strip-toggle-row .form-check-input:checked {
+            background-color: var(--high-impact-color);
+            border-color: #f59e0b;
         }
 
-        #basicScenarioMappingPanel .basic-scenario-led-display {
-            min-height: 31px;
-            padding: 0.375rem 0.75rem;
-            border: 1px solid #334155;
-            border-radius: 0.25rem;
-            background: #0f172a;
-            color: #f8fafc;
-            font-size: 0.875rem;
-            line-height: 1.5;
+        .basic-scenario-card {
+            width: 100%;
             display: flex;
+            align-items: flex-start;
+            gap: 0.65rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background-color: #f9fafb;
+            padding: 0.75rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+            cursor: pointer;
+        }
+
+        .basic-scenario-card-wrap {
+            margin-bottom: 0.75rem;
+        }
+
+        .basic-scenario-card-wrap:last-child {
+            margin-bottom: 0;
+        }
+
+        .basic-scenario-card:hover {
+            background-color: #f3f4f6;
+            border-color: var(--primary);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+        }
+
+        .basic-scenario-card.is-selected {
+            border-color: #f59e0b;
+            background: linear-gradient(180deg, rgba(249, 194, 27, 0.18) 0%, rgba(249, 250, 251, 1) 100%);
+            box-shadow: 0 10px 22px rgba(245, 158, 11, 0.18);
+        }
+
+        .basic-scenario-card:focus-visible {
+            outline: 2px solid var(--high-impact-color);
+            outline-offset: 2px;
+        }
+
+        .basic-scenario-edit-sub {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            line-height: 1.4;
+        }
+
+        #basicScenarioBrightness {
+            accent-color: var(--high-impact-color);
+        }
+
+        /* ---- LED Strip Map Modal ---- */
+
+        .basic-led-map-palette {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .basic-led-map-pill {
+            display: inline-flex;
             align-items: center;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            gap: 6px;
+            border: 2px solid #d1d5db;
+            border-radius: 999px;
+            background: #f9fafb;
+            padding: 4px 10px 4px 6px;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+            user-select: none;
         }
 
-        #basicScenarioMappingPanel input[type="text"] {
-            background: #0f172a;
-            color: #f8fafc;
-            border-color: #334155;
+        .basic-led-map-pill.is-active {
+            border-color: var(--high-impact-color);
+            background: rgba(249, 194, 27, 0.12);
         }
 
-        #basicScenarioMappingPanel input[type="text"]::placeholder {
-            color: #94a3b8;
-            opacity: 1;
+        .basic-led-map-pill-swatch {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(0,0,0,0.2);
+            display: inline-block;
+            flex-shrink: 0;
         }
 
-        #basicScenarioMappingPanel input[type="text"]:focus {
-            background: #0f172a;
-            color: #f8fafc;
-            border-color: #f9c21b;
-            box-shadow: 0 0 0 0.15rem rgba(249, 194, 27, 0.25);
+        .basic-led-map-pill-swatch-wrap {
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
         }
 
-        #basicScenarioLedPickerGrid .basic-scenario-led-chip {
-            border: 1px solid #334155;
+        .basic-led-map-color-input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+            pointer-events: none;
+        }
+
+        .basic-led-map-pill-name {
+            background: none;
+            border: none;
+            padding: 0;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #111827;
+            cursor: pointer;
+        }
+
+        .basic-led-map-pill-count {
+            display: inline-block;
+            background: #e5e7eb;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 1px 6px;
+            margin-left: 4px;
+            color: #374151;
+        }
+
+        .basic-led-map-pill.is-active .basic-led-map-pill-count {
+            background: var(--high-impact-color);
+            color: #111827;
+        }
+
+        .basic-led-map-meta {
+            font-size: 0.78rem;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .basic-led-map-grid {
+            display: grid;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .basic-led-map-chip {
+            border: 2px solid #334155;
             border-radius: 8px;
             background: #0f172a;
             color: #e2e8f0;
@@ -2611,13 +2725,18 @@
             text-align: center;
             cursor: pointer;
             user-select: none;
+            font-weight: 600;
+            transition: transform 0.1s;
         }
 
-        #basicScenarioLedPickerGrid .basic-scenario-led-chip.is-active {
-            background: #f9c21b;
-            border-color: #f9c21b;
-            color: #111827;
-            font-weight: 700;
+        .basic-led-map-chip.is-unassigned {
+            background: #f3f4f6;
+            border-color: #d1d5db;
+            color: #9ca3af;
+        }
+
+        .basic-led-map-chip:active {
+            transform: scale(0.9);
         }
 
         /* Tuning Page Slider Customization */
