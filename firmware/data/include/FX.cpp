@@ -247,36 +247,31 @@ static void modeFlashSparkle(EngineLightGroup& group, uint32_t nowMs) {
 }
 
 static void glitterBase(EngineLightGroup& group, uint8_t intensity, uint32_t color, uint32_t nowMs) {
+  if (!group.ledCount) return;
+
   uint32_t seed = group.runtime.seed ? group.runtime.seed : (nowMs ^ 0x7F37A5U);
   if (intensity > random8FromSeed(seed)) {
-    setPixel(group, random16FromSeed(seed, group.ledCount), color);
+    const uint16_t index = random16FromSeed(seed, group.ledCount);
+    setPixel(group, index, color);
   }
   group.runtime.seed = seed;
 }
 
 static void modeGlitter(EngineLightGroup& group, uint32_t nowMs) {
-  const bool overlay = false; // WLED check2 placeholder: overlay mode.
-  const uint8_t glitterIntensity = group.intensity; // WLED placeholder: glitter density.
-  const uint32_t glitterColor = scaleByBrightness(defaultGlitterColor(group), group.brightness); // WLED placeholder: third glitter color.
-
-  if (!overlay) {
-    unsigned counter = 0;
-    if (group.speed != 0) {
-      counter = static_cast<unsigned>((nowMs * ((group.speed >> 3) + 1U)) >> 8);
-    }
-    for (uint8_t i = 0; i < group.ledCount; i++) {
-      const unsigned colorIndex = static_cast<unsigned>((group.ledCount <= 1 ? 0 : (i * 255U / group.ledCount)) - counter);
-      const uint8_t brightness = brightness100To255(group.brightness);
-      setPixel(group, i, colorFromPalette(group, static_cast<uint16_t>(colorIndex), brightness));
-    }
-  }
-
+  // Glitter FX: Fill with base color (allocation color) and overlay glitter sparkles
+  const uint8_t glitterIntensity = group.intensity;
+  const uint32_t glitterColor = scaleByBrightness(defaultGlitterColor(group), group.brightness);
+  
+  // Fill all LEDs with the primary color (the allocated color for this group)
+  fillPixels(group, scaleByBrightness(group.colorPrimary, group.brightness));
+  
+  // Overlay glitter sparkles on top
   glitterBase(group, glitterIntensity, glitterColor, nowMs);
 }
 
 static void modeSolidGlitter(EngineLightGroup& group, uint32_t nowMs) {
-  const uint8_t glitterIntensity = group.intensity; // WLED placeholder: glitter density.
-  const uint32_t glitterColor = scaleByBrightness(defaultGlitterColor(group), group.brightness); // WLED placeholder: third glitter color.
+  const uint8_t glitterIntensity = group.intensity;
+  const uint32_t glitterColor = scaleByBrightness(defaultGlitterColor(group), group.brightness);
   fillPixels(group, scaleByBrightness(group.colorPrimary, group.brightness));
   glitterBase(group, glitterIntensity, glitterColor, nowMs);
 }
@@ -470,8 +465,8 @@ static const FxMetadata EFFECT_METADATA[FX_COUNT] = {
   { "twinkle", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls the number of lit pixels; default intensity matches WLED mid-value." },
   { "sparkle", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: overlay/background checkbox and secondary background color are reserved for future UI support." },
   { "flash_sparkle", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls flash spawn rate; secondary color is the flash color." },
-  { "glitter", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls glitter density; a dedicated glitter color exists in WLED and is reserved here for future UI support." },
-  { "solid_glitter", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls glitter density; a dedicated glitter color exists in WLED and is reserved here for future UI support." },
+  { "glitter", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED-style glitter: intensity controls random sparkle density and color2 is used as the glitter color." },
+  { "solid_glitter", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED-style solid glitter: intensity controls random sparkle density and color2 is used as the glitter color." },
   { "running", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls wave width; secondary color acts as the background." },
   { "larson", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls trail fade; custom1 controls end delay; dual and bi-delay checkboxes are reserved for future UI support." },
   { "heartbeat", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: secondary color acts as the pulse background." },
