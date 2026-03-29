@@ -85,8 +85,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.538';
-        const BUILD_DATE = '2026-03-28';
+        const APP_VERSION = '1.1.557';
+        const BUILD_DATE = '2026-03-29';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -5558,6 +5558,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         var _basicScenarioFxIntensitySliderInstance = null;
         var _basicScenarioFxIntensitySyncing = false;
         var _basicScenarioFxIntensityCurrent = 128;
+        var _basicScenarioLedCountSliderInstance = null;
+        var _basicScenarioLedCountSyncing = false;
+        var _basicScenarioLedCountCurrent = 9;
         var _basicScenarioBrightnessApplyTimer = null;
         var _basicLedMapActiveScenario = 'brake';
         var _basicLedMapDraftAssignment = {}; // { ledIndex: mode }
@@ -5627,16 +5630,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function _syncBasicScenarioBrightnessUI(percent) {
             const safePercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
-            const slider = document.getElementById('basicScenarioBrightness');
-            const label = document.getElementById('basicScenarioBrightnessLabel');
             _basicScenarioBrightnessCurrent = safePercent;
-            if (_basicScenarioBrightnessSliderInstance && typeof _basicScenarioBrightnessSliderInstance.value === 'function') {
+            if (_basicScenarioBrightnessSliderInstance) {
                 _basicScenarioBrightnessSyncing = true;
-                _basicScenarioBrightnessSliderInstance.value([0, safePercent]);
+                _basicScenarioBrightnessSliderInstance.value = safePercent;
                 _basicScenarioBrightnessSyncing = false;
-            } else if (slider && typeof slider.value !== 'undefined') {
-                slider.value = String(safePercent);
             }
+            const label = document.getElementById('basicScenarioBrightnessLabel');
             if (label) label.textContent = `${safePercent}%`;
         }
 
@@ -5653,11 +5653,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function _syncBasicScenarioCountAndColorOrderUI(config) {
-            const countEl = document.getElementById('basicScenarioLedCount');
             const colorOrderEl = document.getElementById('basicScenarioColorOrder');
             const safeCount = _resolveBasicScenarioLedCount(config?.ledCount);
             const safeOrder = _sanitizeBasicScenarioColorOrder(config?.colorOrder, 'rgb');
-            if (countEl) countEl.value = String(safeCount);
+            _basicScenarioLedCountCurrent = safeCount;
+            const label = document.getElementById('basicScenarioLedCountLabel');
+            if (label) label.textContent = String(safeCount);
+            if (_basicScenarioLedCountSliderInstance && typeof _basicScenarioLedCountSliderInstance.value === 'function') {
+                _basicScenarioLedCountSyncing = true;
+                _basicScenarioLedCountSliderInstance.value([0, safeCount]);
+                _basicScenarioLedCountSyncing = false;
+            }
             if (colorOrderEl) colorOrderEl.value = safeOrder;
         }
 
@@ -5711,12 +5717,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (fxSelect) fxSelect.value = fx;
             if (intensityRow) intensityRow.style.display = fx === 'glitter' ? '' : 'none';
             _basicScenarioFxIntensityCurrent = intensity;
-            if (_basicScenarioFxIntensitySliderInstance && typeof _basicScenarioFxIntensitySliderInstance.value === 'function') {
+            if (_basicScenarioFxIntensitySliderInstance) {
                 _basicScenarioFxIntensitySyncing = true;
-                _basicScenarioFxIntensitySliderInstance.value([0, intensity]);
+                _basicScenarioFxIntensitySliderInstance.value = intensity;
                 _basicScenarioFxIntensitySyncing = false;
-            } else if (intensitySlider && typeof intensitySlider.value !== 'undefined') {
-                intensitySlider.value = String(intensity);
             }
             if (intensityLabel) intensityLabel.textContent = String(intensity);
             if (glitterPicker) glitterPicker.value = glitterColor;
@@ -5914,7 +5918,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function _readBasicScenarioConfigFromUI() {
             const current = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
-            const ledCount = _resolveBasicScenarioLedCount(document.getElementById('basicScenarioLedCount')?.value ?? current.ledCount);
+            const ledCount = _resolveBasicScenarioLedCount(_basicScenarioLedCountCurrent ?? current.ledCount);
             const colorOrder = _sanitizeBasicScenarioColorOrder(document.getElementById('basicScenarioColorOrder')?.value, current.colorOrder || 'rgb');
             const brightnessPercent = Math.max(0, Math.min(100, Math.round(
                 Number(_basicScenarioBrightnessCurrent ?? document.getElementById('basicScenarioBrightness')?.value) || current.brightnessPercent
@@ -6368,9 +6372,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         window.basicScenarioLedCountChange = function(value) {
-            const input = document.getElementById('basicScenarioLedCount');
             const safe = _resolveBasicScenarioLedCount(value);
-            if (input) input.value = String(safe);
+            _basicScenarioLedCountCurrent = safe;
+            const label = document.getElementById('basicScenarioLedCountLabel');
+            if (label) label.textContent = String(safe);
+            if (_basicScenarioLedCountSliderInstance && typeof _basicScenarioLedCountSliderInstance.value === 'function' && !_basicScenarioLedCountSyncing) {
+                _basicScenarioLedCountSyncing = true;
+                _basicScenarioLedCountSliderInstance.value([0, safe]);
+                _basicScenarioLedCountSyncing = false;
+            }
             _basicScenarioConfig = _normalizeBasicScenarioConfig(_readBasicScenarioConfigFromUI());
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);
             _saveBasicScenarioConfig(_basicScenarioConfig);
@@ -6396,9 +6406,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const label = document.getElementById('basicScenarioFxIntensityLabel');
             const safe = Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
             _basicScenarioFxIntensityCurrent = safe;
-            if (_basicScenarioFxIntensitySliderInstance && !_basicScenarioFxIntensitySyncing && typeof _basicScenarioFxIntensitySliderInstance.value === 'function') {
+            if (_basicScenarioFxIntensitySliderInstance && !_basicScenarioFxIntensitySyncing) {
                 _basicScenarioFxIntensitySyncing = true;
-                _basicScenarioFxIntensitySliderInstance.value([0, safe]);
+                _basicScenarioFxIntensitySliderInstance.value = safe;
                 _basicScenarioFxIntensitySyncing = false;
             }
             if (label) label.textContent = String(safe);
@@ -6594,45 +6604,50 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _renderBasicLedGrid();
             _basicScenarioConfig = _loadBasicScenarioConfig();
 
-            const brightnessSliderElement = document.getElementById('basicScenarioBrightness');
-            if (brightnessSliderElement && typeof rangeSlider === 'function') {
-                _basicScenarioBrightnessSliderInstance = rangeSlider(brightnessSliderElement, {
-                    value: [0, _basicScenarioConfig.brightnessPercent],
-                    min: 0,
-                    max: 100,
+            const ledCountSliderElement = document.getElementById('basicScenarioLedCount');
+            if (ledCountSliderElement && typeof rangeSlider === 'function') {
+                _basicScenarioLedCountSliderInstance = rangeSlider(ledCountSliderElement, {
+                    value: [0, _basicScenarioConfig.ledCount],
+                    min: 9,
+                    max: 30,
                     step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
-                        const safe = Math.max(0, Math.min(100, Math.round(Number(value[1]) || 0)));
-                        _basicScenarioBrightnessCurrent = safe;
-                        const label = document.getElementById('basicScenarioBrightnessLabel');
-                        if (label) label.textContent = `${safe}%`;
-                        if (_basicScenarioBrightnessSyncing) return;
-                        basicScenarioConfigChanged();
-                        _queueBasicScenarioBrightnessApply();
+                        if (_basicScenarioLedCountSyncing) return;
+                        const safe = Math.max(9, Math.min(30, Math.round(Number(value[1]) || 9)));
+                        basicScenarioLedCountChange(safe);
                     }
                 });
             }
 
-            const fxIntensitySliderElement = document.getElementById('basicScenarioFxIntensity');
-            if (fxIntensitySliderElement && typeof rangeSlider === 'function') {
-                _basicScenarioFxIntensitySliderInstance = rangeSlider(fxIntensitySliderElement, {
-                    value: [0, _basicScenarioConfig.fxIntensity],
-                    min: 0,
-                    max: 255,
-                    step: 1,
-                    thumbsDisabled: [true, false],
-                    rangeSlideDisabled: true,
-                    onInput: function(value) {
-                        const safe = Math.max(0, Math.min(255, Math.round(Number(value[1]) || 0)));
-                        _basicScenarioFxIntensityCurrent = safe;
-                        const label = document.getElementById('basicScenarioFxIntensityLabel');
-                        if (label) label.textContent = String(safe);
-                        if (_basicScenarioFxIntensitySyncing) return;
-                        basicScenarioConfigChanged();
-                    }
+            const brightnessSliderElement = document.getElementById('basicScenarioBrightness');
+            if (brightnessSliderElement) {
+                brightnessSliderElement.value = _basicScenarioConfig.brightnessPercent;
+                brightnessSliderElement.addEventListener('input', function() {
+                    if (_basicScenarioBrightnessSyncing) return;
+                    const safe = Math.max(0, Math.min(100, Math.round(Number(this.value) || 0)));
+                    _basicScenarioBrightnessCurrent = safe;
+                    const label = document.getElementById('basicScenarioBrightnessLabel');
+                    if (label) label.textContent = `${safe}%`;
+                    basicScenarioConfigChanged();
+                    _queueBasicScenarioBrightnessApply();
                 });
+                _basicScenarioBrightnessSliderInstance = brightnessSliderElement;
+            }
+
+            const fxIntensitySliderElement = document.getElementById('basicScenarioFxIntensity');
+            if (fxIntensitySliderElement) {
+                fxIntensitySliderElement.value = _basicScenarioConfig.fxIntensity;
+                fxIntensitySliderElement.addEventListener('input', function() {
+                    if (_basicScenarioFxIntensitySyncing) return;
+                    const safe = Math.max(0, Math.min(255, Math.round(Number(this.value) || 0)));
+                    _basicScenarioFxIntensityCurrent = safe;
+                    const label = document.getElementById('basicScenarioFxIntensityLabel');
+                    if (label) label.textContent = String(safe);
+                    basicScenarioConfigChanged();
+                });
+                _basicScenarioFxIntensitySliderInstance = fxIntensitySliderElement;
             }
 
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);
@@ -6776,6 +6791,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 brightness: Math.max(0, Math.min(100, brightness100)),
                 effect: normalizeEffectNameForEngine(normalized.pattern),
                 speed: Number(normalized.speed ?? 128),
+                intensity: Number(normalized.intensity ?? 128),
                 leds: normalizeLedIndices(normalized.indices)
             };
         }

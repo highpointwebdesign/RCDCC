@@ -936,6 +936,63 @@
             cursor: not-allowed;
         }
 
+        /* Range input styling for native HTML5 sliders */
+        input[type="range"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right, #e5e7eb 0%, #e5e7eb 100%);
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+            transition: box-shadow 0.15s ease, transform 0.15s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            transform: scale(1.1);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+            transition: box-shadow 0.15s ease, transform 0.15s ease;
+        }
+
+        input[type="range"]::-moz-range-thumb:hover {
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            transform: scale(1.1);
+        }
+
+        input[type="range"]::-moz-range-track {
+            background: transparent;
+            border: none;
+        }
+
+        input[type="range"]::-moz-range-progress {
+            background: var(--primary);
+            height: 6px;
+            border-radius: 3px;
+        }
+
         .tuning-slider-group h6 {
             margin-bottom: 0.6rem;
         }
@@ -2595,26 +2652,52 @@
         /* Step 4 scenario cards */
         .basic-scenario-power-btn {
             min-width: 4.25rem;
-            border: 1px solid #374151;
-            /* background-color: #111827;
-            color: #f9fafb; */
-            background-color: #f9fafb;
-            color: #111827;
+            --bs-btn-bg: #1f2937;
+            --bs-btn-border-color: var(--high-impact-color);
+            --bs-btn-color: var(--high-impact-color);
+            --bs-btn-hover-bg: #1f2937;
+            --bs-btn-hover-border-color: var(--high-impact-color);
+            --bs-btn-hover-color: var(--high-impact-color);
+            --bs-btn-active-bg: #1f2937;
+            --bs-btn-active-border-color: var(--high-impact-color);
+            --bs-btn-active-color: var(--high-impact-color);
+            border: 1px solid var(--high-impact-color);
+            background-color: #1f2937;
+            color: var(--high-impact-color);
             font-weight: 700;
             letter-spacing: 0.02em;
+            transition: none;
         }
 
         .basic-scenario-power-btn:hover,
-        .basic-scenario-power-btn:focus {
-            border-color: #4b5563;
+        .basic-scenario-power-btn:focus,
+        .basic-scenario-power-btn:active {
             background-color: #1f2937;
-            color: #f9fafb;
+            border-color: var(--high-impact-color);
+            color: var(--high-impact-color);
         }
 
         .basic-scenario-power-btn.is-on {
+            --bs-btn-bg: var(--high-impact-color);
+            --bs-btn-border-color: var(--high-impact-color);
+            --bs-btn-color: #1f2937;
+            --bs-btn-hover-bg: var(--high-impact-color);
+            --bs-btn-hover-border-color: var(--high-impact-color);
+            --bs-btn-hover-color: #1f2937;
+            --bs-btn-active-bg: var(--high-impact-color);
+            --bs-btn-active-border-color: var(--high-impact-color);
+            --bs-btn-active-color: #1f2937;
             background-color: var(--high-impact-color);
             border-color: var(--high-impact-color);
-            color: #111827;
+            color: #1f2937;
+        }
+
+        .basic-scenario-power-btn.is-on:hover,
+        .basic-scenario-power-btn.is-on:focus,
+        .basic-scenario-power-btn.is-on:active {
+            background-color: var(--high-impact-color);
+            border-color: var(--high-impact-color);
+            color: #1f2937;
         }
 
         .basic-scenario-card {
@@ -2695,10 +2778,7 @@
             line-height: 1.4;
         }
 
-        #basicScenarioBrightness,
-        #basicScenarioFxIntensity {
-            accent-color: var(--high-impact-color);
-        }
+
 
         /* ---- LED Strip Map Modal ---- */
 
@@ -3004,14 +3084,18 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            transform: scaleY(1);
+            font-size: 2.0rem !important;
+            padding: 4px;
+            min-width: 40px;
+            min-height: 40px;
+            transform: rotate(0deg);
             transform-origin: center;
             transition: transform 0.22s ease;
             will-change: transform;
         }
 
         .lights-collapse-chevron.is-collapsed {
-            transform: scaleY(-1);
+            transform: rotate(-180deg);
         }
 
         .profile-update-btn {
@@ -3295,4 +3379,9 @@
 
     .modal-backdrop {
         z-index: 2050 !important;
+    }
+
+    /* bootstrap overrides */
+    .mb-3 {
+        /* margin-bottom: 1rem !important; */
     }

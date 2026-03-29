@@ -1348,9 +1348,17 @@
                                 <div class="card-body p-0" id="basicLedConfigurationCardBody">
                                     <div class="light-group-item">
                                         <div class="light-group-info" style="width:100%;">
-                                            <div class="d-flex align-items-center gap-2">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
                                                 <div class="light-group-name">LEDs Count</div>
-                                                <input type="number" id="basicScenarioLedCount" class="form-control form-control-sm ms-auto" style="max-width:96px; text-align:right;" inputmode="numeric" pattern="[0-9]*" autocomplete="off" min="1" max="30" step="1" placeholder="11" oninput="basicScenarioLedCountChange(this.value)">
+                                                <span id="basicScenarioLedCountLabel" style="min-width:32px;text-align:right;color:#111827;font-size:0.9rem;font-weight:700;">9</span>
+                                            </div>
+                                            <div class="slider-section" style="margin:8px 0 4px;">
+                                                <div id="basicScenarioLedCount" class="slider-stepper-track"></div>
+                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                                    <span>9</span>
+                                                    <span>19</span>
+                                                    <span>30</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1411,7 +1419,7 @@
                                                 <span id="basicScenarioBrightnessLabel" style="min-width:56px;text-align:right;color:#111827;font-size:0.9rem;font-weight:700;">100%</span>
                                             </div>
                                             <div class="slider-section" style="margin:8px 0 4px;">
-                                                <div id="basicScenarioBrightness" class="slider-stepper-track"></div>
+                                                <input type="range" id="basicScenarioBrightness" min="0" max="100" value="100" step="1" style="width:100%;" />
                                                 <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                                     <span>0%</span>
                                                     <span>50%</span>
@@ -1437,7 +1445,7 @@
                                                     <span id="basicScenarioFxIntensityLabel" style="min-width:56px;text-align:right;color:#111827;font-size:0.9rem;font-weight:700;">128</span>
                                                 </div>
                                                 <div class="slider-section" style="margin:8px 0 4px;">
-                                                    <div id="basicScenarioFxIntensity" class="slider-stepper-track"></div>
+                                                    <input type="range" id="basicScenarioFxIntensity" min="0" max="255" value="128" step="1" style="width:100%;" />
                                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                                         <span>0</span>
                                                         <span>128</span>
@@ -1515,10 +1523,9 @@
                                         <div class="modal-footer" style="background-color: black;">
                                             <div class="d-grid w-100 gap-2">
                                                 <button type="button" class="btn btn-sm btn-outline-warning w-100" onclick="basicCloseLedMapModal()">
-                                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">cancel</span>
                                                     Cancel
                                                 </button>
-                                                <button type="button" class="btn btn-sm btn-gold w-100" onclick="basicLedMapSave()">Save</button>
+                                                <button type="button" class="btn btn-gold" onclick="basicLedMapSave()">Save</button>
                                             </div>
                                         </div>
                                     </div>
@@ -1538,7 +1545,7 @@
                                             <input type="text" id="basicScenarioGroupNameInput" class="form-control form-control-sm" maxlength="24" placeholder="Group name">
                                         </div>
                                         <div class="modal-footer d-flex w-100 gap-2" style="background-color: black;">
-                                            <button type="button" id="basicScenarioGroupDeleteBtn" class="btn w-100 btn-gold-outline" onclick="basicScenarioGroupDelete()">
+                                            <button type="button" id="basicScenarioGroupDeleteBtn" class="btn w-100 btn-danger" onclick="basicScenarioGroupDelete()">
                                                 <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">delete</span> Delete
                                             </button>
                                             <button type="button" class="btn w-100 btn-gold" onclick="basicScenarioGroupSave()">
