@@ -3247,6 +3247,24 @@
             height: 32px;
         }
 
+        /* Re-hide lower thumbs for single-thumb (Trim) sliders - override general display:flex rule */
+        #sliderFrontLeftTrim .range-slider__thumb[data-lower],
+        #sliderFrontRightTrim .range-slider__thumb[data-lower],
+        #sliderRearLeftTrim .range-slider__thumb[data-lower],
+        #sliderRearRightTrim .range-slider__thumb[data-lower] {
+            width: 0 !important;
+            height: 0 !important;
+            display: none !important;
+        }
+
+        /* Make range background transparent for single-thumb sliders */
+        #sliderFrontLeftTrim .range-slider__range,
+        #sliderFrontRightTrim .range-slider__range,
+        #sliderRearLeftTrim .range-slider__range,
+        #sliderRearRightTrim .range-slider__range {
+            background: transparent !important;
+        }
+
         .range-slider .range-slider__range {
             position: absolute;
             z-index: 1;
