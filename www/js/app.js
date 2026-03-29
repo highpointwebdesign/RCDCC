@@ -5895,7 +5895,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             const fx = _sanitizeBasicScenarioFx(raw.fx, defaults.fx);
-            const fxIntensity = Math.max(0, Math.min(255, Math.round(Number(raw.fxIntensity ?? defaults.fxIntensity) || defaults.fxIntensity)));
+            const fxIntensity = Math.max(0, Math.min(255, Math.round(raw.fxIntensity != null && Number.isFinite(Number(raw.fxIntensity)) ? Number(raw.fxIntensity) : defaults.fxIntensity)));
             const glitterColor = _sanitizeBasicScenarioHexColor(raw.glitterColor, defaults.glitterColor);
 
             return {
@@ -5925,7 +5925,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             )));
             const fx = _sanitizeBasicScenarioFx(document.getElementById('basicScenarioFx')?.value, current.fx || 'solid');
             const fxIntensity = Math.max(0, Math.min(255, Math.round(
-                Number(_basicScenarioFxIntensityCurrent ?? document.getElementById('basicScenarioFxIntensity')?.value) || Number(current.fxIntensity) || 128
+                _basicScenarioFxIntensityCurrent != null ? Number(_basicScenarioFxIntensityCurrent) :
+                (Number.isFinite(Number(document.getElementById('basicScenarioFxIntensity')?.value)) ? Number(document.getElementById('basicScenarioFxIntensity')?.value) :
+                (Number.isFinite(Number(current.fxIntensity)) ? Number(current.fxIntensity) : 128))
             )));
             const glitterColor = _sanitizeBasicScenarioHexColor(
                 document.getElementById('basicScenarioGlitterColor')?.value,
@@ -6460,7 +6462,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const brightness = _basicScenarioPercentToBrightness(config.brightnessPercent);
             const color = config.colors?.[mode] || '#ffffff';
             const effect = _sanitizeBasicScenarioFx(config.fx, 'solid');
-            const intensity = Math.max(0, Math.min(255, Math.round(Number(config.fxIntensity) || 128)));
+            const intensity = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.fxIntensity)) ? Number(config.fxIntensity) : 128)));
             const glitterColor = _sanitizeBasicScenarioHexColor(config.glitterColor, '#f5f5f5');
             const assignment = config.assignment || {};
             const cards = _getBasicScenarioCardDefs(config);
