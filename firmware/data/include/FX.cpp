@@ -416,14 +416,12 @@ static void runEffect(EngineLightGroup& group, uint32_t nowMs) {
   switch (group.effect) {
     case FX_SOLID:          modeSolid(group); break;
     case FX_BLINK:          modeBlink(group, nowMs, false); break;
-    case FX_STROBE:         modeBlink(group, nowMs, true); break;
     case FX_BREATHE:        modeBreathe(group, nowMs); break;
     case FX_FADE:           modeFade(group, nowMs); break;
     case FX_TWINKLE:        modeTwinkle(group, nowMs); break;
     case FX_SPARKLE:        modeSparkle(group, nowMs); break;
     case FX_FLASH_SPARKLE:  modeFlashSparkle(group, nowMs); break;
     case FX_GLITTER:        modeGlitter(group, nowMs); break;
-    case FX_SOLID_GLITTER:  modeSolidGlitter(group, nowMs); break;
     case FX_RUNNING:        modeRunningLights(group, nowMs); break;
     case FX_LARSON:         modeLarsonScanner(group, nowMs); break;
     case FX_HEARTBEAT:      modeHeartbeat(group, nowMs); break;
@@ -440,14 +438,12 @@ namespace RcdccFx {
 const char* const EFFECT_NAMES[FX_COUNT] = {
   "solid",
   "blink",
-  "strobe",
   "breathe",
   "fade",
   "twinkle",
   "sparkle",
   "flash_sparkle",
   "glitter",
-  "solid_glitter",
   "running",
   "larson",
   "heartbeat",
@@ -462,14 +458,12 @@ const char* const EFFECT_NAMES[FX_COUNT] = {
 static const FxMetadata EFFECT_METADATA[FX_COUNT] = {
   { "solid", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: none." },
   { "blink", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls duty cycle; secondary color is the off-state/background." },
-  { "strobe", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: secondary color is the off-state/background." },
   { "breathe", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: secondary color acts as the blended background." },
   { "fade", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: secondary color is required for the crossfade target." },
   { "twinkle", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls the number of lit pixels; default intensity matches WLED mid-value." },
   { "sparkle", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: overlay/background checkbox and secondary background color are reserved for future UI support." },
   { "flash_sparkle", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls flash spawn rate; secondary color is the flash color." },
   { "glitter", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED-style glitter: intensity controls random sparkle density and color2 is used as the glitter color." },
-  { "solid_glitter", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED-style solid glitter: intensity controls random sparkle density and color2 is used as the glitter color." },
   { "running", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls wave width; secondary color acts as the background." },
   { "larson", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls trail fade; custom1 controls end delay; dual and bi-delay checkboxes are reserved for future UI support." },
   { "heartbeat", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: secondary color acts as the pulse background." },

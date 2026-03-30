@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.572';
+        const APP_VERSION = '1.1.573';
         const BUILD_DATE = '2026-03-30';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -4439,9 +4439,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const BASIC_LIGHTING_TEST_COLOR = '#0000ff';
         const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'glitter', 'police'];
         const LIGHTS_ENGINE_EFFECTS = new Set(['solid', 'glitter', 'police']);
-        const BASIC_SCENARIO_FX_OPTIONS = new Set(['solid', 'glitter', 'blink', 'breathe', 'heartbeat']);
-        const BASIC_SCENARIO_FX_WITH_INTENSITY = new Set(['glitter', 'blink']);
-        const BASIC_SCENARIO_FX_WITH_SECONDARY_COLOR = new Set(['glitter', 'blink', 'breathe', 'heartbeat']);
+        const BASIC_SCENARIO_FX_OPTIONS = new Set(['solid', 'glitter', 'blink', 'breathe', 'heartbeat', 'running', 'larson', 'flicker']);
+        const BASIC_SCENARIO_FX_WITH_INTENSITY = new Set(['glitter', 'blink', 'running', 'larson', 'flicker']);
+        const BASIC_SCENARIO_FX_WITH_SECONDARY_COLOR = new Set(['glitter', 'blink', 'breathe', 'heartbeat', 'running']);
         const FACTORY_COLOR_PRESETS = [
             '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff',
             '#007FFF', '#ff8800', '#8800ff', '#ffe0a0', '#ffffff'
@@ -5974,6 +5974,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (fx === 'blink') return 'Off-State Color';
             if (fx === 'breathe') return 'Background Color';
             if (fx === 'heartbeat') return 'Background Color';
+            if (fx === 'running') return 'Background Color';
             return 'Secondary Color';
         }
 
