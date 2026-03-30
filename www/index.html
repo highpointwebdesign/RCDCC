@@ -1365,6 +1365,9 @@
                                                 <select id="basicScenarioFx" class="form-select form-select-sm ms-auto" style="width:50%;" onchange="basicScenarioFxChange(this.value)">
                                                     <option value="solid">solid</option>
                                                     <option value="glitter">glitter</option>
+                                                    <option value="blink">blink</option>
+                                                    <option value="breathe">breathe</option>
+                                                    <option value="heartbeat">heartbeat</option>
                                                 </select>
                                             </div>
 
@@ -1389,7 +1392,7 @@
 
                                             <div id="basicScenarioGlitterColorRow" class="mt-3" style="display:none;">
                                                 <div class="d-flex align-items-center gap-2">
-                                                    <div class="light-group-name" style="width:50%;">Glitter Color</div>
+                                                    <div class="light-group-name" id="basicScenarioFxSecondaryColorLabel" style="width:50%;">Secondary Color</div>
                                                     <input type="color" id="basicScenarioGlitterColor" class="light-group-color-input ms-auto" value="#f5f5f5" oninput="basicScenarioGlitterColorChange(this.value)">
                                                 </div>
                                             </div>

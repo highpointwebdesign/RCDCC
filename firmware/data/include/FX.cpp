@@ -32,10 +32,12 @@ static inline uint8_t sin8_approx(uint8_t value) {
   return static_cast<uint8_t>(127.5f + (s * 127.5f));
 }
 
+// WLED breathe math expects FastLED-like sin16 output in 0..32767 range for the
+// 0..16384 quarter-cycle values used by modeBreathe.
 static inline uint16_t sin16_approx(uint16_t value) {
   const float radians = (static_cast<float>(value) / 65535.0f) * TWO_PI_F;
   const float s = sinf(radians);
-  return static_cast<uint16_t>(32767.5f + (s * 32767.5f));
+  return static_cast<uint16_t>(max(0.0f, s) * 32767.0f);
 }
 
 static inline uint32_t nextSeed(uint32_t seed) {
@@ -153,9 +155,8 @@ static void modeBlink(EngineLightGroup& group, uint32_t nowMs, bool strobe) {
 }
 
 static void modeBreathe(EngineLightGroup& group, uint32_t nowMs) {
-  const uint32_t counterRaw = nowMs * ((group.speed >> 3) + 10U);
-  uint16_t counter = static_cast<uint16_t>((counterRaw & 0xFFFFU) >> 2);
-  counter += static_cast<uint16_t>(counter >> 2);
+  uint16_t counter = static_cast<uint16_t>((nowMs * ((group.speed >> 3) + 10U)) & 0xFFFFU);
+  counter = static_cast<uint16_t>((counter >> 2) + (counter >> 4));
 
   unsigned var = 0;
   if (counter < 16384U) {
@@ -164,8 +165,7 @@ static void modeBreathe(EngineLightGroup& group, uint32_t nowMs) {
   }
 
   const uint8_t lum = static_cast<uint8_t>(30U + min<unsigned>(225U, var));
-  const uint8_t scaledLum = scale8(lum, brightness100To255(group.brightness));
-  const uint32_t fg = colorFromPalette(group, 0, scaledLum);
+  const uint32_t fg = scaleByBrightness(group.colorPrimary, group.brightness);
   const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
 
   for (uint8_t i = 0; i < group.ledCount; i++) {

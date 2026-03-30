@@ -7,8 +7,8 @@ android {
         applicationId "com.rcdcc.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10664
-        versionName "1.1.564"
+        versionCode 10672
+        versionName "1.1.572"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.569';
+        const APP_VERSION = '1.1.572';
         const BUILD_DATE = '2026-03-30';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -4439,6 +4439,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const BASIC_LIGHTING_TEST_COLOR = '#0000ff';
         const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'glitter', 'police'];
         const LIGHTS_ENGINE_EFFECTS = new Set(['solid', 'glitter', 'police']);
+        const BASIC_SCENARIO_FX_OPTIONS = new Set(['solid', 'glitter', 'blink', 'breathe', 'heartbeat']);
+        const BASIC_SCENARIO_FX_WITH_INTENSITY = new Set(['glitter', 'blink']);
+        const BASIC_SCENARIO_FX_WITH_SECONDARY_COLOR = new Set(['glitter', 'blink', 'breathe', 'heartbeat']);
         const FACTORY_COLOR_PRESETS = [
             '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff',
             '#007FFF', '#ff8800', '#8800ff', '#ffe0a0', '#ffffff'
@@ -5960,7 +5963,18 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function _sanitizeBasicScenarioFx(value, fallback = 'solid') {
             const v = String(value || '').trim().toLowerCase();
-            return (v === 'glitter' || v === 'solid') ? v : fallback;
+            const resolvedFallback = BASIC_SCENARIO_FX_OPTIONS.has(String(fallback || '').trim().toLowerCase())
+                ? String(fallback || '').trim().toLowerCase()
+                : 'solid';
+            return BASIC_SCENARIO_FX_OPTIONS.has(v) ? v : resolvedFallback;
+        }
+
+        function _basicScenarioFxSecondaryColorLabel(fx) {
+            if (fx === 'glitter') return 'Glitter Color';
+            if (fx === 'blink') return 'Off-State Color';
+            if (fx === 'breathe') return 'Background Color';
+            if (fx === 'heartbeat') return 'Background Color';
+            return 'Secondary Color';
         }
 
         function _syncBasicScenarioFxUI(config) {
@@ -5974,9 +5988,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const intensityLabel = document.getElementById('basicScenarioFxIntensityLabel');
             const glitterRow = document.getElementById('basicScenarioGlitterColorRow');
             const glitterPicker = document.getElementById('basicScenarioGlitterColor');
+            const secondaryColorLabel = document.getElementById('basicScenarioFxSecondaryColorLabel');
+
+            const showIntensity = BASIC_SCENARIO_FX_WITH_INTENSITY.has(fx);
+            const showSecondaryColor = BASIC_SCENARIO_FX_WITH_SECONDARY_COLOR.has(fx);
 
             if (fxSelect) fxSelect.value = fx;
-            if (intensityRow) intensityRow.style.display = fx === 'glitter' ? '' : 'none';
+            if (intensityRow) intensityRow.style.display = showIntensity ? '' : 'none';
             _basicScenarioFxIntensityCurrent = intensity;
             if (_basicScenarioFxIntensitySliderInstance && typeof _basicScenarioFxIntensitySliderInstance.value === 'function') {
                 _basicScenarioFxIntensitySyncing = true;
@@ -5986,7 +6004,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             if (intensityLabel) intensityLabel.textContent = String(intensity);
             if (glitterPicker) glitterPicker.value = glitterColor;
-            if (glitterRow) glitterRow.style.display = fx === 'glitter' ? '' : 'none';
+            if (secondaryColorLabel) secondaryColorLabel.textContent = _basicScenarioFxSecondaryColorLabel(fx);
+            if (glitterRow) glitterRow.style.display = showSecondaryColor ? '' : 'none';
         }
 
         function _basicScenarioIndicesToCompactString(indices) {
@@ -6884,6 +6903,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const effect = _sanitizeBasicScenarioFx(config.fx, 'solid');
             const intensity = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.fxIntensity)) ? Number(config.fxIntensity) : 128)));
             const glitterColor = _sanitizeBasicScenarioHexColor(config.glitterColor, '#f5f5f5');
+            const usesSecondaryColor = BASIC_SCENARIO_FX_WITH_SECONDARY_COLOR.has(effect);
             const assignment = config.assignment || {};
             const cards = _getBasicScenarioCardDefs(config);
             const cardIndex = Math.max(0, cards.findIndex(card => card.mode === mode));
@@ -6897,7 +6917,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 group: slot,
                 name: _getBasicScenarioDisplayName(mode, config),
                 color,
-                color2: effect === 'glitter' ? glitterColor : '#000000',
+                color2: usesSecondaryColor ? glitterColor : '#000000',
                 effect,
                 intensity,
                 brightness,
