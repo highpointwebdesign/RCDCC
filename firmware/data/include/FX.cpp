@@ -547,6 +547,12 @@ bool LightsEngine::updateGroupFromJson(const String& payload) {
     }
   }
 
+  Serial.printf("[LightsEngine] Group %d: enabled=%d ledCount=%d leds=[", idx, group.enabled, group.ledCount);
+  for (uint8_t i = 0; i < group.ledCount; i++) {
+    Serial.printf("%d%s", group.leds[i], i + 1 < group.ledCount ? "," : "");
+  }
+  Serial.printf("] effect=%d color=#%06lX\n", (int)group.effect, (unsigned long)group.colorPrimary);
+
   _resetGroupRuntime(group);
   xSemaphoreGive(_mutex);
   return true;
