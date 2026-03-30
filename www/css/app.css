@@ -936,61 +936,65 @@
             cursor: not-allowed;
         }
 
-        /* Range input styling for native HTML5 sliders */
-        input[type="range"] {
+        /* Native range styling used only by the Lights page sliders.
+           Do not style all input[type=range], or it will break dual-thumb range-slider internals. */
+        .basic-native-range {
             -webkit-appearance: none;
             -moz-appearance: none;
             appearance: none;
             width: 100%;
-            height: 6px;
-            border-radius: 3px;
-            background: linear-gradient(to right, #e5e7eb 0%, #e5e7eb 100%);
+            height: 8px;
+            border-radius: 4px;
+            background: #e5e7eb;
             outline: none;
             cursor: pointer;
         }
 
-        input[type="range"]::-webkit-slider-thumb {
+        .basic-native-range::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 18px;
-            height: 18px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
-            background: var(--primary);
+            border: none;
+            background: var(--high-impact-color);
             cursor: pointer;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
             transition: box-shadow 0.15s ease, transform 0.15s ease;
         }
 
-        input[type="range"]::-webkit-slider-thumb:hover {
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-            transform: scale(1.1);
+        .basic-native-range::-webkit-slider-thumb:hover {
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+            transform: scale(1.06);
         }
 
-        input[type="range"]::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
+        .basic-native-range::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
-            background: var(--primary);
-            cursor: pointer;
             border: none;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+            background: var(--high-impact-color);
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
             transition: box-shadow 0.15s ease, transform 0.15s ease;
         }
 
-        input[type="range"]::-moz-range-thumb:hover {
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-            transform: scale(1.1);
+        .basic-native-range::-moz-range-thumb:hover {
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+            transform: scale(1.06);
         }
 
-        input[type="range"]::-moz-range-track {
-            background: transparent;
+        .basic-native-range::-moz-range-track {
+            background: #e5e7eb;
             border: none;
+            border-radius: 4px;
+            height: 8px;
         }
 
-        input[type="range"]::-moz-range-progress {
-            background: var(--primary);
-            height: 6px;
-            border-radius: 3px;
+        .basic-native-range::-moz-range-progress {
+            background: var(--high-impact-color);
+            height: 8px;
+            border-radius: 4px;
         }
 
         .tuning-slider-group h6 {
