@@ -85,8 +85,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.557';
-        const BUILD_DATE = '2026-03-29';
+        const APP_VERSION = '1.1.544';
+        const BUILD_DATE = '2026-03-30';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -1063,6 +1063,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 syncLightingProfileActionButtons();
 
                 await loadLightGroups();
+                // Ensure firmware starts from a clean group slate after reconnect.
+                // This prevents stale groups from previous sessions from overriding freshly synced LEDs.
+                try {
+                    await pushSystemCommand('lights_clear_all', {});
+                    lastPushedLightGroupCount = 0;
+                    lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
+                    lastPushedLightsMasterEnabled = null;
+                } catch (error) {
+                    console.warn('[Lights] Could not clear firmware groups on connect:', error?.message || error);
+                }
                 // Core/basic mode: always start with master lights OFF on connect.
                 //  setMasterLightsEnabled(false, false);
                 lightingGroupsDirty = false;
@@ -5562,6 +5572,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         var _basicScenarioLedCountSyncing = false;
         var _basicScenarioLedCountCurrent = 9;
         var _basicScenarioBrightnessApplyTimer = null;
+        var _basicScenarioConfigApplyTimer = null;
         var _basicLedMapActiveScenario = 'brake';
         var _basicLedMapDraftAssignment = {}; // { ledIndex: mode }
         var _basicLedMapDraftColors = {};     // { mode: hex }
@@ -5646,7 +5657,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return BASIC_SCENARIO_DEFAULT_LED_COUNT;
         }
 
-        function _sanitizeBasicScenarioColorOrder(value, fallback = 'rgb') {
+        function _sanitizeBasicScenarioColorOrder(value, fallback = DEFAULT_LIGHT_COLOR_ORDER) {
             const v = String(value || '').trim().toLowerCase();
             if (['rgb', 'grb', 'rbg', 'gbr', 'brg', 'bgr'].includes(v)) return v;
             return fallback;
@@ -5655,7 +5666,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function _syncBasicScenarioCountAndColorOrderUI(config) {
             const colorOrderEl = document.getElementById('basicScenarioColorOrder');
             const safeCount = _resolveBasicScenarioLedCount(config?.ledCount);
-            const safeOrder = _sanitizeBasicScenarioColorOrder(config?.colorOrder, 'rgb');
+            const safeOrder = _sanitizeBasicScenarioColorOrder(config?.colorOrder, getVehicleScopedLightColorOrder());
             _basicScenarioLedCountCurrent = safeCount;
             const label = document.getElementById('basicScenarioLedCountLabel');
             if (label) label.textContent = String(safeCount);
@@ -5801,7 +5812,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return {
                 cards: _BASIC_SCENARIO_PRESET_DEFS.map(card => ({ mode: card.mode, label: card.label })),
                 ledCount: BASIC_SCENARIO_DEFAULT_LED_COUNT,
-                colorOrder: 'rgb',
+                colorOrder: getVehicleScopedLightColorOrder(),
                 brightnessPercent: 100,
                 assignment,
                 colors: {
@@ -5919,7 +5930,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function _readBasicScenarioConfigFromUI() {
             const current = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             const ledCount = _resolveBasicScenarioLedCount(_basicScenarioLedCountCurrent ?? current.ledCount);
-            const colorOrder = _sanitizeBasicScenarioColorOrder(document.getElementById('basicScenarioColorOrder')?.value, current.colorOrder || 'rgb');
+            const colorOrder = _sanitizeBasicScenarioColorOrder(document.getElementById('basicScenarioColorOrder')?.value, current.colorOrder || getVehicleScopedLightColorOrder());
             const brightnessPercent = Math.max(0, Math.min(100, Math.round(
                 Number(_basicScenarioBrightnessCurrent ?? document.getElementById('basicScenarioBrightness')?.value) || current.brightnessPercent
             )));
@@ -6391,7 +6402,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         window.basicScenarioColorOrderChange = function(value) {
             const input = document.getElementById('basicScenarioColorOrder');
-            const safe = _sanitizeBasicScenarioColorOrder(value, 'rgb');
+            const safe = _sanitizeBasicScenarioColorOrder(value, getVehicleScopedLightColorOrder());
             if (input) input.value = safe;
             basicScenarioConfigChanged();
         };
@@ -6423,6 +6434,25 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             basicScenarioConfigChanged();
         };
 
+        function _queueBasicScenarioConfigApply() {
+            if (!_basicScenarioStripEnabled) return;
+            if (!bleManager || !bleManager.isConnected) return;
+
+            if (_basicScenarioConfigApplyTimer) {
+                clearTimeout(_basicScenarioConfigApplyTimer);
+            }
+
+            _basicScenarioConfigApplyTimer = setTimeout(async () => {
+                _basicScenarioConfigApplyTimer = null;
+                try {
+                    await _applyBasicScenarioOutput();
+                } catch (error) {
+                    console.warn('[BasicLights] Live scenario apply failed:', error?.message || error);
+                    notifyBasicLightsStatus(`Live apply failed: ${error?.message || error}`, 'error', { duration: 3500 });
+                }
+            }, 120);
+        }
+
         function _loadBasicScenarioConfig() {
             const defaults = _getDefaultBasicScenarioConfig();
             try {
@@ -6438,6 +6468,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _basicScenarioConfig = _normalizeBasicScenarioConfig(_readBasicScenarioConfigFromUI());
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);
             _saveBasicScenarioConfig(_basicScenarioConfig);
+            _queueBasicScenarioConfigApply();
             notifyBasicLightsStatus(`Scenario mapping updated. LEDs ${_basicScenarioConfig.ledCount}, groups ${_getBasicScenarioCardDefs(_basicScenarioConfig).length}/${_basicScenarioMaxGroupCount(_basicScenarioConfig)}, pattern ${String(_basicScenarioConfig.colorOrder || 'rgb').toUpperCase()}, brightness ${_basicScenarioConfig.brightnessPercent}% (${_basicScenarioPercentToBrightness(_basicScenarioConfig.brightnessPercent)} max). FX ${_basicScenarioConfig.fx}, intensity ${_basicScenarioConfig.fxIntensity}.`, 'info');
         };
 
@@ -6536,7 +6567,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 return { groups: [], labels: _selectedScenarioModeLabels() };
             }
 
-            await bleManager.sendSystemCommand('lights_color_order', { order: _sanitizeBasicScenarioColorOrder(config.colorOrder, 'rgb') });
+            await bleManager.sendSystemCommand('lights_color_order', { order: _sanitizeBasicScenarioColorOrder(config.colorOrder, getVehicleScopedLightColorOrder()) });
             await new Promise(r => setTimeout(r, 20));
             await bleManager.sendSystemCommand('lights_master', { enabled: true });
             await new Promise(r => setTimeout(r, 35));
