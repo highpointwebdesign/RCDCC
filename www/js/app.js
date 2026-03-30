@@ -1063,6 +1063,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 syncLightingProfileActionButtons();
 
                 await loadLightGroups();
+                ensureLightingProfilesUpgraded();
+                populateLightingProfileSelector();
+                syncLightingProfileActionButtons();
                 // Ensure firmware starts from a clean group slate after reconnect.
                 // This prevents stale groups from previous sessions from overriding freshly synced LEDs.
                 try {
@@ -1230,7 +1233,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 LIGHT_GROUPS_STORAGE_KEY,
                 LIGHT_GROUPS_INITIALIZED_KEY,
                 LIGHT_MASTER_STORAGE_KEY,
-                TOTAL_LED_COUNT_KEY
+                TOTAL_LED_COUNT_KEY,
+                LIGHT_COLOR_ORDER_KEY,
+                BASIC_SCENARIO_CONFIG_KEY,
+                VEHICLE_LIGHTING_DEFAULTS_STORAGE_KEY
             ].forEach((baseKey) => removeVehicleScopedStorage(baseKey, deviceId));
 
             if (normalizeVehicleStorageId(getPreferredReconnectDeviceId()) === normalizeVehicleStorageId(deviceId)) {
@@ -4453,7 +4459,273 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // Phase 5: Lighting profiles stored in localStorage (mirrors driving profile architecture)
         // The ESP32 receives individual light group commands — it has no knowledge of profiles.
         const LIGHTING_PROFILES_STORAGE_KEY = 'rcdcc_lighting_profiles_v1';
+        const VEHICLE_LIGHTING_DEFAULTS_STORAGE_KEY = 'vehicleLightingDefaultsV1';
         const MAX_LIGHTING_PROFILES = 5;
+
+        function _extractGroupBehavior(groupLike) {
+            const group = normalizeLightGroup(groupLike || {});
+            return {
+                enabled: !!group.enabled,
+                brightness: Math.max(0, Math.min(255, Math.round(Number(group.brightness) || 0))),
+                color: _sanitizeBasicScenarioHexColor(group.color, '#ffffff'),
+                color2: _sanitizeBasicScenarioHexColor(group.color2, '#000000'),
+                pattern: LIGHTS_ENGINE_EFFECTS.has(String(group.pattern || '').toLowerCase())
+                    ? String(group.pattern).toLowerCase()
+                    : LIGHT_GROUP_DEFAULT_PATTERN,
+                intensity: Math.max(0, Math.min(255, Math.round(Number(group.intensity) || 128))),
+                speed: Math.max(0, Math.min(255, Math.round(Number(group.speed) || 128)))
+            };
+        }
+
+        function _buildVehicleLightingBaseFromConfig(config) {
+            const cfg = _normalizeBasicScenarioConfig(config || _getDefaultBasicScenarioConfig());
+            return {
+                ledCount: cfg.ledCount,
+                colorOrder: cfg.colorOrder,
+                cards: JSON.parse(JSON.stringify(cfg.cards || [])),
+                assignment: Object.assign({}, cfg.assignment || {}),
+                customNames: Object.assign({}, cfg.customNames || {})
+            };
+        }
+
+        function _buildVehicleLightingLookFromConfig(config) {
+            const cfg = _normalizeBasicScenarioConfig(config || _getDefaultBasicScenarioConfig());
+            return {
+                brightnessPercent: cfg.brightnessPercent,
+                colors: Object.assign({}, cfg.colors || {}),
+                fx: cfg.fx,
+                fxIntensity: cfg.fxIntensity,
+                glitterColor: cfg.glitterColor
+            };
+        }
+
+        function _loadCurrentBasicScenarioConfigSnapshot() {
+            if (typeof _normalizeBasicScenarioConfig !== 'function' || typeof _getDefaultBasicScenarioConfig !== 'function') return null;
+            if (_basicScenarioConfig && typeof _basicScenarioConfig === 'object') {
+                return _normalizeBasicScenarioConfig(_basicScenarioConfig);
+            }
+            try {
+                const raw = readVehicleScopedStorage(BASIC_SCENARIO_CONFIG_KEY, { migrateLegacy: true });
+                if (!raw) return _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+                return _normalizeBasicScenarioConfig(JSON.parse(raw));
+            } catch (_) {
+                return _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            }
+        }
+
+        function _buildVehicleLightingDefaultsFromRuntime() {
+            const totalLedCount = getVehicleScopedTotalLEDCount();
+            const colorOrder = getVehicleScopedLightColorOrder();
+            const currentGroups = Array.isArray(lightGroups) ? lightGroups.map(normalizeLightGroup) : [];
+            const groupLayout = currentGroups.map((group) => ({
+                id: group.id || createLightGroupId(),
+                name: normalizeLightGroupName(group.name || 'Group'),
+                indices: normalizeLedIndices(group.indices)
+            }));
+            const groupDefaultsById = {};
+            groupLayout.forEach((entry, idx) => {
+                groupDefaultsById[entry.id] = _extractGroupBehavior(currentGroups[idx] || {});
+            });
+
+            const scenarioCfg = _loadCurrentBasicScenarioConfigSnapshot();
+            const basicScenarioBase = scenarioCfg
+                ? _buildVehicleLightingBaseFromConfig(scenarioCfg)
+                : null;
+            const basicScenarioDefaults = scenarioCfg
+                ? _buildVehicleLightingLookFromConfig(scenarioCfg)
+                : null;
+
+            return {
+                version: 1,
+                totalLedCount,
+                colorOrder,
+                groupLayout,
+                groupDefaultsById,
+                basicScenarioBase,
+                basicScenarioDefaults
+            };
+        }
+
+        function loadVehicleLightingDefaults() {
+            try {
+                const raw = readVehicleScopedStorage(VEHICLE_LIGHTING_DEFAULTS_STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && Array.isArray(parsed.groupLayout) && parsed.groupLayout.length) {
+                        return parsed;
+                    }
+                }
+            } catch (_) { /* ignore */ }
+            const fresh = _buildVehicleLightingDefaultsFromRuntime();
+            writeVehicleScopedStorage(VEHICLE_LIGHTING_DEFAULTS_STORAGE_KEY, JSON.stringify(fresh));
+            return fresh;
+        }
+
+        function saveVehicleLightingDefaults(defaults) {
+            writeVehicleScopedStorage(VEHICLE_LIGHTING_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
+        }
+
+        function syncVehicleLightingDefaultsFromLightGroups() {
+            const defaults = loadVehicleLightingDefaults();
+            const currentGroups = Array.isArray(lightGroups) ? lightGroups.map(normalizeLightGroup) : [];
+            const nextLayout = currentGroups.map((group) => ({
+                id: group.id || createLightGroupId(),
+                name: normalizeLightGroupName(group.name || 'Group'),
+                indices: normalizeLedIndices(group.indices)
+            }));
+
+            const existingDefaultsById = defaults.groupDefaultsById && typeof defaults.groupDefaultsById === 'object'
+                ? defaults.groupDefaultsById
+                : {};
+            const nextDefaultsById = {};
+
+            nextLayout.forEach((layoutEntry, idx) => {
+                nextDefaultsById[layoutEntry.id] = existingDefaultsById[layoutEntry.id]
+                    ? _extractGroupBehavior(existingDefaultsById[layoutEntry.id])
+                    : _extractGroupBehavior(currentGroups[idx] || {});
+            });
+
+            const next = {
+                ...defaults,
+                version: 1,
+                totalLedCount: getVehicleScopedTotalLEDCount(),
+                colorOrder: getVehicleScopedLightColorOrder(),
+                groupLayout: nextLayout,
+                groupDefaultsById: nextDefaultsById
+            };
+            saveVehicleLightingDefaults(next);
+            return next;
+        }
+
+        function syncVehicleLightingDefaultsFromBasicScenario(config) {
+            if (typeof _normalizeBasicScenarioConfig !== 'function') return;
+            const defaults = loadVehicleLightingDefaults();
+            const cfg = _normalizeBasicScenarioConfig(config || _getDefaultBasicScenarioConfig());
+            const next = {
+                ...defaults,
+                version: 1,
+                basicScenarioBase: _buildVehicleLightingBaseFromConfig(cfg)
+            };
+            if (!next.basicScenarioDefaults) {
+                next.basicScenarioDefaults = _buildVehicleLightingLookFromConfig(cfg);
+            }
+            saveVehicleLightingDefaults(next);
+        }
+
+        function _composeLightGroupsFromDefaults(defaults, overrides = {}) {
+            const layout = Array.isArray(defaults?.groupLayout) ? defaults.groupLayout : [];
+            const baseById = defaults?.groupDefaultsById && typeof defaults.groupDefaultsById === 'object'
+                ? defaults.groupDefaultsById
+                : {};
+            const overrideById = overrides?.groupBehaviorById && typeof overrides.groupBehaviorById === 'object'
+                ? overrides.groupBehaviorById
+                : {};
+
+            return layout.map((entry) => normalizeLightGroup({
+                id: entry.id,
+                name: normalizeLightGroupName(entry.name || 'Group'),
+                indices: normalizeLedIndices(entry.indices),
+                ..._extractGroupBehavior(baseById[entry.id] || {}),
+                ..._extractGroupBehavior({ ...(baseById[entry.id] || {}), ...(overrideById[entry.id] || {}) })
+            }));
+        }
+
+        function _composeBasicScenarioConfigFromDefaults(defaults, overrides = {}) {
+            if (typeof _normalizeBasicScenarioConfig !== 'function' || typeof _getDefaultBasicScenarioConfig !== 'function') return null;
+            const fallback = _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            const base = defaults?.basicScenarioBase || _buildVehicleLightingBaseFromConfig(fallback);
+            const lookDefaults = defaults?.basicScenarioDefaults || _buildVehicleLightingLookFromConfig(fallback);
+            const lookOverrides = overrides?.basicScenarioLook && typeof overrides.basicScenarioLook === 'object'
+                ? overrides.basicScenarioLook
+                : {};
+
+            return _normalizeBasicScenarioConfig({
+                ...fallback,
+                ...base,
+                ...lookDefaults,
+                ...lookOverrides
+            });
+        }
+
+        function _buildLightingOverridesFromRuntime(defaults) {
+            const override = {
+                masterEnabled: getMasterLightsEnabled(),
+                groupBehaviorById: {}
+            };
+
+            const baseById = defaults?.groupDefaultsById && typeof defaults.groupDefaultsById === 'object'
+                ? defaults.groupDefaultsById
+                : {};
+
+            (Array.isArray(lightGroups) ? lightGroups : []).forEach((group) => {
+                const id = group?.id;
+                if (!id) return;
+                const current = _extractGroupBehavior(group);
+                const base = _extractGroupBehavior(baseById[id] || {});
+                const delta = {};
+                Object.keys(current).forEach((key) => {
+                    if (JSON.stringify(current[key]) !== JSON.stringify(base[key])) {
+                        delta[key] = current[key];
+                    }
+                });
+                if (Object.keys(delta).length) {
+                    override.groupBehaviorById[id] = delta;
+                }
+            });
+
+            const currentScenarioCfg = _loadCurrentBasicScenarioConfigSnapshot();
+            if (currentScenarioCfg) {
+                const defaultsLook = defaults?.basicScenarioDefaults || _buildVehicleLightingLookFromConfig(currentScenarioCfg);
+                const currentLook = _buildVehicleLightingLookFromConfig(currentScenarioCfg);
+                const lookDelta = {};
+                Object.keys(currentLook).forEach((key) => {
+                    if (JSON.stringify(currentLook[key]) !== JSON.stringify(defaultsLook[key])) {
+                        lookDelta[key] = currentLook[key];
+                    }
+                });
+                if (Object.keys(lookDelta).length) {
+                    override.basicScenarioLook = lookDelta;
+                }
+            }
+
+            return override;
+        }
+
+        function _migrateLegacyLightingProfile(profile, defaults) {
+            const source = profile && typeof profile === 'object' ? profile : {};
+            if (source.overrides && typeof source.overrides === 'object') {
+                return source;
+            }
+
+            const legacyGroups = Array.isArray(source.groups) ? source.groups.map(normalizeLightGroup) : [];
+            const groupBehaviorById = {};
+            legacyGroups.forEach((group, idx) => {
+                const fallbackId = defaults?.groupLayout?.[idx]?.id;
+                const id = group.id || fallbackId;
+                if (!id) return;
+                groupBehaviorById[id] = _extractGroupBehavior(group);
+            });
+
+            return {
+                index: Number(source.index) || 0,
+                name: source.name || `Profile ${Number(source.index) || 0}`,
+                overrides: {
+                    masterEnabled: typeof source.masterEnabled === 'boolean' ? source.masterEnabled : getMasterLightsEnabled(),
+                    groupBehaviorById
+                }
+            };
+        }
+
+        function ensureLightingProfilesUpgraded() {
+            const defaults = loadVehicleLightingDefaults();
+            let changed = false;
+            lightingProfiles = (Array.isArray(lightingProfiles) ? lightingProfiles : []).map((profile) => {
+                const migrated = _migrateLegacyLightingProfile(profile, defaults);
+                if (migrated !== profile || Array.isArray(profile?.groups)) changed = true;
+                return migrated;
+            });
+            if (changed) saveLocalLightingProfiles();
+        }
 
         function loadLocalLightingProfiles() {
             try {
@@ -4698,6 +4970,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             refreshLightColorOrderInputFromStorage();
 
             saveLightGroups(false);
+            ensureLightingProfilesUpgraded();
             renderLightGroupsList();
         }
 
@@ -4712,6 +4985,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const restored = loadLocalLightingProfiles();
             lightingProfiles = Array.isArray(restored.profiles) ? restored.profiles : [];
             activeLightingProfileIndex = Number(restored.activeIndex) || 0;
+            ensureLightingProfilesUpgraded();
             populateLightingProfileSelector();
             updateDashboardActiveLightingProfile();
             syncLightingProfileActionButtons();
@@ -4728,9 +5002,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function getVehicleScopedTotalLEDCount() {
             const saved = parseInt(readVehicleScopedStorage(TOTAL_LED_COUNT_KEY), 10);
-            return Number.isInteger(saved) && saved >= 1 && saved <= MAX_LIGHTS_TOTAL_LEDS
+            return Number.isInteger(saved) && saved >= 0 && saved <= MAX_LIGHTS_TOTAL_LEDS
                 ? saved
-                : Math.min(20, MAX_LIGHTS_TOTAL_LEDS);
+                : Math.min(11, MAX_LIGHTS_TOTAL_LEDS);
         }
 
         function getVehicleScopedLightColorOrder() {
@@ -4978,23 +5252,41 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             updateDashboardActiveLightingProfile();
         }
 
-        function hydrateLightGroupsFromActiveProfile(profileData) {
-            if (!profileData) return;
-            const groups = Array.isArray(profileData.groups) ? profileData.groups : [];
-            lightGroups = groups.map(g => ({
-                id: createLightGroupId(),
-                name: g.name || `Group ${g.id}`,
-                indices: normalizeLedIndices(Array.isArray(g.indices) ? g.indices : g.leds),
-                brightness: Math.round((Number(g.brightness ?? 100) * 255) / 100),
-                color: (g.color_primary || '#ffffff').toLowerCase(),
-                color2: (g.color_secondary || '#000000').toLowerCase(),
-                pattern: (g.effect || 'solid').toLowerCase(),
-                effect_speed: Number(g.effect_speed ?? 50),
-                effect_intensity: Number(g.effect_intensity ?? 100),
-                enabled: !!g.enabled
-            }));
+        async function applyResolvedLightingProfile(profile, notify = true) {
+            const defaults = syncVehicleLightingDefaultsFromLightGroups();
+            const overrides = profile?.overrides && typeof profile.overrides === 'object' ? profile.overrides : {};
+            lightGroups = _composeLightGroupsFromDefaults(defaults, overrides).map(normalizeLightGroup);
+            ensureLightGroupIds();
             saveLightGroups(false);
-            applyLightsHierarchyToHardware();
+            renderLightGroupsList();
+
+            const mergedScenarioConfig = _composeBasicScenarioConfigFromDefaults(defaults, overrides);
+            if (mergedScenarioConfig) {
+                _basicScenarioConfig = mergedScenarioConfig;
+                _writeBasicScenarioConfigToUI(_basicScenarioConfig);
+                _saveBasicScenarioConfig(_basicScenarioConfig);
+            }
+
+            const desiredMaster = typeof overrides.masterEnabled === 'boolean'
+                ? overrides.masterEnabled
+                : getMasterLightsEnabled();
+            writeVehicleScopedStorage(LIGHT_MASTER_STORAGE_KEY, desiredMaster ? 'true' : 'false');
+            syncMasterLightSwitches(desiredMaster);
+
+            lightingGroupsDirty = false;
+            syncLightingProfileActionButtons();
+
+            if (isBleConnected()) {
+                try {
+                    await pushAllLightGroupsToESP32(lightGroups);
+                    await pushSystemCommand('lights_master', { enabled: desiredMaster });
+                    if (notify) toast.success(`Loaded lighting profile "${profile.name}"`);
+                } catch (error) {
+                    toast.warning(`Profile set locally. Push failed: ${error?.message || error}`);
+                }
+            } else if (notify) {
+                toast.success(`Profile "${profile.name}" loaded. Connect to apply to truck.`);
+            }
         }
 
         async function selectLightingProfile(index) {
@@ -5002,33 +5294,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 toast.warning('Lighting profiles are locked. Unlock to make changes.');
                 return;
             }
+            ensureLightingProfilesUpgraded();
             const profile = lightingProfiles.find(p => Number(p.index) === Number(index));
             if (!profile) { toast.warning('Lighting profile not found'); return; }
-            if (!profile.groups) {
-                toast.warning(`"${profile.name}" has no saved groups yet. Update the profile first.`);
-                return;
-            }
             activeLightingProfileIndex = Number(index);
             saveLocalLightingProfiles();
             populateLightingProfileSelector();
             updateDashboardActiveLightingProfile();
-            lightGroups = JSON.parse(JSON.stringify(profile.groups)).map(normalizeLightGroup);
-            ensureLightGroupIds();
-            saveLightGroups(false);
-            renderLightGroupsList();
-            lightingGroupsDirty = false;
-            syncLightingProfileActionButtons();
-            if (isBleConnected()) {
-                try {
-                    await pushAllLightGroupsToESP32(lightGroups);
-                    await pushSystemCommand('lights_master', { enabled: getMasterLightsEnabled() });
-                    toast.success(`Loaded lighting profile "${profile.name}"`);
-                } catch (e) {
-                    toast.warning(`Profile set locally. Push failed: ${e.message}`);
-                }
-            } else {
-                toast.success(`Profile "${profile.name}" loaded. Connect to apply to truck.`);
-            }
+            await applyResolvedLightingProfile(profile, true);
         }
 
         async function saveAsNewLightingProfile() {
@@ -5050,10 +5323,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 while (usedSlots.has(targetSlot) && targetSlot < MAX_LIGHTING_PROFILES) targetSlot++;
             }
             if (!profileName) return;
+            const defaults = syncVehicleLightingDefaultsFromLightGroups();
             const snapshot = {
                 index: Number(targetSlot),
                 name: profileName,
-                groups: JSON.parse(JSON.stringify(lightGroups))
+                overrides: _buildLightingOverridesFromRuntime(defaults)
             };
             const existingIdx = lightingProfiles.findIndex(p => Number(p.index) === Number(targetSlot));
             if (existingIdx >= 0) {
@@ -5076,12 +5350,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 toast.warning('Lighting profiles are locked. Unlock to make changes.');
                 return;
             }
+            ensureLightingProfilesUpgraded();
             const active = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
             if (!active) { toast.warning('No active lighting profile selected. Save a profile first.'); return; }
+            const defaults = syncVehicleLightingDefaultsFromLightGroups();
             const idx = lightingProfiles.findIndex(p => Number(p.index) === Number(activeLightingProfileIndex));
             lightingProfiles[idx] = {
                 ...active,
-                groups: JSON.parse(JSON.stringify(lightGroups))
+                overrides: _buildLightingOverridesFromRuntime(defaults)
             };
             saveLocalLightingProfiles();
             lightingGroupsDirty = false;
@@ -5090,23 +5366,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         async function discardLightingProfileChanges() {
+            ensureLightingProfilesUpgraded();
             const active = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
-            if (active && Array.isArray(active.groups)) {
-                lightGroups = JSON.parse(JSON.stringify(active.groups)).map(normalizeLightGroup);
-                ensureLightGroupIds();
-                saveLightGroups(false);
-                renderLightGroupsList();
-                if (isBleConnected()) {
-                    try {
-                        await pushAllLightGroupsToESP32(lightGroups);
-                        await pushSystemCommand('lights_master', { enabled: getMasterLightsEnabled() });
-                    } catch (error) {
-                        console.warn('Failed to apply discarded lighting snapshot to hardware:', error?.message || error);
-                    }
-                }
-            }
-            lightingGroupsDirty = false;
-            syncLightingProfileActionButtons();
+            if (!active) return;
+            await applyResolvedLightingProfile(active, false);
         }
 
         async function confirmDeleteLightingProfile(index) {
@@ -5159,6 +5422,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function saveLightGroups(pushToHardware = true) {
             ensureLightGroupIds();
             writeVehicleScopedStorage(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(lightGroups));
+            syncVehicleLightingDefaultsFromLightGroups();
             renderLightGroupsList();
 
             if (pushToHardware) {
@@ -5966,6 +6230,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function _saveBasicScenarioConfig(config) {
             writeVehicleScopedStorage(BASIC_SCENARIO_CONFIG_KEY, JSON.stringify(config));
+            syncVehicleLightingDefaultsFromBasicScenario(config);
         }
 
         function renderBasicScenarioList() {
@@ -6506,6 +6771,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _basicScenarioConfig = _normalizeBasicScenarioConfig(_readBasicScenarioConfigFromUI());
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);
             _saveBasicScenarioConfig(_basicScenarioConfig);
+            lightingGroupsDirty = true;
+            syncLightingProfileActionButtons();
             _queueBasicScenarioConfigApply();
             notifyBasicLightsStatus(`Scenario mapping updated. LEDs ${_basicScenarioConfig.ledCount}, groups ${_getBasicScenarioCardDefs(_basicScenarioConfig).length}/${_basicScenarioMaxGroupCount(_basicScenarioConfig)}, pattern ${String(_basicScenarioConfig.colorOrder || 'rgb').toUpperCase()}, brightness ${_basicScenarioConfig.brightnessPercent}% (${_basicScenarioPercentToBrightness(_basicScenarioConfig.brightnessPercent)} max). FX ${_basicScenarioConfig.fx}, intensity ${_basicScenarioConfig.fxIntensity}.`, 'info');
         };
@@ -6523,6 +6790,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _basicScenarioConfig = _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);
             _saveBasicScenarioConfig(_basicScenarioConfig);
+            lightingGroupsDirty = true;
+            syncLightingProfileActionButtons();
             notifyBasicLightsStatus('Scenario mapping reset to defaults.', 'success');
         };
 
@@ -7408,7 +7677,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const patternSelect = document.getElementById('lightGroupPatternSelect');
             const colorPicker = document.getElementById('lightGroupColorPicker');
             const colorHex = document.getElementById('lightGroupColorHex');
-            const totalLEDCount = parseInt(document.getElementById('totalLEDCount').value) || 20;
+            const parsedTotalLEDCount = parseInt(document.getElementById('totalLEDCount').value, 10);
+            const totalLEDCount = Number.isInteger(parsedTotalLEDCount)
+                ? Math.max(0, Math.min(MAX_LIGHTS_TOTAL_LEDS, parsedTotalLEDCount))
+                : getVehicleScopedTotalLEDCount();
             
             if (index !== null) {
                 // Edit mode
@@ -7902,13 +8174,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         return;
                     }
                     const value = parseInt(this.value);
-                    if (value >= 1 && value <= MAX_LIGHTS_TOTAL_LEDS) {
+                    if (value >= 0 && value <= MAX_LIGHTS_TOTAL_LEDS) {
                         writeVehicleScopedStorage(TOTAL_LED_COUNT_KEY, String(value));
-                        lightingGroupsDirty = true;
+                        syncVehicleLightingDefaultsFromLightGroups();
                         syncLightingProfileActionButtons();
                         window.toast.success(`Total LED count set to ${value}`);
                     } else {
-                        alert(`Please enter a value between 1 and ${MAX_LIGHTS_TOTAL_LEDS}`);
+                        alert(`Please enter a value between 0 and ${MAX_LIGHTS_TOTAL_LEDS}`);
                         this.value = getVehicleScopedTotalLEDCount();
                     }
                 });
@@ -7928,7 +8200,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const order = normalizeLightColorOrder(this.value);
                     this.value = order;
                     writeVehicleScopedStorage(LIGHT_COLOR_ORDER_KEY, order);
-                    lightingGroupsDirty = true;
+                    syncVehicleLightingDefaultsFromLightGroups();
                     syncLightingProfileActionButtons();
 
                     if (isBleConnected()) {
