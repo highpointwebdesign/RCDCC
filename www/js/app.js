@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.544';
+        const APP_VERSION = '1.1.546';
         const BUILD_DATE = '2026-03-30';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -6359,6 +6359,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _queueBasicScenarioBrightnessApply();
         };
 
+        window.basicScenarioBrightnessStep = function(delta) {
+            const base = Number.isFinite(Number(_basicScenarioBrightnessCurrent))
+                ? Number(_basicScenarioBrightnessCurrent)
+                : Number(document.getElementById('basicScenarioBrightness')?.value || 100);
+            const next = Math.max(0, Math.min(100, Math.round(base + Number(delta || 0))));
+            window.basicScenarioBrightnessChange(next);
+        };
+
         function _queueBasicScenarioBrightnessApply() {
             if (!_basicScenarioStripEnabled) return;
             if (!bleManager || !bleManager.isConnected) return;
@@ -6400,6 +6408,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             notifyBasicLightsStatus(`LED count set to ${safe}. Max groups is now ${_basicScenarioMaxGroupCount(_basicScenarioConfig)}.`, 'info');
         };
 
+        window.basicScenarioLedCountStep = function(delta) {
+            const base = Number.isFinite(Number(_basicScenarioLedCountCurrent))
+                ? Number(_basicScenarioLedCountCurrent)
+                : _resolveBasicScenarioLedCount(document.getElementById('basicScenarioLedCount')?.value);
+            const next = Math.max(9, Math.min(MAX_LIGHTS_TOTAL_LEDS, Math.round(base + Number(delta || 0))));
+            window.basicScenarioLedCountChange(next);
+        };
+
         window.basicScenarioColorOrderChange = function(value) {
             const input = document.getElementById('basicScenarioColorOrder');
             const safe = _sanitizeBasicScenarioColorOrder(value, getVehicleScopedLightColorOrder());
@@ -6426,6 +6442,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
             if (label) label.textContent = String(safe);
             basicScenarioConfigChanged();
+        };
+
+        window.basicScenarioFxIntensityStep = function(delta) {
+            const base = Number.isFinite(Number(_basicScenarioFxIntensityCurrent))
+                ? Number(_basicScenarioFxIntensityCurrent)
+                : Number(document.getElementById('basicScenarioFxIntensity')?.value || 128);
+            const next = Math.max(0, Math.min(255, Math.round(base + Number(delta || 0))));
+            window.basicScenarioFxIntensityChange(next);
         };
 
         window.basicScenarioGlitterColorChange = function(value) {
