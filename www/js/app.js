@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.555';
+        const APP_VERSION = '1.1.564';
         const BUILD_DATE = '2026-03-30';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -4780,6 +4780,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let lightsWriteGateEnabled = false; // Hard gate: prevents ALL lights content writes when master is OFF.
         const expandedLightGroupIds = new Set();
 
+        function resetLightsHardwarePushCache() {
+            lastPushedLightGroupCount = 0;
+            lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
+            lastPushedLightsColorOrder = null;
+            lastPushedLightsMasterEnabled = null;
+        }
+
         function createLightGroupId() {
             return `lg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         }
@@ -5253,6 +5260,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         async function applyResolvedLightingProfile(profile, notify = true) {
+            const currentMasterEnabled = getMasterLightsEnabled();
             const defaults = syncVehicleLightingDefaultsFromLightGroups();
             const overrides = profile?.overrides && typeof profile.overrides === 'object' ? profile.overrides : {};
             lightGroups = _composeLightGroupsFromDefaults(defaults, overrides).map(normalizeLightGroup);
@@ -5267,19 +5275,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 _saveBasicScenarioConfig(_basicScenarioConfig);
             }
 
-            const desiredMaster = typeof overrides.masterEnabled === 'boolean'
-                ? overrides.masterEnabled
-                : getMasterLightsEnabled();
-            writeVehicleScopedStorage(LIGHT_MASTER_STORAGE_KEY, desiredMaster ? 'true' : 'false');
-            syncMasterLightSwitches(desiredMaster);
+            _syncMasterLightState(currentMasterEnabled);
 
             lightingGroupsDirty = false;
             syncLightingProfileActionButtons();
 
             if (isBleConnected()) {
                 try {
-                    await pushAllLightGroupsToESP32(lightGroups);
-                    await pushSystemCommand('lights_master', { enabled: desiredMaster });
+                    resetLightsHardwarePushCache();
+                    await _applyBasicScenarioOutput();
                     if (notify) toast.success(`Loaded lighting profile "${profile.name}"`);
                 } catch (error) {
                     toast.warning(`Profile set locally. Push failed: ${error?.message || error}`);
@@ -5436,6 +5440,17 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return readVehicleScopedStorage(LIGHT_MASTER_STORAGE_KEY, { migrateLegacy: false }) === 'true';
         }
 
+        function _syncMasterLightState(isEnabled, persist = true) {
+            const nextEnabled = !!isEnabled;
+            lightsWriteGateEnabled = nextEnabled;
+            if (persist) {
+                writeVehicleScopedStorage(LIGHT_MASTER_STORAGE_KEY, nextEnabled ? 'true' : 'false');
+            }
+            syncMasterLightSwitches(nextEnabled);
+            _basicScenarioStripEnabled = nextEnabled;
+            _syncBasicScenarioButtons();
+        }
+
         function buildBasicMasterTestGroupPayload() {
             const leds = Array.from({ length: BASIC_LIGHTING_TEST_LED_COUNT }, (_, i) => i);
             return {
@@ -5453,59 +5468,23 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function setMasterLightsEnabled(isEnabled, applyNow = true) {
-            // HARD GATE: Set electrical gate SYNCHRONOUSLY before any async BLE work.
-            // This prevents any lights writes from being processed while master is OFF.
-            lightsWriteGateEnabled = !!isEnabled;
-            writeVehicleScopedStorage(LIGHT_MASTER_STORAGE_KEY, isEnabled ? 'true' : 'false');
-            syncMasterLightSwitches(isEnabled);
-            
+            _syncMasterLightState(isEnabled);
+
             const statusMsg = `[Lights] Master ${isEnabled ? 'ON' : 'OFF'} requested (applyNow=${applyNow}, gate=${lightsWriteGateEnabled})`;
             console.log(statusMsg);
             appendToSettingsConsoleCard(statusMsg, isEnabled ? 'info' : 'warn');
-            
-            if (applyNow) {
-                if (!isEnabled) {
-                    // Basic, deterministic OFF path: disable output and clear runtime groups.
-                    return Promise.resolve(pushSystemCommand('lights_master', { enabled: false }))
-                    .then(() => {
-                        appendToSettingsConsoleCard('[Lights] lights_master false submitted', 'info');
-                        return pushSystemCommand('lights_clear_all', {});
-                    })
-                    .then(() => {
-                        appendToSettingsConsoleCard('[Lights] lights_clear_all submitted', 'info');
-                        lastPushedLightsMasterEnabled = false;
-                        lastPushedLightGroupCount = 0;
-                        lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
-                    })
-                    .catch(error => {
-                        const msg = `[Lights] Master OFF failed: ${String(error?.message || error)}`;
-                        console.error(msg, error);
-                        appendToSettingsConsoleCard(msg, 'error');
-                        toast.error('Failed to apply master light switch state.');
-                    });
-                }
 
-                // ON path for core testing: single known blue group on LEDs 0-10.
-                // Gate is already true from above; group write will be allowed.
-                return Promise.resolve(pushSystemCommand('lights_master', { enabled: true }))
-                .then(() => {
-                    appendToSettingsConsoleCard('[Lights] lights_master true submitted', 'info');
-                    return pushLightsPayload(buildBasicMasterTestGroupPayload());
-                })
-                .then(() => {
-                    appendToSettingsConsoleCard('[Lights] Blue test group (LEDs 0-8) submitted', 'info');
-                    lastPushedLightsMasterEnabled = true;
-                    lastPushedLightGroupCount = 1;
-                    lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
-                })
-                .catch(error => {
-                    const msg = `[Lights] Master ON failed: ${String(error?.message || error)}`;
-                    console.error(msg, error);
-                    appendToSettingsConsoleCard(msg, 'error');
-                    toast.error('Failed to apply master light switch state.');
-                });
+            if (!applyNow || !isBleConnected()) {
+                return Promise.resolve();
             }
-            return Promise.resolve();
+
+            resetLightsHardwarePushCache();
+            return _applyBasicScenarioOutput().catch(error => {
+                const msg = `[Lights] Master ${isEnabled ? 'ON' : 'OFF'} failed: ${String(error?.message || error)}`;
+                console.error(msg, error);
+                appendToSettingsConsoleCard(msg, 'error');
+                toast.error('Failed to apply master light switch state.');
+            });
         }
 
         // ==================== Basic Lights Test (STAGE 1) ====================
@@ -5620,8 +5599,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const icon = btn.querySelector('.material-symbols-outlined');
                 if (icon) icon.textContent = 'light_off';
             }
-            _basicScenarioStripEnabled = false;
-            _syncBasicScenarioButtons();
+            _syncMasterLightState(false);
             if (bleManager && bleManager.isConnected) {
                 bleManager.sendSystemCommand('lights_diag', { on: false }).catch(() => {});
             }
@@ -5808,8 +5786,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             try {
                 await bleManager.sendSystemCommand('lights_master', { enabled: false });
                 await bleManager.sendSystemCommand('lights_clear_all', {});
-                _basicScenarioStripEnabled = false;
-                _syncBasicScenarioButtons();
+                _syncMasterLightState(false);
                 notifyBasicLightsStatus('Groups cleared. Strip off.', 'success');
             } catch (e) {
                 notifyBasicLightsStatus(`Clear failed: ${e?.message || e}`, 'error', { duration: 5000 });
@@ -5818,7 +5795,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         // ==================== Basic Lights Test — Step 4 Real Scenarios ====================
 
-        var _basicScenarioStripEnabled = false;
+        var _basicScenarioStripEnabled = getMasterLightsEnabled();
         const BASIC_SCENARIO_CONFIG_KEY = 'basicScenarioConfigV1';
         const BASIC_SCENARIO_BRIGHTNESS_MAX = 255;
         const BASIC_SCENARIO_DEFAULT_LED_COUNT = 11;
@@ -6714,11 +6691,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const label = document.getElementById('basicScenarioFxIntensityLabel');
             const safe = Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
             _basicScenarioFxIntensityCurrent = safe;
-            if (_basicScenarioFxIntensitySliderInstance && !_basicScenarioFxIntensitySyncing) {
+            if (_basicScenarioFxIntensitySliderInstance && typeof _basicScenarioFxIntensitySliderInstance.value === 'function' && !_basicScenarioFxIntensitySyncing) {
                 _basicScenarioFxIntensitySyncing = true;
-                _basicScenarioFxIntensitySliderInstance.value = safe;
+                _basicScenarioFxIntensitySliderInstance.value([0, safe]);
                 _basicScenarioFxIntensitySyncing = false;
             }
+            _setBasicScenarioThumbLabel('basicScenarioFxIntensity', safe);
             if (label) label.textContent = String(safe);
             basicScenarioConfigChanged();
         };
@@ -6908,16 +6886,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const labels = _selectedScenarioModeLabels();
 
             if (nextEnabled && (!bleManager || !bleManager.isConnected)) {
-                _basicScenarioStripEnabled = false;
-                _syncBasicScenarioButtons();
+                _syncMasterLightState(false, false);
                 notifyBasicLightsStatus(`${_basicScenarioSelectionStatus(labels)} Not connected.`, 'warning');
                 return;
             }
 
             try {
-                _basicScenarioStripEnabled = nextEnabled;
+                _syncMasterLightState(nextEnabled);
                 const result = await _applyBasicScenarioOutput();
-                _syncBasicScenarioButtons();
 
                 if (!_basicScenarioStripEnabled) {
                     notifyBasicLightsStatus(`${_basicScenarioSelectionStatus(labels)} Strip output off.`, 'info');
@@ -6931,8 +6907,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     result.groups.length ? 'success' : 'warning'
                 );
             } catch (e) {
-                _basicScenarioStripEnabled = false;
-                _syncBasicScenarioButtons();
+                _syncMasterLightState(false);
                 const msg = `Scenario strip toggle failed: ${e?.message || e}`;
                 notifyBasicLightsStatus(msg, 'error', { duration: 5000 });
                 console.error('[BasicLights]', msg);
@@ -7050,7 +7025,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                         return;
                     }
                     masterLightToggleInFlight = true;
-                    // await setMasterLightsEnabled(!getMasterLightsEnabled(), true);
+                    await setMasterLightsEnabled(!getMasterLightsEnabled(), true);
                 } catch (error) {
                     const msg = `Master switch click failed: ${String(error?.message || error)}`;
                     console.error(msg, error);
