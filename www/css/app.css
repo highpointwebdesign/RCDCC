@@ -2917,6 +2917,13 @@
             transition: transform 0.1s;
         }
 
+        .basic-led-map-chip.is-pulsing {
+            animation: basic-led-map-pulse 1.1s ease-in-out infinite;
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.28);
+        }
+
         .basic-led-map-chip.is-unassigned {
             background: #f3f4f6;
             border-color: #d1d5db;
@@ -2925,6 +2932,19 @@
 
         .basic-led-map-chip:active {
             transform: scale(0.9);
+        }
+
+        @keyframes basic-led-map-pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.26);
+                filter: brightness(1);
+            }
+            50% {
+                transform: scale(1.12);
+                box-shadow: 0 0 0 9px rgba(245, 158, 11, 0);
+                filter: brightness(1.18);
+            }
         }
 
         /* Tuning Page Slider Customization */
@@ -3210,6 +3230,9 @@
         #sliderFrontRightTrim .range-slider__thumb,
         #sliderRearLeftTrim .range-slider__thumb,
         #sliderRearRightTrim .range-slider__thumb,
+        #basicScenarioLedCount .range-slider__thumb,
+        #basicScenarioBrightness .range-slider__thumb,
+        #basicScenarioFxIntensity .range-slider__thumb,
         #lightGroupBrightnessSlider .range-slider__thumb,
         #lightGroupIntensitySlider .range-slider__thumb,
         #lightGroupSpeedSlider .range-slider__thumb {
@@ -3244,11 +3267,28 @@
         #sliderFrontRightTrim .range-slider__thumb[data-upper],
         #sliderRearLeftTrim .range-slider__thumb[data-upper],
         #sliderRearRightTrim .range-slider__thumb[data-upper],
+        #basicScenarioLedCount .range-slider__thumb[data-upper],
+        #basicScenarioBrightness .range-slider__thumb[data-upper],
+        #basicScenarioFxIntensity .range-slider__thumb[data-upper],
         #lightGroupBrightnessSlider .range-slider__thumb[data-upper],
         #lightGroupIntensitySlider .range-slider__thumb[data-upper],
         #lightGroupSpeedSlider .range-slider__thumb[data-upper] {
             width: 32px;
             height: 32px;
+        }
+
+        #basicScenarioLedCount .range-slider__thumb[data-lower],
+        #basicScenarioBrightness .range-slider__thumb[data-lower],
+        #basicScenarioFxIntensity .range-slider__thumb[data-lower] {
+            width: 0 !important;
+            height: 0 !important;
+            display: none !important;
+        }
+
+        #basicScenarioLedCount .range-slider__thumb[data-upper],
+        #basicScenarioBrightness .range-slider__thumb[data-upper],
+        #basicScenarioFxIntensity .range-slider__thumb[data-upper] {
+            z-index: 2;
         }
 
         /* Re-hide lower thumbs for single-thumb (Trim) sliders - override general display:flex rule */
