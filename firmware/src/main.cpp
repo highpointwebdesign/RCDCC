@@ -9,6 +9,7 @@
 #include "SuspensionSimulator.h"
 #include "StorageManager.h"
 #include "PWMOutputs.h"
+#include "LightsEngine.h"
 #include "BluetoothService.h"
 
 // Global instances
@@ -17,6 +18,7 @@ SensorFusion sensorFusion;
 SuspensionSimulator suspensionSimulator;
 StorageManager storageManager;
 PWMOutputs pwmOutputs;
+LightsEngine* lightsEngine = nullptr;
 BluetoothService* bluetoothService = nullptr;  // Initialize in setup()
 
 // LED feedback pin
@@ -539,6 +541,22 @@ bool applyLightsPayload(const String& payload) {
     return true;
   }
 
+  if (!lightsEngine) {
+    Serial.println("BLE lights payload ignored: lights runtime not initialized");
+    return false;
+  }
+
+  // Use LightsEngine runtime directly so effect/speed/intensity animate correctly.
+  const bool applied = lightsEngine->updateGroupFromJson(payload);
+  if (!applied) {
+    Serial.println("BLE lights payload rejected by runtime parser");
+    return false;
+  }
+
+  lightsDiagEnabled = false;
+  lightsBasicEnabled = false;
+  return true;
+
   DynamicJsonDocument doc(3072);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
@@ -711,6 +729,21 @@ bool applySystemCommandPayload(const String& payload) {
 
   if (command == "lights_master") {
     lightsMasterEnabled = doc["enabled"] | false;
+    if (lightsEngine) {
+      lightsEngine->setMaster(lightsMasterEnabled);
+      if (!lightsMasterEnabled) {
+        lightsEngine->setBasicMode(false);
+      }
+    }
+
+    lightsDiagEnabled = false;
+    if (!lightsMasterEnabled) {
+      lightsBasicEnabled = false;
+    }
+
+    Serial.printf("{\"status\":\"lights_master\",\"enabled\":%s}\n", lightsMasterEnabled ? "true" : "false");
+    return true;
+
     if (!lightsMasterEnabled) {
       lightsDiagEnabled = false;
       lightsBasicEnabled = false;
@@ -729,8 +762,11 @@ bool applySystemCommandPayload(const String& payload) {
   if (command == "lights_clear_all") {
     lightsDiagEnabled = false;
     lightsBasicEnabled = false;
+    if (lightsEngine) {
+      lightsEngine->setBasicMode(false);
+      lightsEngine->clearAllGroups(true);
+    }
     clearAllLegacyGroupSlots();
-    clearStrip();
     Serial.println("{\"status\":\"lights_cleared\"}");
     return true;
   }
@@ -738,6 +774,13 @@ bool applySystemCommandPayload(const String& payload) {
   if (command == "lights_color_order") {
     const String order = doc["order"] | "grb";
     stripColorOrder = parseStripColorOrder(order);
+    if (lightsEngine) {
+      lightsEngine->setColorOrderByName(order.c_str());
+    }
+
+    Serial.printf("{\"status\":\"lights_color_order\",\"order\":\"%s\"}\n", order.c_str());
+    return true;
+
     if (lightsDiagEnabled) {
       applyDiagStep();
     } else if (hasAnyEnabledLegacyGroups()) {
@@ -757,7 +800,12 @@ bool applySystemCommandPayload(const String& payload) {
     lightsBasicG = static_cast<uint8_t>(constrain(static_cast<int>(doc["g"] | 0), 0, 255));
     lightsBasicB = static_cast<uint8_t>(constrain(static_cast<int>(doc["b"] | 0), 0, 255));
     lightsBasicBri = static_cast<uint8_t>(constrain(static_cast<int>(doc["bri"] | 100), 0, 100));
-    applyBasicLightsOutput();
+
+    if (lightsEngine) {
+      lightsEngine->setMaster(true);
+      lightsEngine->setBasicMode(lightsBasicEnabled, lightsBasicR, lightsBasicG, lightsBasicB, STATUS_LED_COUNT);
+    }
+
     Serial.println("{\"status\":\"lights_basic\"}");
     return true;
   }
@@ -909,8 +957,12 @@ void setup() {
   // Load configuration from storage
   storageManager.init();
 
-  // LightsEngine removed; legacy status LED path remains active.
-  legacyStatusLedEnabled = true;
+  // Lights runtime handles app payload effects (glitter, speed, intensity, etc.).
+  lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
+  lightsEngine->begin();
+  lightsEngine->setMaster(false);
+  lightsEngine->setColorOrderByName("grb");
+  legacyStatusLedEnabled = false;
 
   storageManager.loadConfig();
   storageManager.loadLights();
@@ -1005,7 +1057,13 @@ void setup() {
       lightsDiagEnabled = false;
       lightsBasicEnabled = false;
       lightsMasterEnabled = false;
-      clearStrip();
+      if (lightsEngine) {
+        lightsEngine->setBasicMode(false);
+        lightsEngine->setMaster(false);
+        lightsEngine->clearAllGroups(true);
+      } else {
+        clearStrip();
+      }
     }
     digitalWrite(LED_PIN, connected ? HIGH : LOW);
   });
