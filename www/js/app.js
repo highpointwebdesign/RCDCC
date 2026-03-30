@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.564';
+        const APP_VERSION = '1.1.569';
         const BUILD_DATE = '2026-03-30';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -3803,8 +3803,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             syncCardCollapseState('servoRangeCard', 'servoRangeChevron', 'servoRangeCardCollapsed');
             syncCardCollapseState('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed');
             syncCardCollapseState('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed');
-            syncCardCollapseState('basicLedConfigurationCard', 'basicLedConfigurationChevron', 'basicLedConfigurationCardCollapsed');
-            syncCardCollapseState('basicLedAllocationCard', 'basicLedAllocationChevron', 'basicLedAllocationCardCollapsed');
             syncCardCollapseState('basicLedFxOutputCard', 'basicLedFxOutputChevron', 'basicLedFxOutputCardCollapsed');
             syncCardCollapseState('basicActiveLedAllocationCard', 'basicActiveLedAllocationChevron', 'basicActiveLedAllocationCardCollapsed');
             syncCardCollapseState('manageLightGroupsCard', 'manageLightGroupsChevron', 'manageLightGroupsCardCollapsed');
@@ -3813,6 +3811,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             syncDrivingProfilesCardUI();
             syncLightingProfilesCardUI();
             syncLightingControlCardUI();
+            syncHardwareSetupCardUI();
             syncManageLightGroupsLockUI();
             
             // Restore servo range lock state from localStorage
@@ -4751,6 +4750,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let lightingProfileBusy = false;
         let lightingProfilesLocked = localStorage.getItem('lightingProfilesLocked') === 'true';
         let lightingControlLocked = localStorage.getItem('lightingControlLocked') === 'true';
+        let hardwareSetupLocked = localStorage.getItem('hardwareSetupLocked') === 'true';
         let manageLightGroupsLocked = localStorage.getItem('manageLightGroupsLocked') === 'true';
         let lightStripConfigLocked = localStorage.getItem('lightStripConfigLocked') === 'true';
         let lightingGroupsDirty = false;
@@ -6379,9 +6379,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         window.basicOpenLedMapModal = function(preSelectMode) {
-            const modal = document.getElementById('basicLedMapModal');
-            if (!modal) return;
-
             const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             const cards = _getBasicScenarioCardDefs(config);
             _basicLedMapDraftAssignment = Object.assign({}, config.assignment || {});
@@ -6402,15 +6399,119 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _renderLedMapPalette();
             _renderLedMapGrid();
 
-            if (window.bootstrap && bootstrap.Modal) {
-                _basicLedMapModalInstance = bootstrap.Modal.getOrCreateInstance(modal);
-                _basicLedMapModalInstance.show();
+            // Expand hardware setup card if collapsed so the inline section is visible
+            const hwBody = document.getElementById('hardwareSetupCardBody');
+            if (hwBody && hwBody.style.display === 'none') {
+                localStorage.setItem('hardwareSetupCardCollapsed', 'false');
+                syncHardwareSetupCardUI();
+            }
+
+            // Show inline section
+            const inline = document.getElementById('basicLedMapInline');
+            if (inline) {
+                inline.style.display = 'block';
+                syncBasicLedMapInlineToggleUI();
+                setTimeout(() => inline.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
             }
         };
 
         window.basicCloseLedMapModal = function() {
-            if (_basicLedMapModalInstance) _basicLedMapModalInstance.hide();
+            const inline = document.getElementById('basicLedMapInline');
+            if (inline) inline.style.display = 'none';
+            syncBasicLedMapInlineToggleUI();
+            // Legacy: clean up Bootstrap modal instance if present
+            if (_basicLedMapModalInstance) {
+                _basicLedMapModalInstance.hide();
+                _basicLedMapModalInstance = null;
+            }
         };
+
+        window.basicToggleLedMapInline = function() {
+            if (hardwareSetupLocked) return;
+            const inline = document.getElementById('basicLedMapInline');
+            if (!inline) return;
+            if (inline.style.display !== 'none') {
+                basicLedMapInlineCancel();
+            } else {
+                basicOpenLedMapModal();
+            }
+            syncBasicLedMapInlineToggleUI();
+        };
+
+        window.basicLedMapInlineCancel = function() {
+            _basicLedMapDraftAssignment = {};
+            _basicLedMapDraftColors = {};
+            basicCloseLedMapModal();
+        };
+
+        function toggleHardwareSetupCard() {
+            const isCollapsed = localStorage.getItem('hardwareSetupCardCollapsed') !== 'false';
+            localStorage.setItem('hardwareSetupCardCollapsed', isCollapsed ? 'false' : 'true');
+            syncHardwareSetupCardUI();
+        }
+
+        function toggleHardwareSetupLock() {
+            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
+            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            hardwareSetupLocked = !hardwareSetupLocked;
+            localStorage.setItem('hardwareSetupLocked', hardwareSetupLocked.toString());
+            syncHardwareSetupCardUI();
+        }
+
+        function syncBasicLedMapInlineToggleUI() {
+            const inline = document.getElementById('basicLedMapInline');
+            const chevron = document.getElementById('basicLedMapInlineChevron');
+            if (!inline || !chevron) return;
+            const isCollapsed = inline.style.display === 'none';
+            chevron.classList.toggle('is-collapsed', isCollapsed);
+            chevron.title = isCollapsed ? 'Expand LED mapping' : 'Collapse LED mapping';
+            chevron.style.opacity = hardwareSetupLocked ? '0.4' : '1';
+            chevron.style.pointerEvents = hardwareSetupLocked ? 'none' : 'auto';
+            chevron.setAttribute('aria-disabled', hardwareSetupLocked ? 'true' : 'false');
+        }
+
+        function syncHardwareSetupCardUI() {
+            const card = document.getElementById('hardwareSetupCard');
+            const body = document.getElementById('hardwareSetupCardBody');
+            const lockIcon = document.getElementById('hardwareSetupLockIcon');
+            const chevron = document.getElementById('hardwareSetupChevron');
+            // Default is collapsed (true). 'false' means expanded.
+            const isCollapsed = localStorage.getItem('hardwareSetupCardCollapsed') !== 'false';
+            if (card) card.classList.toggle('profile-card-locked', hardwareSetupLocked);
+            if (body) body.style.display = isCollapsed ? 'none' : 'block';
+            if (body) {
+                const controls = body.querySelectorAll('input, select, textarea, button');
+                controls.forEach(control => {
+                    control.disabled = hardwareSetupLocked;
+                    control.setAttribute('aria-disabled', hardwareSetupLocked ? 'true' : 'false');
+                });
+            }
+            if (chevron) {
+                chevron.classList.toggle('is-collapsed', isCollapsed);
+                chevron.title = isCollapsed ? 'Expand hardware setup' : 'Collapse hardware setup';
+            }
+            if (lockIcon) {
+                lockIcon.textContent = hardwareSetupLocked ? 'lock' : 'lock_open_right';
+                lockIcon.style.color = hardwareSetupLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
+                lockIcon.title = hardwareSetupLocked ? 'Unlock hardware setup' : 'Lock hardware setup to prevent changes';
+            }
+            syncHardwareSetupSummary();
+            syncBasicLedMapInlineToggleUI();
+        }
+
+        function syncHardwareSetupSummary() {
+            const summaryEl = document.getElementById('hardwareSetupSummary');
+            if (!summaryEl) return;
+            const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            const ledCount = config.ledCount || 0;
+            const colorOrder = (config.colorOrder || 'grb').toUpperCase();
+            const groupCount = _getBasicScenarioCardDefs(config).length;
+            const assignedCount = Object.keys(config.assignment || {}).filter(k => {
+                const i = parseInt(k, 10);
+                return Number.isFinite(i) && i >= 0 && i < ledCount;
+            }).length;
+            summaryEl.textContent = `${ledCount} LEDs · ${colorOrder} · ${groupCount} groups · ${assignedCount} assigned`;
+        }
 
         window.basicLedMapSelectedColorChange = function(value) {
             if (_basicLedMapActiveScenario === null) return;
@@ -6444,6 +6545,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _basicScenarioConfig = _normalizeBasicScenarioConfig(config);
             _saveBasicScenarioConfig(_basicScenarioConfig);
             renderBasicScenarioList();
+            syncHardwareSetupSummary();
             basicCloseLedMapModal();
             if (!_basicScenarioStripEnabled) {
                 notifyBasicLightsStatus('LED strip map saved.', 'success');
@@ -6662,6 +6764,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);
             _saveBasicScenarioConfig(_basicScenarioConfig);
             notifyBasicLightsStatus(`LED count set to ${safe}. Max groups is now ${_basicScenarioMaxGroupCount(_basicScenarioConfig)}.`, 'info');
+            syncHardwareSetupSummary();
         };
 
         window.basicScenarioLedCountStep = function(delta) {
@@ -6677,6 +6780,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const safe = _sanitizeBasicScenarioColorOrder(value, getVehicleScopedLightColorOrder());
             if (input) input.value = safe;
             basicScenarioConfigChanged();
+            syncHardwareSetupSummary();
         };
 
         window.basicScenarioFxChange = function(value) {
@@ -6975,11 +7079,6 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);
             _syncBasicScenarioStripSwitch();
-
-            const ledMapModal = document.getElementById('basicLedMapModal');
-            if (ledMapModal && window.bootstrap && bootstrap.Modal) {
-                _basicLedMapModalInstance = bootstrap.Modal.getOrCreateInstance(ledMapModal);
-            }
 
             const scenarioGroupModal = document.getElementById('basicScenarioGroupModal');
             if (scenarioGroupModal && window.bootstrap && bootstrap.Modal) {

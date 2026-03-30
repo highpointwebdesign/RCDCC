@@ -3122,6 +3122,22 @@
             transform: rotate(-180deg);
         }
 
+        .hardware-setup-title-wrap {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .hardware-setup-title {
+            white-space: nowrap;
+        }
+
+        .hardware-setup-summary {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+
         .profile-update-btn {
             border-width: 2px;
             transition: border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;

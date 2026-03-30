@@ -1317,95 +1317,15 @@
                         
                         <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
                             <div class="d-flex align-items-center gap-2">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
-                                Lighting Controls
+                                <span class="material-symbols-outlined" style="color: var(--danger);">tune</span>
+                                Profile Look
                             </div>
                             <div class="d-flex align-items-center gap-2 profile-card-header-actions">
-                                <span class="material-symbols-outlined icon-action" id="lightingControlLockIcon" title="Lock lighting controls to prevent changes" onclick="toggleLightingControlLock(this)">lock_open_right</span>
-                                <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="lightingControlChevron" title="Collapse lighting controls" onclick="toggleLightingControlCard()">keyboard_arrow_down</span>
+                                <span class="material-symbols-outlined icon-action" id="lightingControlLockIcon" title="Lock profile look to prevent changes" onclick="toggleLightingControlLock(this)">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="lightingControlChevron" title="Collapse profile look" onclick="toggleLightingControlCard()">keyboard_arrow_down</span>
                             </div>
                         </div>
                         <div class="card-body" id="basicLightsTestCardBody">
-                            <!-- Step 4: Real Group Scenarios -->
-                            
-                            <!-- <div class="mb-2" style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);">LED Power</div> -->
-                            <!-- <div class="light-group-name mb-2" style="font-size:0.9rem;">LED Power</div> -->
-                            <!-- <div class="d-flex mb-2">
-                                <button type="button" id="basicScenarioStripSwitch" class="btn btn-lg basic-scenario-power-btn w-100" aria-pressed="false" onclick="basicScenarioStripToggle()">LIGHTS OFF</button>
-                            </div> -->
-
-                            <!-- <hr class="mt-4 mb-3"> -->
-                            <div id="basicLedConfigurationCard">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="mb-0">
-                                        <span class="material-symbols-outlined icon-danger">settings_input_component</span>
-                                        LED Configuration
-                                    </h6>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="basicLedConfigurationChevron" title="Collapse LED configuration" onclick="toggleCardCollapse('basicLedConfigurationCard', 'basicLedConfigurationChevron', 'basicLedConfigurationCardCollapsed')">keyboard_arrow_down</span>
-                                    </div>
-                                </div>
-                                <div class="card-body p-0" id="basicLedConfigurationCardBody">
-                                    <div class="light-group-item">
-                                        <div class="light-group-info" style="width:100%;">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <div class="light-group-name">LEDs Count</div>
-                                                <!-- <span id="basicScenarioLedCountLabel" style="min-width:32px;text-align:right;color:#111827;font-size:0.9rem;font-weight:700;">9</span> -->
-                                            </div>
-                                            <div class="slider-section" style="margin:8px 0 4px;">
-                                                <div class="slider-stepper-control">
-                                                    <button type="button" class="slider-stepper-btn" aria-label="Decrease LEDs count" onclick="basicScenarioLedCountStep(-1)">-</button>
-                                                    <div id="basicScenarioLedCount" class="slider-stepper-track"></div>
-                                                    <button type="button" class="slider-stepper-btn" aria-label="Increase LEDs count" onclick="basicScenarioLedCountStep(1)">+</button>
-                                                </div>
-                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                    <span>0</span>
-                                                    <span>15</span>
-                                                    <span>30</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="light-group-item">
-                                        <div class="light-group-info" style="width:100%;">
-                                            <div class="d-flex align-items-center gap-2">
-                                                <div class="light-group-name" style="width:50%;">Color Order</div>
-                                                <select id="basicScenarioColorOrder" class="form-select form-select-sm ms-auto" style="width:50%;" onchange="basicScenarioColorOrderChange(this.value)">
-                                                    <option value="rgb">RGB</option>
-                                                    <option value="grb">GRB</option>
-                                                    <option value="rbg">RBG</option>
-                                                    <option value="gbr">GBR</option>
-                                                    <option value="brg">BRG</option>
-                                                    <option value="bgr">BGR</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <hr class="mt-4 mb-3">
-                            <div id="basicLedAllocationCard">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="mb-0">
-                                        <span class="material-symbols-outlined icon-danger">hub</span>
-                                        LED Allocation
-                                    </h6>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="basicLedAllocationChevron" title="Collapse LED allocation" onclick="toggleCardCollapse('basicLedAllocationCard', 'basicLedAllocationChevron', 'basicLedAllocationCardCollapsed')">keyboard_arrow_down</span>
-                                    </div>
-                                </div>
-                                <div class="card-body p-0" id="basicLedAllocationCardBody">
-                                    <div class="d-flex gap-2 mb-2">
-                                        <button type="button" class="btn w-100 btn-gold" onclick="basicOpenLedMapModal()">
-                                            LED Assignments
-                                        </button>
-                                        <!-- here -->
-                                    </div>
-                                </div>
-                            </div>
-
-                            <hr class="mt-4 mb-3">
                             <div id="basicLedFxOutputCard">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="mb-0">
@@ -1482,8 +1402,8 @@
                             <div id="basicActiveLedAllocationCard">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="mb-0">
-                                        <span class="material-symbols-outlined icon-danger">list_alt</span>
-                                        Active LED Allocation
+                                        <span class="material-symbols-outlined icon-danger">format_list_bulleted</span>
+                                        Groups
                                     </h6>
                                     <div class="d-flex align-items-center gap-2">
                                         <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="basicActiveLedAllocationChevron" title="Collapse active LED allocation" onclick="toggleCardCollapse('basicActiveLedAllocationCard', 'basicActiveLedAllocationChevron', 'basicActiveLedAllocationCardCollapsed')">keyboard_arrow_down</span>
@@ -1498,61 +1418,6 @@
                                         <button type="button" class="btn btn-outline-secondary w-100" onclick="basicScenarioConfigResetDefaults()">
                                             Reset Defaults
                                         </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- LED Strip Map Modal -->
-                            <div class="modal fade" id="basicLedMapModal" tabindex="-1" aria-hidden="true">
-                                <div class="modal-dialog modal-lg modal-dialog-centered light-group-editor-dialog" style="margin-top: 125px;">
-                                    <div class="modal-content">
-                                        <div class="modal-header" style="background-color: black; color: white;">
-                                            <span class="material-symbols-outlined" style="color: var(--high-impact-color);">hub</span>
-                                            <h5 class="modal-title">LED Strip Map</h5>
-                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                        </div>
-                                        <div class="modal-body" style="color: #000; padding: 1rem;">
-                                            <div class="light-group-item">
-                                                <div class="light-group-info" style="width:100%;">
-                                                    <div class="light-group-name mb-2" style="font-size:0.9rem;">Step 1. Select Group</div>
-                                                    <div id="basicLedMapPalette" class="basic-led-map-palette"></div>
-                                                </div>
-                                            </div>
-
-                                            <div class="light-group-item">
-                                                <div class="light-group-info" style="width:100%;">
-                                                    <div class="light-group-name mb-2" style="font-size:0.9rem;">Step 2. Select Color</div>
-                                                    <div class="d-flex align-items-center gap-2">
-                                                        <input type="color" id="basicLedMapSelectedColor" class="light-group-color-input" value="#f5f5f5" oninput="basicLedMapSelectedColorChange(this.value)">
-                                                        <div id="basicLedMapSelectedColorLabel" class="basic-led-map-meta" style="margin:0;">No group selected</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div class="light-group-item">
-                                                <div class="light-group-info" style="width:100%;">
-                                                    <div class="light-group-name mb-2" style="font-size:0.9rem;">Step 3. Select LED</div>
-                                                    <div id="basicLedMapMeta" class="basic-led-map-meta"></div>
-                                                    <div id="basicLedMapGrid" class="basic-led-map-grid"></div>
-                                                    <div class="d-flex gap-2 mt-3">
-                                                        <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" onclick="basicLedMapClearScenario()">
-                                                            Clear Group
-                                                        </button>
-                                                        <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" onclick="basicLedMapClearAll()">
-                                                            Clear All
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="modal-footer" style="background-color: black;">
-                                            <div class="d-grid w-100 gap-2">
-                                                <button type="button" class="btn btn-sm btn-outline-warning w-100" onclick="basicCloseLedMapModal()">
-                                                    Cancel
-                                                </button>
-                                                <button type="button" class="btn btn-gold" onclick="basicLedMapSave()">Save</button>
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1577,6 +1442,118 @@
                                                 <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">save</span> Save
                                             </button>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hardware Setup Card -->
+                <div class="col-12">
+                    <div class="card" id="hardwareSetupCard">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor:pointer;" onclick="toggleHardwareSetupCard()">
+                            <div class="d-flex align-items-center gap-2 flex-nowrap hardware-setup-title-wrap">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">settings_input_component</span>
+                                <span class="hardware-setup-title">Hardware Setup</span>
+                                <span id="hardwareSetupSummary" class="text-muted ms-2 hardware-setup-summary" style="font-size:0.8rem;font-weight:400;"></span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 profile-card-header-actions">
+                                <span class="material-symbols-outlined icon-action" id="hardwareSetupLockIcon" title="Lock hardware setup to prevent changes" onclick="event.stopPropagation(); toggleHardwareSetupLock()">lock_open_right</span>
+                                <span class="material-symbols-outlined lights-collapse-chevron is-collapsed" id="hardwareSetupChevron" title="Expand hardware setup" style="color: var(--high-impact-color);">keyboard_arrow_down</span>
+                            </div>
+                        </div>
+                        <div class="card-body" id="hardwareSetupCardBody" style="display:none;">
+                            <div id="basicLedConfigurationCard">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">
+                                        <span class="material-symbols-outlined icon-danger">settings_input_component</span>
+                                        LED Configuration
+                                    </h6>
+                                </div>
+                                <div id="basicLedConfigurationCardBody">
+                                    <div class="light-group-item">
+                                        <div class="light-group-info" style="width:100%;">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <div class="light-group-name">LEDs Count</div>
+                                            </div>
+                                            <div class="slider-section" style="margin:8px 0 4px;">
+                                                <div class="slider-stepper-control">
+                                                    <button type="button" class="slider-stepper-btn" aria-label="Decrease LEDs count" onclick="basicScenarioLedCountStep(-1)">-</button>
+                                                    <div id="basicScenarioLedCount" class="slider-stepper-track"></div>
+                                                    <button type="button" class="slider-stepper-btn" aria-label="Increase LEDs count" onclick="basicScenarioLedCountStep(1)">+</button>
+                                                </div>
+                                                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                                    <span>0</span>
+                                                    <span>15</span>
+                                                    <span>30</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="light-group-item">
+                                        <div class="light-group-info" style="width:100%;">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="light-group-name" style="width:50%;">Color Order</div>
+                                                <select id="basicScenarioColorOrder" class="form-select form-select-sm ms-auto" style="width:50%;" onchange="basicScenarioColorOrderChange(this.value)">
+                                                    <option value="rgb">RGB</option>
+                                                    <option value="grb">GRB</option>
+                                                    <option value="rbg">RBG</option>
+                                                    <option value="gbr">GBR</option>
+                                                    <option value="brg">BRG</option>
+                                                    <option value="bgr">BGR</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="mt-4 mb-3">
+
+                            <div id="basicLedMappingSection">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">
+                                        <span class="material-symbols-outlined icon-danger">hub</span>
+                                        LED Mapping
+                                    </h6>
+                                    <span class="material-symbols-outlined icon-action lights-collapse-chevron is-collapsed" id="basicLedMapInlineChevron" title="Expand LED mapping" onclick="event.stopPropagation(); basicToggleLedMapInline()">keyboard_arrow_down</span>
+                                </div>
+                                <div id="basicLedMapInlineSummary" class="basic-led-map-meta mb-2"></div>
+                                <div id="basicLedMapInline" style="display:none;">
+                                    <div class="light-group-item">
+                                        <div class="light-group-info" style="width:100%;">
+                                            <div class="light-group-name mb-2" style="font-size:0.9rem;">Step 1. Select Group</div>
+                                            <div id="basicLedMapPalette" class="basic-led-map-palette"></div>
+                                        </div>
+                                    </div>
+                                    <div class="light-group-item">
+                                        <div class="light-group-info" style="width:100%;">
+                                            <div class="light-group-name mb-2" style="font-size:0.9rem;">Step 2. Select Color</div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <input type="color" id="basicLedMapSelectedColor" class="light-group-color-input" value="#f5f5f5" oninput="basicLedMapSelectedColorChange(this.value)">
+                                                <div id="basicLedMapSelectedColorLabel" class="basic-led-map-meta" style="margin:0;">No group selected</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="light-group-item">
+                                        <div class="light-group-info" style="width:100%;">
+                                            <div class="light-group-name mb-2" style="font-size:0.9rem;">Step 3. Select LED</div>
+                                            <div id="basicLedMapMeta" class="basic-led-map-meta"></div>
+                                            <div id="basicLedMapGrid" class="basic-led-map-grid"></div>
+                                            <div class="d-flex gap-2 mt-3">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" onclick="basicLedMapClearScenario()">
+                                                    Clear Group
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" onclick="basicLedMapClearAll()">
+                                                    Clear All
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="d-grid gap-2 mt-3">
+                                        <button type="button" class="btn btn-sm btn-outline-warning w-100" onclick="basicLedMapInlineCancel()">Cancel</button>
+                                        <button type="button" class="btn btn-gold" onclick="basicLedMapSave()">Save</button>
                                     </div>
                                 </div>
                             </div>
