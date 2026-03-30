@@ -1055,15 +1055,8 @@ void setup() {
     if (!connected) {
       ledBlinkEndTime = 0;
       lightsDiagEnabled = false;
-      lightsBasicEnabled = false;
-      lightsMasterEnabled = false;
-      if (lightsEngine) {
-        lightsEngine->setBasicMode(false);
-        lightsEngine->setMaster(false);
-        lightsEngine->clearAllGroups(true);
-      } else {
-        clearStrip();
-      }
+      // lightsBasicEnabled and lightsMasterEnabled are intentionally preserved so
+      // the LED groups keep running after the phone disconnects.
     }
     digitalWrite(LED_PIN, connected ? HIGH : LOW);
   });

@@ -250,9 +250,12 @@ static void glitterBase(EngineLightGroup& group, uint8_t intensity, uint32_t col
   if (!group.ledCount) return;
 
   uint32_t seed = group.runtime.seed ? group.runtime.seed : (nowMs ^ 0x7F37A5U);
-  if (intensity > random8FromSeed(seed)) {
-    const uint16_t index = random16FromSeed(seed, group.ledCount);
-    setPixel(group, index, color);
+  // Each LED independently decides whether to sparkle based on intensity probability.
+  // intensity=255 → all LEDs sparkle every tick; intensity=1 → almost never; intensity=128 → ~half.
+  for (uint8_t i = 0; i < group.ledCount; i++) {
+    if (intensity > random8FromSeed(seed)) {
+      setPixel(group, i, color);
+    }
   }
   group.runtime.seed = seed;
 }
@@ -516,6 +519,8 @@ bool LightsEngine::updateGroupFromJson(const String& payload) {
   const int idx = doc["group"] | -1;
   if (idx < 0 || idx >= LIGHTS_ENGINE_MAX_GROUPS) return false;
 
+  if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(50)) != pdTRUE) return false;
+
   if (idx >= _groupCount) _groupCount = idx + 1;
 
   EngineLightGroup& group = _groups[idx];
@@ -543,6 +548,7 @@ bool LightsEngine::updateGroupFromJson(const String& payload) {
   }
 
   _resetGroupRuntime(group);
+  xSemaphoreGive(_mutex);
   return true;
 }
 
