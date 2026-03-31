@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.576';
+        const APP_VERSION = '1.1.579';
         const BUILD_DATE = '2026-03-31';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -4498,6 +4498,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 fx: cfg.fx,
                 fxIntensity: cfg.fxIntensity,
                 glitterColor: cfg.glitterColor,
+                larsonSpeed: cfg.larsonSpeed,
                 larsonEndDelay: cfg.larsonEndDelay,
                 larsonDual: cfg.larsonDual,
                 larsonBiDelay: cfg.larsonBiDelay
@@ -5818,6 +5819,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         var _basicScenarioLarsonDelaySliderInstance = null;
         var _basicScenarioLarsonDelaySyncing = false;
         var _basicScenarioLarsonDelayCurrent = 128;
+        var _basicScenarioLarsonSpeedSliderInstance = null;
+        var _basicScenarioLarsonSpeedSyncing = false;
+        var _basicScenarioLarsonSpeedCurrent = 224;
         var _basicScenarioLedCountSliderInstance = null;
         var _basicScenarioLedCountSyncing = false;
         var _basicScenarioLedCountCurrent = 11;
@@ -5988,6 +5992,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const fx = _sanitizeBasicScenarioFx(config?.fx, 'solid');
             const intensity = Math.max(0, Math.min(255, Math.round(Number(config?.fxIntensity) || 0)));
             const glitterColor = _sanitizeBasicScenarioHexColor(config?.glitterColor, '#f5f5f5');
+            const larsonSpeed = Math.max(0, Math.min(255, Math.round(Number(config?.larsonSpeed) || 224)));
             const larsonEndDelay = Math.max(0, Math.min(255, Math.round(Number(config?.larsonEndDelay) || 128)));
             const larsonDual = !!config?.larsonDual;
             const larsonBiDelay = !!config?.larsonBiDelay;
@@ -5997,6 +6002,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const intensitySlider = document.getElementById('basicScenarioFxIntensity');
             const intensityLabel = document.getElementById('basicScenarioFxIntensityLabel');
             const larsonRow = document.getElementById('basicScenarioLarsonSettingsRow');
+            const larsonSpeedRow = document.getElementById('basicScenarioLarsonSpeedRow');
             const larsonDualToggle = document.getElementById('basicScenarioLarsonDual');
             const larsonBiDelayToggle = document.getElementById('basicScenarioLarsonBiDelay');
             const glitterRow = document.getElementById('basicScenarioGlitterColorRow');
@@ -6017,6 +6023,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 _setBasicScenarioThumbLabel('basicScenarioFxIntensity', intensity);
             }
             if (intensityLabel) intensityLabel.textContent = String(intensity);
+            _basicScenarioLarsonSpeedCurrent = larsonSpeed;
+            if (_basicScenarioLarsonSpeedSliderInstance && typeof _basicScenarioLarsonSpeedSliderInstance.value === 'function') {
+                _basicScenarioLarsonSpeedSyncing = true;
+                _basicScenarioLarsonSpeedSliderInstance.value([0, larsonSpeed]);
+                _basicScenarioLarsonSpeedSyncing = false;
+                _setBasicScenarioThumbLabel('basicScenarioLarsonSpeed', larsonSpeed);
+            }
             _basicScenarioLarsonDelayCurrent = larsonEndDelay;
             if (_basicScenarioLarsonDelaySliderInstance && typeof _basicScenarioLarsonDelaySliderInstance.value === 'function') {
                 _basicScenarioLarsonDelaySyncing = true;
@@ -6025,6 +6038,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 _setBasicScenarioThumbLabel('basicScenarioLarsonDelay', larsonEndDelay);
             }
             if (larsonRow) larsonRow.style.display = showLarsonSettings ? '' : 'none';
+            if (larsonSpeedRow) larsonSpeedRow.style.display = showLarsonSettings ? '' : 'none';
             if (larsonDualToggle) larsonDualToggle.checked = larsonDual;
             if (larsonBiDelayToggle) larsonBiDelayToggle.checked = larsonBiDelay;
             if (glitterPicker) glitterPicker.value = glitterColor;
@@ -6121,6 +6135,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 fx: 'solid',
                 fxIntensity: 128,
                 glitterColor: '#ffffff',
+                larsonSpeed: 224,
                 larsonEndDelay: 128,
                 larsonDual: false,
                 larsonBiDelay: false
@@ -6205,6 +6220,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const fx = _sanitizeBasicScenarioFx(raw.fx, defaults.fx);
             const fxIntensity = Math.max(0, Math.min(255, Math.round(raw.fxIntensity != null && Number.isFinite(Number(raw.fxIntensity)) ? Number(raw.fxIntensity) : defaults.fxIntensity)));
             const glitterColor = _sanitizeBasicScenarioHexColor(raw.glitterColor, defaults.glitterColor);
+            const larsonSpeed = Math.max(0, Math.min(255, Math.round(raw.larsonSpeed != null && Number.isFinite(Number(raw.larsonSpeed)) ? Number(raw.larsonSpeed) : defaults.larsonSpeed)));
             const larsonEndDelay = Math.max(0, Math.min(255, Math.round(raw.larsonEndDelay != null && Number.isFinite(Number(raw.larsonEndDelay)) ? Number(raw.larsonEndDelay) : defaults.larsonEndDelay)));
             const larsonDual = !!raw.larsonDual;
             const larsonBiDelay = !!raw.larsonBiDelay;
@@ -6224,6 +6240,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 fx,
                 fxIntensity,
                 glitterColor,
+                larsonSpeed,
                 larsonEndDelay,
                 larsonDual,
                 larsonBiDelay
@@ -6252,9 +6269,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 (Number.isFinite(Number(document.getElementById('basicScenarioLarsonDelay')?.value)) ? Number(document.getElementById('basicScenarioLarsonDelay')?.value) :
                 (Number.isFinite(Number(current.larsonEndDelay)) ? Number(current.larsonEndDelay) : 128))
             )));
+            const larsonSpeed = Math.max(0, Math.min(255, Math.round(
+                _basicScenarioLarsonSpeedCurrent != null ? Number(_basicScenarioLarsonSpeedCurrent) :
+                (Number.isFinite(Number(document.getElementById('basicScenarioLarsonSpeed')?.value)) ? Number(document.getElementById('basicScenarioLarsonSpeed')?.value) :
+                (Number.isFinite(Number(current.larsonSpeed)) ? Number(current.larsonSpeed) : 224))
+            )));
             const larsonDual = !!document.getElementById('basicScenarioLarsonDual')?.checked;
             const larsonBiDelay = !!document.getElementById('basicScenarioLarsonBiDelay')?.checked;
-            return Object.assign({}, current, { ledCount, colorOrder, brightnessPercent, fx, fxIntensity, glitterColor, larsonEndDelay, larsonDual, larsonBiDelay });
+            return Object.assign({}, current, { ledCount, colorOrder, brightnessPercent, fx, fxIntensity, glitterColor, larsonSpeed, larsonEndDelay, larsonDual, larsonBiDelay });
         }
 
         function _writeBasicScenarioConfigToUI(config) {
@@ -6892,6 +6914,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             window.basicScenarioLarsonDelayChange(next);
         };
 
+        window.basicScenarioLarsonSpeedChange = function(value) {
+            const safe = Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
+            _basicScenarioLarsonSpeedCurrent = safe;
+            if (_basicScenarioLarsonSpeedSliderInstance && typeof _basicScenarioLarsonSpeedSliderInstance.value === 'function' && !_basicScenarioLarsonSpeedSyncing) {
+                _basicScenarioLarsonSpeedSyncing = true;
+                _basicScenarioLarsonSpeedSliderInstance.value([0, safe]);
+                _basicScenarioLarsonSpeedSyncing = false;
+            }
+            _setBasicScenarioThumbLabel('basicScenarioLarsonSpeed', safe);
+            basicScenarioConfigChanged();
+        };
+
+        window.basicScenarioLarsonSpeedStep = function(delta) {
+            const base = Number.isFinite(Number(_basicScenarioLarsonSpeedCurrent))
+                ? Number(_basicScenarioLarsonSpeedCurrent)
+                : 224;
+            const next = Math.max(0, Math.min(255, Math.round(base + Number(delta || 0))));
+            window.basicScenarioLarsonSpeedChange(next);
+        };
+
         window.basicScenarioLarsonDualChange = function() {
             basicScenarioConfigChanged();
         };
@@ -6944,7 +6986,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             syncLightingProfileActionButtons();
             _queueBasicScenarioConfigApply();
             const larsonSummary = _basicScenarioConfig.fx === 'larson'
-                ? `, endDelay ${_basicScenarioConfig.larsonEndDelay}, dual ${_basicScenarioConfig.larsonDual ? 'on' : 'off'}, bi-delay ${_basicScenarioConfig.larsonBiDelay ? 'on' : 'off'}`
+                ? `, speed ${_basicScenarioConfig.larsonSpeed}, endDelay ${_basicScenarioConfig.larsonEndDelay}, dual ${_basicScenarioConfig.larsonDual ? 'on' : 'off'}, bi-delay ${_basicScenarioConfig.larsonBiDelay ? 'on' : 'off'}`
                 : '';
             notifyBasicLightsStatus(`Scenario mapping updated. LEDs ${_basicScenarioConfig.ledCount}, groups ${_getBasicScenarioCardDefs(_basicScenarioConfig).length}/${_basicScenarioMaxGroupCount(_basicScenarioConfig)}, pattern ${String(_basicScenarioConfig.colorOrder || 'rgb').toUpperCase()}, brightness ${_basicScenarioConfig.brightnessPercent}% (${_basicScenarioPercentToBrightness(_basicScenarioConfig.brightnessPercent)} max). FX ${_basicScenarioConfig.fx}, intensity ${_basicScenarioConfig.fxIntensity}${larsonSummary}.`, 'info');
         };
@@ -6974,6 +7016,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const effect = _sanitizeBasicScenarioFx(config.fx, 'solid');
             const intensity = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.fxIntensity)) ? Number(config.fxIntensity) : 128)));
             const glitterColor = _sanitizeBasicScenarioHexColor(config.glitterColor, '#f5f5f5');
+            const larsonSpeed = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.larsonSpeed)) ? Number(config.larsonSpeed) : 224)));
             const larsonEndDelay = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.larsonEndDelay)) ? Number(config.larsonEndDelay) : 128)));
             const larsonDual = !!config.larsonDual;
             const larsonBiDelay = !!config.larsonBiDelay;
@@ -6993,6 +7036,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 color,
                 color2: usesSecondaryColor ? glitterColor : '#000000',
                 effect,
+                speed: effect === 'larson' ? larsonSpeed : 128,
                 intensity,
                 custom1: effect === 'larson' ? larsonEndDelay : undefined,
                 check1: effect === 'larson' ? larsonDual : undefined,
@@ -7068,7 +7112,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     color2: group.color2 || '#000000',
                     brightness: Math.max(0, Math.min(BASIC_SCENARIO_BRIGHTNESS_MAX, Math.round(Number(group.brightness) || 0))),
                     effect: group.effect || 'solid',
-                    speed: 128,
+                    speed: Math.max(0, Math.min(255, Math.round(Number(group.speed) || 128))),
                     intensity: Math.max(0, Math.min(255, Math.round(Number(group.intensity) || 128))),
                     custom1: Number.isFinite(Number(group.custom1)) ? Math.max(0, Math.min(255, Math.round(Number(group.custom1)))) : undefined,
                     check1: group.effect === 'larson' ? group.check1 === true : undefined,
@@ -7193,6 +7237,24 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     }
                 });
                 _setBasicScenarioThumbLabel('basicScenarioLarsonDelay', _basicScenarioConfig.larsonEndDelay);
+            }
+
+            const larsonSpeedSliderElement = document.getElementById('basicScenarioLarsonSpeed');
+            if (larsonSpeedSliderElement && typeof rangeSlider === 'function') {
+                _basicScenarioLarsonSpeedSliderInstance = rangeSlider(larsonSpeedSliderElement, {
+                    value: [0, _basicScenarioConfig.larsonSpeed],
+                    min: 0,
+                    max: 255,
+                    step: 1,
+                    thumbsDisabled: [true, false],
+                    rangeSlideDisabled: true,
+                    onInput: function(value) {
+                        if (_basicScenarioLarsonSpeedSyncing) return;
+                        const safe = Math.max(0, Math.min(255, Math.round(Number(value[1]) || 0)));
+                        window.basicScenarioLarsonSpeedChange(safe);
+                    }
+                });
+                _setBasicScenarioThumbLabel('basicScenarioLarsonSpeed', _basicScenarioConfig.larsonSpeed);
             }
 
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);

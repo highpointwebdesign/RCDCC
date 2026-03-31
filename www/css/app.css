@@ -2962,6 +2962,7 @@
         #sliderRearRightTrim .range-slider__thumb[data-lower],
         #basicScenarioLedCount .range-slider__thumb[data-lower],
         #basicScenarioBrightness .range-slider__thumb[data-lower],
+        #basicScenarioLarsonSpeed .range-slider__thumb[data-lower],
         #basicScenarioFxIntensity .range-slider__thumb[data-lower],
         #basicScenarioLarsonDelay .range-slider__thumb[data-lower],
         #lightGroupBrightnessSlider .range-slider__thumb[data-lower],
@@ -2984,6 +2985,7 @@
         #sliderRearRightTrim .range-slider__range,
         #basicScenarioLedCount .range-slider__range,
         #basicScenarioBrightness .range-slider__range,
+        #basicScenarioLarsonSpeed .range-slider__range,
         #basicScenarioFxIntensity .range-slider__range,
         #basicScenarioLarsonDelay .range-slider__range,
         #lightGroupBrightnessSlider .range-slider__range,
@@ -3252,6 +3254,7 @@
         #sliderRearRightTrim .range-slider__thumb,
         #basicScenarioLedCount .range-slider__thumb,
         #basicScenarioBrightness .range-slider__thumb,
+        #basicScenarioLarsonSpeed .range-slider__thumb,
         #basicScenarioFxIntensity .range-slider__thumb,
         #basicScenarioLarsonDelay .range-slider__thumb,
         #lightGroupBrightnessSlider .range-slider__thumb,
@@ -3290,6 +3293,7 @@
         #sliderRearRightTrim .range-slider__thumb[data-upper],
         #basicScenarioLedCount .range-slider__thumb[data-upper],
         #basicScenarioBrightness .range-slider__thumb[data-upper],
+        #basicScenarioLarsonSpeed .range-slider__thumb[data-upper],
         #basicScenarioFxIntensity .range-slider__thumb[data-upper],
         #basicScenarioLarsonDelay .range-slider__thumb[data-upper],
         #lightGroupBrightnessSlider .range-slider__thumb[data-upper],
@@ -3301,6 +3305,7 @@
 
         #basicScenarioLedCount .range-slider__thumb[data-lower],
         #basicScenarioBrightness .range-slider__thumb[data-lower],
+        #basicScenarioLarsonSpeed .range-slider__thumb[data-lower],
         #basicScenarioFxIntensity .range-slider__thumb[data-lower],
         #basicScenarioLarsonDelay .range-slider__thumb[data-lower] {
             width: 0 !important;
@@ -3310,6 +3315,7 @@
 
         #basicScenarioLedCount .range-slider__thumb[data-upper],
         #basicScenarioBrightness .range-slider__thumb[data-upper],
+        #basicScenarioLarsonSpeed .range-slider__thumb[data-upper],
         #basicScenarioFxIntensity .range-slider__thumb[data-upper],
         #basicScenarioLarsonDelay .range-slider__thumb[data-upper] {
             z-index: 2;
