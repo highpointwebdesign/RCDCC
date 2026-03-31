@@ -46,6 +46,12 @@ struct EngineLightGroup {
   LightEffect effect = RcdccFx::FX_SOLID;
   uint8_t speed = RcdccFx::DEFAULT_SPEED;
   uint8_t intensity = RcdccFx::DEFAULT_INTENSITY;
+  uint8_t custom1 = RcdccFx::DEFAULT_CUSTOM1;
+  uint8_t custom2 = RcdccFx::DEFAULT_CUSTOM2;
+  uint8_t custom3 = RcdccFx::DEFAULT_CUSTOM3;
+  bool check1 = false;
+  bool check2 = false;
+  bool check3 = false;
   uint16_t leds[LIGHTS_ENGINE_MAX_GROUP_LEDS] = {0};
   uint8_t ledCount = 0;
   uint32_t pixels[LIGHTS_ENGINE_MAX_GROUP_LEDS] = {0};

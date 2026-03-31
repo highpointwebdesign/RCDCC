@@ -299,10 +299,10 @@ static void modeLarsonScanner(EngineLightGroup& group, uint32_t nowMs) {
     return;
   }
 
-  const uint8_t trail = group.intensity; // WLED placeholder: trail fade amount.
-  const uint8_t endDelay = RcdccFx::DEFAULT_CUSTOM1; // WLED placeholder: end delay slider.
-  const bool dual = false; // WLED placeholder: dual scanner checkbox.
-  const bool bidirectionalDelay = false; // WLED placeholder: bi-delay checkbox.
+  const uint8_t trail = group.intensity;
+  const uint8_t endDelay = group.custom1;
+  const bool dual = group.check1;
+  const bool bidirectionalDelay = group.check2;
 
   const unsigned speed = max<unsigned>(1U, (1000U / LIGHTS_ENGINE_TASK_HZ) * map(group.speed, 0, 255, 96, 2));
   const unsigned pixelsPerFrame = group.ledCount / speed;
@@ -474,7 +474,7 @@ static const FxMetadata EFFECT_METADATA[FX_COUNT] = {
   { "flash_sparkle", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls flash spawn rate; secondary color is the flash color." },
   { "glitter", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED-style glitter: intensity controls random sparkle density and color2 is used as the glitter color." },
   { "running", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls wave width; secondary color acts as the background." },
-  { "larson", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls trail fade; custom1 controls end delay; dual and bi-delay checkboxes are reserved for future UI support." },
+  { "larson", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: intensity controls trail fade; custom1 controls end delay; check1 enables dual scanner; check2 enables bi-delay." },
   { "heartbeat", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: secondary color acts as the pulse background." },
   { "flicker", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls flicker depth." },
   { "fire_flicker", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls flicker depth and preserves the fire-like WLED falloff." }
@@ -540,6 +540,12 @@ bool LightsEngine::updateGroupFromJson(const String& payload) {
   const FxMetadata& meta = metadataForEffect(group.effect);
   group.speed = doc.containsKey("speed") ? constrain((int)doc["speed"], 0, 255) : meta.defaultSpeed;
   group.intensity = doc.containsKey("intensity") ? constrain((int)doc["intensity"], 0, 255) : meta.defaultIntensity;
+  group.custom1 = doc.containsKey("custom1") ? constrain((int)doc["custom1"], 0, 255) : meta.defaultCustom1;
+  group.custom2 = doc.containsKey("custom2") ? constrain((int)doc["custom2"], 0, 255) : meta.defaultCustom2;
+  group.custom3 = doc.containsKey("custom3") ? constrain((int)doc["custom3"], 0, 31) : meta.defaultCustom3;
+  group.check1 = doc.containsKey("check1") ? doc["check1"].as<bool>() : meta.defaultCheck1;
+  group.check2 = doc.containsKey("check2") ? doc["check2"].as<bool>() : meta.defaultCheck2;
+  group.check3 = doc.containsKey("check3") ? doc["check3"].as<bool>() : meta.defaultCheck3;
 
   if (doc.containsKey("leds")) {
     JsonArray arr = doc["leds"].as<JsonArray>();
@@ -581,6 +587,12 @@ void LightsEngine::updateFromPayload(const NewLightsConfig& cfg) {
     const FxMetadata& meta = metadataForEffect(dst.effect);
     dst.speed = meta.defaultSpeed;
     dst.intensity = meta.defaultIntensity;
+    dst.custom1 = meta.defaultCustom1;
+    dst.custom2 = meta.defaultCustom2;
+    dst.custom3 = meta.defaultCustom3;
+    dst.check1 = meta.defaultCheck1;
+    dst.check2 = meta.defaultCheck2;
+    dst.check3 = meta.defaultCheck3;
     dst.ledCount = min((uint8_t)src.ledCount, (uint8_t)LIGHTS_ENGINE_MAX_GROUP_LEDS);
     for (uint8_t j = 0; j < dst.ledCount; j++) dst.leds[j] = src.ledIndices[j];
 
@@ -605,8 +617,15 @@ void LightsEngine::loadProfile(const LightingProfile& profile) {
     dst.colorSecond = _parseHex(src.colorSecondary);
     dst.brightness = constrain((int)src.brightness, 0, 100);
     dst.effect = effectFromString(src.effect);
+    const FxMetadata& meta = metadataForEffect(dst.effect);
     dst.speed = (uint8_t)((uint16_t)constrain((int)src.effectSpeed, 0, 100) * 255U / 100U);
     dst.intensity = (uint8_t)((uint16_t)constrain((int)src.effectIntensity, 0, 100) * 255U / 100U);
+    dst.custom1 = meta.defaultCustom1;
+    dst.custom2 = meta.defaultCustom2;
+    dst.custom3 = meta.defaultCustom3;
+    dst.check1 = meta.defaultCheck1;
+    dst.check2 = meta.defaultCheck2;
+    dst.check3 = meta.defaultCheck3;
     dst.ledCount = 0;
 
     const uint16_t maxLeds = min((uint16_t)src.ledCount, (uint16_t)LIGHTS_ENGINE_MAX_GROUP_LEDS);
