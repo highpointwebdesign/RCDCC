@@ -305,13 +305,22 @@ static void modeLarsonScanner(EngineLightGroup& group, uint32_t nowMs) {
   const bool bidirectionalDelay = false; // WLED placeholder: bi-delay checkbox.
 
   const unsigned speed = max<unsigned>(1U, (1000U / LIGHTS_ENGINE_TASK_HZ) * map(group.speed, 0, 255, 96, 2));
-  const unsigned pixelsPerFrame = max<unsigned>(1U, group.ledCount / speed);
+  const unsigned pixelsPerFrame = group.ledCount / speed;
 
   fadeOut(group, static_cast<uint8_t>(255U - trail));
 
   if (group.runtime.step > nowMs) return;
 
   unsigned index = group.runtime.aux1 + pixelsPerFrame;
+  // Slow speeds need frame-per-pixel stepping (WLED behavior) instead of always
+  // forcing 1 pixel/frame, otherwise speed control feels incorrect.
+  if (pixelsPerFrame == 0U) {
+    const unsigned framesPerPixel = max<unsigned>(1U, speed / max<unsigned>(group.ledCount, 1U));
+    if (group.runtime.step++ < framesPerPixel) return;
+    group.runtime.step = 0;
+    index++;
+  }
+
   if (index > group.ledCount) {
     group.runtime.aux0 = !group.runtime.aux0;
     group.runtime.aux1 = 0;
