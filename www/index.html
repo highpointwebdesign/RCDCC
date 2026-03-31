@@ -1364,12 +1364,28 @@
                                                 <div class="light-group-name" style="width:50%;">Fx</div>
                                                 <select id="basicScenarioFx" class="form-select form-select-sm ms-auto" style="width:50%;" onchange="basicScenarioFxChange(this.value)">
                                                     <option value="solid">solid</option>
+                                                    <option value="android">android</option>
+                                                    <option value="bpm">bpm</option>
+                                                    <option value="candle">candle</option>
+                                                    <option value="candle_multi">candle multi</option>
+                                                    <option value="chase_2">chase 2</option>
+                                                    <option value="chase_flash">chase flash</option>
+                                                    <option value="chase_rainbow">chase rainbow</option>
+                                                    <option value="chunchun">chunchun</option>
+                                                    <option value="colorwaves">colorwaves</option>
+                                                    <option value="dancing_shadows">dancing shadows</option>
+                                                    <option value="fairy">fairy</option>
+                                                    <option value="fairy_twinkle">fairy twinkle</option>
+                                                    <option value="ripple">ripple</option>
+                                                    <option value="sine">sine</option>
+                                                    <option value="strobe">strobe</option>
+                                                    <option value="strobe_mega">strobe mega</option>
+                                                    <option value="wipe">wipe</option>
                                                     <option value="glitter">glitter</option>
                                                     <option value="blink">blink</option>
                                                     <option value="breathe">breathe</option>
                                                     <option value="heartbeat">heartbeat</option>
                                                     <option value="running">running</option>
-                                                    <option value="larson">larson</option>
                                                     <option value="flicker">flicker</option>
                                                 </select>
                                             </div>
@@ -1396,13 +1412,13 @@
                                             <div id="basicScenarioLarsonSettingsRow" class="mt-3" style="display:none;">
                                                 <div id="basicScenarioLarsonSpeedRow">
                                                     <div class="d-flex justify-content-between align-items-center mb-2">
-                                                        <div class="light-group-name">Larson Speed</div>
+                                                        <div class="light-group-name">FX Speed</div>
                                                     </div>
                                                     <div class="slider-section" style="margin:8px 0 4px;">
                                                         <div class="slider-stepper-control">
-                                                            <button type="button" class="slider-stepper-btn" aria-label="Decrease Larson speed" onclick="basicScenarioLarsonSpeedStep(-1)">-</button>
+                                                            <button type="button" class="slider-stepper-btn" aria-label="Decrease FX speed" onclick="basicScenarioLarsonSpeedStep(-1)">-</button>
                                                             <div id="basicScenarioLarsonSpeed" class="slider-stepper-track"></div>
-                                                            <button type="button" class="slider-stepper-btn" aria-label="Increase Larson speed" onclick="basicScenarioLarsonSpeedStep(1)">+</button>
+                                                            <button type="button" class="slider-stepper-btn" aria-label="Increase FX speed" onclick="basicScenarioLarsonSpeedStep(1)">+</button>
                                                         </div>
                                                         <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
                                                             <span>0</span>
@@ -1412,29 +1428,21 @@
                                                     </div>
                                                 </div>
 
-                                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <div class="light-group-name">Larson End Delay</div>
-                                                </div>
-                                                <div class="slider-section" style="margin:8px 0 4px;">
-                                                    <div class="slider-stepper-control">
-                                                        <button type="button" class="slider-stepper-btn" aria-label="Decrease Larson end delay" onclick="basicScenarioLarsonDelayStep(-1)">-</button>
-                                                        <div id="basicScenarioLarsonDelay" class="slider-stepper-track"></div>
-                                                        <button type="button" class="slider-stepper-btn" aria-label="Increase Larson end delay" onclick="basicScenarioLarsonDelayStep(1)">+</button>
+                                                <div id="basicScenarioFxParam1Row">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <div class="light-group-name" id="basicScenarioFxParam1Label">Width</div>
                                                     </div>
-                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                        <span>0</span>
-                                                        <span>128</span>
-                                                        <span>255</span>
-                                                    </div>
-                                                </div>
-                                                <div class="d-flex align-items-center justify-content-between mt-2 gap-2">
-                                                    <div class="form-check form-switch m-0">
-                                                        <input class="form-check-input" type="checkbox" id="basicScenarioLarsonDual" onchange="basicScenarioLarsonDualChange(this.checked)">
-                                                        <label class="form-check-label" for="basicScenarioLarsonDual">Dual Scanner</label>
-                                                    </div>
-                                                    <div class="form-check form-switch m-0">
-                                                        <input class="form-check-input" type="checkbox" id="basicScenarioLarsonBiDelay" onchange="basicScenarioLarsonBiDelayChange(this.checked)">
-                                                        <label class="form-check-label" for="basicScenarioLarsonBiDelay">Bi-delay</label>
+                                                    <div class="slider-section" style="margin:8px 0 4px;">
+                                                        <div class="slider-stepper-control">
+                                                            <button type="button" class="slider-stepper-btn" aria-label="Decrease FX parameter" onclick="basicScenarioLarsonDelayStep(-1)">-</button>
+                                                            <div id="basicScenarioLarsonDelay" class="slider-stepper-track"></div>
+                                                            <button type="button" class="slider-stepper-btn" aria-label="Increase FX parameter" onclick="basicScenarioLarsonDelayStep(1)">+</button>
+                                                        </div>
+                                                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                                            <span>0</span>
+                                                            <span>128</span>
+                                                            <span>255</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>

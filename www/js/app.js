@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.579';
+        const APP_VERSION = '1.1.591';
         const BUILD_DATE = '2026-03-31';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -4439,9 +4439,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         const BASIC_LIGHTING_TEST_COLOR = '#0000ff';
         const LIGHT_GROUP_EXTRA_PATTERNS = ['solid', 'glitter', 'police'];
         const LIGHTS_ENGINE_EFFECTS = new Set(['solid', 'glitter', 'police']);
-        const BASIC_SCENARIO_FX_OPTIONS = new Set(['solid', 'glitter', 'blink', 'breathe', 'heartbeat', 'running', 'larson', 'flicker']);
-        const BASIC_SCENARIO_FX_WITH_INTENSITY = new Set(['glitter', 'blink', 'running', 'larson', 'flicker']);
-        const BASIC_SCENARIO_FX_WITH_SECONDARY_COLOR = new Set(['glitter', 'blink', 'breathe', 'heartbeat', 'running']);
+        const BASIC_SCENARIO_FX_OPTIONS = new Set(['solid', 'android', 'bpm', 'candle', 'candle_multi', 'chase_2', 'chase_flash', 'chase_rainbow', 'chunchun', 'colorwaves', 'dancing_shadows', 'fairy', 'fairy_twinkle', 'ripple', 'sine', 'strobe', 'strobe_mega', 'wipe', 'glitter', 'blink', 'breathe', 'heartbeat', 'running', 'flicker']);
+        const BASIC_SCENARIO_FX_WITH_INTENSITY = new Set(['glitter', 'blink', 'flicker', 'candle', 'candle_multi', 'fairy_twinkle', 'strobe_mega', 'wipe']);
+        const BASIC_SCENARIO_FX_WITH_SECONDARY_COLOR = new Set(['android', 'candle', 'candle_multi', 'chase_2', 'chase_flash', 'chase_rainbow', 'chunchun', 'colorwaves', 'dancing_shadows', 'fairy', 'fairy_twinkle', 'ripple', 'strobe', 'strobe_mega', 'wipe', 'glitter', 'blink', 'breathe', 'heartbeat', 'running']);
+        const BASIC_SCENARIO_FX_WITH_SPEED = new Set(['android', 'bpm', 'candle', 'candle_multi', 'chase_2', 'chase_flash', 'chase_rainbow', 'chunchun', 'colorwaves', 'dancing_shadows', 'fairy', 'fairy_twinkle', 'ripple', 'running', 'sine', 'strobe', 'strobe_mega', 'wipe']);
+        const BASIC_SCENARIO_FX_WITH_PARAM1 = new Set(['android', 'chase_2', 'chase_rainbow', 'chunchun', 'colorwaves', 'dancing_shadows', 'fairy', 'ripple', 'running', 'sine']);
         const FACTORY_COLOR_PRESETS = [
             '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff',
             '#007FFF', '#ff8800', '#8800ff', '#ffe0a0', '#ffffff'
@@ -5821,7 +5823,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         var _basicScenarioLarsonDelayCurrent = 128;
         var _basicScenarioLarsonSpeedSliderInstance = null;
         var _basicScenarioLarsonSpeedSyncing = false;
-        var _basicScenarioLarsonSpeedCurrent = 224;
+        var _basicScenarioLarsonSpeedCurrent = 128;
         var _basicScenarioLedCountSliderInstance = null;
         var _basicScenarioLedCountSyncing = false;
         var _basicScenarioLedCountCurrent = 11;
@@ -5980,6 +5982,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function _basicScenarioFxSecondaryColorLabel(fx) {
+            if (fx === 'android') return 'Background Color';
+            if (fx === 'candle') return 'Background Color';
+            if (fx === 'candle_multi') return 'Background Color';
+            if (fx === 'chase_2') return 'Background Color';
+            if (fx === 'chase_flash') return 'Background Color';
+            if (fx === 'chase_rainbow') return 'Background Color';
+            if (fx === 'chunchun') return 'Background Color';
+            if (fx === 'colorwaves') return 'Background Color';
+            if (fx === 'dancing_shadows') return 'Background Color';
+            if (fx === 'fairy') return 'Background Color';
+            if (fx === 'fairy_twinkle') return 'Background Color';
+            if (fx === 'ripple') return 'Background Color';
+            if (fx === 'strobe') return 'Background Color';
+            if (fx === 'strobe_mega') return 'Background Color';
+            if (fx === 'wipe') return 'Background Color';
             if (fx === 'glitter') return 'Glitter Color';
             if (fx === 'blink') return 'Off-State Color';
             if (fx === 'breathe') return 'Background Color';
@@ -5988,30 +6005,42 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return 'Secondary Color';
         }
 
+        function _basicScenarioFxParam1Label(fx) {
+            if (fx === 'android') return 'Width';
+            if (fx === 'chase_2') return 'Width';
+            if (fx === 'chase_rainbow') return 'Width';
+            if (fx === 'chunchun') return 'Gap Size';
+            if (fx === 'colorwaves') return 'Hue';
+            if (fx === 'dancing_shadows') return '# Shadows';
+            if (fx === 'fairy') return '# Flashers';
+            if (fx === 'ripple') return 'Wave #';
+            if (fx === 'running') return 'Wave Width';
+            if (fx === 'sine') return 'Scale';
+            return 'Parameter';
+        }
+
         function _syncBasicScenarioFxUI(config) {
             const fx = _sanitizeBasicScenarioFx(config?.fx, 'solid');
             const intensity = Math.max(0, Math.min(255, Math.round(Number(config?.fxIntensity) || 0)));
             const glitterColor = _sanitizeBasicScenarioHexColor(config?.glitterColor, '#f5f5f5');
-            const larsonSpeed = Math.max(0, Math.min(255, Math.round(Number(config?.larsonSpeed) || 224)));
+            const larsonSpeed = Math.max(0, Math.min(255, Math.round(Number(config?.larsonSpeed) || 128)));
             const larsonEndDelay = Math.max(0, Math.min(255, Math.round(Number(config?.larsonEndDelay) || 128)));
-            const larsonDual = !!config?.larsonDual;
-            const larsonBiDelay = !!config?.larsonBiDelay;
 
             const fxSelect = document.getElementById('basicScenarioFx');
             const intensityRow = document.getElementById('basicScenarioFxIntensityRow');
-            const intensitySlider = document.getElementById('basicScenarioFxIntensity');
             const intensityLabel = document.getElementById('basicScenarioFxIntensityLabel');
             const larsonRow = document.getElementById('basicScenarioLarsonSettingsRow');
             const larsonSpeedRow = document.getElementById('basicScenarioLarsonSpeedRow');
-            const larsonDualToggle = document.getElementById('basicScenarioLarsonDual');
-            const larsonBiDelayToggle = document.getElementById('basicScenarioLarsonBiDelay');
+            const fxParam1Row = document.getElementById('basicScenarioFxParam1Row');
+            const fxParam1Label = document.getElementById('basicScenarioFxParam1Label');
             const glitterRow = document.getElementById('basicScenarioGlitterColorRow');
             const glitterPicker = document.getElementById('basicScenarioGlitterColor');
             const secondaryColorLabel = document.getElementById('basicScenarioFxSecondaryColorLabel');
 
             const showIntensity = BASIC_SCENARIO_FX_WITH_INTENSITY.has(fx);
             const showSecondaryColor = BASIC_SCENARIO_FX_WITH_SECONDARY_COLOR.has(fx);
-            const showLarsonSettings = fx === 'larson';
+            const showSpeed = BASIC_SCENARIO_FX_WITH_SPEED.has(fx);
+            const showParam1 = BASIC_SCENARIO_FX_WITH_PARAM1.has(fx);
 
             if (fxSelect) fxSelect.value = fx;
             if (intensityRow) intensityRow.style.display = showIntensity ? '' : 'none';
@@ -6037,10 +6066,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 _basicScenarioLarsonDelaySyncing = false;
                 _setBasicScenarioThumbLabel('basicScenarioLarsonDelay', larsonEndDelay);
             }
-            if (larsonRow) larsonRow.style.display = showLarsonSettings ? '' : 'none';
-            if (larsonSpeedRow) larsonSpeedRow.style.display = showLarsonSettings ? '' : 'none';
-            if (larsonDualToggle) larsonDualToggle.checked = larsonDual;
-            if (larsonBiDelayToggle) larsonBiDelayToggle.checked = larsonBiDelay;
+            if (larsonRow) larsonRow.style.display = (showSpeed || showParam1) ? '' : 'none';
+            if (larsonSpeedRow) larsonSpeedRow.style.display = showSpeed ? '' : 'none';
+            if (fxParam1Row) fxParam1Row.style.display = showParam1 ? '' : 'none';
+            if (fxParam1Label) fxParam1Label.textContent = _basicScenarioFxParam1Label(fx);
             if (glitterPicker) glitterPicker.value = glitterColor;
             if (secondaryColorLabel) secondaryColorLabel.textContent = _basicScenarioFxSecondaryColorLabel(fx);
             if (glitterRow) glitterRow.style.display = showSecondaryColor ? '' : 'none';
@@ -6134,8 +6163,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 customNames: {},
                 fx: 'solid',
                 fxIntensity: 128,
-                glitterColor: '#ffffff',
-                larsonSpeed: 224,
+                glitterColor: '#000000',
+                larsonSpeed: 128,
                 larsonEndDelay: 128,
                 larsonDual: false,
                 larsonBiDelay: false
@@ -6272,11 +6301,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const larsonSpeed = Math.max(0, Math.min(255, Math.round(
                 _basicScenarioLarsonSpeedCurrent != null ? Number(_basicScenarioLarsonSpeedCurrent) :
                 (Number.isFinite(Number(document.getElementById('basicScenarioLarsonSpeed')?.value)) ? Number(document.getElementById('basicScenarioLarsonSpeed')?.value) :
-                (Number.isFinite(Number(current.larsonSpeed)) ? Number(current.larsonSpeed) : 224))
+                (Number.isFinite(Number(current.larsonSpeed)) ? Number(current.larsonSpeed) : 128))
             )));
-            const larsonDual = !!document.getElementById('basicScenarioLarsonDual')?.checked;
-            const larsonBiDelay = !!document.getElementById('basicScenarioLarsonBiDelay')?.checked;
-            return Object.assign({}, current, { ledCount, colorOrder, brightnessPercent, fx, fxIntensity, glitterColor, larsonSpeed, larsonEndDelay, larsonDual, larsonBiDelay });
+            return Object.assign({}, current, { ledCount, colorOrder, brightnessPercent, fx, fxIntensity, glitterColor, larsonSpeed, larsonEndDelay });
         }
 
         function _writeBasicScenarioConfigToUI(config) {
@@ -6929,17 +6956,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         window.basicScenarioLarsonSpeedStep = function(delta) {
             const base = Number.isFinite(Number(_basicScenarioLarsonSpeedCurrent))
                 ? Number(_basicScenarioLarsonSpeedCurrent)
-                : 224;
+                : 128;
             const next = Math.max(0, Math.min(255, Math.round(base + Number(delta || 0))));
             window.basicScenarioLarsonSpeedChange(next);
-        };
-
-        window.basicScenarioLarsonDualChange = function() {
-            basicScenarioConfigChanged();
-        };
-
-        window.basicScenarioLarsonBiDelayChange = function() {
-            basicScenarioConfigChanged();
         };
 
         window.basicScenarioGlitterColorChange = function(value) {
@@ -6985,10 +7004,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             lightingGroupsDirty = true;
             syncLightingProfileActionButtons();
             _queueBasicScenarioConfigApply();
-            const larsonSummary = _basicScenarioConfig.fx === 'larson'
-                ? `, speed ${_basicScenarioConfig.larsonSpeed}, endDelay ${_basicScenarioConfig.larsonEndDelay}, dual ${_basicScenarioConfig.larsonDual ? 'on' : 'off'}, bi-delay ${_basicScenarioConfig.larsonBiDelay ? 'on' : 'off'}`
+            const speedSummary = BASIC_SCENARIO_FX_WITH_SPEED.has(_basicScenarioConfig.fx)
+                ? `, speed ${_basicScenarioConfig.larsonSpeed}`
                 : '';
-            notifyBasicLightsStatus(`Scenario mapping updated. LEDs ${_basicScenarioConfig.ledCount}, groups ${_getBasicScenarioCardDefs(_basicScenarioConfig).length}/${_basicScenarioMaxGroupCount(_basicScenarioConfig)}, pattern ${String(_basicScenarioConfig.colorOrder || 'rgb').toUpperCase()}, brightness ${_basicScenarioConfig.brightnessPercent}% (${_basicScenarioPercentToBrightness(_basicScenarioConfig.brightnessPercent)} max). FX ${_basicScenarioConfig.fx}, intensity ${_basicScenarioConfig.fxIntensity}${larsonSummary}.`, 'info');
+            const paramSummary = BASIC_SCENARIO_FX_WITH_PARAM1.has(_basicScenarioConfig.fx)
+                ? `, ${_basicScenarioFxParam1Label(_basicScenarioConfig.fx).toLowerCase()} ${_basicScenarioConfig.larsonEndDelay}`
+                : '';
+            notifyBasicLightsStatus(`Scenario mapping updated. LEDs ${_basicScenarioConfig.ledCount}, groups ${_getBasicScenarioCardDefs(_basicScenarioConfig).length}/${_basicScenarioMaxGroupCount(_basicScenarioConfig)}, pattern ${String(_basicScenarioConfig.colorOrder || 'rgb').toUpperCase()}, brightness ${_basicScenarioConfig.brightnessPercent}% (${_basicScenarioPercentToBrightness(_basicScenarioConfig.brightnessPercent)} max). FX ${_basicScenarioConfig.fx}, intensity ${_basicScenarioConfig.fxIntensity}${speedSummary}${paramSummary}.`, 'info');
         };
 
         window.basicScenarioConfigResetDefaults = async function() {
@@ -7016,11 +7038,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const effect = _sanitizeBasicScenarioFx(config.fx, 'solid');
             const intensity = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.fxIntensity)) ? Number(config.fxIntensity) : 128)));
             const glitterColor = _sanitizeBasicScenarioHexColor(config.glitterColor, '#f5f5f5');
-            const larsonSpeed = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.larsonSpeed)) ? Number(config.larsonSpeed) : 224)));
+            const larsonSpeed = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.larsonSpeed)) ? Number(config.larsonSpeed) : 128)));
             const larsonEndDelay = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.larsonEndDelay)) ? Number(config.larsonEndDelay) : 128)));
-            const larsonDual = !!config.larsonDual;
-            const larsonBiDelay = !!config.larsonBiDelay;
             const usesSecondaryColor = BASIC_SCENARIO_FX_WITH_SECONDARY_COLOR.has(effect);
+            const usesSpeed = BASIC_SCENARIO_FX_WITH_SPEED.has(effect);
+            const usesParam1 = BASIC_SCENARIO_FX_WITH_PARAM1.has(effect);
             const assignment = config.assignment || {};
             const cards = _getBasicScenarioCardDefs(config);
             const cardIndex = Math.max(0, cards.findIndex(card => card.mode === mode));
@@ -7036,11 +7058,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 color,
                 color2: usesSecondaryColor ? glitterColor : '#000000',
                 effect,
-                speed: effect === 'larson' ? larsonSpeed : 128,
+                speed: usesSpeed ? larsonSpeed : 128,
                 intensity,
-                custom1: effect === 'larson' ? larsonEndDelay : undefined,
-                check1: effect === 'larson' ? larsonDual : undefined,
-                check2: effect === 'larson' ? larsonBiDelay : undefined,
+                custom1: usesParam1 ? larsonEndDelay : undefined,
                 brightness,
                 leds
             }];
@@ -7080,30 +7100,25 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return _activeScenarioModeLabels();
         }
 
-        async function _clearScenarioOutput() {
-            lightsWriteGateEnabled = true;
-            await bleManager.sendSystemCommand('lights_master', { enabled: false });
-            await new Promise(r => setTimeout(r, 25));
-            await bleManager.sendSystemCommand('lights_clear_all', {});
-            await new Promise(r => setTimeout(r, 25));
-        }
+        var _basicScenarioLastPushedSlots = [];
 
         async function _applyBasicScenarioOutput() {
             const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             const groups = _buildActiveBasicScenarioGroups().filter(group => Array.isArray(group.leds) && group.leds.length > 0);
-
-            await _clearScenarioOutput();
             if (!_basicScenarioStripEnabled || !groups.length) {
+                lightsWriteGateEnabled = true;
+                await bleManager.sendSystemCommand('lights_master', { enabled: false });
+                _basicScenarioLastPushedSlots = [];
                 return { groups: [], labels: _selectedScenarioModeLabels() };
             }
 
             await bleManager.sendSystemCommand('lights_color_order', { order: _sanitizeBasicScenarioColorOrder(config.colorOrder, getVehicleScopedLightColorOrder()) });
-            await new Promise(r => setTimeout(r, 20));
             await bleManager.sendSystemCommand('lights_master', { enabled: true });
-            await new Promise(r => setTimeout(r, 35));
 
+            const activeSlots = [];
             for (let i = 0; i < groups.length; i++) {
                 const group = groups[i];
+                activeSlots.push(group.group);
                 await pushLightsPayload({
                     group: group.group,
                     name: group.name,
@@ -7115,11 +7130,28 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     speed: Math.max(0, Math.min(255, Math.round(Number(group.speed) || 128))),
                     intensity: Math.max(0, Math.min(255, Math.round(Number(group.intensity) || 128))),
                     custom1: Number.isFinite(Number(group.custom1)) ? Math.max(0, Math.min(255, Math.round(Number(group.custom1)))) : undefined,
-                    check1: group.effect === 'larson' ? group.check1 === true : undefined,
-                    check2: group.effect === 'larson' ? group.check2 === true : undefined,
                     leds: group.leds
                 });
             }
+
+            const staleSlots = _basicScenarioLastPushedSlots.filter(slot => !activeSlots.includes(slot));
+            for (let i = 0; i < staleSlots.length; i++) {
+                const slot = staleSlots[i];
+                await pushLightsPayload({
+                    group: slot,
+                    name: `slot_${slot}`,
+                    enabled: false,
+                    color: '#000000',
+                    color2: '#000000',
+                    brightness: 0,
+                    effect: 'solid',
+                    speed: 128,
+                    intensity: 128,
+                    leds: []
+                });
+            }
+
+            _basicScenarioLastPushedSlots = activeSlots.slice();
 
             return { groups, labels: _selectedScenarioModeLabels() };
         }
@@ -7321,8 +7353,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!value) return 1;
             if (value === 'blink' || value === 'strobe' || value === 'police') return 2;
             if (value === 'breathe' || value === 'fade' || value === 'heartbeat') return 3;
-            if (value === 'running' || value === 'larson') return 4;
-            if (value === 'twinkle' || value === 'sparkle' || value === 'flash_sparkle' || value === 'glitter' || value === 'solid_glitter') return 5;
+            if (value === 'running' || value === 'chase_2' || value === 'chase_flash' || value === 'chase_rainbow' || value === 'chunchun' || value === 'colorwaves' || value === 'dancing_shadows' || value === 'ripple' || value === 'sine' || value === 'wipe') return 4;
+            if (value === 'twinkle' || value === 'sparkle' || value === 'flash_sparkle' || value === 'glitter' || value === 'solid_glitter' || value === 'fairy' || value === 'fairy_twinkle') return 5;
+            if (value === 'strobe' || value === 'strobe_mega') return 2;
             if (value === 'flicker' || value === 'fire_flicker') return 6;
             return 1; // solid default
         }
@@ -7330,10 +7363,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function getPatternBlinkRate(patternName) {
             const value = (patternName || '').toLowerCase();
             if (value === 'strobe') return 80;
+            if (value === 'strobe_mega') return 70;
             if (value === 'blink') return 220;
             if (value === 'police') return 220;
             if (value === 'flicker' || value === 'fire_flicker' || value === 'sparkle' || value === 'glitter' || value === 'solid_glitter' || value === 'flash_sparkle') return 120;
-            if (value === 'running' || value === 'larson') return 180;
+            if (value === 'running' || value === 'chase_2' || value === 'chase_rainbow' || value === 'chunchun' || value === 'colorwaves' || value === 'dancing_shadows' || value === 'ripple' || value === 'sine' || value === 'wipe') return 180;
+            if (value === 'chase_flash') return 120;
+            if (value === 'fairy' || value === 'fairy_twinkle') return 140;
             if (value === 'breathe' || value === 'fade' || value === 'heartbeat') return 650;
             return 450;
         }

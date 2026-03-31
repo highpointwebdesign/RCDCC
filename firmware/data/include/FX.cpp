@@ -280,7 +280,7 @@ static void modeSolidGlitter(EngineLightGroup& group, uint32_t nowMs) {
 }
 
 static void modeRunningLights(EngineLightGroup& group, uint32_t nowMs) {
-  const uint8_t waveWidth = group.intensity; // WLED placeholder: wave width.
+  const uint8_t waveWidth = group.custom1; // WLED parity: running width is custom1.
   const unsigned xScale = max<unsigned>(1U, waveWidth >> 2);
   const uint32_t counter = (nowMs * max<uint8_t>(1U, group.speed)) >> 9;
   const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
@@ -340,6 +340,398 @@ static void modeLarsonScanner(EngineLightGroup& group, uint32_t nowMs) {
       }
     }
     group.runtime.aux1 = index;
+  }
+}
+
+static void modeAndroid(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  unsigned size = static_cast<unsigned>(group.runtime.aux1 >> 1);
+  bool shrinking = (group.runtime.aux1 & 0x01U) != 0U;
+
+  if (nowMs >= group.runtime.step) {
+    const unsigned maxSize = max<unsigned>(2U, (static_cast<unsigned>(group.custom1) * group.ledCount) / 255U);
+    group.runtime.step = nowMs + 3U + ((8U * static_cast<uint32_t>(255U - group.speed)) / max<uint8_t>(group.ledCount, 1U));
+
+    if (size > maxSize) shrinking = true;
+    else if (size < 2U) shrinking = false;
+
+    if (!shrinking) {
+      if ((group.runtime.tick % 3U) == 1U) group.runtime.aux0++;
+      else size++;
+    } else {
+      group.runtime.aux0++;
+      if ((group.runtime.tick % 3U) != 1U && size > 0U) size--;
+    }
+
+    if (group.runtime.aux0 >= group.ledCount) group.runtime.aux0 = 0;
+    group.runtime.aux1 = (static_cast<uint32_t>(size) << 1U) | (shrinking ? 1U : 0U);
+    group.runtime.tick++;
+  }
+
+  const unsigned start = static_cast<unsigned>(group.runtime.aux0 % group.ledCount);
+  const unsigned end = (start + size) % group.ledCount;
+  const uint32_t fg = scaleByBrightness(group.colorPrimary, group.brightness);
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+
+  for (unsigned i = 0; i < group.ledCount; i++) {
+    const bool inArc = (start < end)
+      ? (i >= start && i < end)
+      : (i >= start || i < end);
+    setPixel(group, i, inArc ? fg : bg);
+  }
+}
+
+static void modeBpm(EngineLightGroup& group, uint32_t nowMs) {
+  const uint8_t stp = static_cast<uint8_t>((nowMs / 20U) & 0xFFU);
+  const uint8_t phase = static_cast<uint8_t>((nowMs * max<uint8_t>(1U, group.speed)) >> 8);
+  const uint8_t beat = static_cast<uint8_t>(map(sin8_approx(phase), 0, 255, 64, 255));
+
+  for (uint8_t i = 0; i < group.ledCount; i++) {
+    const uint8_t waveBri = static_cast<uint8_t>(beat - stp + (i * 10U));
+    const uint8_t outBri = scale8(waveBri, brightness100To255(group.brightness));
+    setPixel(group, i, colorFromPalette(group, static_cast<uint16_t>(stp + (i * 2U)), outBri));
+  }
+}
+
+static void candleCore(EngineLightGroup& group, uint32_t nowMs, bool perPixel) {
+  const uint32_t frameMs = 12U + static_cast<uint32_t>(255U - group.speed) * 2U;
+  if (nowMs - group.runtime.step < frameMs) return;
+  group.runtime.step = nowMs;
+
+  uint32_t seed = group.runtime.seed ? group.runtime.seed : (nowMs ^ 0x3A5C19U);
+  const uint8_t baseBri = brightness100To255(group.brightness);
+  const uint8_t flickerDepth = static_cast<uint8_t>(map(group.intensity, 0, 255, 8, 192));
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+
+  uint8_t sharedDrop = 0;
+  if (!perPixel) {
+    sharedDrop = random8FromSeed(seed) % max<uint8_t>(1U, flickerDepth);
+  }
+
+  for (uint8_t i = 0; i < group.ledCount; i++) {
+    const uint8_t drop = perPixel
+      ? static_cast<uint8_t>(random8FromSeed(seed) % max<uint8_t>(1U, flickerDepth))
+      : sharedDrop;
+    const uint8_t bri = static_cast<uint8_t>(max<int>(baseBri - drop, 0));
+    const uint32_t fg = scalePackedColor(colorFromPalette(group, static_cast<uint16_t>(i * 13U)), bri);
+    setPixel(group, i, blendPackedColor(bg, fg, 220U));
+  }
+
+  group.runtime.seed = seed;
+}
+
+static void modeCandle(EngineLightGroup& group, uint32_t nowMs) {
+  candleCore(group, nowMs, false);
+}
+
+static void modeCandleMulti(EngineLightGroup& group, uint32_t nowMs) {
+  candleCore(group, nowMs, true);
+}
+
+static void modeChase2(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  const uint8_t width = static_cast<uint8_t>(max<unsigned>(1U, map(group.custom1, 0, 255, 1, max<uint8_t>(1U, group.ledCount / 2U))));
+  const uint16_t counter = static_cast<uint16_t>(nowMs * ((group.speed >> 2) + 1U));
+  const uint8_t head = static_cast<uint8_t>((static_cast<uint32_t>(counter) * group.ledCount) >> 16);
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+  const uint32_t fx = scaleByBrightness(group.colorPrimary, group.brightness);
+
+  fillPixels(group, bg);
+  for (uint8_t i = 0; i < width; i++) {
+    setPixel(group, static_cast<uint8_t>((head + i) % group.ledCount), fx);
+  }
+}
+
+static void modeChaseFlash(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  const uint8_t flashStep = static_cast<uint8_t>(group.runtime.aux1 % 9U); // (FLASH_COUNT*2)+1 where FLASH_COUNT=4
+  const uint8_t head = static_cast<uint8_t>(group.runtime.aux0 % group.ledCount);
+  const uint8_t next = static_cast<uint8_t>((head + 1U) % group.ledCount);
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+  const uint32_t fx = scaleByBrightness(group.colorPrimary, group.brightness);
+
+  fillPixels(group, bg);
+  if (flashStep < 8U && (flashStep % 2U == 0U)) {
+    setPixel(group, head, fx);
+    setPixel(group, next, fx);
+  }
+
+  if (nowMs >= group.runtime.step) {
+    group.runtime.aux1++;
+    if (flashStep >= 8U) group.runtime.aux0 = next;
+    const uint32_t delayMs = (flashStep < 8U)
+      ? ((flashStep % 2U == 0U) ? 20U : 30U)
+      : (10U + ((30U * static_cast<uint32_t>(255U - group.speed)) / max<uint8_t>(group.ledCount, 1U)));
+    group.runtime.step = nowMs + delayMs;
+  }
+}
+
+static void modeChaseRainbow(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  const uint8_t width = static_cast<uint8_t>(max<unsigned>(1U, map(group.custom1, 0, 255, 1, max<uint8_t>(1U, group.ledCount / 2U))));
+  const uint16_t counter = static_cast<uint16_t>(nowMs * ((group.speed >> 2) + 1U));
+  const uint8_t head = static_cast<uint8_t>((static_cast<uint32_t>(counter) * group.ledCount) >> 16);
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+
+  fillPixels(group, bg);
+  for (uint8_t i = 0; i < width; i++) {
+    const uint8_t pos = static_cast<uint8_t>((head + i) % group.ledCount);
+    const uint8_t hue = static_cast<uint8_t>(group.runtime.tick + (pos * 255U / max<uint8_t>(group.ledCount, 1U)));
+    const uint32_t rainbow = scalePackedColor(colorWheel(hue), brightness100To255(group.brightness));
+    setPixel(group, pos, rainbow);
+  }
+}
+
+static void modeChunchun(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  const uint8_t gapScale = static_cast<uint8_t>(max<unsigned>(2U, map(group.custom1, 0, 255, 2, 12)));
+  const uint8_t birdCount = static_cast<uint8_t>(max<unsigned>(1U, (2U + (group.ledCount / gapScale))));
+  const uint32_t counter = nowMs * (6U + (group.speed >> 4));
+  const uint8_t fadeBy = scale8(255U - brightness100To255(group.brightness), 24U);
+
+  fadeOut(group, static_cast<uint8_t>(220U + (fadeBy >> 1U))); // leave a short visible trail
+
+  const uint32_t fgBase = scaleByBrightness(group.colorPrimary, group.brightness);
+  for (uint8_t i = 0; i < birdCount; i++) {
+    const uint32_t phase = counter - ((static_cast<uint32_t>(group.custom1) << 8U) / max<uint8_t>(birdCount, 1U)) * i;
+    const uint16_t wave = static_cast<uint16_t>((sin8_approx(static_cast<uint8_t>(phase >> 8U)) << 8U) + 0x80U);
+    const uint8_t pos = static_cast<uint8_t>((static_cast<uint32_t>(wave) * group.ledCount) >> 16U);
+    setPixel(group, min<uint8_t>(pos, group.ledCount - 1U), colorFromPalette(group, static_cast<uint16_t>((i * 255U) / max<uint8_t>(birdCount, 1U)), colorAverageLight(fgBase)));
+  }
+}
+
+static void modeColorwaves(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+  const uint32_t tint = scaleByBrightness(group.colorPrimary, group.brightness);
+  const uint8_t hueOffset = group.custom1;
+  const uint8_t drift = static_cast<uint8_t>((nowMs * (2U + (group.speed >> 5U))) >> 10U);
+  const uint8_t waveBase = static_cast<uint8_t>((nowMs * (4U + (group.speed >> 4U))) >> 8U);
+
+  for (uint8_t i = 0; i < group.ledCount; i++) {
+    const uint8_t wavePos = static_cast<uint8_t>(waveBase + (i * 11U));
+    const uint8_t hue = static_cast<uint8_t>(hueOffset + drift + (triwave8(static_cast<uint8_t>(wavePos + (i * 7U))) >> 1U));
+    const uint8_t bri = static_cast<uint8_t>(80U + scale8(sin8_approx(static_cast<uint8_t>(wavePos + drift)), 175U));
+    const uint32_t rainbow = scalePackedColor(colorWheel(hue), bri);
+    const uint32_t tinted = blendPackedColor(scalePackedColor(tint, static_cast<uint8_t>(160U + (bri >> 2U))), rainbow, 144U);
+    setPixel(group, i, blendPackedColor(bg, tinted, 224U));
+  }
+}
+
+static void modeDancingShadows(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+  const uint32_t base = scaleByBrightness(group.colorPrimary, group.brightness);
+  const unsigned shadowCount = max<unsigned>(1U, map(group.custom1, 0, 255, 1, min<unsigned>(12U, max<uint8_t>(group.ledCount, 1U))));
+  const uint32_t motion = nowMs * (2U + (group.speed >> 5U));
+  const uint32_t seedBase = group.runtime.seed ? group.runtime.seed : (group.colorPrimary ^ (static_cast<uint32_t>(group.custom1) << 8U) ^ group.ledCount);
+
+  fillPixels(group, bg);
+
+  for (unsigned s = 0; s < shadowCount; s++) {
+    uint32_t seed = seedBase + ((s + 1U) * 0x9E3779B9UL);
+    const uint8_t width = static_cast<uint8_t>(1U + (random8FromSeed(seed) % max<uint8_t>(2U, min<uint8_t>(10U, group.ledCount))));
+    const uint8_t style = static_cast<uint8_t>(random8FromSeed(seed) % 3U);
+    const uint8_t hue = static_cast<uint8_t>(random8FromSeed(seed) + (motion >> 10U));
+    const uint32_t accent = scalePackedColor(colorWheel(hue), brightness100To255(group.brightness));
+    const uint32_t shadowColor = blendPackedColor(base, accent, 96U);
+    const uint16_t phase = static_cast<uint16_t>(((motion / (6U + (random8FromSeed(seed) % 18U))) + (s * 8192U)) & 0xFFFFU);
+    const int travel = static_cast<int>(group.ledCount + width + 1U);
+    const int start = static_cast<int>((static_cast<uint32_t>(triwave16(phase)) * travel) >> 16U) - static_cast<int>(width / 2U);
+
+    for (uint8_t j = 0; j < width; j++) {
+      const int pos = start + j;
+      if (pos < 0 || pos >= group.ledCount) continue;
+
+      uint8_t alpha = 160U;
+      if (style == 1U) {
+        const uint8_t gradientPos = (width <= 1U) ? 255U : static_cast<uint8_t>((static_cast<uint16_t>(j) * 255U) / (width - 1U));
+        alpha = triwave8(gradientPos);
+      } else if (style == 2U) {
+        alpha = (j % 2U == 0U) ? 180U : 92U;
+      }
+
+      setPixel(group, static_cast<uint8_t>(pos), blendPackedColor(getPixel(group, static_cast<uint8_t>(pos)), shadowColor, alpha));
+    }
+  }
+}
+
+static void modeFairy(EngineLightGroup& group, uint32_t nowMs) {
+  if (!group.ledCount) return;
+
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+  const uint32_t base = scalePackedColor(group.colorPrimary, static_cast<uint8_t>(40U + (brightness100To255(group.brightness) >> 3U)));
+  const unsigned flasherCount = max<unsigned>(1U, map(group.custom1, 0, 255, 1, max<unsigned>(1U, min<unsigned>(group.ledCount, 10U))));
+  const uint32_t pulseBase = nowMs * (3U + (group.speed >> 5U));
+  const uint32_t seedBase = group.runtime.seed ? group.runtime.seed : (group.colorPrimary ^ 0x5A1F00UL);
+  const uint8_t slotSpan = max<uint8_t>(1U, static_cast<uint8_t>((group.ledCount + flasherCount - 1U) / flasherCount));
+
+  fillPixels(group, bg);
+  for (uint8_t i = 0; i < group.ledCount; i++) {
+    setPixel(group, i, blendPackedColor(bg, base, 88U));
+  }
+
+  for (unsigned f = 0; f < flasherCount; f++) {
+    uint32_t seed = seedBase + ((f + 1U) * 0x045D9F3BUL);
+    const uint8_t offset = static_cast<uint8_t>(random8FromSeed(seed) % slotSpan);
+    const uint8_t pos = min<uint8_t>(group.ledCount - 1U, static_cast<uint8_t>(f * slotSpan + offset));
+    const uint8_t paletteHue = random8FromSeed(seed);
+    const uint8_t phase = static_cast<uint8_t>((pulseBase / (4U + (random8FromSeed(seed) % 8U))) + (f * 37U));
+    const uint8_t wave = sin8_approx(phase);
+    const uint8_t bri = (wave > 180U)
+      ? static_cast<uint8_t>(96U + scale8(static_cast<uint8_t>(wave - 180U), 223U))
+      : scale8(wave, 32U);
+    const uint32_t flashColor = blendPackedColor(scalePackedColor(group.colorPrimary, bri), scalePackedColor(colorWheel(paletteHue), bri), 72U);
+    setPixel(group, pos, blendPackedColor(getPixel(group, pos), flashColor, max<uint8_t>(96U, bri)));
+  }
+}
+
+static void modeFairyTwinkle(EngineLightGroup& group, uint32_t nowMs) {
+  if (!group.ledCount) return;
+
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+  const uint32_t fg = scaleByBrightness(group.colorPrimary, group.brightness);
+  const uint8_t variation = static_cast<uint8_t>(map(group.intensity, 0, 255, 24, 170));
+  const uint32_t twinkleBase = nowMs * (2U + (group.speed >> 6U));
+  const uint32_t seedBase = group.runtime.seed ? group.runtime.seed : (group.colorPrimary ^ 0xA55AA55AUL);
+
+  for (uint8_t i = 0; i < group.ledCount; i++) {
+    uint32_t seed = seedBase + ((static_cast<uint32_t>(i) + 1U) * 1103515245UL);
+    const uint8_t paletteHue = random8FromSeed(seed);
+    const uint8_t phase = static_cast<uint8_t>((twinkleBase / (3U + (random8FromSeed(seed) % 7U))) + paletteHue + (i * 17U));
+    const uint8_t wave = sin8_approx(phase);
+    const uint8_t mix = clamp8(176 + (((static_cast<int>(wave) - 128) * variation) / 127));
+    const uint32_t twinkleColor = blendPackedColor(fg, scaleByBrightness(colorWheel(paletteHue), group.brightness), 48U);
+    setPixel(group, i, blendPackedColor(bg, twinkleColor, mix));
+  }
+}
+
+static void modeRipple(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+  const uint32_t fg = scaleByBrightness(group.colorPrimary, group.brightness);
+  const uint8_t waveCount = static_cast<uint8_t>(max<unsigned>(1U, map(group.custom1, 0, 255, 1, 8)));
+  const uint32_t rippleSpeed = 1U + (group.speed >> 5U);
+  const uint32_t timeBase = nowMs * rippleSpeed;
+
+  fillPixels(group, bg);
+
+  for (uint8_t w = 0; w < waveCount; w++) {
+    const uint32_t offset = (static_cast<uint32_t>(w) * 65535UL) / waveCount;
+    const uint16_t centerWave = static_cast<uint16_t>((timeBase * 23U + offset) & 0xFFFFU);
+    const uint8_t center = static_cast<uint8_t>((static_cast<uint32_t>(triwave16(centerWave)) * group.ledCount) >> 16U);
+    const uint8_t phase = static_cast<uint8_t>((timeBase >> 3U) + (w * 47U));
+    const uint8_t radius = static_cast<uint8_t>(1U + map(sin8_approx(phase), 0, 255, 1, max<uint8_t>(2U, group.ledCount / 2U)));
+
+    for (uint8_t i = 0; i < group.ledCount; i++) {
+      const uint8_t d = static_cast<uint8_t>(abs(static_cast<int>(i) - static_cast<int>(center)));
+      if (d > radius) continue;
+      const uint8_t alpha = static_cast<uint8_t>(255U - ((static_cast<uint16_t>(d) * 255U) / max<uint8_t>(1U, radius)));
+      setPixel(group, i, blendPackedColor(getPixel(group, i), fg, alpha));
+    }
+  }
+}
+
+static void modeSine(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  const uint8_t scale = static_cast<uint8_t>(max<unsigned>(1U, (group.custom1 >> 2U) + 1U));
+  const uint32_t step = nowMs * (1U + (group.speed >> 5U));
+  const uint32_t fg = scaleByBrightness(group.colorPrimary, group.brightness);
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+
+  for (uint8_t i = 0; i < group.ledCount; i++) {
+    const uint8_t wave = sin8_approx(static_cast<uint8_t>((i * scale) + (step >> 4U)));
+    const uint8_t mix = static_cast<uint8_t>(48U + scale8(wave, 207U));
+    setPixel(group, i, blendPackedColor(bg, fg, mix));
+  }
+}
+
+static void modeStrobe(EngineLightGroup& group, uint32_t nowMs) {
+  modeBlink(group, nowMs, true);
+}
+
+static void modeStrobeMega(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  const uint32_t bg = scaleByBrightness(group.colorSecond, group.brightness);
+  const uint32_t fg = scaleByBrightness(group.colorPrimary, group.brightness);
+  const uint8_t flashCount = static_cast<uint8_t>(2U * ((group.intensity / 10U) + 1U));
+  const uint8_t phase = static_cast<uint8_t>(group.runtime.aux1 % (flashCount + 2U));
+
+  fillPixels(group, bg);
+  if (phase < flashCount && ((phase & 0x01U) == 0U)) {
+    fillPixels(group, fg);
+  }
+
+  if (nowMs >= group.runtime.step) {
+    const uint32_t delayMs = (phase < flashCount)
+      ? (((phase & 0x01U) == 0U) ? 15U : 50U)
+      : (50U + 20U * static_cast<uint32_t>(255U - group.speed));
+    group.runtime.aux1 = phase + 1U;
+    group.runtime.step = nowMs + delayMs;
+  }
+}
+
+static void modeWipe(EngineLightGroup& group, uint32_t nowMs) {
+  if (group.ledCount <= 1) {
+    modeSolid(group);
+    return;
+  }
+
+  const uint32_t cycleMs = 750U + (255U - group.speed) * 150U;
+  const uint32_t perc = cycleMs ? (nowMs % cycleMs) : 0U;
+  const uint16_t prog = static_cast<uint16_t>((perc * 65535UL) / max<uint32_t>(1U, cycleMs));
+  const bool back = prog > 32767U;
+  const uint16_t front = back ? static_cast<uint16_t>(prog - 32767U) : prog;
+  const uint8_t wipePos = static_cast<uint8_t>((static_cast<uint32_t>(front) * group.ledCount) >> 15U);
+
+  const uint8_t blendAmount = static_cast<uint8_t>(map(group.intensity, 0, 255, 32, 255));
+  const uint32_t onColor = scaleByBrightness(group.colorPrimary, group.brightness);
+  const uint32_t offColor = scaleByBrightness(group.colorSecond, group.brightness);
+
+  for (uint8_t i = 0; i < group.ledCount; i++) {
+    const bool lit = back ? (i >= wipePos) : (i < wipePos);
+    const uint32_t base = lit ? onColor : offColor;
+    setPixel(group, i, blendPackedColor(offColor, base, blendAmount));
   }
 }
 
@@ -433,6 +825,23 @@ static void runEffect(EngineLightGroup& group, uint32_t nowMs) {
     case FX_GLITTER:        modeGlitter(group, nowMs); break;
     case FX_RUNNING:        modeRunningLights(group, nowMs); break;
     case FX_LARSON:         modeLarsonScanner(group, nowMs); break;
+    case FX_ANDROID:        modeAndroid(group, nowMs); break;
+    case FX_BPM:            modeBpm(group, nowMs); break;
+    case FX_CANDLE:         modeCandle(group, nowMs); break;
+    case FX_CANDLE_MULTI:   modeCandleMulti(group, nowMs); break;
+    case FX_CHASE_2:        modeChase2(group, nowMs); break;
+    case FX_CHASE_FLASH:    modeChaseFlash(group, nowMs); break;
+    case FX_CHASE_RAINBOW:  modeChaseRainbow(group, nowMs); break;
+    case FX_CHUNCHUN:       modeChunchun(group, nowMs); break;
+    case FX_COLORWAVES:     modeColorwaves(group, nowMs); break;
+    case FX_DANCING_SHADOWS: modeDancingShadows(group, nowMs); break;
+    case FX_FAIRY:          modeFairy(group, nowMs); break;
+    case FX_FAIRY_TWINKLE:  modeFairyTwinkle(group, nowMs); break;
+    case FX_RIPPLE:         modeRipple(group, nowMs); break;
+    case FX_SINE:           modeSine(group, nowMs); break;
+    case FX_STROBE:         modeStrobe(group, nowMs); break;
+    case FX_STROBE_MEGA:    modeStrobeMega(group, nowMs); break;
+    case FX_WIPE:           modeWipe(group, nowMs); break;
     case FX_HEARTBEAT:      modeHeartbeat(group, nowMs); break;
     case FX_FLICKER:        modeFlicker(group, nowMs); break;
     case FX_FIRE_FLICKER:   modeFireFlicker(group, nowMs); break;
@@ -457,7 +866,24 @@ const char* const EFFECT_NAMES[FX_COUNT] = {
   "larson",
   "heartbeat",
   "flicker",
-  "fire_flicker"
+  "fire_flicker",
+  "android",
+  "bpm",
+  "candle",
+  "candle_multi",
+  "chase_2",
+  "chase_flash",
+  "chase_rainbow",
+  "chunchun",
+  "colorwaves",
+  "dancing_shadows",
+  "fairy",
+  "fairy_twinkle",
+  "ripple",
+  "sine",
+  "strobe",
+  "strobe_mega",
+  "wipe"
 };
 
 // TODO(Future Effects): Track planned additions in one place.
@@ -477,7 +903,24 @@ static const FxMetadata EFFECT_METADATA[FX_COUNT] = {
   { "larson", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: intensity controls trail fade; custom1 controls end delay; check1 enables dual scanner; check2 enables bi-delay." },
   { "heartbeat", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: secondary color acts as the pulse background." },
   { "flicker", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls flicker depth." },
-  { "fire_flicker", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls flicker depth and preserves the fire-like WLED falloff." }
+  { "fire_flicker", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "Extra WLED params: intensity controls flicker depth and preserves the fire-like WLED falloff." },
+  { "android", DEFAULT_SPEED, DEFAULT_INTENSITY, 96, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls rotation rate, custom1 controls scanner width, and secondary color is background." },
+  { "bpm", 64, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls beat rate." },
+  { "candle", 96, 224, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls flicker rate and intensity controls flicker depth." },
+  { "candle_multi", 96, 224, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls flicker rate and intensity controls per-pixel flicker depth." },
+  { "chase_2", DEFAULT_SPEED, DEFAULT_INTENSITY, 64, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls chase speed and custom1 controls chase width." },
+  { "chase_flash", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls chase/flash cadence; secondary color is background." },
+  { "chase_rainbow", DEFAULT_SPEED, DEFAULT_INTENSITY, 64, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls chase speed and custom1 controls chase width." },
+  { "chunchun", DEFAULT_SPEED, DEFAULT_INTENSITY, 128, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls motion and custom1 controls gap size between birds." },
+  { "colorwaves", DEFAULT_SPEED, DEFAULT_INTENSITY, 160, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED-style colorwaves: speed controls wave motion, custom1 offsets hue, and secondary color acts as the background." },
+  { "dancing_shadows", DEFAULT_SPEED, DEFAULT_INTENSITY, 96, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED-style dancing shadows: speed controls motion, custom1 controls the number of moving shadows, and secondary color is the background." },
+  { "fairy", DEFAULT_SPEED, DEFAULT_INTENSITY, 96, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED-style fairy: speed controls flasher cadence, custom1 controls the number of flashers, and secondary color is the background." },
+  { "fairy_twinkle", DEFAULT_SPEED, 160, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED-style fairy twinkle: speed controls twinkle tempo, intensity controls twinkle depth, and secondary color is the background." },
+  { "ripple", DEFAULT_SPEED, DEFAULT_INTENSITY, 128, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls ripple cadence and custom1 controls wave count." },
+  { "sine", DEFAULT_SPEED, DEFAULT_INTENSITY, 128, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls phase rate and custom1 controls sine scale." },
+  { "strobe", DEFAULT_SPEED, DEFAULT_INTENSITY, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls strobe cadence and secondary color is background/off-state." },
+  { "strobe_mega", DEFAULT_SPEED, 128, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls burst cadence and intensity controls strobe burst count." },
+  { "wipe", DEFAULT_SPEED, 180, DEFAULT_CUSTOM1, DEFAULT_CUSTOM2, DEFAULT_CUSTOM3, false, false, false, "WLED parity: speed controls wipe travel and intensity controls wipe blend strength; secondary color is background." }
 };
 
 LightEffect effectFromString(const char* name) {
@@ -527,6 +970,12 @@ bool LightsEngine::updateGroupFromJson(const String& payload) {
   if (idx >= _groupCount) _groupCount = idx + 1;
 
   EngineLightGroup& group = _groups[idx];
+  const LightEffect prevEffect = group.effect;
+  const bool prevEnabled = group.enabled;
+  const uint8_t prevLedCount = group.ledCount;
+  uint16_t prevLeds[LIGHTS_ENGINE_MAX_GROUP_LEDS];
+  memcpy(prevLeds, group.leds, sizeof(prevLeds));
+
   if (doc.containsKey("name")) {
     strncpy(group.name, doc["name"].as<const char*>(), sizeof(group.name) - 1);
     group.name[sizeof(group.name) - 1] = '\0';
@@ -562,7 +1011,17 @@ bool LightsEngine::updateGroupFromJson(const String& payload) {
   }
   Serial.printf("] effect=%d color=#%06lX\n", (int)group.effect, (unsigned long)group.colorPrimary);
 
-  _resetGroupRuntime(group);
+  const bool effectChanged = (group.effect != prevEffect);
+  const bool becameEnabled = (!prevEnabled && group.enabled);
+  const bool ledCountChanged = (group.ledCount != prevLedCount);
+  const bool ledMapChanged = ledCountChanged || memcmp(prevLeds, group.leds, sizeof(prevLeds)) != 0;
+
+  // Preserve runtime animation state across control updates so effects like
+  // Larson keep sweeping continuously instead of restarting each payload.
+  if (effectChanged || becameEnabled || ledMapChanged) {
+    _resetGroupRuntime(group);
+  }
+
   xSemaphoreGive(_mutex);
   return true;
 }
