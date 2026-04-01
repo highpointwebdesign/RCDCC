@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.591';
+        const APP_VERSION = '1.1.601';
         const BUILD_DATE = '2026-03-31';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -1105,7 +1105,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 lastPushedLightsColorOrder = null;
 
                 // Update basic lights test card status
-                notifyBasicLightsStatus('Connected — tap Master to test LEDs directly.', 'success');
+                // notifyBasicLightsStatus('Connected — tap Master to test LEDs directly.', 'success');
 
                 const vehicleName = connectionLabel
                     || getGarageVehicleNameById(bleManager?.deviceId)
@@ -4450,6 +4450,20 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         ];
         const LIGHT_COLOR_ORDER_OPTIONS = new Set(['grb', 'rgb', 'rbg', 'gbr', 'brg', 'bgr']);
         const DEFAULT_LIGHT_COLOR_ORDER = 'grb';
+        const LIGHTING_DEBUG_STORAGE_KEY = 'lightingDebug';
+
+        function isLightingDebugEnabled() {
+            try {
+                return window.__LIGHTING_DEBUG__ === true || localStorage.getItem(LIGHTING_DEBUG_STORAGE_KEY) === 'true';
+            } catch (_) {
+                return window.__LIGHTING_DEBUG__ === true;
+            }
+        }
+
+        function lightingDebugLog(...args) {
+            if (!isLightingDebugEnabled()) return;
+            console.log(...args);
+        }
 
         function normalizeLightGroupName(name) {
             return String(name || '').trim().slice(0, MAX_LIGHT_GROUP_NAME_LENGTH);
@@ -5102,7 +5116,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function toggleLightingProfilesLock() {
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
-            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            clickSound.play().catch(e => lightingDebugLog('Sound play failed:', e));
             lightingProfilesLocked = !lightingProfilesLocked;
             localStorage.setItem('lightingProfilesLocked', lightingProfilesLocked.toString());
             syncLightingProfilesCardUI();
@@ -5117,7 +5131,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function toggleLightingControlLock() {
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
-            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            clickSound.play().catch(e => lightingDebugLog('Sound play failed:', e));
             lightingControlLocked = !lightingControlLocked;
             localStorage.setItem('lightingControlLocked', lightingControlLocked.toString());
             syncLightingControlCardUI();
@@ -5166,7 +5180,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function toggleManageLightGroupsLock() {
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
-            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            clickSound.play().catch(e => lightingDebugLog('Sound play failed:', e));
             manageLightGroupsLocked = !manageLightGroupsLocked;
             localStorage.setItem('manageLightGroupsLocked', manageLightGroupsLocked.toString());
             syncManageLightGroupsLockUI();
@@ -5200,7 +5214,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function toggleLightStripConfigLock() {
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
-            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            clickSound.play().catch(e => lightingDebugLog('Sound play failed:', e));
             // Light Strip Config card removed; function now does nothing.
         }
 
@@ -5295,7 +5309,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     await _applyBasicScenarioOutput();
                     if (notify) toast.success(`Loaded lighting profile "${profile.name}"`);
                 } catch (error) {
-                    toast.warning(`Profile set locally. Push failed: ${error?.message || error}`);
+                    if (notify) {
+                        toast.warning(`Profile set locally. Push failed: ${error?.message || error}`);
+                    } else {
+                        console.warn('[LightingProfiles] Silent profile apply failed:', error?.message || error);
+                    }
                 }
             } else if (notify) {
                 toast.success(`Profile "${profile.name}" loaded. Connect to apply to truck.`);
@@ -5418,12 +5436,21 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             if (!confirmed) return;
             const wasActive = Number(activeLightingProfileIndex) === Number(index);
             lightingProfiles = lightingProfiles.filter(p => Number(p.index) !== Number(index));
+            let nextActiveProfile = null;
             if (wasActive || !lightingProfiles.some(p => Number(p.index) === Number(activeLightingProfileIndex))) {
                 activeLightingProfileIndex = Number(lightingProfiles[0].index);
+                nextActiveProfile = lightingProfiles[0];
             }
             saveLocalLightingProfiles();
             populateLightingProfileSelector();
             updateDashboardActiveLightingProfile();
+
+            // If deleting the active profile forced a fallback selection, apply it immediately
+            // so the active profile shown in UI matches live output.
+            if (nextActiveProfile) {
+                await applyResolvedLightingProfile(nextActiveProfile, false);
+            }
+
             toast.success('Lighting profile deleted');
         }
 
@@ -5480,7 +5507,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _syncMasterLightState(isEnabled);
 
             const statusMsg = `[Lights] Master ${isEnabled ? 'ON' : 'OFF'} requested (applyNow=${applyNow}, gate=${lightsWriteGateEnabled})`;
-            console.log(statusMsg);
+            lightingDebugLog(statusMsg);
             appendToSettingsConsoleCard(statusMsg, isEnabled ? 'info' : 'warn');
 
             if (!applyNow || !isBleConnected()) {
@@ -5531,7 +5558,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     ? `Sent ON — ${colorOrder}(${r},${g},${b}) @ ${_basicLightsBri}%`
                     : 'Sent OFF';
                 notifyBasicLightsStatus(msg, 'success');
-                console.log('[BasicLights]', msg);
+                lightingDebugLog('[BasicLights]', msg);
             } catch (e) {
                 const msg = `Send failed: ${e?.message || e}`;
                 notifyBasicLightsStatus(msg, 'error', { duration: 5000 });
@@ -5573,7 +5600,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 await bleManager.sendSystemCommand('lights_color_order', { order: 'rgb' });
                 await bleManager.sendSystemCommand('lights_diag', { on: true, intervalMs: 500 });
                 notifyBasicLightsStatus('Diag running: RED -> GREEN -> BLUE -> WHITE -> OFF', 'info');
-                console.log('[BasicLights] Diag cycle started');
+                lightingDebugLog('[BasicLights] Diag cycle started');
             } catch (e) {
                 const msg = `Diag start failed: ${e?.message || e}`;
                 notifyBasicLightsStatus(msg, 'error', { duration: 5000 });
@@ -5590,7 +5617,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 await bleManager.sendSystemCommand('lights_diag', { on: false });
                 await bleManager.sendSystemCommand('lights_basic', { on: false, r: 0, g: 0, b: 0, bri: 0 });
                 notifyBasicLightsStatus('Diag stopped. Strip held OFF.', 'success');
-                console.log('[BasicLights] Diag cycle stopped');
+                lightingDebugLog('[BasicLights] Diag cycle stopped');
             } catch (e) {
                 const msg = `Diag stop failed: ${e?.message || e}`;
                 notifyBasicLightsStatus(msg, 'error', { duration: 5000 });
@@ -6021,10 +6048,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function _syncBasicScenarioFxUI(config) {
             const fx = _sanitizeBasicScenarioFx(config?.fx, 'solid');
-            const intensity = Math.max(0, Math.min(255, Math.round(Number(config?.fxIntensity) || 0)));
+            const intensity = Math.max(1, Math.min(255, Math.round(Number(config?.fxIntensity) || 1)));
             const glitterColor = _sanitizeBasicScenarioHexColor(config?.glitterColor, '#f5f5f5');
-            const larsonSpeed = Math.max(0, Math.min(255, Math.round(Number(config?.larsonSpeed) || 128)));
-            const larsonEndDelay = Math.max(0, Math.min(255, Math.round(Number(config?.larsonEndDelay) || 128)));
+            const larsonSpeed = Math.max(1, Math.min(255, Math.round(Number(config?.larsonSpeed) || 128)));
+            const larsonEndDelay = Math.max(1, Math.min(255, Math.round(Number(config?.larsonEndDelay) || 128)));
 
             const fxSelect = document.getElementById('basicScenarioFx');
             const intensityRow = document.getElementById('basicScenarioFxIntensityRow');
@@ -6247,10 +6274,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             }
 
             const fx = _sanitizeBasicScenarioFx(raw.fx, defaults.fx);
-            const fxIntensity = Math.max(0, Math.min(255, Math.round(raw.fxIntensity != null && Number.isFinite(Number(raw.fxIntensity)) ? Number(raw.fxIntensity) : defaults.fxIntensity)));
+            const fxIntensity = Math.max(1, Math.min(255, Math.round(raw.fxIntensity != null && Number.isFinite(Number(raw.fxIntensity)) ? Number(raw.fxIntensity) : defaults.fxIntensity)));
             const glitterColor = _sanitizeBasicScenarioHexColor(raw.glitterColor, defaults.glitterColor);
-            const larsonSpeed = Math.max(0, Math.min(255, Math.round(raw.larsonSpeed != null && Number.isFinite(Number(raw.larsonSpeed)) ? Number(raw.larsonSpeed) : defaults.larsonSpeed)));
-            const larsonEndDelay = Math.max(0, Math.min(255, Math.round(raw.larsonEndDelay != null && Number.isFinite(Number(raw.larsonEndDelay)) ? Number(raw.larsonEndDelay) : defaults.larsonEndDelay)));
+            const larsonSpeed = Math.max(1, Math.min(255, Math.round(raw.larsonSpeed != null && Number.isFinite(Number(raw.larsonSpeed)) ? Number(raw.larsonSpeed) : defaults.larsonSpeed)));
+            const larsonEndDelay = Math.max(1, Math.min(255, Math.round(raw.larsonEndDelay != null && Number.isFinite(Number(raw.larsonEndDelay)) ? Number(raw.larsonEndDelay) : defaults.larsonEndDelay)));
             const larsonDual = !!raw.larsonDual;
             const larsonBiDelay = !!raw.larsonBiDelay;
 
@@ -6560,7 +6587,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         function toggleHardwareSetupLock() {
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
-            clickSound.play().catch(e => console.log('Sound play failed:', e));
+            clickSound.play().catch(e => lightingDebugLog('Sound play failed:', e));
             hardwareSetupLocked = !hardwareSetupLocked;
             localStorage.setItem('hardwareSetupLocked', hardwareSetupLocked.toString());
             syncHardwareSetupCardUI();
@@ -6848,8 +6875,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     const result = await _applyBasicScenarioOutput();
                     notifyBasicLightsStatus(
                         result.groups.length
-                            ? `LED brightness applied. Configured scenarios: ${result.labels.join(', ')}.`
-                            : 'LED brightness updated, but no valid LEDs are assigned to any Step 4 scenario.',
+                            ? `LED brightness applied.}.`
+                            : 'LED brightness updated, but no LEDs are assigned.',
                         result.groups.length ? 'success' : 'warning'
                     );
                 } catch (e) {
@@ -6901,11 +6928,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
         window.basicScenarioFxIntensityChange = function(value) {
             const label = document.getElementById('basicScenarioFxIntensityLabel');
-            const safe = Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
+            const safe = Math.max(1, Math.min(255, Math.round(Number(value) || 1)));
             _basicScenarioFxIntensityCurrent = safe;
             if (_basicScenarioFxIntensitySliderInstance && typeof _basicScenarioFxIntensitySliderInstance.value === 'function' && !_basicScenarioFxIntensitySyncing) {
                 _basicScenarioFxIntensitySyncing = true;
-                _basicScenarioFxIntensitySliderInstance.value([0, safe]);
+                _basicScenarioFxIntensitySliderInstance.value([1, safe]);
                 _basicScenarioFxIntensitySyncing = false;
             }
             _setBasicScenarioThumbLabel('basicScenarioFxIntensity', safe);
@@ -6917,16 +6944,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const base = Number.isFinite(Number(_basicScenarioFxIntensityCurrent))
                 ? Number(_basicScenarioFxIntensityCurrent)
                 : 128;
-            const next = Math.max(0, Math.min(255, Math.round(base + Number(delta || 0))));
+            const next = Math.max(1, Math.min(255, Math.round(base + Number(delta || 0))));
             window.basicScenarioFxIntensityChange(next);
         };
 
         window.basicScenarioLarsonDelayChange = function(value) {
-            const safe = Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
+            const safe = Math.max(1, Math.min(255, Math.round(Number(value) || 1)));
             _basicScenarioLarsonDelayCurrent = safe;
             if (_basicScenarioLarsonDelaySliderInstance && typeof _basicScenarioLarsonDelaySliderInstance.value === 'function' && !_basicScenarioLarsonDelaySyncing) {
                 _basicScenarioLarsonDelaySyncing = true;
-                _basicScenarioLarsonDelaySliderInstance.value([0, safe]);
+                _basicScenarioLarsonDelaySliderInstance.value([1, safe]);
                 _basicScenarioLarsonDelaySyncing = false;
             }
             _setBasicScenarioThumbLabel('basicScenarioLarsonDelay', safe);
@@ -6937,16 +6964,16 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const base = Number.isFinite(Number(_basicScenarioLarsonDelayCurrent))
                 ? Number(_basicScenarioLarsonDelayCurrent)
                 : 128;
-            const next = Math.max(0, Math.min(255, Math.round(base + Number(delta || 0))));
+            const next = Math.max(1, Math.min(255, Math.round(base + Number(delta || 0))));
             window.basicScenarioLarsonDelayChange(next);
         };
 
         window.basicScenarioLarsonSpeedChange = function(value) {
-            const safe = Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
+            const safe = Math.max(1, Math.min(255, Math.round(Number(value) || 1)));
             _basicScenarioLarsonSpeedCurrent = safe;
             if (_basicScenarioLarsonSpeedSliderInstance && typeof _basicScenarioLarsonSpeedSliderInstance.value === 'function' && !_basicScenarioLarsonSpeedSyncing) {
                 _basicScenarioLarsonSpeedSyncing = true;
-                _basicScenarioLarsonSpeedSliderInstance.value([0, safe]);
+                _basicScenarioLarsonSpeedSliderInstance.value([1, safe]);
                 _basicScenarioLarsonSpeedSyncing = false;
             }
             _setBasicScenarioThumbLabel('basicScenarioLarsonSpeed', safe);
@@ -6957,7 +6984,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const base = Number.isFinite(Number(_basicScenarioLarsonSpeedCurrent))
                 ? Number(_basicScenarioLarsonSpeedCurrent)
                 : 128;
-            const next = Math.max(0, Math.min(255, Math.round(base + Number(delta || 0))));
+            const next = Math.max(1, Math.min(255, Math.round(base + Number(delta || 0))));
             window.basicScenarioLarsonSpeedChange(next);
         };
 
@@ -7010,13 +7037,13 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const paramSummary = BASIC_SCENARIO_FX_WITH_PARAM1.has(_basicScenarioConfig.fx)
                 ? `, ${_basicScenarioFxParam1Label(_basicScenarioConfig.fx).toLowerCase()} ${_basicScenarioConfig.larsonEndDelay}`
                 : '';
-            notifyBasicLightsStatus(`Scenario mapping updated. LEDs ${_basicScenarioConfig.ledCount}, groups ${_getBasicScenarioCardDefs(_basicScenarioConfig).length}/${_basicScenarioMaxGroupCount(_basicScenarioConfig)}, pattern ${String(_basicScenarioConfig.colorOrder || 'rgb').toUpperCase()}, brightness ${_basicScenarioConfig.brightnessPercent}% (${_basicScenarioPercentToBrightness(_basicScenarioConfig.brightnessPercent)} max). FX ${_basicScenarioConfig.fx}, intensity ${_basicScenarioConfig.fxIntensity}${speedSummary}${paramSummary}.`, 'info');
+            notifyBasicLightsStatus(`Lighting fx updated.`, 'success');
         };
 
         window.basicScenarioConfigResetDefaults = async function() {
             const confirmed = await showActionConfirmDialog(
-                'Reset Step 4 Defaults',
-                'Reset Step 4 mapping, colors, brightness, and FX to defaults?',
+                'Reset Defaults',
+                'Reset mapping, colors, brightness, and FX to defaults?',
                 'Reset',
                 'Cancel',
                 'basic-scenario-reset-defaults-overlay'
@@ -7028,7 +7055,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _saveBasicScenarioConfig(_basicScenarioConfig);
             lightingGroupsDirty = true;
             syncLightingProfileActionButtons();
-            notifyBasicLightsStatus('Scenario mapping reset to defaults.', 'success');
+            notifyBasicLightsStatus('LED mapping reset to defaults.', 'success');
         };
 
         function _buildBasicScenarioGroups(mode) {
@@ -7036,10 +7063,10 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const brightness = _basicScenarioPercentToBrightness(config.brightnessPercent);
             const color = config.colors?.[mode] || '#ffffff';
             const effect = _sanitizeBasicScenarioFx(config.fx, 'solid');
-            const intensity = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.fxIntensity)) ? Number(config.fxIntensity) : 128)));
+            const intensity = Math.max(1, Math.min(255, Math.round(Number.isFinite(Number(config.fxIntensity)) ? Number(config.fxIntensity) : 128)));
             const glitterColor = _sanitizeBasicScenarioHexColor(config.glitterColor, '#f5f5f5');
-            const larsonSpeed = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.larsonSpeed)) ? Number(config.larsonSpeed) : 128)));
-            const larsonEndDelay = Math.max(0, Math.min(255, Math.round(Number.isFinite(Number(config.larsonEndDelay)) ? Number(config.larsonEndDelay) : 128)));
+            const larsonSpeed = Math.max(1, Math.min(255, Math.round(Number.isFinite(Number(config.larsonSpeed)) ? Number(config.larsonSpeed) : 128)));
+            const larsonEndDelay = Math.max(1, Math.min(255, Math.round(Number.isFinite(Number(config.larsonEndDelay)) ? Number(config.larsonEndDelay) : 128)));
             const usesSecondaryColor = BASIC_SCENARIO_FX_WITH_SECONDARY_COLOR.has(effect);
             const usesSpeed = BASIC_SCENARIO_FX_WITH_SPEED.has(effect);
             const usesParam1 = BASIC_SCENARIO_FX_WITH_PARAM1.has(effect);
@@ -7127,9 +7154,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     color2: group.color2 || '#000000',
                     brightness: Math.max(0, Math.min(BASIC_SCENARIO_BRIGHTNESS_MAX, Math.round(Number(group.brightness) || 0))),
                     effect: group.effect || 'solid',
-                    speed: Math.max(0, Math.min(255, Math.round(Number(group.speed) || 128))),
-                    intensity: Math.max(0, Math.min(255, Math.round(Number(group.intensity) || 128))),
-                    custom1: Number.isFinite(Number(group.custom1)) ? Math.max(0, Math.min(255, Math.round(Number(group.custom1)))) : undefined,
+                    speed: Math.max(1, Math.min(255, Math.round(Number(group.speed) || 128))),
+                    intensity: Math.max(1, Math.min(255, Math.round(Number(group.intensity) || 128))),
+                    custom1: Number.isFinite(Number(group.custom1)) ? Math.max(1, Math.min(255, Math.round(Number(group.custom1)))) : undefined,
                     leds: group.leds
                 });
             }
@@ -7157,8 +7184,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         function _basicScenarioSelectionStatus(labels) {
-            if (!labels.length) return 'No Step 4 scenarios have assigned LEDs.';
-            return `Configured scenarios: ${labels.join(', ')}.`;
+            if (!labels.length) return 'No LEDs have been assigned.';
+            return `LEDs have been powered off`;
         }
 
         window.basicScenarioStripToggle = async function(forceEnabled) {
@@ -7176,19 +7203,19 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 const result = await _applyBasicScenarioOutput();
 
                 if (!_basicScenarioStripEnabled) {
-                    notifyBasicLightsStatus(`${_basicScenarioSelectionStatus(labels)} Strip output off.`, 'info');
+                    notifyBasicLightsStatus(`${_basicScenarioSelectionStatus(labels)}.`, 'success');
                     return;
                 }
 
                 notifyBasicLightsStatus(
                     result.groups.length
-                        ? `Strip on. Configured scenarios: ${result.labels.join(', ')}.`
-                        : 'Strip on, but no valid LEDs are assigned to any Step 4 scenario.',
+                        ? `LEDs have been powered on.`
+                        : 'LEDs have been powered on, but no LEDs have been assigned.',
                     result.groups.length ? 'success' : 'warning'
                 );
             } catch (e) {
                 _syncMasterLightState(false);
-                const msg = `Scenario strip toggle failed: ${e?.message || e}`;
+                const msg = `LED toggle failed: ${e?.message || e}`;
                 notifyBasicLightsStatus(msg, 'error', { duration: 5000 });
                 console.error('[BasicLights]', msg);
             }
@@ -7238,15 +7265,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const fxIntensitySliderElement = document.getElementById('basicScenarioFxIntensity');
             if (fxIntensitySliderElement && typeof rangeSlider === 'function') {
                 _basicScenarioFxIntensitySliderInstance = rangeSlider(fxIntensitySliderElement, {
-                    value: [0, _basicScenarioConfig.fxIntensity],
-                    min: 0,
+                    value: [1, Math.max(1, _basicScenarioConfig.fxIntensity)],
+                    min: 1,
                     max: 255,
                     step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         if (_basicScenarioFxIntensitySyncing) return;
-                        const safe = Math.max(0, Math.min(255, Math.round(Number(value[1]) || 0)));
+                        const safe = Math.max(1, Math.min(255, Math.round(Number(value[1]) || 1)));
                         window.basicScenarioFxIntensityChange(safe);
                     }
                 });
@@ -7256,15 +7283,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const larsonDelaySliderElement = document.getElementById('basicScenarioLarsonDelay');
             if (larsonDelaySliderElement && typeof rangeSlider === 'function') {
                 _basicScenarioLarsonDelaySliderInstance = rangeSlider(larsonDelaySliderElement, {
-                    value: [0, _basicScenarioConfig.larsonEndDelay],
-                    min: 0,
+                    value: [1, Math.max(1, _basicScenarioConfig.larsonEndDelay)],
+                    min: 1,
                     max: 255,
                     step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         if (_basicScenarioLarsonDelaySyncing) return;
-                        const safe = Math.max(0, Math.min(255, Math.round(Number(value[1]) || 0)));
+                        const safe = Math.max(1, Math.min(255, Math.round(Number(value[1]) || 1)));
                         window.basicScenarioLarsonDelayChange(safe);
                     }
                 });
@@ -7274,15 +7301,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const larsonSpeedSliderElement = document.getElementById('basicScenarioLarsonSpeed');
             if (larsonSpeedSliderElement && typeof rangeSlider === 'function') {
                 _basicScenarioLarsonSpeedSliderInstance = rangeSlider(larsonSpeedSliderElement, {
-                    value: [0, _basicScenarioConfig.larsonSpeed],
-                    min: 0,
+                    value: [1, Math.max(1, _basicScenarioConfig.larsonSpeed)],
+                    min: 1,
                     max: 255,
                     step: 1,
                     thumbsDisabled: [true, false],
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         if (_basicScenarioLarsonSpeedSyncing) return;
-                        const safe = Math.max(0, Math.min(255, Math.round(Number(value[1]) || 0)));
+                        const safe = Math.max(1, Math.min(255, Math.round(Number(value[1]) || 1)));
                         window.basicScenarioLarsonSpeedChange(safe);
                     }
                 });
@@ -7532,12 +7559,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         async function applyLightsHierarchyToHardware(override = null) {
             if (!isBleConnected()) {
                 // Startup and offline states can update local light groups before BLE is connected.
-                console.debug('[Lights] Skipping hardware sync: BLE not connected');
+                lightingDebugLog('[Lights] Skipping hardware sync: BLE not connected');
                 return;
             }
 
             if (!lightsWriteGateEnabled) {
-                console.debug('[Lights] applyLightsHierarchyToHardware: master gate closed, skipping');
+                lightingDebugLog('[Lights] applyLightsHierarchyToHardware: master gate closed, skipping');
                 return;
             }
 
@@ -7549,7 +7576,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     : (Array.isArray(lightGroups) ? lightGroups : []);
                 const sourceGroups = sourceGroupsRaw.map(normalizeLightGroup);
                 const finalMaster = masterEnabled || !!override?.forceMasterOn;
-                console.log('[Lights] Source groups:', sourceGroups.map(g => ({
+                lightingDebugLog('[Lights] Source groups:', sourceGroups.map(g => ({
                     name: g.name || 'Unnamed Group',
                     enabled: !!g.enabled,
                     indices: Array.isArray(g.indices) ? g.indices.length : 0

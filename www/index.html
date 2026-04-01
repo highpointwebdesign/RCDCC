@@ -59,6 +59,7 @@
             
             <div class="header-actions">
                 <span class="material-symbols-outlined" title="Reset Gyro" id="setLevelBtn" role="button" tabindex="0" style="color: var(--high-impact-color); cursor: pointer; font-size: 1.5rem; display: inline-flex; align-items: center; justify-content: center;">tools_installation_kit</span>
+                <span class="material-symbols-outlined" title="Camera placeholder" id="cameraPlaceholderIcon" aria-hidden="true" style="color: var(--text-muted); font-size: 1.5rem; padding-left: 5px; display: inline-flex; align-items: center; justify-content: center;">videocam_off</span>
                 <span class="material-symbols-outlined" id="wifiIcon" role="button" tabindex="0" style="cursor: pointer; font-size: 1.5rem; padding-left: 5px; display: inline-flex; align-items: center; justify-content: center;">bluetooth_disabled</span>
             </div>
         </div>
@@ -90,19 +91,19 @@
                             <span id="rollPitchPitchValue">--</span>
                         </div>
                         <div class="d-flex justify-content-between mt-2">
-                            <span >Latitude</span>
+                            <span>Latitude</span>
                             <span class="value" id="latitude">--</span>
                         </div>
                         <div class="d-flex justify-content-between mt-2">
-                            <span >Longitude</span>
+                            <span>Longitude</span>
                             <span class="value" id="longitude">--</span>
                         </div>
                         <div class="d-flex justify-content-between mt-2">
-                            <span >Elevation</span>
+                            <span>Elevation</span>
                             <span class="value" id="elevation">--</span>
                         </div>
                         <div class="d-flex justify-content-between mt-2">
-                            <span >Accuracy</span>
+                            <span>Accuracy</span>
                             <span class="value" id="accuracy">--</span>
                         </div>
                     </div>
@@ -1363,30 +1364,30 @@
                                             <div class="d-flex align-items-center gap-2">
                                                 <div class="light-group-name" style="width:50%;">Fx</div>
                                                 <select id="basicScenarioFx" class="form-select form-select-sm ms-auto" style="width:50%;" onchange="basicScenarioFxChange(this.value)">
-                                                    <option value="solid">solid</option>
-                                                    <option value="android">android</option>
-                                                    <option value="bpm">bpm</option>
-                                                    <option value="candle">candle</option>
-                                                    <option value="candle_multi">candle multi</option>
-                                                    <option value="chase_2">chase 2</option>
-                                                    <option value="chase_flash">chase flash</option>
-                                                    <option value="chase_rainbow">chase rainbow</option>
-                                                    <option value="chunchun">chunchun</option>
-                                                    <option value="colorwaves">colorwaves</option>
-                                                    <option value="dancing_shadows">dancing shadows</option>
-                                                    <option value="fairy">fairy</option>
-                                                    <option value="fairy_twinkle">fairy twinkle</option>
-                                                    <option value="ripple">ripple</option>
-                                                    <option value="sine">sine</option>
-                                                    <option value="strobe">strobe</option>
-                                                    <option value="strobe_mega">strobe mega</option>
-                                                    <option value="wipe">wipe</option>
-                                                    <option value="glitter">glitter</option>
-                                                    <option value="blink">blink</option>
-                                                    <option value="breathe">breathe</option>
-                                                    <option value="heartbeat">heartbeat</option>
-                                                    <option value="running">running</option>
-                                                    <option value="flicker">flicker</option>
+                                                    <option value="android">Android</option>
+                                                    <option value="blink">Blink</option>
+                                                    <option value="bpm">BPM</option>
+                                                    <option value="breathe">Breathe</option>
+                                                    <option value="candle">Candle</option>
+                                                    <option value="candle_multi">Candle Multi</option>
+                                                    <option value="chase_2">Chase 2</option>
+                                                    <option value="chase_flash">Chase Flash</option>
+                                                    <option value="chase_rainbow">Chase Rainbow</option>
+                                                    <option value="chunchun">Chunchun</option>
+                                                    <option value="colorwaves">Colorwaves</option>
+                                                    <option value="dancing_shadows">Dancing Shadows</option>
+                                                    <option value="fairy">Fairy</option>
+                                                    <option value="fairy_twinkle">Fairy Twinkle</option>
+                                                    <option value="flicker">Flicker</option>
+                                                    <option value="glitter">Glitter</option>
+                                                    <option value="heartbeat">Heartbeat</option>
+                                                    <option value="ripple">Ripple</option>
+                                                    <option value="running">Running</option>
+                                                    <option value="sine">Sine</option>
+                                                    <option value="solid">Solid</option>
+                                                    <option value="strobe">Strobe</option>
+                                                    <option value="strobe_mega">Strobe Mega</option>
+                                                    <option value="wipe">Wipe</option>
                                                 </select>
                                             </div>
 
@@ -1402,7 +1403,7 @@
                                                         <button type="button" class="slider-stepper-btn" aria-label="Increase FX intensity" onclick="basicScenarioFxIntensityStep(1)">+</button>
                                                     </div>
                                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                        <span>0</span>
+                                                        <span>1</span>
                                                         <span>128</span>
                                                         <span>255</span>
                                                     </div>
@@ -1421,7 +1422,7 @@
                                                             <button type="button" class="slider-stepper-btn" aria-label="Increase FX speed" onclick="basicScenarioLarsonSpeedStep(1)">+</button>
                                                         </div>
                                                         <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                            <span>0</span>
+                                                            <span>1</span>
                                                             <span>128</span>
                                                             <span>255</span>
                                                         </div>
@@ -1439,7 +1440,7 @@
                                                             <button type="button" class="slider-stepper-btn" aria-label="Increase FX parameter" onclick="basicScenarioLarsonDelayStep(1)">+</button>
                                                         </div>
                                                         <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                            <span>0</span>
+                                                            <span>1</span>
                                                             <span>128</span>
                                                             <span>255</span>
                                                         </div>
