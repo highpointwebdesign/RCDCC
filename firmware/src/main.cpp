@@ -38,7 +38,7 @@ bool ledBleOn = false;  // true while BLE is connected (steady-on state)
 // command is received within this window (phone disconnection safety net).
 static uint32_t lastBleCommandMs = 0;
 static constexpr uint32_t CONTINUOUS_WATCHDOG_MS = 500;
-static constexpr bool LIGHTS_ENTRYPOINT_ENABLED = false;
+static constexpr bool LIGHTS_ENTRYPOINT_ENABLED = true;
 static constexpr bool SUSPENSION_DEBUG_LOGS = true;
 static constexpr uint32_t SUSPENSION_DEBUG_INTERVAL_MS = 500;
 static constexpr bool I2C_BUS_SCAN_ENABLED = false;
@@ -1185,10 +1185,9 @@ void setup() {
     bluetoothService->setKVWriteHandler(applyKVWritePayload);
     bluetoothService->setServoWriteHandler(applyServoConfigPayload);
     bluetoothService->setSystemWriteHandler(applySystemCommandPayload);
-    // Lights handler disabled for debugging
-    // if (LIGHTS_ENTRYPOINT_ENABLED) {
-    //   bluetoothService->setLightsWriteHandler(applyLightsPayload);
-    // }
+    if (LIGHTS_ENTRYPOINT_ENABLED) {
+      bluetoothService->setLightsWriteHandler(applyLightsPayload);
+    }
     bluetoothService->setConnectionStateHandler([](bool connected) {
       ledBleOn = connected;
       if (!connected) {
