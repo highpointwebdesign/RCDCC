@@ -1108,50 +1108,18 @@ public:
       return out;
     }
 
-    // Lights scope disabled for this build
-    // if (scope == "lights") {
-    //   DynamicJsonDocument doc(12288);
-    //   JsonArray ltProfArr = doc.createNestedArray("lt_profiles");
-    //   getLightingProfileNames(ltProfArr);
-    //   doc["lt_profile_count"] = ltProfArr.size();
-    //
-    //   int activeLtProf = state.system.activeLightingProfile;
-    //   Preferences pref;
-    //   if (pref.begin("system", false)) {
-    //     activeLtProf = pref.getInt("act_lt_prof", activeLtProf);
-    //     pref.end();
-    //   }
-    //   doc["act_lt_prof"] = activeLtProf;
-    //
-    //   LightingProfile activeProfile = {};
-    //   if (loadLightingProfile(activeLtProf, activeProfile)) {
-    //     JsonObject ap = doc.createNestedObject("active_lt_profile");
-    //     ap["index"] = activeLtProf;
-    //     ap["name"] = activeProfile.name;
-    //     ap["master"] = activeProfile.master;
-    //     ap["total_leds"] = activeProfile.totalLeds;
-    //     JsonArray groups = ap.createNestedArray("groups");
-    //     for (uint8_t i = 0; i < activeProfile.groupCount; i++) {
-    //       const LightingGroup& g = activeProfile.groups[i];
-    //       JsonObject go = groups.createNestedObject();
-    //       go["id"] = g.id;
-    //       go["name"] = g.name;
-    //       go["enabled"] = g.enabled;
-    //       go["effect"] = g.effect;
-    //       go["color_primary"] = g.colorPrimary;
-    //       go["color_secondary"] = g.colorSecondary;
-    //       go["brightness"] = g.brightness;
-    //       go["effect_speed"] = g.effectSpeed;
-    //       go["effect_intensity"] = g.effectIntensity;
-    //       JsonArray leds = go.createNestedArray("leds");
-    //       for (uint16_t j = 0; j < g.ledCount; j++) leds.add(g.leds[j]);
-    //     }
-    //   }
-    //
-    //   String out;
-    //   serializeJson(doc, out);
-    //   return out;
-    // }
+    // Lights scope: return minimal empty config (no filesystem ops)
+    if (scope == "lights") {
+      DynamicJsonDocument doc(512);
+      doc["lt_profile_count"] = 0;
+      doc["act_lt_prof"] = 0;
+      JsonArray ltProfArr = doc.createNestedArray("lt_profiles");
+      // Empty profiles array - no file I/O
+      
+      String out;
+      serializeJson(doc, out);
+      return out;
+    }
 
     if (scope == "settings") {
       DynamicJsonDocument doc(4096);

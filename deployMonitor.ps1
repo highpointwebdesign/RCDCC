@@ -1,5 +1,5 @@
 param(
-	[string]$Port = "COM4",
+	[string]$Port = "COM5",
 	[int]$Baud = 115200,
 	[string]$Environment = "esp32"
 )
