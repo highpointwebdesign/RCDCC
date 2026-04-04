@@ -1071,13 +1071,25 @@ void setup() {
   //   Serial.println("Lights runtime disabled");
   // }
   lightsEngine = nullptr;
-  legacyStatusLedEnabled = false;
+  legacyStatusLedEnabled = true;  // TEST 1.3: Re-enable LightsEngine allocation
+  
+  // TEST 1.3: Re-enable LightsEngine allocation
+  if (LIGHTS_ENTRYPOINT_ENABLED) {
+    lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
+    lightsEngine->begin();
+    lightsEngine->setMaster(false);
+    lightsEngine->setColorOrderByName("grb");
+    legacyStatusLedEnabled = false;
+  } else {
+    lightsEngine = nullptr;
+    legacyStatusLedEnabled = true;
+  }
 
   storageManager.loadConfig();
   // Lights loading disabled for debugging
-  // if (LIGHTS_ENTRYPOINT_ENABLED) {
-  //   storageManager.loadLights();
-  // }
+  if (LIGHTS_ENTRYPOINT_ENABLED) {
+    storageManager.loadLights();
+  }
   // Note: Phase 5 loads lighting profiles from LittleFS, not from legacy lights config
   SuspensionConfig config = storageManager.getConfig();
   ServoConfig servoConfig = storageManager.getServoConfig();
@@ -1136,15 +1148,15 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   
-  // Initialize addressable LED (NeoPixel) - disabled for debugging
-  // if (legacyStatusLedEnabled) {
-  //   statusLED.begin();
-  //   statusLED.setBrightness(50); // Set brightness (0-255)
-  //   statusLED.clear();
-  //   statusLED.show();
-  //   updateStatusLEDColor(); // Load color from config
-  //   Serial.println("Status LED initialized");
-  // }
+  // Initialize addressable LED (NeoPixel) - TEST 1.2
+  if (legacyStatusLedEnabled) {
+    statusLED.begin();
+    statusLED.setBrightness(50); // Set brightness (0-255)
+    statusLED.clear();
+    statusLED.show();
+    updateStatusLEDColor(); // Load color from config
+    Serial.println("Status LED initialized");
+  }
   
   // Calibrate to current position as level
   if (mpuConnected && CALIBRATE_IMU_ON_BOOT) {
