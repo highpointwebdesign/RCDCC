@@ -1049,32 +1049,35 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
-  // Adafruit NeoPixel LED initialization
-  statusLED.begin();
-  statusLED.show();  // Initialize all pixels to off
+  // Lights disabled for debugging
+  // statusLED.begin();
+  // statusLED.show();  // Initialize all pixels to off
   
   Serial.println("\n\nR/C Dynamic Chassis Control - Starting...");
   
   // Load configuration from storage
   storageManager.init();
 
-  // Lights runtime handles app payload effects (glitter, speed, intensity, etc.).
-  if (LIGHTS_ENTRYPOINT_ENABLED) {
-    lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
-    lightsEngine->begin();
-    lightsEngine->setMaster(false);
-    lightsEngine->setColorOrderByName("grb");
-    legacyStatusLedEnabled = false;
-  } else {
-    lightsEngine = nullptr;
-    legacyStatusLedEnabled = true;
-    Serial.println("Lights runtime disabled");
-  }
+  // Lights runtime disabled for debugging
+  // if (LIGHTS_ENTRYPOINT_ENABLED) {
+  //   lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
+  //   lightsEngine->begin();
+  //   lightsEngine->setMaster(false);
+  //   lightsEngine->setColorOrderByName("grb");
+  //   legacyStatusLedEnabled = false;
+  // } else {
+  //   lightsEngine = nullptr;
+  //   legacyStatusLedEnabled = true;
+  //   Serial.println("Lights runtime disabled");
+  // }
+  lightsEngine = nullptr;
+  legacyStatusLedEnabled = false;
 
   storageManager.loadConfig();
-  if (LIGHTS_ENTRYPOINT_ENABLED) {
-    storageManager.loadLights();
-  }
+  // Lights loading disabled for debugging
+  // if (LIGHTS_ENTRYPOINT_ENABLED) {
+  //   storageManager.loadLights();
+  // }
   // Note: Phase 5 loads lighting profiles from LittleFS, not from legacy lights config
   SuspensionConfig config = storageManager.getConfig();
   ServoConfig servoConfig = storageManager.getServoConfig();
@@ -1133,15 +1136,15 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   
-  // Initialize addressable LED (NeoPixel)
-  if (legacyStatusLedEnabled) {
-    statusLED.begin();
-    statusLED.setBrightness(50); // Set brightness (0-255)
-    statusLED.clear();
-    statusLED.show();
-    updateStatusLEDColor(); // Load color from config
-    Serial.println("Status LED initialized");
-  }
+  // Initialize addressable LED (NeoPixel) - disabled for debugging
+  // if (legacyStatusLedEnabled) {
+  //   statusLED.begin();
+  //   statusLED.setBrightness(50); // Set brightness (0-255)
+  //   statusLED.clear();
+  //   statusLED.show();
+  //   updateStatusLEDColor(); // Load color from config
+  //   Serial.println("Status LED initialized");
+  // }
   
   // Calibrate to current position as level
   if (mpuConnected && CALIBRATE_IMU_ON_BOOT) {
@@ -1170,9 +1173,10 @@ void setup() {
     bluetoothService->setKVWriteHandler(applyKVWritePayload);
     bluetoothService->setServoWriteHandler(applyServoConfigPayload);
     bluetoothService->setSystemWriteHandler(applySystemCommandPayload);
-    if (LIGHTS_ENTRYPOINT_ENABLED) {
-      bluetoothService->setLightsWriteHandler(applyLightsPayload);
-    }
+    // Lights handler disabled for debugging
+    // if (LIGHTS_ENTRYPOINT_ENABLED) {
+    //   bluetoothService->setLightsWriteHandler(applyLightsPayload);
+    // }
     bluetoothService->setConnectionStateHandler([](bool connected) {
       ledBleOn = connected;
       if (!connected) {
