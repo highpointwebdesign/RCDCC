@@ -85,8 +85,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.612';
-        const BUILD_DATE = '2026-04-03';
+        const APP_VERSION = '1.1.621';
+        const BUILD_DATE = '2026-04-04';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -5646,6 +5646,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return readVehicleScopedStorage(LIGHT_MASTER_STORAGE_KEY, { migrateLegacy: false }) === 'true';
         }
 
+        function syncLightsControlsVisibility(isEnabled) {
+            const controlsContainer = document.getElementById('lightsControlsContainer');
+            if (!controlsContainer) return;
+            controlsContainer.hidden = !isEnabled;
+        }
+
         function _syncMasterLightState(isEnabled, persist = true) {
             const nextEnabled = !!isEnabled;
             lightsWriteGateEnabled = nextEnabled;
@@ -5653,6 +5659,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 writeVehicleScopedStorage(LIGHT_MASTER_STORAGE_KEY, nextEnabled ? 'true' : 'false');
             }
             syncMasterLightSwitches(nextEnabled);
+            syncLightsControlsVisibility(nextEnabled);
             _basicScenarioStripEnabled = nextEnabled;
             _syncBasicScenarioButtons();
         }
@@ -7513,6 +7520,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     icon.textContent = isEnabled ? 'lightbulb' : 'light_off';
                 }
             });
+            syncLightsControlsVisibility(isEnabled);
         }
 
         function bindMasterLightSwitch(toggleElement) {
