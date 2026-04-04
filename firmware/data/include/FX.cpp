@@ -955,7 +955,7 @@ LightsEngine::LightsEngine(uint8_t pin, uint16_t numLeds)
 void LightsEngine::begin() {
   _strip.begin();
   _strip.show();
-  xTaskCreatePinnedToCore(_task, "LEDEffects", 6144, this, 1, &_taskHandle, LIGHTS_ENGINE_CORE);
+  xTaskCreatePinnedToCore(_task, "LEDEffects", LIGHTS_ENGINE_STACK_WORDS, this, 1, &_taskHandle, LIGHTS_ENGINE_CORE);
 }
 
 bool LightsEngine::updateGroupFromJson(const String& payload) {

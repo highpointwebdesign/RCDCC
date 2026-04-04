@@ -192,10 +192,16 @@
                             <span>Max Elevation</span>
                             <span id="trailMaxElevationValue">-- ft</span>
                         </div>
-                        <div class="trail-session-actions mt-3">
-                            <button type="button" class="btn btn-sm btn-gold" id="trailSessionStartBtn">Start</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="trailSessionStopBtn">Stop</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="trailSessionResetBtn">Reset</button>
+                        <div class="trail-session-actions row g-2 mt-3">
+                            <div class="col-4">
+                                <button type="button" class="btn btn-sm btn-gold w-100" id="trailSessionStartBtn">Start</button>
+                            </div>
+                            <div class="col-4">
+                                <button type="button" class="btn btn-sm btn-outline-secondary w-100" id="trailSessionStopBtn">Stop</button>
+                            </div>
+                            <div class="col-4">
+                                <button type="button" class="btn btn-sm btn-outline-secondary w-100" id="trailSessionResetBtn">Reset</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1083,6 +1089,38 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Servo Card -->
+                <div class="col-12 col-md-6">
+                    <div class="card">
+                        <div class="card-header" style="background-color: black; color: white;">
+                            <span class="material-symbols-outlined" style="color: var(--danger);">
+                            info
+                            </span>
+                            Servo Test
+                        </div>
+                        <div class="card-body">
+                                <p style="text-align: left;">Select the suspension servos to activate for testing. This will run a simple test sequence to verify servo functionality and channel order. Use this to identify which servo corresponds to each wheel and confirm that all four suspension servos are working properly.</p>
+                                <div class="btn-group w-100" role="group" aria-label="Basic checkbox toggle button group" style="flex-wrap: nowrap;">
+                                <input type="checkbox" class="btn-check" id="testFrontLeft" autocomplete="off">
+                                <label class="btn btn-gold" for="testFrontLeft">Front Left</label>
+
+                                <input type="checkbox" class="btn-check" id="testFrontRight" autocomplete="off">
+                                <label class="btn btn-gold" for="testFrontRight">Front Right</label>
+
+                                <input type="checkbox" class="btn-check" id="testRearLeft" autocomplete="off">
+                                <label class="btn btn-gold" for="testRearLeft">Rear Left</label>
+
+                                <input type="checkbox" class="btn-check" id="testRearRight" autocomplete="off">
+                                <label class="btn btn-gold" for="testRearRight">Rear Right</label>
+                                </div>
+                                <div class="d-grid gap-2 mt-3">
+                                    <button class="btn btn-gold" id="initiateServoTestBtn" type="button" onclick="startServoTestSequence()" value="Activate Servos">Initiate Test Sequence</button>
+                                    <button class="btn btn-outline-secondary" id="abortServoTestBtn" type="button" onclick="abortServoTestSequence()" disabled>Abort Test</button>
+                                </div>
+                        </div>
+                    </div>
+                </div>
            
             <!-- Help Card -->
                 <div class="col-12 col-md-6">
@@ -1888,8 +1926,10 @@
                         <div id="garageVehicleAboutName" style="color: #666; font-size: 0.92rem;">--</div>
                     </div>
                     <div style="margin-bottom: 0.9rem;">
-                        <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">MAC ID</div>
-                        <div id="garageVehicleAboutMac" style="color: #666; font-size: 0.85rem;">--</div>
+                        <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">Interface MACs</div>
+                        <div id="garageVehicleAboutMacWifiSta" style="color: #666; font-size: 0.85rem;">WiFi STA: --</div>
+                        <div id="garageVehicleAboutMacSoftAp" style="color: #666; font-size: 0.85rem;">SoftAP: --</div>
+                        <div id="garageVehicleAboutMacBle" style="color: #666; font-size: 0.85rem;">BLE: --</div>
                     </div>
                     <div>
                         <div style="font-weight: 600; color: #000; margin-bottom: 0.2rem;">Firmware Version</div>

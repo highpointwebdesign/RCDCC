@@ -8,12 +8,13 @@
 #include "FX.h"
 
 #define LIGHTS_ENGINE_PIN 27
-#define LIGHTS_ENGINE_MAX_LEDS 30
+#define LIGHTS_ENGINE_MAX_LEDS 30  // Buffer size; app configures actual active count
 #define LIGHTS_ENGINE_MAX_GROUPS 15
 #define LIGHTS_ENGINE_MAX_GROUP_LEDS 15
 #define LIGHTS_ENGINE_TASK_HZ 50
 #define LIGHTS_ENGINE_TICK_MS (1000 / LIGHTS_ENGINE_TASK_HZ)
 #define LIGHTS_ENGINE_CORE 0
+#define LIGHTS_ENGINE_STACK_WORDS 16384
 
 using RcdccFx::LightEffect;
 using RcdccFx::FxRuntime;

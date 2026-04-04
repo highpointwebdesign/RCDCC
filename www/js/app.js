@@ -85,8 +85,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.601';
-        const BUILD_DATE = '2026-03-31';
+        const APP_VERSION = '1.1.612';
+        const BUILD_DATE = '2026-04-03';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -1808,6 +1808,176 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         function delay(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
+
+        // ==================== Help: Servo Test Sequence ====================
+        const SERVO_TEST_STEP_DEGREES = [10, 90, 170, 90];
+        const SERVO_TEST_DWELL_MS = 2000;
+        let servoTestRunning = false;
+        let servoTestAbortRequested = false;
+
+        function getServoTestDescriptors() {
+            return [
+                {
+                    checkboxId: 'testFrontLeft',
+                    label: 'Front Left',
+                    trimKey: window.RCDCC_KEYS?.SERVO_FL_TRIM,
+                    fullCfgKey: 'srv_fl'
+                },
+                {
+                    checkboxId: 'testFrontRight',
+                    label: 'Front Right',
+                    trimKey: window.RCDCC_KEYS?.SERVO_FR_TRIM,
+                    fullCfgKey: 'srv_fr'
+                },
+                {
+                    checkboxId: 'testRearLeft',
+                    label: 'Rear Left',
+                    trimKey: window.RCDCC_KEYS?.SERVO_RL_TRIM,
+                    fullCfgKey: 'srv_rl'
+                },
+                {
+                    checkboxId: 'testRearRight',
+                    label: 'Rear Right',
+                    trimKey: window.RCDCC_KEYS?.SERVO_RR_TRIM,
+                    fullCfgKey: 'srv_rr'
+                }
+            ];
+        }
+
+        function setServoTestButtonsState(isRunning) {
+            const startBtn = document.getElementById('initiateServoTestBtn');
+            const abortBtn = document.getElementById('abortServoTestBtn');
+            if (startBtn) startBtn.disabled = isRunning;
+            if (abortBtn) abortBtn.disabled = !isRunning;
+        }
+
+        function getServoLimitsFromRam(fullCfgKey) {
+            const servo = (fullConfig && typeof fullConfig === 'object') ? fullConfig[fullCfgKey] : null;
+            const minUs = Number(servo?.min);
+            const maxUs = Number(servo?.max);
+            if (!Number.isFinite(minUs) || !Number.isFinite(maxUs)) {
+                return { minUs: 1000, maxUs: 2000 };
+            }
+
+            const safeMin = Math.max(900, Math.min(2100, Math.round(Math.min(minUs, maxUs))));
+            const safeMax = Math.max(safeMin + 1, Math.min(2100, Math.round(Math.max(minUs, maxUs))));
+            return { minUs: safeMin, maxUs: safeMax };
+        }
+
+        function mapDegreesToUsWithinLimits(degrees, minUs, maxUs) {
+            const deg = Math.max(0, Math.min(180, Number(degrees) || 0));
+            const span = maxUs - minUs;
+            return Math.round(minUs + (deg / 180) * span);
+        }
+
+        async function waitWithAbort(totalMs) {
+            const stepMs = 100;
+            let elapsed = 0;
+            while (elapsed < totalMs) {
+                if (servoTestAbortRequested) return false;
+                await delay(stepMs);
+                elapsed += stepMs;
+            }
+            return true;
+        }
+
+        async function writeServoTrimUs(trimKey, microseconds) {
+            ensureBleConnectedOrThrow();
+            if (!trimKey) throw new Error('Servo trim key not configured');
+            await bleManager.writeValue(trimKey, Math.round(microseconds));
+        }
+
+        async function runSingleServoTest(descriptor) {
+            const { minUs, maxUs } = getServoLimitsFromRam(descriptor.fullCfgKey);
+
+            // Bring servo to center first for predictable behavior.
+            const centerUs = mapDegreesToUsWithinLimits(90, minUs, maxUs);
+            await writeServoTrimUs(descriptor.trimKey, centerUs);
+            if (!(await waitWithAbort(1000))) return false;
+
+            for (const degrees of SERVO_TEST_STEP_DEGREES) {
+                if (servoTestAbortRequested) return false;
+                const targetUs = mapDegreesToUsWithinLimits(degrees, minUs, maxUs);
+                await writeServoTrimUs(descriptor.trimKey, targetUs);
+                if (!(await waitWithAbort(SERVO_TEST_DWELL_MS))) return false;
+            }
+
+            return true;
+        }
+
+        function getSelectedServoDescriptors() {
+            return getServoTestDescriptors().filter((descriptor) => {
+                const checkbox = document.getElementById(descriptor.checkboxId);
+                return !!(checkbox && checkbox.checked);
+            });
+        }
+
+        function clearServoTestSelections() {
+            getServoTestDescriptors().forEach((descriptor) => {
+                const checkbox = document.getElementById(descriptor.checkboxId);
+                if (checkbox) checkbox.checked = false;
+            });
+        }
+
+        window.abortServoTestSequence = function abortServoTestSequence() {
+            if (!servoTestRunning) return;
+            servoTestAbortRequested = true;
+            if (window.toast) toast.warning('Servo test abort requested', { duration: 1800 });
+        };
+
+        window.startServoTestSequence = async function startServoTestSequence() {
+            if (servoTestRunning) return;
+
+            try {
+                ensureBleConnectedOrThrow();
+            } catch (error) {
+                if (window.toast) toast.warning('Connect to Bluetooth before running Servo Test');
+                return;
+            }
+
+            const selected = getSelectedServoDescriptors();
+            if (!selected.length) {
+                if (window.toast) toast.warning('Select at least one servo to test');
+                return;
+            }
+
+            servoTestRunning = true;
+            servoTestAbortRequested = false;
+            setServoTestButtonsState(true);
+
+            if (window.toast) {
+                const labels = selected.map((s) => s.label).join(', ');
+                toast.info(`Running Servo Test: ${labels}`, { duration: 2200 });
+            }
+
+            let completed = false;
+            try {
+                for (const descriptor of selected) {
+                    if (servoTestAbortRequested) break;
+                    if (window.toast) toast.info(`Starting ${descriptor.label}`, { duration: 1800 });
+                    const ok = await runSingleServoTest(descriptor);
+                    if (!ok) break;
+                    if (!servoTestAbortRequested && window.toast) toast.success(`Completed ${descriptor.label}`, { duration: 1800 });
+                }
+                completed = !servoTestAbortRequested;
+            } catch (error) {
+                console.error('Servo test sequence failed:', error);
+                if (window.toast) toast.error(`Servo test failed: ${String(error?.message || error)}`);
+            } finally {
+                clearServoTestSelections();
+                setServoTestButtonsState(false);
+                servoTestRunning = false;
+                servoTestAbortRequested = false;
+            }
+
+            if (window.toast) {
+                if (completed) {
+                    toast.success('Servo testing complete', { duration: 2200 });
+                } else {
+                    toast.warning('Servo testing stopped', { duration: 1800 });
+                }
+            }
+        };
 
         // ==================== Emergency Lights Helper Functions ====================
         // Convert hex color (RGB) to object

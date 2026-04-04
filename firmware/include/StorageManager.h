@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <Preferences.h>
+#include <esp_mac.h>
 #include <cstring>
 
 class StorageManager {
@@ -36,6 +37,23 @@ private:
   static constexpr const char* NS_SYSTEM = "system";
 
   static constexpr float FLOAT_SCALE = 1000.0f;
+
+  static String formatMacAddress(const uint8_t* macBytes) {
+    char buffer[18] = {0};
+    snprintf(buffer,
+             sizeof(buffer),
+             "%02X:%02X:%02X:%02X:%02X:%02X",
+             macBytes[0], macBytes[1], macBytes[2], macBytes[3], macBytes[4], macBytes[5]);
+    return String(buffer);
+  }
+
+  static String readInterfaceMac(esp_mac_type_t macType) {
+    uint8_t macBytes[6] = {0};
+    if (esp_read_mac(macBytes, macType) != ESP_OK) {
+      return String("");
+    }
+    return formatMacAddress(macBytes);
+  }
 
   static int32_t clampI32(int32_t value, int32_t minValue, int32_t maxValue) {
     if (value < minValue) return minValue;
@@ -830,6 +848,15 @@ public:
     if (key == "reactionSpeed") {
       doc["v"] = static_cast<int32_t>(roundf(value * 50.0f));
       setValue("suspension.react_spd", doc["v"].as<JsonVariantConst>());
+    } else if (key == "rideHeightOffset") {
+      const int32_t rideHeight = clampI32(static_cast<int32_t>(roundf(value)), 0, 100);
+      doc["v"] = rideHeight;
+      setValue("srv_fl.ride_ht", doc["v"].as<JsonVariantConst>());
+      setValue("srv_fr.ride_ht", doc["v"].as<JsonVariantConst>());
+      setValue("srv_rl.ride_ht", doc["v"].as<JsonVariantConst>());
+      setValue("srv_rr.ride_ht", doc["v"].as<JsonVariantConst>());
+    } else if (key == "rangeLimit") {
+      legacyConfig.rangeLimit = constrain(value, 0.0f, 180.0f);
     } else if (key == "damping") {
       doc["v"] = static_cast<int32_t>(roundf(value * 100.0f));
       setValue("suspension.damping", doc["v"].as<JsonVariantConst>());
@@ -839,6 +866,12 @@ public:
     } else if (key == "frontRearBalance") {
       doc["v"] = static_cast<int32_t>(roundf((value * 200.0f) - 100.0f));
       setValue("suspension.fr_balance", doc["v"].as<JsonVariantConst>());
+    } else if (key == "sampleRate") {
+      legacyConfig.sampleRate = static_cast<uint16_t>(clampI32(static_cast<int32_t>(roundf(value)), 1, 200));
+    } else if (key == "telemetryRate") {
+      legacyConfig.telemetryRate = static_cast<uint8_t>(clampI32(static_cast<int32_t>(roundf(value)), 1, 10));
+    } else if (key == "fpvAutoMode") {
+      legacyConfig.fpvAutoMode = value > 0.5f;
     } else if (key == "mpuOrientation") {
       doc["v"] = static_cast<int32_t>(value);
       setValue("imu.orient", doc["v"].as<JsonVariantConst>());
@@ -1054,6 +1087,9 @@ public:
       doc["device_nm"] = state.system.deviceName;
       doc["config_owner"] = "app";
       doc["executor_mode"] = "kv_only";
+      doc["mac_wifi_sta"] = readInterfaceMac(ESP_MAC_WIFI_STA);
+      doc["mac_softap"] = readInterfaceMac(ESP_MAC_WIFI_SOFTAP);
+      doc["mac_ble"] = readInterfaceMac(ESP_MAC_BT);
       String out;
       serializeJson(doc, out);
       return out;

@@ -21,6 +21,14 @@ PWMOutputs pwmOutputs;
 LightsEngine* lightsEngine = nullptr;
 BluetoothService* bluetoothService = nullptr;  // Initialize in setup()
 
+struct ManualServoOverride {
+  bool active = false;
+  uint32_t expiresAtMs = 0;
+  uint16_t targetUs = 1500;
+};
+
+static ManualServoOverride gManualServoOverrides[4];
+
 // LED feedback pin
 #define LED_PIN 2
 unsigned long ledBlinkEndTime = 0;
@@ -30,7 +38,13 @@ bool ledBleOn = false;  // true while BLE is connected (steady-on state)
 // command is received within this window (phone disconnection safety net).
 static uint32_t lastBleCommandMs = 0;
 static constexpr uint32_t CONTINUOUS_WATCHDOG_MS = 500;
-static constexpr bool LIGHTS_ENTRYPOINT_ENABLED = true;
+static constexpr bool LIGHTS_ENTRYPOINT_ENABLED = false;
+static constexpr bool SUSPENSION_DEBUG_LOGS = true;
+static constexpr uint32_t SUSPENSION_DEBUG_INTERVAL_MS = 500;
+static constexpr bool I2C_BUS_SCAN_ENABLED = false;
+static constexpr bool BLE_STARTUP_ENABLED = true;
+static constexpr bool CALIBRATE_IMU_ON_BOOT = false;
+static constexpr bool SUSPENSION_PWM_ENABLED = true;
 
 enum StripColorOrder : uint8_t {
   STRIP_ORDER_GRB = 0,
@@ -56,6 +70,7 @@ uint16_t lightsDiagIntervalMs = 500;
 unsigned long lightsDiagLastStepMs = 0;
 uint8_t lightsDiagStep = 0;
 StripColorOrder stripColorOrder = STRIP_ORDER_GRB;
+static uint32_t lastSuspensionDebugMs = 0;
 
 static constexpr uint8_t LIGHT_GROUP_SLOT_COUNT = 15;
 struct LegacyLightGroupSlot {
@@ -127,6 +142,38 @@ static void writeTrimToAllSuspensionServos() {
   pwmOutputs.setChannelMicroseconds(1, static_cast<uint16_t>(frTrim));
   pwmOutputs.setChannelMicroseconds(2, static_cast<uint16_t>(rlTrim));
   pwmOutputs.setChannelMicroseconds(3, static_cast<uint16_t>(rrTrim));
+}
+
+  static void clearManualServoOverrides() {
+    for (auto& overrideState : gManualServoOverrides) {
+      overrideState.active = false;
+      overrideState.expiresAtMs = 0;
+      overrideState.targetUs = 1500;
+    }
+  }
+
+  static void setManualServoOverride(uint8_t channel, uint16_t microseconds, uint32_t durationMs = 2500) {
+    if (channel >= 4) return;
+    gManualServoOverrides[channel].active = true;
+    gManualServoOverrides[channel].expiresAtMs = millis() + durationMs;
+    gManualServoOverrides[channel].targetUs = constrain(microseconds, static_cast<uint16_t>(900), static_cast<uint16_t>(2100));
+  }
+
+  static bool manualServoOverrideActive(uint8_t channel, uint32_t nowMs) {
+    if (channel >= 4) return false;
+    ManualServoOverride& overrideState = gManualServoOverrides[channel];
+    if (!overrideState.active) return false;
+    if (static_cast<int32_t>(overrideState.expiresAtMs - nowMs) <= 0) {
+      overrideState.active = false;
+      return false;
+    }
+    return true;
+  }
+
+static void refreshSuspensionRuntimeFromStorage() {
+  const SuspensionConfig cfg = storageManager.getConfig();
+  const ServoConfig servoCfg = storageManager.getServoConfig();
+  suspensionSimulator.init(cfg, servoCfg);
 }
 
 static void applyDanceModeTilt(float rollNorm, float pitchNorm) {
@@ -476,8 +523,28 @@ bool applyConfigUpdatePayload(const String& payload) {
       if (servo.containsKey("max")) storageManager.updateServoParameter(servoName, "max", servo["max"]);
       if (servo.containsKey("trim")) storageManager.updateServoParameter(servoName, "trim", servo["trim"]);
       if (servo.containsKey("reversed")) storageManager.updateServoParameter(servoName, "reversed", servo["reversed"]);
+      if (servo.containsKey("rideHeight")) {
+        String ns = (strcmp(servoName, "frontLeft") == 0) ? "srv_fl"
+                  : (strcmp(servoName, "frontRight") == 0) ? "srv_fr"
+                  : (strcmp(servoName, "rearLeft") == 0) ? "srv_rl"
+                  : "srv_rr";
+        DynamicJsonDocument rideDoc(32);
+        rideDoc["v"] = servo["rideHeight"].as<int32_t>();
+        storageManager.setValue(ns + ".ride_ht", rideDoc["v"].as<JsonVariantConst>());
+      }
+      if (servo.containsKey("ride_ht")) {
+        String ns = (strcmp(servoName, "frontLeft") == 0) ? "srv_fl"
+                  : (strcmp(servoName, "frontRight") == 0) ? "srv_fr"
+                  : (strcmp(servoName, "rearLeft") == 0) ? "srv_rl"
+                  : "srv_rr";
+        DynamicJsonDocument rideDoc(32);
+        rideDoc["v"] = servo["ride_ht"].as<int32_t>();
+        storageManager.setValue(ns + ".ride_ht", rideDoc["v"].as<JsonVariantConst>());
+      }
     }
   }
+
+  refreshSuspensionRuntimeFromStorage();
 
   startLedBlink();
   return true;
@@ -485,6 +552,7 @@ bool applyConfigUpdatePayload(const String& payload) {
 
 bool applyKVWritePayload(const String& payload) {
   lastBleCommandMs = millis();  // Reset continuous-servo watchdog
+  Serial.printf("[BLE-KV] payload=%s\n", payload.c_str());
   DynamicJsonDocument doc(512);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
@@ -499,6 +567,7 @@ bool applyKVWritePayload(const String& payload) {
 
   const String key = doc["key"].as<String>();
   const JsonVariantConst value = doc["value"].as<JsonVariantConst>();
+  Serial.printf("[BLE-KV] key=%s value=%s\n", key.c_str(), value.as<String>().c_str());
 
   if (!storageManager.setValue(key, value)) {
     Serial.printf("BLE KV ignored unknown key: %s\n", key.c_str());
@@ -507,6 +576,24 @@ bool applyKVWritePayload(const String& payload) {
 
   if (key == "imu.orient") {
     sensorFusion.setOrientation(storageManager.getConfig().mpuOrientation);
+  }
+
+  if (key == "srv_fl.trim") {
+    setManualServoOverride(0, value.as<int32_t>());
+    Serial.printf("[SERVO-OVR] ch=0 us=%ld\n", static_cast<long>(value.as<int32_t>()));
+  } else if (key == "srv_fr.trim") {
+    setManualServoOverride(1, value.as<int32_t>());
+    Serial.printf("[SERVO-OVR] ch=1 us=%ld\n", static_cast<long>(value.as<int32_t>()));
+  } else if (key == "srv_rl.trim") {
+    setManualServoOverride(2, value.as<int32_t>());
+    Serial.printf("[SERVO-OVR] ch=2 us=%ld\n", static_cast<long>(value.as<int32_t>()));
+  } else if (key == "srv_rr.trim") {
+    setManualServoOverride(3, value.as<int32_t>());
+    Serial.printf("[SERVO-OVR] ch=3 us=%ld\n", static_cast<long>(value.as<int32_t>()));
+  }
+
+  if (key.startsWith("suspension.") || key.startsWith("srv_f") || key == "imu.orient") {
+    refreshSuspensionRuntimeFromStorage();
   }
 
   startLedBlink();
@@ -525,17 +612,28 @@ bool applyServoConfigPayload(const String& payload) {
     return false;
   }
 
-  storageManager.updateServoParameter(
-    doc["servo"].as<String>(),
-    doc["param"].as<String>(),
-    doc["value"].as<int>()
-  );
+  const String servoName = doc["servo"].as<String>();
+  const String paramName = doc["param"].as<String>();
+  const int paramValue = doc["value"].as<int>();
+
+  storageManager.updateServoParameter(servoName, paramName, paramValue);
+
+  if (paramName == "trim") {
+    if (servoName == "frontLeft") setManualServoOverride(0, paramValue);
+    else if (servoName == "frontRight") setManualServoOverride(1, paramValue);
+    else if (servoName == "rearLeft") setManualServoOverride(2, paramValue);
+    else if (servoName == "rearRight") setManualServoOverride(3, paramValue);
+  }
+
+  refreshSuspensionRuntimeFromStorage();
 
   startLedBlink();
   return true;
 }
 
 bool applyLightsPayload(const String& payload) {
+  Serial.printf("[BLE-LIGHTS] payload=%s\n", payload.c_str());
+
   if (!LIGHTS_ENTRYPOINT_ENABLED) {
     Serial.println("BLE lights payload ignored: lights entrypoint disabled");
     return true;
@@ -645,6 +743,8 @@ bool applyLightsPayload(const String& payload) {
 
 bool applySystemCommandPayload(const String& payload) {
 
+  Serial.printf("[BLE-SYS] payload=%s\n", payload.c_str());
+
   DynamicJsonDocument doc(512);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
@@ -654,6 +754,7 @@ bool applySystemCommandPayload(const String& payload) {
 
   String command = doc["command"] | "";
   command.toLowerCase();
+  Serial.printf("[BLE-SYS] command=%s\n", command.c_str());
 
   // Simple 5-LED blue on/off test
   if (command == "leds_simple_onoff") {
@@ -958,14 +1059,22 @@ void setup() {
   storageManager.init();
 
   // Lights runtime handles app payload effects (glitter, speed, intensity, etc.).
-  lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
-  lightsEngine->begin();
-  lightsEngine->setMaster(false);
-  lightsEngine->setColorOrderByName("grb");
-  legacyStatusLedEnabled = false;
+  if (LIGHTS_ENTRYPOINT_ENABLED) {
+    lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
+    lightsEngine->begin();
+    lightsEngine->setMaster(false);
+    lightsEngine->setColorOrderByName("grb");
+    legacyStatusLedEnabled = false;
+  } else {
+    lightsEngine = nullptr;
+    legacyStatusLedEnabled = true;
+    Serial.println("Lights runtime disabled");
+  }
 
   storageManager.loadConfig();
-  storageManager.loadLights();
+  if (LIGHTS_ENTRYPOINT_ENABLED) {
+    storageManager.loadLights();
+  }
   // Note: Phase 5 loads lighting profiles from LittleFS, not from legacy lights config
   SuspensionConfig config = storageManager.getConfig();
   ServoConfig servoConfig = storageManager.getServoConfig();
@@ -975,25 +1084,30 @@ void setup() {
   delay(100);
   
   Serial.println("Testing MPU6050 connection...");
-  Serial.println("Scanning I2C bus...");
-  
-  // Scan I2C bus
-  byte error, address;
-  int nDevices = 0;
-  for(address = 1; address < 127; address++ ) {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
-    if (error == 0) {
-      Serial.print("I2C device found at address 0x");
-      if (address<16) Serial.print("0");
-      Serial.println(address,HEX);
-      nDevices++;
+  if (I2C_BUS_SCAN_ENABLED) {
+    Serial.println("Scanning I2C bus...");
+
+    // Optional bus scan for diagnostics. Disabled by default to avoid
+    // driver panics observed on some boards during startup.
+    byte error;
+    int nDevices = 0;
+    for (uint8_t address = 1; address < 127; address++) {
+      Wire.beginTransmission(address);
+      error = Wire.endTransmission();
+      if (error == 0) {
+        Serial.print("I2C device found at address 0x");
+        if (address < 16) Serial.print("0");
+        Serial.println(address, HEX);
+        nDevices++;
+      }
     }
-  }
-  if (nDevices == 0) {
-    Serial.println("No I2C devices found!");
+    if (nDevices == 0) {
+      Serial.println("No I2C devices found!");
+    } else {
+      Serial.println("I2C scan complete");
+    }
   } else {
-    Serial.println("I2C scan complete");
+    Serial.println("I2C bus scan disabled");
   }
   
   mpu.initialize();
@@ -1030,40 +1144,52 @@ void setup() {
   }
   
   // Calibrate to current position as level
-  if (mpuConnected) {
+  if (mpuConnected && CALIBRATE_IMU_ON_BOOT) {
     sensorFusion.calibrate(mpu, [](const String& msg) {
       Serial.println(msg);  // Output to Serial only
     });
+  } else if (mpuConnected) {
+    Serial.println("Skipping IMU calibration on boot");
   }
   
   // Initialize suspension simulator with config and servo calibration
   suspensionSimulator.init(config, servoConfig);
   
   // Initialize PWM outputs
-  pwmOutputs.init();
-  pwmOutputs.initAux();
+  if (SUSPENSION_PWM_ENABLED) {
+    pwmOutputs.init();
+    // pwmOutputs.initAux();  // Disabled: AUX_SERVO_PINS overlap with suspension servo pins (25,26,32,33) and NeoPixel (27)
+  } else {
+    Serial.println("Suspension PWM disabled");
+  }
 
-  // Initialize Bluetooth Low Energy service
-  bluetoothService = new BluetoothService(&storageManager);
-  bluetoothService->setConfigWriteHandler(applyConfigUpdatePayload);
-  bluetoothService->setKVWriteHandler(applyKVWritePayload);
-  bluetoothService->setServoWriteHandler(applyServoConfigPayload);
-  bluetoothService->setSystemWriteHandler(applySystemCommandPayload);
-  bluetoothService->setLightsWriteHandler(applyLightsPayload);
-  bluetoothService->setConnectionStateHandler([](bool connected) {
-    ledBleOn = connected;
-    if (!connected) {
-      ledBlinkEndTime = 0;
-      lightsDiagEnabled = false;
-      // lightsBasicEnabled and lightsMasterEnabled are intentionally preserved so
-      // the LED groups keep running after the phone disconnects.
+  if (BLE_STARTUP_ENABLED) {
+    // Initialize Bluetooth Low Energy service
+    bluetoothService = new BluetoothService(&storageManager);
+    bluetoothService->setConfigWriteHandler(applyConfigUpdatePayload);
+    bluetoothService->setKVWriteHandler(applyKVWritePayload);
+    bluetoothService->setServoWriteHandler(applyServoConfigPayload);
+    bluetoothService->setSystemWriteHandler(applySystemCommandPayload);
+    if (LIGHTS_ENTRYPOINT_ENABLED) {
+      bluetoothService->setLightsWriteHandler(applyLightsPayload);
     }
-    digitalWrite(LED_PIN, connected ? HIGH : LOW);
-  });
-  const String bleDeviceName = buildBleAdvertisedName();
-  Serial.printf("Starting BLE advertising as: %s\n", bleDeviceName.c_str());
-  bluetoothService->begin(bleDeviceName.c_str());
-  Serial.println("Bluetooth service started");
+    bluetoothService->setConnectionStateHandler([](bool connected) {
+      ledBleOn = connected;
+      if (!connected) {
+        ledBlinkEndTime = 0;
+        lightsDiagEnabled = false;
+        // lightsBasicEnabled and lightsMasterEnabled are intentionally preserved so
+        // the LED groups keep running after the phone disconnects.
+      }
+      digitalWrite(LED_PIN, connected ? HIGH : LOW);
+    });
+    const String bleDeviceName = buildBleAdvertisedName();
+    Serial.printf("Starting BLE advertising as: %s\n", bleDeviceName.c_str());
+    bluetoothService->begin(bleDeviceName.c_str());
+    Serial.println("Bluetooth service started");
+  } else {
+    Serial.println("BLE startup disabled");
+  }
   
   Serial.println("Setup complete!");
 }
@@ -1265,12 +1391,69 @@ void loop() {
         Serial.printf("⚠️  SLOW SERVO CONFIG LOAD: %lums (SPIFFS read)\n", servoConfigTime);
       }
 
-      pwmOutputs.setChannel(0, fl, servoConfig.frontLeft);
-      pwmOutputs.setChannel(1, fr, servoConfig.frontRight);
-      pwmOutputs.setChannel(2, rl, servoConfig.rearLeft);
-      pwmOutputs.setChannel(3, rr, servoConfig.rearRight);
+      if (SUSPENSION_DEBUG_LOGS && (currentTime - lastSuspensionDebugMs >= SUSPENSION_DEBUG_INTERVAL_MS)) {
+        const RCDCCConfigState& dbgState = storageManager.getCurrentState();
+        Serial.printf(
+          "[SUSP-DBG] imu roll=%.2f pitch=%.2f vacc=%.2f | outDeg fl=%.1f fr=%.1f rl=%.1f rr=%.1f\n",
+          roll,
+          pitch,
+          verticalAccel,
+          fl,
+          fr,
+          rl,
+          rr
+        );
+        Serial.printf(
+          "[SUSP-DBG] state us fl(t=%ld min=%ld max=%ld rh=%ld rev=%u) fr(t=%ld min=%ld max=%ld rh=%ld rev=%u)\n",
+          static_cast<long>(dbgState.servoFL.trimUs),
+          static_cast<long>(dbgState.servoFL.minUs),
+          static_cast<long>(dbgState.servoFL.maxUs),
+          static_cast<long>(dbgState.servoFL.rideHeight),
+          static_cast<unsigned>(dbgState.servoFL.reverse),
+          static_cast<long>(dbgState.servoFR.trimUs),
+          static_cast<long>(dbgState.servoFR.minUs),
+          static_cast<long>(dbgState.servoFR.maxUs),
+          static_cast<long>(dbgState.servoFR.rideHeight),
+          static_cast<unsigned>(dbgState.servoFR.reverse)
+        );
+        Serial.printf(
+          "[SUSP-DBG] state us rl(t=%ld min=%ld max=%ld rh=%ld rev=%u) rr(t=%ld min=%ld max=%ld rh=%ld rev=%u)\n",
+          static_cast<long>(dbgState.servoRL.trimUs),
+          static_cast<long>(dbgState.servoRL.minUs),
+          static_cast<long>(dbgState.servoRL.maxUs),
+          static_cast<long>(dbgState.servoRL.rideHeight),
+          static_cast<unsigned>(dbgState.servoRL.reverse),
+          static_cast<long>(dbgState.servoRR.trimUs),
+          static_cast<long>(dbgState.servoRR.minUs),
+          static_cast<long>(dbgState.servoRR.maxUs),
+          static_cast<long>(dbgState.servoRR.rideHeight),
+          static_cast<unsigned>(dbgState.servoRR.reverse)
+        );
+        Serial.printf(
+          "[SUSP-DBG] pins fl=%d fr=%d rl=%d rr=%d\n",
+          PWM_FL_PIN,
+          PWM_FR_PIN,
+          PWM_RL_PIN,
+          PWM_RR_PIN
+        );
+        lastSuspensionDebugMs = currentTime;
+      }
+
+      if (manualServoOverrideActive(0, currentTime)) pwmOutputs.setChannelMicroseconds(0, gManualServoOverrides[0].targetUs);
+      else pwmOutputs.setChannel(0, fl, servoConfig.frontLeft);
+
+      if (manualServoOverrideActive(1, currentTime)) pwmOutputs.setChannelMicroseconds(1, gManualServoOverrides[1].targetUs);
+      else pwmOutputs.setChannel(1, fr, servoConfig.frontRight);
+
+      if (manualServoOverrideActive(2, currentTime)) pwmOutputs.setChannelMicroseconds(2, gManualServoOverrides[2].targetUs);
+      else pwmOutputs.setChannel(2, rl, servoConfig.rearLeft);
+
+      if (manualServoOverrideActive(3, currentTime)) pwmOutputs.setChannelMicroseconds(3, gManualServoOverrides[3].targetUs);
+      else pwmOutputs.setChannel(3, rr, servoConfig.rearRight);
     }
 
+
+    clearManualServoOverrides();
     // Update aux servo PWM outputs
     {
       const ServoRegistry& reg = storageManager.getServoRegistry();

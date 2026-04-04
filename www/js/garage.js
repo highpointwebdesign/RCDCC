@@ -1098,7 +1098,9 @@ const GarageManager = (() => {
         if (!connected) return;
 
         const nameEl = document.getElementById('garageVehicleAboutName');
-        const macEl = document.getElementById('garageVehicleAboutMac');
+    const macWifiStaEl = document.getElementById('garageVehicleAboutMacWifiSta');
+    const macSoftApEl = document.getElementById('garageVehicleAboutMacSoftAp');
+    const macBleEl = document.getElementById('garageVehicleAboutMacBle');
         const fwEl = document.getElementById('garageVehicleAboutFirmware');
         const titleTextEl = document.getElementById('garageVehicleAboutTitleText');
         const modalEl = document.getElementById('garageVehicleAboutModal');
@@ -1107,16 +1109,27 @@ const GarageManager = (() => {
         const vehicleName = vehicle.friendlyName || vehicle.bleName || 'Vehicle';
         if (nameEl) nameEl.textContent = vehicleName;
         if (titleTextEl) titleTextEl.textContent = `About ${vehicleName}`;
-        if (macEl) macEl.textContent = deviceId;
+        if (macWifiStaEl) macWifiStaEl.textContent = 'WiFi STA: Loading...';
+        if (macSoftApEl) macSoftApEl.textContent = 'SoftAP: Loading...';
+        if (macBleEl) macBleEl.textContent = `BLE: ${deviceId || '--'}`;
         if (fwEl) fwEl.textContent = 'Loading...';
         renderAboutBluetoothStrength(_connectedVehicleRssi);
 
         try {
             const data = await window.bleManager.readConfigScoped('bootstrap');
             const fw = data?.fw_version || data?.version || data?.firmwareVersion || data?.system?.fw_version || 'Not available';
+            const wifiStaMac = data?.mac_wifi_sta || data?.system?.mac_wifi_sta || '--';
+            const softApMac = data?.mac_softap || data?.system?.mac_softap || '--';
+            const bleMac = data?.mac_ble || data?.system?.mac_ble || deviceId || '--';
             if (fwEl) fwEl.textContent = fw;
+            if (macWifiStaEl) macWifiStaEl.textContent = `WiFi STA: ${wifiStaMac}`;
+            if (macSoftApEl) macSoftApEl.textContent = `SoftAP: ${softApMac}`;
+            if (macBleEl) macBleEl.textContent = `BLE: ${bleMac}`;
         } catch (error) {
             if (fwEl) fwEl.textContent = 'Connection error';
+            if (macWifiStaEl) macWifiStaEl.textContent = 'WiFi STA: Not available';
+            if (macSoftApEl) macSoftApEl.textContent = 'SoftAP: Not available';
+            if (macBleEl) macBleEl.textContent = `BLE: ${deviceId || 'Not available'}`;
             console.warn('Vehicle about firmware fetch failed:', error?.message || error);
         }
 

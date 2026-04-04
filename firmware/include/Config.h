@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "26.03.30"
+#define FIRMWARE_VERSION "26.04.16"
 #endif
 
 // Sensor configuration
@@ -16,14 +16,14 @@
 // Note: PWM_RESOLUTION is defined in PWMOutputs.h
 
 // GPIO assignments for PWM outputs (if using direct GPIO instead of PCA9685)
-#define PWM_FL_PIN 12  // Front Left
-#define PWM_FR_PIN 13  // Front Right
-#define PWM_RL_PIN 14  // Rear Left
-#define PWM_RR_PIN 15  // Rear Right
+#define PWM_FL_PIN 25  // Front Left
+#define PWM_FR_PIN 26  // Front Right
+#define PWM_RL_PIN 32  // Rear Left
+#define PWM_RR_PIN 33  // Rear Right
 
 // Addressable LED configuration
 #define STATUS_LED_PIN 27         // GPIO pin for addressable LED strip (WS2812B/NeoPixel)
-#define STATUS_LED_COUNT 100      // Total number of LEDs in the strip (adjust to your hardware)
+#define STATUS_LED_COUNT 30       // Buffer size for addressable LEDs; app configures actual count
 #define LED_BRIGHTNESS_MAX 255    // Maximum brightness value
 
 // Phase 1 default values (NVS-backed schema)
