@@ -62,6 +62,19 @@ applySafeAreaInsets();
 window.addEventListener('resize', applySafeAreaInsets);
 document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
+// Warn about unsaved changes when leaving the page
+window.addEventListener('beforeunload', function(event) {
+    // Check if we're in the lights section with unsaved changes
+    const currentSection = document.querySelector('section.page-section:not([style*="display:none"])');
+    const isInLightsSection = currentSection?.id === 'lights';
+    
+    if (isInLightsSection && (_isLightingProfileLookDirty || lightingGroupsDirty)) {
+        event.preventDefault();
+        event.returnValue = '';
+        return '';
+    }
+});
+
         // Hide Android navigation bar (immersive mode)
         // ==================== Status Bar ====================
         // ==================== Status Bar ====================
@@ -85,7 +98,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.621';
+        const APP_VERSION = '1.1.635';
         const BUILD_DATE = '2026-04-04';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -4163,6 +4176,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             bindMasterLightSwitch(lightsToggleDashboard);
             bindMasterLightSwitch(lightsToggleLightGroups);
             syncMasterLightSwitches(getMasterLightsEnabled());
+            // Ensure lighting controls are always visible (master light state controls hardware writes, not UI visibility)
+            syncLightsControlsVisibility(true);
             
             // Suspension Settings gear click - navigate to Tuning
             const suspGear = document.getElementById('suspensionSettingsGear');
@@ -4691,6 +4706,15 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             };
         }
 
+        function _buildVehicleLightingGroupsFromConfig(config) {
+            const cfg = _normalizeBasicScenarioConfig(config || _getDefaultBasicScenarioConfig());
+            return {
+                cards: JSON.parse(JSON.stringify(cfg.cards || [])),
+                assignment: Object.assign({}, cfg.assignment || {}),
+                customNames: Object.assign({}, cfg.customNames || {})
+            };
+        }
+
         function _loadCurrentBasicScenarioConfigSnapshot() {
             if (typeof _normalizeBasicScenarioConfig !== 'function' || typeof _getDefaultBasicScenarioConfig !== 'function') return null;
             if (_basicScenarioConfig && typeof _basicScenarioConfig === 'object') {
@@ -4830,92 +4854,87 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const lookOverrides = overrides?.basicScenarioLook && typeof overrides.basicScenarioLook === 'object'
                 ? overrides.basicScenarioLook
                 : {};
+            const groupsOverrides = overrides?.basicScenarioGroups && typeof overrides.basicScenarioGroups === 'object'
+                ? overrides.basicScenarioGroups
+                : {};
 
             return _normalizeBasicScenarioConfig({
                 ...fallback,
                 ...base,
+                ...groupsOverrides,
                 ...lookDefaults,
                 ...lookOverrides
             });
         }
 
-        function _buildLightingOverridesFromRuntime(defaults) {
-            const override = {
-                masterEnabled: getMasterLightsEnabled(),
-                groupBehaviorById: {}
-            };
-
-            const baseById = defaults?.groupDefaultsById && typeof defaults.groupDefaultsById === 'object'
-                ? defaults.groupDefaultsById
-                : {};
-
-            (Array.isArray(lightGroups) ? lightGroups : []).forEach((group) => {
-                const id = group?.id;
-                if (!id) return;
-                const current = _extractGroupBehavior(group);
-                const base = _extractGroupBehavior(baseById[id] || {});
-                const delta = {};
-                Object.keys(current).forEach((key) => {
-                    if (JSON.stringify(current[key]) !== JSON.stringify(base[key])) {
-                        delta[key] = current[key];
-                    }
-                });
-                if (Object.keys(delta).length) {
-                    override.groupBehaviorById[id] = delta;
-                }
-            });
-
-            const currentScenarioCfg = _loadCurrentBasicScenarioConfigSnapshot();
-            if (currentScenarioCfg) {
-                const defaultsLook = defaults?.basicScenarioDefaults || _buildVehicleLightingLookFromConfig(currentScenarioCfg);
-                const currentLook = _buildVehicleLightingLookFromConfig(currentScenarioCfg);
-                const lookDelta = {};
-                Object.keys(currentLook).forEach((key) => {
-                    if (JSON.stringify(currentLook[key]) !== JSON.stringify(defaultsLook[key])) {
-                        lookDelta[key] = currentLook[key];
-                    }
-                });
-                if (Object.keys(lookDelta).length) {
-                    override.basicScenarioLook = lookDelta;
-                }
-            }
-
-            return override;
-        }
-
-        function _migrateLegacyLightingProfile(profile, defaults) {
-            const source = profile && typeof profile === 'object' ? profile : {};
-            if (source.overrides && typeof source.overrides === 'object') {
-                return source;
-            }
-
-            const legacyGroups = Array.isArray(source.groups) ? source.groups.map(normalizeLightGroup) : [];
-            const groupBehaviorById = {};
-            legacyGroups.forEach((group, idx) => {
-                const fallbackId = defaults?.groupLayout?.[idx]?.id;
-                const id = group.id || fallbackId;
-                if (!id) return;
-                groupBehaviorById[id] = _extractGroupBehavior(group);
-            });
+        function _buildLightingProfileSnapshotFromRuntime(index, name) {
+            const scenarioCfg = _loadCurrentBasicScenarioConfigSnapshot();
+            const fallbackScenario = _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
 
             return {
-                index: Number(source.index) || 0,
-                name: source.name || `Profile ${Number(source.index) || 0}`,
-                overrides: {
-                    masterEnabled: typeof source.masterEnabled === 'boolean' ? source.masterEnabled : getMasterLightsEnabled(),
-                    groupBehaviorById
+                index: Number(index) || 0,
+                name: String(name || `Profile ${Number(index) || 0}`).trim() || `Profile ${Number(index) || 0}`,
+                masterEnabled: getMasterLightsEnabled(),
+                groups: (Array.isArray(lightGroups) ? lightGroups : []).map(normalizeLightGroup),
+                basicScenarioGroups: _buildVehicleLightingGroupsFromConfig(scenarioCfg || fallbackScenario),
+                basicScenarioLook: _buildVehicleLightingLookFromConfig(scenarioCfg || fallbackScenario),
+                basicLedMapDraft: {
+                    assignment: Object.assign({}, _basicLedMapDraftAssignment),
+                    colors: Object.assign({}, _basicLedMapDraftColors),
+                    activeScenario: _basicLedMapActiveScenario
                 }
             };
         }
 
         function ensureLightingProfilesUpgraded() {
-            const defaults = loadVehicleLightingDefaults();
+            const fallbackScenario = _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+            const fallbackLook = _buildVehicleLightingLookFromConfig(fallbackScenario);
             let changed = false;
-            lightingProfiles = (Array.isArray(lightingProfiles) ? lightingProfiles : []).map((profile) => {
-                const migrated = _migrateLegacyLightingProfile(profile, defaults);
-                if (migrated !== profile || Array.isArray(profile?.groups)) changed = true;
-                return migrated;
+
+            lightingProfiles = (Array.isArray(lightingProfiles) ? lightingProfiles : []).map((profile, idx) => {
+                const source = profile && typeof profile === 'object' ? profile : {};
+                const normalized = {
+                    index: Number(source.index),
+                    name: String(source.name || '').trim(),
+                    masterEnabled: typeof source.masterEnabled === 'boolean' ? source.masterEnabled : getMasterLightsEnabled(),
+                    groups: Array.isArray(source.groups) ? source.groups.map(normalizeLightGroup) : [],
+                    basicScenarioGroups: source.basicScenarioGroups && typeof source.basicScenarioGroups === 'object'
+                        ? _buildVehicleLightingGroupsFromConfig(source.basicScenarioGroups)
+                        : _buildVehicleLightingGroupsFromConfig(fallbackScenario),
+                    basicScenarioLook: source.basicScenarioLook && typeof source.basicScenarioLook === 'object'
+                        ? { ...fallbackLook, ...source.basicScenarioLook }
+                        : fallbackLook,
+                    basicLedMapDraft: source.basicLedMapDraft && typeof source.basicLedMapDraft === 'object'
+                        ? {
+                            assignment: source.basicLedMapDraft.assignment && typeof source.basicLedMapDraft.assignment === 'object'
+                                ? Object.assign({}, source.basicLedMapDraft.assignment)
+                                : {},
+                            colors: source.basicLedMapDraft.colors && typeof source.basicLedMapDraft.colors === 'object'
+                                ? Object.assign({}, source.basicLedMapDraft.colors)
+                                : {},
+                            activeScenario: String(source.basicLedMapDraft.activeScenario || '')
+                        }
+                        : { assignment: {}, colors: {}, activeScenario: '' }
+                };
+
+                if (!Number.isInteger(normalized.index) || normalized.index < 0) {
+                    normalized.index = idx;
+                    changed = true;
+                }
+                if (!normalized.name) {
+                    normalized.name = `Profile ${normalized.index}`;
+                    changed = true;
+                }
+                if (!Array.isArray(source.groups)) {
+                    changed = true;
+                }
+                if (!source.basicLedMapDraft) {
+                    changed = true;
+                }
+
+                return normalized;
             });
+
             if (changed) saveLocalLightingProfiles();
         }
 
@@ -4947,6 +4966,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         let manageLightGroupsLocked = localStorage.getItem('manageLightGroupsLocked') === 'true';
         let lightStripConfigLocked = localStorage.getItem('lightStripConfigLocked') === 'true';
         let lightingGroupsDirty = false;
+        let _isLightingProfileLookDirty = false;
         
         // Predefined light groups (initialized on first load)
         const PREDEFINED_LIGHT_GROUPS = [
@@ -5229,7 +5249,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const updateBtn = document.getElementById('ltProfileUpdateBtn');
             if (!updateBtn) return;
             const activeProfile = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
-            const showUpdate = !!activeProfile && lightingGroupsDirty;
+            const showUpdate = !!activeProfile && (lightingGroupsDirty || _isLightingProfileLookDirty);
             updateBtn.classList.toggle('profile-update-needs-save', showUpdate);
             updateBtn.disabled = !showUpdate || lightingProfileBusy || lightingProfilesLocked || !isBleConnected();
         }
@@ -5453,24 +5473,50 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         }
 
         async function applyResolvedLightingProfile(profile, notify = true) {
-            const currentMasterEnabled = getMasterLightsEnabled();
-            const defaults = syncVehicleLightingDefaultsFromLightGroups();
-            const overrides = profile?.overrides && typeof profile.overrides === 'object' ? profile.overrides : {};
-            lightGroups = _composeLightGroupsFromDefaults(defaults, overrides).map(normalizeLightGroup);
+            const defaults = loadVehicleLightingDefaults();
+            lightGroups = (Array.isArray(profile?.groups) ? profile.groups : []).map(normalizeLightGroup);
             ensureLightGroupIds();
             saveLightGroups(false);
             renderLightGroupsList();
 
-            const mergedScenarioConfig = _composeBasicScenarioConfigFromDefaults(defaults, overrides);
+            const mergedScenarioConfig = _composeBasicScenarioConfigFromDefaults(defaults, {
+                basicScenarioGroups: profile?.basicScenarioGroups && typeof profile.basicScenarioGroups === 'object'
+                    ? profile.basicScenarioGroups
+                    : {},
+                basicScenarioLook: profile?.basicScenarioLook && typeof profile.basicScenarioLook === 'object'
+                    ? profile.basicScenarioLook
+                    : {}
+            });
             if (mergedScenarioConfig) {
                 _basicScenarioConfig = mergedScenarioConfig;
                 _writeBasicScenarioConfigToUI(_basicScenarioConfig);
                 _saveBasicScenarioConfig(_basicScenarioConfig);
             }
 
-            _syncMasterLightState(currentMasterEnabled);
+            const profileMaster = typeof profile?.masterEnabled === 'boolean'
+                ? profile.masterEnabled
+                : getMasterLightsEnabled();
+            _syncMasterLightState(profileMaster);
 
             lightingGroupsDirty = false;
+            _isLightingProfileLookDirty = false;
+            
+            // Restore LED mapping draft from profile
+            if (profile?.basicLedMapDraft && typeof profile.basicLedMapDraft === 'object') {
+                _basicLedMapDraftAssignment = Object.assign({}, profile.basicLedMapDraft.assignment || {});
+                _basicLedMapDraftColors = Object.assign({}, profile.basicLedMapDraft.colors || {});
+                _basicLedMapActiveScenario = String(profile.basicLedMapDraft.activeScenario || '') || _getBasicScenarioCardDefs(mergedScenarioConfig)[0]?.mode || 'brake';
+            } else {
+                // Empty draft for profiles without saved LED mapping
+                _basicLedMapDraftAssignment = {};
+                _basicLedMapDraftColors = {};
+                _basicLedMapActiveScenario = _getBasicScenarioCardDefs(mergedScenarioConfig)[0]?.mode || 'brake';
+            }
+            
+            // Refresh LED mapping display
+            _renderLedMapPalette();
+            _renderLedMapGrid();
+            
             syncLightingProfileActionButtons();
 
             if (isBleConnected()) {
@@ -5495,6 +5541,37 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 toast.warning('Lighting profiles are locked. Unlock to make changes.');
                 return;
             }
+            
+            // Prompt if there are unsaved changes to the current profile
+            if (_isLightingProfileLookDirty || lightingGroupsDirty) {
+                const confirmed = await new Promise(resolve => {
+                    const existing = document.getElementById('profile-unsaved-overlay');
+                    if (existing) existing.remove();
+                    const overlay = document.createElement('div');
+                    overlay.id = 'profile-unsaved-overlay';
+                    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+                    overlay.innerHTML = `
+                      <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
+                        <h5 style="margin:0 0 12px;color:#fff;">Unsaved Changes</h5>
+                        <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">You have unsaved changes to the current lighting profile. Do you want to save them before switching?</p>
+                        <div style="display:flex;gap:8px;flex-direction:column;">
+                            <button id="pus-save" style="padding:10px;border:none;border-radius:8px;background:#c8a800;color:#000;font-weight:600;cursor:pointer;">Save & Switch</button>
+                            <button id="pus-discard" style="padding:10px;border:none;border-radius:8px;background:#333;color:#fff;border:1px solid #555;cursor:pointer;">Discard & Switch</button>
+                            <button id="pus-cancel" style="padding:10px;border:none;border-radius:8px;background:#555;color:#fff;border:1px solid #777;cursor:pointer;">Cancel</button>
+                        </div>
+                      </div>`;
+                    document.body.appendChild(overlay);
+                    overlay.querySelector('#pus-save').onclick = async () => { 
+                        overlay.remove();
+                        await updateActiveLightingProfile();
+                        resolve(true);
+                    };
+                    overlay.querySelector('#pus-discard').onclick = () => { overlay.remove(); resolve(true); };
+                    overlay.querySelector('#pus-cancel').onclick = () => { overlay.remove(); resolve(false); };
+                });
+                if (!confirmed) return;
+            }
+            
             ensureLightingProfilesUpgraded();
             const profile = lightingProfiles.find(p => Number(p.index) === Number(index));
             if (!profile) { toast.warning('Lighting profile not found'); return; }
@@ -5524,12 +5601,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 while (usedSlots.has(targetSlot) && targetSlot < MAX_LIGHTING_PROFILES) targetSlot++;
             }
             if (!profileName) return;
-            const defaults = syncVehicleLightingDefaultsFromLightGroups();
-            const snapshot = {
-                index: Number(targetSlot),
-                name: profileName,
-                overrides: _buildLightingOverridesFromRuntime(defaults)
-            };
+            const snapshot = _buildLightingProfileSnapshotFromRuntime(Number(targetSlot), profileName);
             const existingIdx = lightingProfiles.findIndex(p => Number(p.index) === Number(targetSlot));
             if (existingIdx >= 0) {
                 lightingProfiles[existingIdx] = snapshot;
@@ -5542,6 +5614,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             populateLightingProfileSelector();
             updateDashboardActiveLightingProfile();
             lightingGroupsDirty = false;
+            _isLightingProfileLookDirty = false;
             syncLightingProfileActionButtons();
             toast.success(`Saved lighting profile "${profileName}"`);
         }
@@ -5554,14 +5627,11 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             ensureLightingProfilesUpgraded();
             const active = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
             if (!active) { toast.warning('No active lighting profile selected. Save a profile first.'); return; }
-            const defaults = syncVehicleLightingDefaultsFromLightGroups();
             const idx = lightingProfiles.findIndex(p => Number(p.index) === Number(activeLightingProfileIndex));
-            lightingProfiles[idx] = {
-                ...active,
-                overrides: _buildLightingOverridesFromRuntime(defaults)
-            };
+            lightingProfiles[idx] = _buildLightingProfileSnapshotFromRuntime(active.index, active.name);
             saveLocalLightingProfiles();
             lightingGroupsDirty = false;
+            _isLightingProfileLookDirty = false;
             syncLightingProfileActionButtons();
             toast.success(`Updated lighting profile "${active.name}"`);
         }
@@ -5659,7 +5729,8 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 writeVehicleScopedStorage(LIGHT_MASTER_STORAGE_KEY, nextEnabled ? 'true' : 'false');
             }
             syncMasterLightSwitches(nextEnabled);
-            syncLightsControlsVisibility(nextEnabled);
+            // Always show controls regardless of master light state; master only gates hardware writes
+            syncLightsControlsVisibility(true);
             _basicScenarioStripEnabled = nextEnabled;
             _syncBasicScenarioButtons();
         }
@@ -6574,6 +6645,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             return (r * 299 + g * 587 + b * 114) / 1000 < 140;
         }
 
+        function _markLedMapDirty() {
+            lightingGroupsDirty = true;
+            _isLightingProfileLookDirty = true;
+            syncLightingProfileActionButtons();
+        }
+
         function _renderLedMapPalette() {
             const palette = document.getElementById('basicLedMapPalette');
             if (!palette) return;
@@ -6590,6 +6667,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 _basicLedMapActiveScenario = null;
                 _renderLedMapPalette();
                 _renderLedMapGrid();
+                _markLedMapDirty();
             };
             palette.appendChild(clearPill);
 
@@ -6610,6 +6688,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     _basicLedMapActiveScenario = card.mode;
                     _renderLedMapPalette();
                     _renderLedMapGrid();
+                    _markLedMapDirty();
                 };
                 palette.appendChild(pill);
             });
@@ -6685,6 +6764,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     }
                     _renderLedMapPalette();
                     _renderLedMapGrid();
+                    _markLedMapDirty();
                 };
                 grid.appendChild(btn);
             }
@@ -6711,25 +6791,54 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _renderLedMapPalette();
             _renderLedMapGrid();
 
-            // Expand hardware setup card if collapsed so the inline section is visible
+            // Expand profile look card if collapsed so the inline section is visible
+            const profileLookBody = document.getElementById('basicLightsTestCardBody');
+            if (profileLookBody && profileLookBody.style.display === 'none') {
+                localStorage.setItem('lightingControlCardCollapsed', 'false');
+                syncLightingControlCardUI();
+            }
+
+            // Show inline section
+            const inline = document.getElementById('basicLedMapInline');
+            const actionRow = document.getElementById('basicLedMapActionRow');
+            if (inline) {
+                inline.style.display = 'block';
+                syncBasicLedMapInlineToggleUI();
+                const scrollMappingSectionToTop = () => {
+                    const mappingSection = document.getElementById('basicLedMappingSection');
+                    const mappingHeading = mappingSection?.querySelector('h6');
+                    const target = mappingHeading || mappingSection || inline;
+                    if (!target) return;
+
+                    const header = document.querySelector('.dashboard-header');
+                    const headerOffset = (header?.getBoundingClientRect().height || 0) + 12;
+                    const targetY = window.pageYOffset + target.getBoundingClientRect().top - headerOffset;
+
+                    window.scrollTo({
+                        top: Math.max(0, targetY),
+                        behavior: 'smooth'
+                    });
+                };
+
+                // First pass for initial open, second pass after layout settles.
+                setTimeout(scrollMappingSectionToTop, 60);
+                setTimeout(scrollMappingSectionToTop, 260);
+            }
+            if (actionRow) actionRow.style.display = 'grid';
+
+            // Keep action buttons visible by expanding Hardware Setup card when mapping is active.
             const hwBody = document.getElementById('hardwareSetupCardBody');
             if (hwBody && hwBody.style.display === 'none') {
                 localStorage.setItem('hardwareSetupCardCollapsed', 'false');
                 syncHardwareSetupCardUI();
             }
-
-            // Show inline section
-            const inline = document.getElementById('basicLedMapInline');
-            if (inline) {
-                inline.style.display = 'block';
-                syncBasicLedMapInlineToggleUI();
-                setTimeout(() => inline.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-            }
         };
 
         window.basicCloseLedMapModal = function() {
             const inline = document.getElementById('basicLedMapInline');
+            const actionRow = document.getElementById('basicLedMapActionRow');
             if (inline) inline.style.display = 'none';
+            if (actionRow) actionRow.style.display = 'none';
             syncBasicLedMapInlineToggleUI();
             // Legacy: clean up Bootstrap modal instance if present
             if (_basicLedMapModalInstance) {
@@ -6739,7 +6848,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
         };
 
         window.basicToggleLedMapInline = function() {
-            if (hardwareSetupLocked) return;
+            if (lightingControlLocked) return;
             const inline = document.getElementById('basicLedMapInline');
             if (!inline) return;
             if (inline.style.display !== 'none') {
@@ -6777,9 +6886,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             const isCollapsed = inline.style.display === 'none';
             chevron.classList.toggle('is-collapsed', isCollapsed);
             chevron.title = isCollapsed ? 'Expand LED mapping' : 'Collapse LED mapping';
-            chevron.style.opacity = hardwareSetupLocked ? '0.4' : '1';
-            chevron.style.pointerEvents = hardwareSetupLocked ? 'none' : 'auto';
-            chevron.setAttribute('aria-disabled', hardwareSetupLocked ? 'true' : 'false');
+            chevron.style.opacity = lightingControlLocked ? '0.4' : '1';
+            chevron.style.pointerEvents = lightingControlLocked ? 'none' : 'auto';
+            chevron.setAttribute('aria-disabled', lightingControlLocked ? 'true' : 'false');
         }
 
         function syncHardwareSetupCardUI() {
@@ -6833,6 +6942,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             );
             _renderLedMapPalette();
             _renderLedMapGrid();
+            _markLedMapDirty();
         };
 
         window.basicLedMapClearScenario = function() {
@@ -6842,12 +6952,14 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             });
             _renderLedMapPalette();
             _renderLedMapGrid();
+            _markLedMapDirty();
         };
 
         window.basicLedMapClearAll = function() {
             _basicLedMapDraftAssignment = {};
             _renderLedMapPalette();
             _renderLedMapGrid();
+            _markLedMapDirty();
         };
 
         window.basicLedMapSave = async function() {
@@ -6958,6 +7070,9 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 _basicScenarioConfig = _normalizeBasicScenarioConfig(Object.assign({}, config, { customNames: nextNames }));
                 _saveBasicScenarioConfig(_basicScenarioConfig);
                 renderBasicScenarioList();
+                // Refresh palette so updated display name is shown.
+                _renderLedMapPalette();
+                _markLedMapDirty();
                 notifyBasicLightsStatus(`Group renamed to ${providedName}.`, 'success');
             } else {
                 if (cards.length >= maxGroups) {
@@ -6975,7 +7090,12 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     customNames: nextNames
                 }));
                 _saveBasicScenarioConfig(_basicScenarioConfig);
+                // Sync new group into the live LED map draft so it appears in the palette immediately.
+                _basicLedMapDraftColors[mode] = '#f5f5f5';
+                _renderLedMapPalette();
+                _renderLedMapGrid();
                 renderBasicScenarioList();
+                _markLedMapDirty();
                 notifyBasicLightsStatus(`Added group ${providedName}.`, 'success');
             }
 
@@ -7015,7 +7135,26 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                 customNames: nextNames
             }));
             _saveBasicScenarioConfig(_basicScenarioConfig);
+
+            // Keep inline LED mapping editor in sync when groups are deleted.
+            if (_basicLedMapDraftAssignment && typeof _basicLedMapDraftAssignment === 'object') {
+                Object.keys(_basicLedMapDraftAssignment).forEach((key) => {
+                    if (_basicLedMapDraftAssignment[key] === mode) {
+                        delete _basicLedMapDraftAssignment[key];
+                    }
+                });
+            }
+            if (_basicLedMapDraftColors && typeof _basicLedMapDraftColors === 'object') {
+                delete _basicLedMapDraftColors[mode];
+            }
+            if (_basicLedMapActiveScenario === mode) {
+                _basicLedMapActiveScenario = _getBasicScenarioCardDefs(_basicScenarioConfig)[0]?.mode || null;
+            }
+
             renderBasicScenarioList();
+            _renderLedMapPalette();
+            _renderLedMapGrid();
+            _markLedMapDirty();
             if (_basicScenarioGroupModalInstance) _basicScenarioGroupModalInstance.hide();
             notifyBasicLightsStatus(`Deleted group ${_getBasicScenarioDisplayName(mode, config)}. Its LEDs are now available.`, 'success');
         };
@@ -7206,6 +7345,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);
             _saveBasicScenarioConfig(_basicScenarioConfig);
             lightingGroupsDirty = true;
+            _isLightingProfileLookDirty = true;
             syncLightingProfileActionButtons();
             _queueBasicScenarioConfigApply();
             const speedSummary = BASIC_SCENARIO_FX_WITH_SPEED.has(_basicScenarioConfig.fx)
@@ -7520,7 +7660,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
                     icon.textContent = isEnabled ? 'lightbulb' : 'light_off';
                 }
             });
-            syncLightsControlsVisibility(isEnabled);
+            // Note: Controls visibility is managed by _syncMasterLightState, not here
         }
 
         function bindMasterLightSwitch(toggleElement) {
