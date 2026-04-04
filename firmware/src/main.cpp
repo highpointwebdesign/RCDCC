@@ -1049,9 +1049,9 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
-  // Lights disabled for debugging
-  // statusLED.begin();
-  // statusLED.show();  // Initialize all pixels to off
+  // Adafruit NeoPixel LED initialization - TEST 1.1
+  statusLED.begin();
+  statusLED.show();  // Initialize all pixels to off
   
   Serial.println("\n\nR/C Dynamic Chassis Control - Starting...");
   
