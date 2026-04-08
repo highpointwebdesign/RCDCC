@@ -345,7 +345,7 @@ window.addEventListener('beforeunload', function(event) {
             updateDashboardVehicleName(null);
 
             // Reset suspension settings card
-            const suspensionIds = ['rideHeightDisplay', 'dampingDisplay', 'stiffnessDisplay', 'frontRearBalanceDisplay'];
+            const suspensionIds = ['rideHeightDisplay', 'omegaNDisplay', 'zetaDisplay', 'rangeDisplay', 'frontRearBalanceDisplay'];
             suspensionIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = '--';
@@ -544,8 +544,11 @@ window.addEventListener('beforeunload', function(event) {
             if (isPageDirty('tuning')) {
                 reapplyWrites.push(pushConfigPayload({
                     rideHeightOffset: tuningSliderValues.rideHeightOffset,
-                    damping: tuningSliderValues.damping,
-                    stiffness: tuningSliderValues.stiffness,
+                    omegaN: tuningSliderValues.omegaN,
+                    zeta: tuningSliderValues.zeta,
+                    range: tuningSliderValues.range,
+                    inputDeadband: tuningSliderValues.inputDeadband,
+                    inputHyst: tuningSliderValues.inputHyst,
                     reactionSpeed: tuningSliderValues.reactionSpeed,
                     frontRearBalance: tuningSliderValues.frontRearBalance,
                     sampleRate: tuningSliderValues.sampleRate
@@ -624,13 +627,22 @@ window.addEventListener('beforeunload', function(event) {
             const trimDegToUs = (trimDeg) => 1500 + Math.round((Number(trimDeg) || 0) * (1000 / 180));
 
             if (Object.prototype.hasOwnProperty.call(payload, 'reactionSpeed')) {
-                pushWrite(window.RCDCC_KEYS.SUSPENSION_REACT_SPD, toInt((Number(payload.reactionSpeed) || 0) * 50));
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_REACT_SPD, toInt((Number(payload.reactionSpeed) || 0) * 100));
             }
-            if (Object.prototype.hasOwnProperty.call(payload, 'damping')) {
-                pushWrite(window.RCDCC_KEYS.SUSPENSION_DAMPING, toInt((Number(payload.damping) || 0) * 100));
+            if (Object.prototype.hasOwnProperty.call(payload, 'omegaN')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_OMEGA_N, toInt((Number(payload.omegaN) || 0) * 100));
             }
-            if (Object.prototype.hasOwnProperty.call(payload, 'stiffness')) {
-                pushWrite(window.RCDCC_KEYS.SUSPENSION_STIFFNESS, toInt((Number(payload.stiffness) || 0) * 50));
+            if (Object.prototype.hasOwnProperty.call(payload, 'zeta')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_ZETA, toInt((Number(payload.zeta) || 0) * 100));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'range')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_RANGE, toInt((Number(payload.range) || 0) * 100));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'inputDeadband')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_DEADBAND, toInt((Number(payload.inputDeadband) || 0) * 100));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'inputHyst')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_HYST, toInt((Number(payload.inputHyst) || 0) * 100));
             }
             if (Object.prototype.hasOwnProperty.call(payload, 'frontRearBalance')) {
                 const raw = Number(payload.frontRearBalance) || 0;
@@ -931,8 +943,11 @@ window.addEventListener('beforeunload', function(event) {
                 if (pageKey === 'tuning') {
                     const tuningSnapshot = {
                         rideHeightOffset: tuningSliderValues.rideHeightOffset,
-                        damping: tuningSliderValues.damping,
-                        stiffness: tuningSliderValues.stiffness,
+                        omegaN: tuningSliderValues.omegaN,
+                        zeta: tuningSliderValues.zeta,
+                        range: tuningSliderValues.range,
+                        inputDeadband: tuningSliderValues.inputDeadband,
+                        inputHyst: tuningSliderValues.inputHyst,
                         reactionSpeed: tuningSliderValues.reactionSpeed,
                         frontRearBalance: tuningSliderValues.frontRearBalance,
                         sampleRate: tuningSliderValues.sampleRate
@@ -977,9 +992,12 @@ window.addEventListener('beforeunload', function(event) {
                         promises.push(bleManager.writeValue(k.SERVO_RL_RIDE_HT, ride));
                         promises.push(bleManager.writeValue(k.SERVO_RR_RIDE_HT, ride));
                     }
-                    if (saved.damping       !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_DAMPING,   toInt((saved.damping || 0) * 100)));
-                    if (saved.stiffness     !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_STIFFNESS, toInt((saved.stiffness || 0) * 50)));
-                    if (saved.reactionSpeed !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_REACT_SPD, toInt((saved.reactionSpeed || 0) * 50)));
+                    if (saved.omegaN        !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_OMEGA_N,   toInt((saved.omegaN || 0) * 100)));
+                    if (saved.zeta          !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_ZETA,      toInt((saved.zeta || 0) * 100)));
+                    if (saved.range         !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_RANGE,     toInt((saved.range || 0) * 100)));
+                    if (saved.inputDeadband !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_DEADBAND,  toInt((saved.inputDeadband || 0) * 100)));
+                    if (saved.inputHyst     !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_HYST,      toInt((saved.inputHyst || 0) * 100)));
+                    if (saved.reactionSpeed !== undefined) promises.push(bleManager.writeValue(k.SUSPENSION_REACT_SPD, toInt((saved.reactionSpeed || 0) * 100)));
                     if (saved.frontRearBalance !== undefined) {
                         const mapped = toInt(((Number(saved.frontRearBalance) || 0) / 100) * 200 - 100);
                         promises.push(bleManager.writeValue(k.SUSPENSION_FR_BAL, mapped));
@@ -1631,8 +1649,11 @@ window.addEventListener('beforeunload', function(event) {
         function captureCurrentTuningValues() {
             return {
                 rideHeightOffset: tuningSliderValues.rideHeightOffset ?? 50,
-                damping: tuningSliderValues.damping ?? 0.8,
-                stiffness: tuningSliderValues.stiffness ?? 1.0,
+                omegaN: tuningSliderValues.omegaN ?? 3.0,
+                zeta: tuningSliderValues.zeta ?? 0.25,
+                range: tuningSliderValues.range ?? 1.0,
+                inputDeadband: tuningSliderValues.inputDeadband ?? 0.30,
+                inputHyst: tuningSliderValues.inputHyst ?? 0.15,
                 reactionSpeed: tuningSliderValues.reactionSpeed ?? 1.0,
                 frontRearBalance: tuningSliderValues.frontRearBalance ?? 50,
                 sampleRate: tuningSliderValues.sampleRate ?? 25
@@ -10305,8 +10326,9 @@ window.addEventListener('beforeunload', function(event) {
                 const placeholderMap = {
                     reactionSpeedBadge: '--',
                     rideHeightDisplay: '--',
-                    dampingDisplay: '--',
-                    stiffnessDisplay: '--',
+                    omegaNDisplay: '--',
+                    zetaDisplay: '--',
+                    rangeDisplay: '--',
                     frontRearBalanceDisplay: '--'
                 };
 
@@ -10521,16 +10543,22 @@ window.addEventListener('beforeunload', function(event) {
                 if (display) display.textContent = `${config.rideHeightOffset.toFixed(0)}`;
             }
             
-            // Update Damping
-            if (config.damping !== undefined) {
-                const display = document.getElementById('dampingDisplay');
-                if (display) display.textContent = config.damping.toFixed(1);
+            // Update Bounce Speed (omegaN)
+            if (config.omegaN !== undefined) {
+                const display = document.getElementById('omegaNDisplay');
+                if (display) display.textContent = config.omegaN.toFixed(1);
             }
             
-            // Update Stiffness
-            if (config.stiffness !== undefined) {
-                const display = document.getElementById('stiffnessDisplay');
-                if (display) display.textContent = config.stiffness.toFixed(1);
+            // Update Bounce Decay (zeta)
+            if (config.zeta !== undefined) {
+                const display = document.getElementById('zetaDisplay');
+                if (display) display.textContent = config.zeta.toFixed(2);
+            }
+
+            // Update Motion Amount (range)
+            if (config.range !== undefined) {
+                const display = document.getElementById('rangeDisplay');
+                if (display) display.textContent = config.range.toFixed(1);
             }
             
             // Update Front/Rear Balance
@@ -10542,6 +10570,77 @@ window.addEventListener('beforeunload', function(event) {
             
             // Update tuning sliders
             updateTuningSliders(config);
+        }
+
+        // ==================== Tuning Equalizer Functions ====================
+
+        function updateMasterFeel(feel) {
+            const t = Math.max(0, Math.min(100, Number(feel) || 0)) / 100;
+            const lerp = (a, b, t) => a + (b - a) * t;
+
+            const newOmegaN   = Number(lerp(2.0,  9.5,  t).toFixed(1));
+            const newZeta     = Number(lerp(0.55, 0.10, t).toFixed(2));
+            const newRange    = Number(lerp(0.8,  3.4,  t).toFixed(1));
+            const newReact    = Number(lerp(0.25, 0.95, t).toFixed(2));
+
+            const labels = ['Race', 'Sport', 'Balanced', 'Touring', 'Relaxed', 'Loose'];
+            const thresholds = [16, 33, 50, 66, 83, 100];
+            const feelPct = feel;
+            let label = labels[labels.length - 1];
+            for (let i = 0; i < thresholds.length; i++) {
+                if (feelPct < thresholds[i]) { label = labels[i]; break; }
+            }
+            const labelEl = document.getElementById('masterFeelLabel');
+            if (labelEl) labelEl.textContent = label;
+
+            const fakeConfig = {
+                omegaN: newOmegaN,
+                zeta: newZeta,
+                range: newRange,
+                reactionSpeed: newReact
+            };
+            isLoadingTuningConfig = true;
+            updateTuningSliders(fakeConfig);
+            isLoadingTuningConfig = false;
+
+            const k = window.RCDCC_KEYS;
+            const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+            if (canUseKv) {
+                bleManager.writeValue(k.SUSPENSION_OMEGA_N,   Math.round(newOmegaN * 100)).catch(e => console.error('KV masterFeel omegaN:', e));
+                bleManager.writeValue(k.SUSPENSION_ZETA,      Math.round(newZeta * 100)).catch(e => console.error('KV masterFeel zeta:', e));
+                bleManager.writeValue(k.SUSPENSION_RANGE,     Math.round(newRange * 100)).catch(e => console.error('KV masterFeel range:', e));
+                bleManager.writeValue(k.SUSPENSION_REACT_SPD, Math.round(newReact * 100)).catch(e => console.error('KV masterFeel react:', e));
+            }
+            markPageDirty('tuning');
+        }
+
+        function setTuningConfigMode(mode) {
+            const masterRow = document.getElementById('tuningMasterRow');
+            const autoBtn   = document.getElementById('tuningModeAutoBtn');
+            const custBtn   = document.getElementById('tuningModeCustomBtn');
+
+            const isAuto = mode === 'auto';
+            if (masterRow) masterRow.style.display = isAuto ? '' : 'none';
+
+            const allSuspSliders = ['omegaN', 'zeta', 'range', 'deadband', 'hyst', 'reactionSpeed'];
+            allSuspSliders.forEach(key => {
+                const el = document.querySelector(`.slider-stepper-control[data-slider-key="${key}"]`);
+                if (el) {
+                    const group = el.closest('.tuning-slider-group');
+                    if (group) group.style.display = isAuto ? 'none' : '';
+                }
+            });
+
+            if (autoBtn) {
+                autoBtn.classList.toggle('btn-outline-danger',    isAuto);
+                autoBtn.classList.toggle('btn-outline-secondary', !isAuto);
+            }
+            if (custBtn) {
+                custBtn.classList.toggle('btn-outline-danger',    !isAuto);
+                custBtn.classList.toggle('btn-outline-secondary', isAuto);
+            }
+
+            localStorage.setItem('tuningConfigMode', mode);
         }
 
         // ==================== Tuning Functions ====================
@@ -10557,8 +10656,11 @@ window.addEventListener('beforeunload', function(event) {
         // Track debounce timers for each slider
         const tuningSliderSaveTimers = {
             rideHeight: null,
-            damping: null,
-            stiffness: null,
+            omegaN: null,
+            zeta: null,
+            range: null,
+            deadband: null,
+            hyst: null,
             reactionSpeed: null,
             balance: null,
             sensorRate: null
@@ -10603,8 +10705,11 @@ window.addEventListener('beforeunload', function(event) {
             // Build complete payload with ALL current tuning values
             const payload = {
                 rideHeightOffset: tuningSliderValues.rideHeightOffset,
-                damping: tuningSliderValues.damping,
-                stiffness: tuningSliderValues.stiffness,
+                omegaN: tuningSliderValues.omegaN,
+                zeta: tuningSliderValues.zeta,
+                range: tuningSliderValues.range,
+                inputDeadband: tuningSliderValues.inputDeadband,
+                inputHyst: tuningSliderValues.inputHyst,
                 reactionSpeed: tuningSliderValues.reactionSpeed,
                 frontRearBalance: tuningSliderValues.frontRearBalance,
                 sampleRate: tuningSliderValues.sampleRate
@@ -10625,8 +10730,11 @@ window.addEventListener('beforeunload', function(event) {
                 // Update local config snapshot even if initial config fetch has not completed yet.
                 const configRef = ensureWritableFullConfig();
                 configRef.rideHeightOffset = payload.rideHeightOffset;
-                configRef.damping = payload.damping;
-                configRef.stiffness = payload.stiffness;
+                configRef.omegaN = payload.omegaN;
+                configRef.zeta = payload.zeta;
+                configRef.range = payload.range;
+                configRef.inputDeadband = payload.inputDeadband;
+                configRef.inputHyst = payload.inputHyst;
                 configRef.reactionSpeed = payload.reactionSpeed;
                 configRef.frontRearBalance = payload.frontRearBalance;
                 configRef.sampleRate = payload.sampleRate;
@@ -10743,8 +10851,11 @@ window.addEventListener('beforeunload', function(event) {
 
             const tuningSliderPendingSave = {
                 rideHeight: false,
-                damping: false,
-                stiffness: false,
+                omegaN: false,
+                zeta: false,
+                range: false,
+                deadband: false,
+                hyst: false,
                 reactionSpeed: false,
                 balance: false,
                 sensorRate: false
@@ -10772,18 +10883,33 @@ window.addEventListener('beforeunload', function(event) {
                     return;
                 }
 
-                if (sliderKey === 'damping') {
-                    tuningKvWrite(k.SUSPENSION_DAMPING, Math.round((tuningSliderValues.damping || 0) * 100), 'damping', tuningSliderValues.damping);
+                if (sliderKey === 'omegaN') {
+                    tuningKvWrite(k.SUSPENSION_OMEGA_N, Math.round((tuningSliderValues.omegaN || 0) * 100), 'omegaN', tuningSliderValues.omegaN);
                     return;
                 }
 
-                if (sliderKey === 'stiffness') {
-                    tuningKvWrite(k.SUSPENSION_STIFFNESS, Math.round((tuningSliderValues.stiffness || 0) * 50), 'stiffness', tuningSliderValues.stiffness);
+                if (sliderKey === 'zeta') {
+                    tuningKvWrite(k.SUSPENSION_ZETA, Math.round((tuningSliderValues.zeta || 0) * 100), 'zeta', tuningSliderValues.zeta);
+                    return;
+                }
+
+                if (sliderKey === 'range') {
+                    tuningKvWrite(k.SUSPENSION_RANGE, Math.round((tuningSliderValues.range || 0) * 100), 'range', tuningSliderValues.range);
+                    return;
+                }
+
+                if (sliderKey === 'deadband') {
+                    tuningKvWrite(k.SUSPENSION_DEADBAND, Math.round((tuningSliderValues.inputDeadband || 0) * 100), 'deadband', tuningSliderValues.inputDeadband);
+                    return;
+                }
+
+                if (sliderKey === 'hyst') {
+                    tuningKvWrite(k.SUSPENSION_HYST, Math.round((tuningSliderValues.inputHyst || 0) * 100), 'hyst', tuningSliderValues.inputHyst);
                     return;
                 }
 
                 if (sliderKey === 'reactionSpeed') {
-                    tuningKvWrite(k.SUSPENSION_REACT_SPD, Math.round((tuningSliderValues.reactionSpeed || 0) * 50), 'reactionSpeed', tuningSliderValues.reactionSpeed);
+                    tuningKvWrite(k.SUSPENSION_REACT_SPD, Math.round((tuningSliderValues.reactionSpeed || 0) * 100), 'reactionSpeed', tuningSliderValues.reactionSpeed);
                     return;
                 }
 
@@ -10849,51 +10975,144 @@ window.addEventListener('beforeunload', function(event) {
             updateTuningThumbLabel('sliderRideHeight', 50, 0);
             attachReleaseSaveHandler(rideHeightElement, 'rideHeight');
 
-            // Initialize Damping - Horizontal slider (0.1-2.0)
-            let dampingElement = document.querySelector('#sliderDamping');
-            const dampingInstance = rangeSlider(dampingElement, {
-                value: [0.1, 0.8],
-                min: 0.1,
-                max: 2.0,
-                step: 0.1,
-                thumbsDisabled: [true, false],
-                rangeSlideDisabled: true,
-                onInput: function(value, userInteraction) {
-                    tuningSliderValues.damping = value[1];
-                    updateTuningThumbLabel('sliderDamping', value[1], 1);
-                    if (!isLoadingTuningConfig) {
-                        markPageDirty('tuning');
-                        tuningSliderPendingSave.damping = true;
-                    }
-                    syncTuningStepperButtons();
-                }
-            });
-            tuningSliderInstances.damping = { element: dampingElement, instance: dampingInstance };
-            updateTuningThumbLabel('sliderDamping', 0.8, 1);
-            attachReleaseSaveHandler(dampingElement, 'damping');
-
-            // Initialize Stiffness - Horizontal slider (0.5-3.0)
-            let stiffnessElement = document.querySelector('#sliderStiffness');
-            const stiffnessInstance = rangeSlider(stiffnessElement, {
-                value: [0.5, 1.0],
+            // Initialize Bounce Speed (omegaN) - 0.5-15.0 rad/s
+            let omegaNElement = document.querySelector('#sliderOmegaN');
+            const omegaNInstance = rangeSlider(omegaNElement, {
+                value: [0.5, 3.0],
                 min: 0.5,
-                max: 3.0,
+                max: 15.0,
                 step: 0.1,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
-                    tuningSliderValues.stiffness = value[1];
-                    updateTuningThumbLabel('sliderStiffness', value[1], 1);
+                    tuningSliderValues.omegaN = value[1];
+                    updateTuningThumbLabel('sliderOmegaN', value[1], 1);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
-                        tuningSliderPendingSave.stiffness = true;
+                        tuningSliderPendingSave.omegaN = true;
                     }
                     syncTuningStepperButtons();
                 }
             });
-            tuningSliderInstances.stiffness = { element: stiffnessElement, instance: stiffnessInstance };
-            updateTuningThumbLabel('sliderStiffness', 1.0, 1);
-            attachReleaseSaveHandler(stiffnessElement, 'stiffness');
+            tuningSliderInstances.omegaN = { element: omegaNElement, instance: omegaNInstance };
+            updateTuningThumbLabel('sliderOmegaN', 3.0, 1);
+            attachReleaseSaveHandler(omegaNElement, 'omegaN');
+
+            // Initialize Bounce Decay (zeta) - 0.05-0.95
+            let zetaElement = document.querySelector('#sliderZeta');
+            const zetaInstance = rangeSlider(zetaElement, {
+                value: [0.05, 0.25],
+                min: 0.05,
+                max: 0.95,
+                step: 0.05,
+                thumbsDisabled: [true, false],
+                rangeSlideDisabled: true,
+                onInput: function(value, userInteraction) {
+                    tuningSliderValues.zeta = value[1];
+                    updateTuningThumbLabel('sliderZeta', value[1], 2);
+                    if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
+                        tuningSliderPendingSave.zeta = true;
+                    }
+                    syncTuningStepperButtons();
+                }
+            });
+            tuningSliderInstances.zeta = { element: zetaElement, instance: zetaInstance };
+            updateTuningThumbLabel('sliderZeta', 0.25, 2);
+            attachReleaseSaveHandler(zetaElement, 'zeta');
+
+            // Initialize Motion Amount (range) - 0.1-4.0
+            let rangeElement = document.querySelector('#sliderRange');
+            const rangeInstance = rangeSlider(rangeElement, {
+                value: [0.1, 1.0],
+                min: 0.1,
+                max: 4.0,
+                step: 0.1,
+                thumbsDisabled: [true, false],
+                rangeSlideDisabled: true,
+                onInput: function(value, userInteraction) {
+                    tuningSliderValues.range = value[1];
+                    updateTuningThumbLabel('sliderRange', value[1], 1);
+                    if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
+                        tuningSliderPendingSave.range = true;
+                    }
+                    syncTuningStepperButtons();
+                }
+            });
+            tuningSliderInstances.range = { element: rangeElement, instance: rangeInstance };
+            updateTuningThumbLabel('sliderRange', 1.0, 1);
+            attachReleaseSaveHandler(rangeElement, 'range');
+
+            // Initialize Noise Guard (deadband) - 0.0-1.0
+            let deadbandElement = document.querySelector('#sliderDeadband');
+            const deadbandInstance = rangeSlider(deadbandElement, {
+                value: [0.0, 0.30],
+                min: 0.0,
+                max: 1.0,
+                step: 0.05,
+                thumbsDisabled: [true, false],
+                rangeSlideDisabled: true,
+                onInput: function(value, userInteraction) {
+                    tuningSliderValues.inputDeadband = value[1];
+                    updateTuningThumbLabel('sliderDeadband', value[1], 2);
+                    if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
+                        tuningSliderPendingSave.deadband = true;
+                    }
+                    syncTuningStepperButtons();
+                }
+            });
+            tuningSliderInstances.deadband = { element: deadbandElement, instance: deadbandInstance };
+            updateTuningThumbLabel('sliderDeadband', 0.30, 2);
+            attachReleaseSaveHandler(deadbandElement, 'deadband');
+
+            // Initialize Noise Latch (hyst) - 0.0-0.5
+            let hystElement = document.querySelector('#sliderHyst');
+            const hystInstance = rangeSlider(hystElement, {
+                value: [0.0, 0.15],
+                min: 0.0,
+                max: 0.5,
+                step: 0.05,
+                thumbsDisabled: [true, false],
+                rangeSlideDisabled: true,
+                onInput: function(value, userInteraction) {
+                    tuningSliderValues.inputHyst = value[1];
+                    updateTuningThumbLabel('sliderHyst', value[1], 2);
+                    if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
+                        tuningSliderPendingSave.hyst = true;
+                    }
+                    syncTuningStepperButtons();
+                }
+            });
+            tuningSliderInstances.hyst = { element: hystElement, instance: hystInstance };
+            updateTuningThumbLabel('sliderHyst', 0.15, 2);
+            attachReleaseSaveHandler(hystElement, 'hyst');
+
+            // Initialize Master Feel (auto-equalizer) - 0-100
+            let masterFeelElement = document.querySelector('#sliderMasterFeel');
+            if (masterFeelElement) {
+                const masterFeelInstance = rangeSlider(masterFeelElement, {
+                    value: [0, 50],
+                    min: 0,
+                    max: 100,
+                    step: 1,
+                    thumbsDisabled: [true, false],
+                    rangeSlideDisabled: true,
+                    onInput: function(value, userInteraction) {
+                        tuningSliderValues.masterFeel = Math.round(value[1]);
+                        updateTuningThumbLabel('sliderMasterFeel', tuningSliderValues.masterFeel, 0);
+                        if (!isLoadingTuningConfig) {
+                            updateMasterFeel(tuningSliderValues.masterFeel);
+                        }
+                        syncTuningStepperButtons();
+                    }
+                });
+                tuningSliderInstances.masterFeel = { element: masterFeelElement, instance: masterFeelInstance };
+                updateTuningThumbLabel('sliderMasterFeel', 50, 0);
+                attachReleaseSaveHandler(masterFeelElement, 'masterFeel');
+            }
 
             // Initialize Reaction Speed - Horizontal slider (0.1-5.0)
             let reactionElement = document.querySelector('#sliderReactionSpeed');
@@ -11009,8 +11228,11 @@ window.addEventListener('beforeunload', function(event) {
         // Track locked state for each slider
         const tuningSliderLocks = {
             rideHeight: false,
-            damping: false,
-            stiffness: false,
+            omegaN: false,
+            zeta: false,
+            range: false,
+            deadband: false,
+            hyst: false,
             reactionSpeed: false,
             balance: false,
             sensorRate: false
@@ -11456,8 +11678,12 @@ window.addEventListener('beforeunload', function(event) {
         };
         const tuningSliderValues = {
             rideHeightOffset: 50,
-            damping: 0.8,
-            stiffness: 1.0,
+            omegaN: 3.0,
+            zeta: 0.25,
+            range: 1.0,
+            inputDeadband: 0.30,
+            inputHyst: 0.15,
+            masterFeel: 50,
             reactionSpeed: 1.0,
             frontRearBalance: 50,
             sampleRate: 25
@@ -11466,20 +11692,28 @@ window.addEventListener('beforeunload', function(event) {
         // Store rangeSlider instances for tuning sliders
         const tuningSliderInstances = {
             rideHeight: null,
-            damping: null,
-            stiffness: null,
+            omegaN: null,
+            zeta: null,
+            range: null,
+            deadband: null,
+            hyst: null,
+            masterFeel: null,
             reactionSpeed: null,
             balance: null,
             sensorRate: null
         };
 
         const tuningStepperConfigs = {
-            rideHeight: { min: 0, max: 100, step: 1, decimals: 0, valueKey: 'rideHeightOffset' },
-            damping: { min: 0.1, max: 2.0, step: 0.1, decimals: 1, valueKey: 'damping' },
-            stiffness: { min: 0.5, max: 3.0, step: 0.1, decimals: 1, valueKey: 'stiffness' },
-            reactionSpeed: { min: 0.1, max: 5.0, step: 0.1, decimals: 1, valueKey: 'reactionSpeed' },
-            balance: { min: 0, max: 100, step: 1, decimals: 0, valueKey: 'frontRearBalance' },
-            sensorRate: { min: 5, max: 50, step: 1, decimals: 0, valueKey: 'sampleRate' }
+            rideHeight:   { min: 0,    max: 100,  step: 1,    decimals: 0, valueKey: 'rideHeightOffset' },
+            omegaN:       { min: 0.5,  max: 15.0, step: 0.1,  decimals: 1, valueKey: 'omegaN' },
+            zeta:         { min: 0.05, max: 0.95, step: 0.05, decimals: 2, valueKey: 'zeta' },
+            range:        { min: 0.1,  max: 4.0,  step: 0.1,  decimals: 1, valueKey: 'range' },
+            deadband:     { min: 0.0,  max: 1.0,  step: 0.05, decimals: 2, valueKey: 'inputDeadband' },
+            hyst:         { min: 0.0,  max: 0.5,  step: 0.05, decimals: 2, valueKey: 'inputHyst' },
+            masterFeel:   { min: 0,    max: 100,  step: 1,    decimals: 0, valueKey: 'masterFeel' },
+            reactionSpeed:{ min: 0.1,  max: 5.0,  step: 0.1,  decimals: 1, valueKey: 'reactionSpeed' },
+            balance:      { min: 0,    max: 100,  step: 1,    decimals: 0, valueKey: 'frontRearBalance' },
+            sensorRate:   { min: 5,    max: 50,   step: 1,    decimals: 0, valueKey: 'sampleRate' }
         };
 
         function getTuningStepperCurrentValue(sliderKey) {
@@ -11586,16 +11820,34 @@ window.addEventListener('beforeunload', function(event) {
                 updateThumbnailLabel('sliderRideHeight', tuningSliderValues.rideHeightOffset, 0);
             }
             
-            if (config.damping !== undefined) {
-                tuningSliderValues.damping = config.damping;
-                updateSliderElement('damping', 'damping', 0.1, config.damping);
-                updateThumbnailLabel('sliderDamping', config.damping, 1);
+            if (config.omegaN !== undefined) {
+                tuningSliderValues.omegaN = config.omegaN;
+                updateSliderElement('omegaN', 'omegaN', 0.5, config.omegaN);
+                updateThumbnailLabel('sliderOmegaN', config.omegaN, 1);
             }
             
-            if (config.stiffness !== undefined) {
-                tuningSliderValues.stiffness = config.stiffness;
-                updateSliderElement('stiffness', 'stiffness', 0.5, config.stiffness);
-                updateThumbnailLabel('sliderStiffness', config.stiffness, 1);
+            if (config.zeta !== undefined) {
+                tuningSliderValues.zeta = config.zeta;
+                updateSliderElement('zeta', 'zeta', 0.05, config.zeta);
+                updateThumbnailLabel('sliderZeta', config.zeta, 2);
+            }
+
+            if (config.range !== undefined) {
+                tuningSliderValues.range = config.range;
+                updateSliderElement('range', 'range', 0.1, config.range);
+                updateThumbnailLabel('sliderRange', config.range, 1);
+            }
+
+            if (config.inputDeadband !== undefined) {
+                tuningSliderValues.inputDeadband = config.inputDeadband;
+                updateSliderElement('deadband', 'inputDeadband', 0.0, config.inputDeadband);
+                updateThumbnailLabel('sliderDeadband', config.inputDeadband, 2);
+            }
+
+            if (config.inputHyst !== undefined) {
+                tuningSliderValues.inputHyst = config.inputHyst;
+                updateSliderElement('hyst', 'inputHyst', 0.0, config.inputHyst);
+                updateThumbnailLabel('sliderHyst', config.inputHyst, 2);
             }
             
             if (config.reactionSpeed !== undefined) {

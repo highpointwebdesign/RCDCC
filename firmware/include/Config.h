@@ -40,10 +40,13 @@
 #define DEFAULT_SERVO_REVERSE 0
 #define DEFAULT_SERVO_RIDE_HT 50
 
-#define DEFAULT_SUSP_DAMPING 50
-#define DEFAULT_SUSP_STIFFNESS 50
-#define DEFAULT_SUSP_REACT_SPD 50
-#define DEFAULT_SUSP_FR_BALANCE 0
+#define DEFAULT_SUSP_OMEGA_N   300   // omegaN × 100  →  3.00 rad/s
+#define DEFAULT_SUSP_ZETA       25   // zeta × 100    →  0.25 (underdamped)
+#define DEFAULT_SUSP_REACT_SPD  50
+#define DEFAULT_SUSP_FR_BALANCE  0
+#define DEFAULT_SUSP_RANGE     100   // range × 100   →  1.00 (unit scale)
+#define DEFAULT_SUSP_DEADBAND   30   // deadband × 100 → 0.30 deg
+#define DEFAULT_SUSP_HYST       15   // hyst × 100    →  0.15 deg
 
 #define DEFAULT_IMU_ORIENT 0
 #define DEFAULT_IMU_ROLL_TRIM 0.0f
@@ -56,9 +59,12 @@
 #define DEFAULT_REACTION_SPEED 1.0f
 #define DEFAULT_RIDE_HEIGHT 50.0f
 #define DEFAULT_RANGE_LIMIT 60.0f
-#define DEFAULT_DAMPING 0.5f
+#define DEFAULT_OMEGA_N 3.0f
+#define DEFAULT_ZETA 0.25f
+#define DEFAULT_RANGE 1.0f
 #define DEFAULT_FRONT_REAR_BALANCE 0.5f
-#define DEFAULT_STIFFNESS 1.0f
+#define DEFAULT_INPUT_DEADBAND 0.30f
+#define DEFAULT_INPUT_HYST 0.15f
 #define DEFAULT_FPV_AUTO_MODE false
 #define DEFAULT_SERVO_TRIM 0
 #define DEFAULT_SERVO_MIN 0
@@ -96,10 +102,13 @@ enum MPU6050Orientation {
 struct SuspensionConfig {
   float reactionSpeed;
   float rideHeightOffset;
-  float rangeLimit;
-  float damping;
+  float rangeLimit;        // legacy — travel envelope degrees (unused by new simulator)
+  float omegaN;            // natural frequency rad/s  (0.5 – 15.0)
+  float zeta;              // damping ratio            (0.05 – 0.95)
+  float range;             // input scale factor       (0.1 – 4.0)
+  float inputDeadband;     // noise gate around zero   (0.0 – 1.0)
+  float inputHyst;         // hysteresis to prevent chatter (0.0 – 0.5)
   float frontRearBalance;  // 0.0 = all rear, 1.0 = all front
-  float stiffness;
   uint16_t sampleRate;
   uint8_t telemetryRate;   // WebSocket broadcast rate in Hz (1-10)
   uint8_t mpuOrientation;  // MPU6050 mounting orientation
@@ -120,10 +129,13 @@ struct RCDCCServoState {
 };
 
 struct RCDCCSuspensionState {
-  int32_t damping;
-  int32_t stiffness;
-  int32_t reactSpeed;
-  int32_t frontRearBalance;
+  int32_t omegaN;           // × 100  (50–1500  → 0.50–15.00 rad/s)
+  int32_t zeta;             // × 100  (5–95     → 0.05–0.95)
+  int32_t reactSpeed;       // 0–100
+  int32_t frontRearBalance; // −100–100
+  int32_t range;            // × 100  (10–400   → 0.10–4.00)
+  int32_t inputDeadband;    // × 100  (0–100    → 0.00–1.00 deg)
+  int32_t inputHyst;        // × 100  (0–50     → 0.00–0.50 deg)
 };
 
 struct RCDCCImuState {
@@ -334,10 +346,13 @@ struct DrivingProfile {
   int32_t srvRrTrim; int32_t srvRrMin; int32_t srvRrMax; int32_t srvRrRht; uint8_t srvRrRev;
 
   // Suspension (same scale as RCDCCSuspensionState)
-  int32_t damping;
-  int32_t stiffness;
+  int32_t omegaN;
+  int32_t zeta;
   int32_t reactSpd;
   int32_t frBalance;
+  int32_t range;
+  int32_t deadband;
+  int32_t hyst;
 
   // IMU orientation index
   int32_t imuOrient;

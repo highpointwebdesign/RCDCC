@@ -490,9 +490,12 @@ bool applyConfigUpdatePayload(const String& payload) {
   if (doc.containsKey("reactionSpeed")) storageManager.updateParameter("reactionSpeed", doc["reactionSpeed"]);
   if (doc.containsKey("rideHeightOffset")) storageManager.updateParameter("rideHeightOffset", doc["rideHeightOffset"]);
   if (doc.containsKey("rangeLimit")) storageManager.updateParameter("rangeLimit", doc["rangeLimit"]);
-  if (doc.containsKey("damping")) storageManager.updateParameter("damping", doc["damping"]);
+  if (doc.containsKey("omegaN"))        storageManager.updateParameter("omegaN",        doc["omegaN"]);
+  if (doc.containsKey("zeta"))          storageManager.updateParameter("zeta",          doc["zeta"]);
+  if (doc.containsKey("range"))         storageManager.updateParameter("range",         doc["range"]);
+  if (doc.containsKey("inputDeadband")) storageManager.updateParameter("inputDeadband", doc["inputDeadband"]);
+  if (doc.containsKey("inputHyst"))     storageManager.updateParameter("inputHyst",     doc["inputHyst"]);
   if (doc.containsKey("frontRearBalance")) storageManager.updateParameter("frontRearBalance", doc["frontRearBalance"]);
-  if (doc.containsKey("stiffness")) storageManager.updateParameter("stiffness", doc["stiffness"]);
   if (doc.containsKey("sampleRate")) storageManager.updateParameter("sampleRate", doc["sampleRate"]);
   if (doc.containsKey("telemetryRate")) storageManager.updateParameter("telemetryRate", doc["telemetryRate"]);
   if (doc.containsKey("mpuOrientation")) {

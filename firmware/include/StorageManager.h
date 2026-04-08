@@ -90,10 +90,13 @@ private:
     initDefaultServo(state.servoRL, DEFAULT_SERVO_LABEL_RL);
     initDefaultServo(state.servoRR, DEFAULT_SERVO_LABEL_RR);
 
-    state.suspension.damping = DEFAULT_SUSP_DAMPING;
-    state.suspension.stiffness = DEFAULT_SUSP_STIFFNESS;
-    state.suspension.reactSpeed = DEFAULT_SUSP_REACT_SPD;
+    state.suspension.omegaN        = DEFAULT_SUSP_OMEGA_N;
+    state.suspension.zeta          = DEFAULT_SUSP_ZETA;
+    state.suspension.reactSpeed    = DEFAULT_SUSP_REACT_SPD;
     state.suspension.frontRearBalance = DEFAULT_SUSP_FR_BALANCE;
+    state.suspension.range         = DEFAULT_SUSP_RANGE;
+    state.suspension.inputDeadband = DEFAULT_SUSP_DEADBAND;
+    state.suspension.inputHyst     = DEFAULT_SUSP_HYST;
 
     state.imu.orient = DEFAULT_IMU_ORIENT;
     state.imu.rollTrim = DEFAULT_IMU_ROLL_TRIM;
@@ -110,17 +113,19 @@ private:
   }
 
   void syncLegacyFromState() {
-    legacyConfig.reactionSpeed = static_cast<float>(clampI32(state.suspension.reactSpeed, 0, 100)) / 50.0f;
-    if (legacyConfig.reactionSpeed < 0.1f) legacyConfig.reactionSpeed = 0.1f;
+    legacyConfig.reactionSpeed = static_cast<float>(clampI32(state.suspension.reactSpeed, 0, 100)) / 100.0f;
+    if (legacyConfig.reactionSpeed < 0.01f) legacyConfig.reactionSpeed = 0.01f;
 
     legacyConfig.rideHeightOffset = static_cast<float>(
       (state.servoFL.rideHeight + state.servoFR.rideHeight + state.servoRL.rideHeight + state.servoRR.rideHeight) / 4
     );
     legacyConfig.rangeLimit = DEFAULT_RANGE_LIMIT;
-    legacyConfig.damping = static_cast<float>(clampI32(state.suspension.damping, 0, 100)) / 100.0f;
+    legacyConfig.omegaN = static_cast<float>(clampI32(state.suspension.omegaN, 50, 1500)) / 100.0f;
+    legacyConfig.zeta   = static_cast<float>(clampI32(state.suspension.zeta,    5,   95)) / 100.0f;
+    legacyConfig.range  = static_cast<float>(clampI32(state.suspension.range,  10, 400)) / 100.0f;
+    legacyConfig.inputDeadband = static_cast<float>(clampI32(state.suspension.inputDeadband, 0, 100)) / 100.0f;
+    legacyConfig.inputHyst     = static_cast<float>(clampI32(state.suspension.inputHyst,     0,  50)) / 100.0f;
     legacyConfig.frontRearBalance = static_cast<float>(clampI32(state.suspension.frontRearBalance, -100, 100) + 100) / 200.0f;
-    legacyConfig.stiffness = static_cast<float>(clampI32(state.suspension.stiffness, 0, 100)) / 50.0f;
-    if (legacyConfig.stiffness < 0.1f) legacyConfig.stiffness = 0.1f;
     legacyConfig.sampleRate = SUSPENSION_SAMPLE_RATE_HZ;
     legacyConfig.telemetryRate = DEFAULT_TELEMETRY_RATE_HZ;
     legacyConfig.mpuOrientation = static_cast<uint8_t>(clampI32(state.imu.orient, 0, 3));
@@ -189,10 +194,13 @@ private:
       return;
     }
 
-    pref.putInt("damping", state.suspension.damping);
-    pref.putInt("stiffness", state.suspension.stiffness);
+    pref.putInt("omega_n",  state.suspension.omegaN);
+    pref.putInt("zeta",     state.suspension.zeta);
     pref.putInt("react_spd", state.suspension.reactSpeed);
     pref.putInt("fr_balance", state.suspension.frontRearBalance);
+    pref.putInt("range",    state.suspension.range);
+    pref.putInt("deadband", state.suspension.inputDeadband);
+    pref.putInt("hyst",     state.suspension.inputHyst);
     pref.end();
   }
 
@@ -268,7 +276,10 @@ private:
   }
 
   void readSuspensionNamespace() {
-    state.suspension = { DEFAULT_SUSP_DAMPING, DEFAULT_SUSP_STIFFNESS, DEFAULT_SUSP_REACT_SPD, DEFAULT_SUSP_FR_BALANCE };
+    state.suspension = {
+      DEFAULT_SUSP_OMEGA_N, DEFAULT_SUSP_ZETA, DEFAULT_SUSP_REACT_SPD,
+      DEFAULT_SUSP_FR_BALANCE, DEFAULT_SUSP_RANGE, DEFAULT_SUSP_DEADBAND, DEFAULT_SUSP_HYST
+    };
 
     Preferences pref;
     if (!pref.begin(NS_SUSP, true)) {
@@ -276,16 +287,22 @@ private:
       return;
     }
 
-    state.suspension.damping = pref.getInt("damping", DEFAULT_SUSP_DAMPING);
-    state.suspension.stiffness = pref.getInt("stiffness", DEFAULT_SUSP_STIFFNESS);
-    state.suspension.reactSpeed = pref.getInt("react_spd", DEFAULT_SUSP_REACT_SPD);
+    state.suspension.omegaN        = pref.getInt("omega_n",   DEFAULT_SUSP_OMEGA_N);
+    state.suspension.zeta          = pref.getInt("zeta",      DEFAULT_SUSP_ZETA);
+    state.suspension.reactSpeed    = pref.getInt("react_spd", DEFAULT_SUSP_REACT_SPD);
     state.suspension.frontRearBalance = pref.getInt("fr_balance", DEFAULT_SUSP_FR_BALANCE);
+    state.suspension.range         = pref.getInt("range",     DEFAULT_SUSP_RANGE);
+    state.suspension.inputDeadband = pref.getInt("deadband",  DEFAULT_SUSP_DEADBAND);
+    state.suspension.inputHyst     = pref.getInt("hyst",      DEFAULT_SUSP_HYST);
     pref.end();
 
-    state.suspension.damping = clampI32(state.suspension.damping, 0, 100);
-    state.suspension.stiffness = clampI32(state.suspension.stiffness, 0, 100);
-    state.suspension.reactSpeed = clampI32(state.suspension.reactSpeed, 0, 100);
+    state.suspension.omegaN        = clampI32(state.suspension.omegaN,        50, 1500);
+    state.suspension.zeta          = clampI32(state.suspension.zeta,           5,   95);
+    state.suspension.reactSpeed    = clampI32(state.suspension.reactSpeed,     0,  100);
     state.suspension.frontRearBalance = clampI32(state.suspension.frontRearBalance, -100, 100);
+    state.suspension.range         = clampI32(state.suspension.range,         10,  400);
+    state.suspension.inputDeadband = clampI32(state.suspension.inputDeadband,  0,  100);
+    state.suspension.inputHyst     = clampI32(state.suspension.inputHyst,      0,   50);
   }
 
   void readImuNamespace() {
@@ -532,10 +549,13 @@ private:
     pref.putInt("srv_rr_trim", p.srvRrTrim);  pref.putInt("srv_rr_min", p.srvRrMin);
     pref.putInt("srv_rr_max",  p.srvRrMax);   pref.putInt("srv_rr_rht", p.srvRrRht);
     pref.putUChar("srv_rr_rev", p.srvRrRev);
-    pref.putInt("damping",    p.damping);
-    pref.putInt("stiffness",  p.stiffness);
-    pref.putInt("react_spd",  p.reactSpd);
+    pref.putInt("omega_n",   p.omegaN);
+    pref.putInt("zeta",      p.zeta);
+    pref.putInt("react_spd", p.reactSpd);
     pref.putInt("fr_balance", p.frBalance);
+    pref.putInt("range",     p.range);
+    pref.putInt("deadband",  p.deadband);
+    pref.putInt("hyst",      p.hyst);
     pref.putInt("imu_orient", p.imuOrient);
     pref.end();
   }
@@ -571,10 +591,13 @@ private:
     p.srvRrMax  = pref.getInt("srv_rr_max",  DEFAULT_SERVO_MAX_US);
     p.srvRrRht  = pref.getInt("srv_rr_rht",  DEFAULT_SERVO_RIDE_HT);
     p.srvRrRev  = pref.getUChar("srv_rr_rev", DEFAULT_SERVO_REVERSE);
-    p.damping   = pref.getInt("damping",    DEFAULT_SUSP_DAMPING);
-    p.stiffness = pref.getInt("stiffness",  DEFAULT_SUSP_STIFFNESS);
-    p.reactSpd  = pref.getInt("react_spd",  DEFAULT_SUSP_REACT_SPD);
+    p.omegaN   = pref.getInt("omega_n",   DEFAULT_SUSP_OMEGA_N);
+    p.zeta     = pref.getInt("zeta",      DEFAULT_SUSP_ZETA);
+    p.reactSpd = pref.getInt("react_spd", DEFAULT_SUSP_REACT_SPD);
     p.frBalance = pref.getInt("fr_balance", DEFAULT_SUSP_FR_BALANCE);
+    p.range    = pref.getInt("range",     DEFAULT_SUSP_RANGE);
+    p.deadband = pref.getInt("deadband",  DEFAULT_SUSP_DEADBAND);
+    p.hyst     = pref.getInt("hyst",      DEFAULT_SUSP_HYST);
     p.imuOrient = pref.getInt("imu_orient", DEFAULT_IMU_ORIENT);
     pref.end();
     p.populated = true;
@@ -696,10 +719,13 @@ public:
     }
 
     if (ns == NS_SUSP) {
-      if (key == "damping") state.suspension.damping = clampI32(value.as<int32_t>(), 0, 100);
-      else if (key == "stiffness") state.suspension.stiffness = clampI32(value.as<int32_t>(), 0, 100);
-      else if (key == "react_spd") state.suspension.reactSpeed = clampI32(value.as<int32_t>(), 0, 100);
+      if      (key == "omega_n")   state.suspension.omegaN        = clampI32(value.as<int32_t>(),  50, 1500);
+      else if (key == "zeta")      state.suspension.zeta          = clampI32(value.as<int32_t>(),   5,   95);
+      else if (key == "react_spd") state.suspension.reactSpeed    = clampI32(value.as<int32_t>(),   0,  100);
       else if (key == "fr_balance") state.suspension.frontRearBalance = clampI32(value.as<int32_t>(), -100, 100);
+      else if (key == "range")     state.suspension.range         = clampI32(value.as<int32_t>(),  10,  400);
+      else if (key == "deadband")  state.suspension.inputDeadband = clampI32(value.as<int32_t>(),   0,  100);
+      else if (key == "hyst")      state.suspension.inputHyst     = clampI32(value.as<int32_t>(),   0,   50);
       else return false;
 
       syncLegacyFromState();
@@ -857,12 +883,21 @@ public:
       setValue("srv_rr.ride_ht", doc["v"].as<JsonVariantConst>());
     } else if (key == "rangeLimit") {
       legacyConfig.rangeLimit = constrain(value, 0.0f, 180.0f);
-    } else if (key == "damping") {
+    } else if (key == "omegaN") {
       doc["v"] = static_cast<int32_t>(roundf(value * 100.0f));
-      setValue("suspension.damping", doc["v"].as<JsonVariantConst>());
-    } else if (key == "stiffness") {
-      doc["v"] = static_cast<int32_t>(roundf(value * 50.0f));
-      setValue("suspension.stiffness", doc["v"].as<JsonVariantConst>());
+      setValue("suspension.omega_n", doc["v"].as<JsonVariantConst>());
+    } else if (key == "zeta") {
+      doc["v"] = static_cast<int32_t>(roundf(value * 100.0f));
+      setValue("suspension.zeta", doc["v"].as<JsonVariantConst>());
+    } else if (key == "range") {
+      doc["v"] = static_cast<int32_t>(roundf(value * 100.0f));
+      setValue("suspension.range", doc["v"].as<JsonVariantConst>());
+    } else if (key == "inputDeadband") {
+      doc["v"] = static_cast<int32_t>(roundf(value * 100.0f));
+      setValue("suspension.deadband", doc["v"].as<JsonVariantConst>());
+    } else if (key == "inputHyst") {
+      doc["v"] = static_cast<int32_t>(roundf(value * 100.0f));
+      setValue("suspension.hyst", doc["v"].as<JsonVariantConst>());
     } else if (key == "frontRearBalance") {
       doc["v"] = static_cast<int32_t>(roundf((value * 200.0f) - 100.0f));
       setValue("suspension.fr_balance", doc["v"].as<JsonVariantConst>());
@@ -927,10 +962,13 @@ public:
     writeServo("srv_rr", state.servoRR);
 
     JsonObject susp = doc.createNestedObject("suspension");
-    susp["damping"] = state.suspension.damping;
-    susp["stiffness"] = state.suspension.stiffness;
+    susp["omega_n"]   = state.suspension.omegaN;
+    susp["zeta"]      = state.suspension.zeta;
     susp["react_spd"] = state.suspension.reactSpeed;
     susp["fr_balance"] = state.suspension.frontRearBalance;
+    susp["range"]     = state.suspension.range;
+    susp["deadband"]  = state.suspension.inputDeadband;
+    susp["hyst"]      = state.suspension.inputHyst;
 
     JsonObject imu = doc.createNestedObject("imu");
     imu["orient"] = state.imu.orient;
@@ -952,12 +990,15 @@ public:
       return compactOutput;
     }
 
-    doc["reactionSpeed"] = legacyConfig.reactionSpeed;
+    doc["reactionSpeed"]   = legacyConfig.reactionSpeed;
     doc["rideHeightOffset"] = legacyConfig.rideHeightOffset;
-    doc["rangeLimit"] = legacyConfig.rangeLimit;
-    doc["damping"] = legacyConfig.damping;
+    doc["rangeLimit"]       = legacyConfig.rangeLimit;
+    doc["omegaN"]          = legacyConfig.omegaN;
+    doc["zeta"]            = legacyConfig.zeta;
+    doc["range"]           = legacyConfig.range;
+    doc["inputDeadband"]   = legacyConfig.inputDeadband;
+    doc["inputHyst"]       = legacyConfig.inputHyst;
     doc["frontRearBalance"] = legacyConfig.frontRearBalance;
-    doc["stiffness"] = legacyConfig.stiffness;
     doc["sampleRate"] = legacyConfig.sampleRate;
     doc["telemetryRate"] = legacyConfig.telemetryRate;
     doc["mpuOrientation"] = legacyConfig.mpuOrientation;
@@ -1171,20 +1212,38 @@ public:
 
     if (doc.containsKey("reactionSpeed")) {
       DynamicJsonDocument valueDoc(32);
-      valueDoc["v"] = static_cast<int32_t>(roundf(doc["reactionSpeed"].as<float>() * 50.0f));
+      valueDoc["v"] = static_cast<int32_t>(roundf(doc["reactionSpeed"].as<float>() * 100.0f));
       setValue("suspension.react_spd", valueDoc["v"].as<JsonVariantConst>());
     }
 
-    if (doc.containsKey("damping")) {
+    if (doc.containsKey("omegaN")) {
       DynamicJsonDocument valueDoc(32);
-      valueDoc["v"] = static_cast<int32_t>(roundf(doc["damping"].as<float>() * 100.0f));
-      setValue("suspension.damping", valueDoc["v"].as<JsonVariantConst>());
+      valueDoc["v"] = static_cast<int32_t>(roundf(doc["omegaN"].as<float>() * 100.0f));
+      setValue("suspension.omega_n", valueDoc["v"].as<JsonVariantConst>());
     }
 
-    if (doc.containsKey("stiffness")) {
+    if (doc.containsKey("zeta")) {
       DynamicJsonDocument valueDoc(32);
-      valueDoc["v"] = static_cast<int32_t>(roundf(doc["stiffness"].as<float>() * 50.0f));
-      setValue("suspension.stiffness", valueDoc["v"].as<JsonVariantConst>());
+      valueDoc["v"] = static_cast<int32_t>(roundf(doc["zeta"].as<float>() * 100.0f));
+      setValue("suspension.zeta", valueDoc["v"].as<JsonVariantConst>());
+    }
+
+    if (doc.containsKey("range")) {
+      DynamicJsonDocument valueDoc(32);
+      valueDoc["v"] = static_cast<int32_t>(roundf(doc["range"].as<float>() * 100.0f));
+      setValue("suspension.range", valueDoc["v"].as<JsonVariantConst>());
+    }
+
+    if (doc.containsKey("inputDeadband")) {
+      DynamicJsonDocument valueDoc(32);
+      valueDoc["v"] = static_cast<int32_t>(roundf(doc["inputDeadband"].as<float>() * 100.0f));
+      setValue("suspension.deadband", valueDoc["v"].as<JsonVariantConst>());
+    }
+
+    if (doc.containsKey("inputHyst")) {
+      DynamicJsonDocument valueDoc(32);
+      valueDoc["v"] = static_cast<int32_t>(roundf(doc["inputHyst"].as<float>() * 100.0f));
+      setValue("suspension.hyst", valueDoc["v"].as<JsonVariantConst>());
     }
 
     if (doc.containsKey("frontRearBalance")) {
@@ -1294,10 +1353,13 @@ public:
     state.servoRR.rideHeight = clampI32(p.srvRrRht, 0, 100);
     state.servoRR.reverse   = p.srvRrRev ? 1 : 0;
 
-    state.suspension.damping   = clampI32(p.damping,   0, 100);
-    state.suspension.stiffness = clampI32(p.stiffness, 0, 100);
-    state.suspension.reactSpeed = clampI32(p.reactSpd, 0, 100);
+    state.suspension.omegaN        = clampI32(p.omegaN,    50, 1500);
+    state.suspension.zeta          = clampI32(p.zeta,       5,   95);
+    state.suspension.reactSpeed    = clampI32(p.reactSpd,   0,  100);
     state.suspension.frontRearBalance = clampI32(p.frBalance, -100, 100);
+    state.suspension.range         = clampI32(p.range,     10,  400);
+    state.suspension.inputDeadband = clampI32(p.deadband,   0,  100);
+    state.suspension.inputHyst     = clampI32(p.hyst,       0,   50);
 
     state.imu.orient = clampI32(p.imuOrient, 0, 5);
     state.system.activeDrivingProfile = idx;
@@ -1327,10 +1389,13 @@ public:
     p.srvRrTrim = state.servoRR.trimUs;   p.srvRrMin = state.servoRR.minUs;
     p.srvRrMax  = state.servoRR.maxUs;    p.srvRrRht = state.servoRR.rideHeight;
     p.srvRrRev  = state.servoRR.reverse;
-    p.damping   = state.suspension.damping;
-    p.stiffness = state.suspension.stiffness;
-    p.reactSpd  = state.suspension.reactSpeed;
+    p.omegaN   = state.suspension.omegaN;
+    p.zeta     = state.suspension.zeta;
+    p.reactSpd = state.suspension.reactSpeed;
     p.frBalance = state.suspension.frontRearBalance;
+    p.range    = state.suspension.range;
+    p.deadband = state.suspension.inputDeadband;
+    p.hyst     = state.suspension.inputHyst;
     p.imuOrient = state.imu.orient;
 
     writeDrivingProfileToNVS(idx, p);

@@ -634,6 +634,26 @@
                             </div>
                         </div>
                         <div class="card-body" id="tuningParametersCardBody">
+
+                            <!-- Tuning Mode -->
+                            <div class="tuning-slider-group">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0"><span class="material-symbols-outlined icon-danger">tune</span> Tuning Mode</h6>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" id="tuningModeAutoBtn" onclick="setTuningConfigMode('auto')">Auto</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="tuningModeCustomBtn" onclick="setTuningConfigMode('custom')">Custom</button>
+                                    </div>
+                                </div>
+                                <div id="tuningMasterRow" class="slider-section">
+                                    <div class="slider-stepper-control" data-slider-key="masterFeel">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease drive feel">-</button>
+                                        <div id="sliderMasterFeel" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase drive feel">+</button>
+                                    </div>
+                                    <div style="text-align:center; margin-top: 4px; font-size: 0.75rem; color: var(--text-muted);" id="masterFeelLabel">Balanced</div>
+                                </div>
+                            </div>
+
                             <!-- Ride Height -->
                             <div class="tuning-slider-group">
                                 <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger); transform: rotate(90deg);">
@@ -671,36 +691,87 @@
                                 </div>
                             </div>
 
-                            <!-- Stiffness -->
+                            <!-- Bounce Speed (omegaN) -->
                             <div class="tuning-slider-group">
-                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">compress</span> Stiffness</h6>
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">settings_motion_mode</span> Bounce Speed</h6>
                                 <div class="slider-section">
-                                    <div class="slider-stepper-control" data-slider-key="stiffness">
-                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease stiffness">-</button>
-                                        <div id="sliderStiffness" class="slider-stepper-track"></div>
-                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase stiffness">+</button>
+                                    <div class="slider-stepper-control" data-slider-key="omegaN">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease bounce speed">-</button>
+                                        <div id="sliderOmegaN" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase bounce speed">+</button>
                                     </div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Soft</span>
-                                        <span>Normal</span>
-                                        <span>Stiff</span>
+                                        <span>Slow</span>
+                                        <span>Balanced</span>
+                                        <span>Fast</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Damping -->
+                            <!-- Bounce Decay (zeta) -->
                             <div class="tuning-slider-group">
-                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">airwave</span> Damping</h6>
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">airwave</span> Bounce Decay</h6>
                                 <div class="slider-section">
-                                    <div class="slider-stepper-control" data-slider-key="damping">
-                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease damping">-</button>
-                                        <div id="sliderDamping" class="slider-stepper-track"></div>
-                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase damping">+</button>
+                                    <div class="slider-stepper-control" data-slider-key="zeta">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease bounce decay">-</button>
+                                        <div id="sliderZeta" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase bounce decay">+</button>
                                     </div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Soft</span>
+                                        <span>Bouncy</span>
+                                        <span>Balanced</span>
+                                        <span>Firm</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Motion Amount (range) -->
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">arrows_outward</span> Motion Amount</h6>
+                                <div class="slider-section">
+                                    <div class="slider-stepper-control" data-slider-key="range">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease motion range">-</button>
+                                        <div id="sliderRange" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase motion range">+</button>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Small</span>
                                         <span>Normal</span>
-                                        <span>Stiff</span>
+                                        <span>Large</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Noise Guard (deadband) -->
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">noise_aware</span> Noise Guard</h6>
+                                <div class="slider-section">
+                                    <div class="slider-stepper-control" data-slider-key="deadband">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease noise guard">-</button>
+                                        <div id="sliderDeadband" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase noise guard">+</button>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Off</span>
+                                        <span>Normal</span>
+                                        <span>High</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Noise Latch (hyst) -->
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">lock</span> Noise Latch</h6>
+                                <div class="slider-section">
+                                    <div class="slider-stepper-control" data-slider-key="hyst">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease noise latch">-</button>
+                                        <div id="sliderHyst" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase noise latch">+</button>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Off</span>
+                                        <span>Normal</span>
+                                        <span>High</span>
                                     </div>
                                 </div>
                             </div>
