@@ -626,8 +626,8 @@
                     <button type="button" id="suspendSuspensionBtn" class="btn btn-outline-secondary w-100"
                             onclick="toggleSuspendSuspension()"
                             disabled>
-                        <span class="material-symbols-outlined" style="vertical-align:middle;font-size:1.1em;">pause_circle</span>
-                        <span id="suspendSuspensionLabel">Pause Suspension</span>
+                        <!-- <span class="material-symbols-outlined" style="vertical-align:middle;font-size:1.1em;">pause_circle</span> -->
+                        <span id="suspendSuspensionLabel">Suspension Active</span>
                     </button>
                 </div>
 
@@ -1378,11 +1378,6 @@
             <!-- Lights Controls -->
             <div class="row g-3">
                 <div class="col-12">
-                    <div class="d-flex mb-2">
-                        <button type="button" id="basicScenarioStripSwitch" class="btn btn-lg basic-scenario-power-btn w-100" aria-pressed="false" onclick="basicScenarioStripToggle()">LIGHTS OFF</button>
-                    </div>
-                </div>
-                <div class="col-12">
                 <div id="lightsControlsContainer" class="row g-3">
 
                     <div class="col-12">
@@ -1420,6 +1415,14 @@
                     </div>
                     </div>
             
+                    <!-- Lights Master Toggle -->
+                    <div class="col-12">
+                        <button type="button" id="basicScenarioStripSwitch" class="btn btn-outline-secondary w-100" aria-pressed="false" onclick="basicScenarioStripToggle()">
+                            <!-- <span class="material-symbols-outlined" style="vertical-align:middle;font-size:1.1em;">light_off</span> -->
+                            <span id="basicScenarioStripLabel">Lights are OFF</span>
+                        </button>
+                    </div>
+
                     <!-- Basic Lights Test (Stage 1) -->
                     <div class="col-12">
                         <div class="card" id="basicLightsTestCard">

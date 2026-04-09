@@ -98,7 +98,7 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.668';
+        const APP_VERSION = '1.1.676';
         const BUILD_DATE = '2026-04-09';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -7526,11 +7526,21 @@ window.addEventListener('beforeunload', function(event) {
 
         function _syncBasicScenarioStripSwitch() {
             const buttonEl = document.getElementById('basicScenarioStripSwitch');
+            const labelEl = document.getElementById('basicScenarioStripLabel');
             if (!buttonEl) return;
             const isOn = !!_basicScenarioStripEnabled;
             buttonEl.setAttribute('aria-pressed', isOn ? 'true' : 'false');
-            buttonEl.classList.toggle('is-on', isOn);
-            buttonEl.textContent = isOn ? 'LIGHTS ON' : 'LIGHTS OFF';
+            if (isOn) {
+                buttonEl.classList.remove('btn-outline-secondary');
+                buttonEl.classList.add('btn-warning');
+                // buttonEl.querySelector('span.material-symbols-outlined').textContent = 'lightbulb';
+                if (labelEl) labelEl.textContent = 'Lights are ON';
+            } else {
+                buttonEl.classList.remove('btn-warning');
+                buttonEl.classList.add('btn-outline-secondary');
+                // buttonEl.querySelector('span.material-symbols-outlined').textContent = 'light_off';
+                if (labelEl) labelEl.textContent = 'Lights are OFF';
+            }
         }
 
         function _buildActiveBasicScenarioGroups() {
@@ -10018,13 +10028,13 @@ window.addEventListener('beforeunload', function(event) {
             if (suspensionPaused) {
                 btn.classList.remove('btn-outline-secondary');
                 btn.classList.add('btn-warning');
-                btn.querySelector('span.material-symbols-outlined').textContent = 'play_circle';
-                label.textContent = 'Resume Suspension';
+                //  btn.querySelector('span.material-symbols-outlined').textContent = 'play_circle';
+                label.textContent = 'Suspension Paused';
             } else {
                 btn.classList.remove('btn-warning');
                 btn.classList.add('btn-outline-secondary');
-                btn.querySelector('span.material-symbols-outlined').textContent = 'pause_circle';
-                label.textContent = 'Pause Suspension';
+                //     btn.querySelector('span.material-symbols-outlined').textContent = 'pause_circle';
+                label.textContent = 'Suspension Active';
             }
         }
 
