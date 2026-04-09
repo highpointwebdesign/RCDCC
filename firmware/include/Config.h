@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "26.04.16"
+#define FIRMWARE_VERSION "26.04.29"
 #endif
 
 // Sensor configuration
@@ -18,8 +18,8 @@
 // GPIO assignments for PWM outputs (if using direct GPIO instead of PCA9685)
 #define PWM_FL_PIN 25  // Front Left
 #define PWM_FR_PIN 26  // Front Right
-#define PWM_RL_PIN 32  // Rear Left
-#define PWM_RR_PIN 33  // Rear Right
+#define PWM_RL_PIN 17  // Rear Left
+#define PWM_RR_PIN 18  // Rear Right
 
 // Addressable LED configuration
 #define STATUS_LED_PIN 27         // GPIO pin for addressable LED strip (WS2812B/NeoPixel)

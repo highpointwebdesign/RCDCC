@@ -621,12 +621,22 @@
                     </div>
                 </div>
 
+                <!-- Suspend Suspension Button -->
+                <div class="col-12">
+                    <button type="button" id="suspendSuspensionBtn" class="btn btn-outline-secondary w-100"
+                            onclick="toggleSuspendSuspension()"
+                            disabled>
+                        <span class="material-symbols-outlined" style="vertical-align:middle;font-size:1.1em;">pause_circle</span>
+                        <span id="suspendSuspensionLabel">Pause Suspension</span>
+                    </button>
+                </div>
+
                 <!-- Parameters Card -->
                 <div class="col-12 col-md-6">
                     <div class="card" id="tuningParametersCard">
                         <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
                             <div>
-                                <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Suspension
+                                <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Tuning
                             </div>
                             <div class="d-flex align-items-center gap-2">
                                 <span class="material-symbols-outlined icon-action" id="tuningLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleTuningLock(this)">lock</span>
@@ -638,12 +648,17 @@
                             <!-- Tuning Mode -->
                             <div class="tuning-slider-group">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="mb-0"><span class="material-symbols-outlined icon-danger">tune</span> Tuning Mode</h6>
+                                    <h6 class="mb-0"><span class="material-symbols-outlined icon-danger">tune</span> Mode</h6>
                                     <div class="d-flex gap-2">
-                                        <button type="button" class="btn btn-sm btn-outline-danger" id="tuningModeAutoBtn" onclick="setTuningConfigMode('auto')">Auto</button>
+                                        <button type="button" class="btn btn-sm btn-gold" id="tuningModeAutoBtn" onclick="setTuningConfigMode('auto')">Auto</button>
                                         <button type="button" class="btn btn-sm btn-outline-secondary" id="tuningModeCustomBtn" onclick="setTuningConfigMode('custom')">Custom</button>
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- Drive Mode -->
+                            <div class="tuning-slider-group" id="tuningDriveModeGroup">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">directions_car</span> Drive Mode</h6>
                                 <div id="tuningMasterRow" class="slider-section">
                                     <div class="slider-stepper-control" data-slider-key="masterFeel">
                                         <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease drive feel">-</button>
@@ -653,43 +668,24 @@
                                     <div style="text-align:center; margin-top: 4px; font-size: 0.75rem; color: var(--text-muted);" id="masterFeelLabel">Balanced</div>
                                 </div>
                             </div>
-
-                            <!-- Ride Height -->
+                            
+                            <!-- Balance (Rear/Front) -->
                             <div class="tuning-slider-group">
-                                <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger); transform: rotate(90deg);">
-                                    arrows_outward
-                                    </span>
-                                Ride Height</h6>
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">balance</span> Balance (Rear/Front)</h6>
                                 <div class="slider-section">
-                                    <div class="slider-stepper-control" data-slider-key="rideHeight">
-                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease ride height">-</button>
-                                        <div id="sliderRideHeight" class="slider-stepper-track"></div>
-                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase ride height">+</button>
+                                    <div class="slider-stepper-control" data-slider-key="balance">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Shift balance toward rear">-</button>
+                                        <div id="sliderBalance" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Shift balance toward front">+</button>
                                     </div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Min</span>
-                                        <span>Mid</span>
-                                        <span>Max</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Reaction Speed -->
-                            <div class="tuning-slider-group">
-                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">speed</span> Reaction Speed</h6>
-                                <div class="slider-section">
-                                    <div class="slider-stepper-control" data-slider-key="reactionSpeed">
-                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease reaction speed">-</button>
-                                        <div id="sliderReactionSpeed" class="slider-stepper-track"></div>
-                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase reaction speed">+</button>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Slow</span>
+                                        <span>Rear</span>
                                         <span>Balanced</span>
-                                        <span>Fast</span>
+                                        <span>Front</span>
                                     </div>
                                 </div>
                             </div>
+                             
 
                             <!-- Bounce Speed (omegaN) -->
                             <div class="tuning-slider-group">
@@ -759,6 +755,23 @@
                                 </div>
                             </div>
 
+                            <!-- Reaction Speed -->
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">speed</span> Reaction Speed</h6>
+                                <div class="slider-section">
+                                    <div class="slider-stepper-control" data-slider-key="reactionSpeed">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease reaction speed">-</button>
+                                        <div id="sliderReactionSpeed" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase reaction speed">+</button>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Slow</span>
+                                        <span>Balanced</span>
+                                        <span>Fast</span>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Noise Latch (hyst) -->
                             <div class="tuning-slider-group">
                                 <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">lock</span> Noise Latch</h6>
@@ -776,41 +789,9 @@
                                 </div>
                             </div>
 
-                            <!-- Balance (Rear/Front) -->
-                            <div class="tuning-slider-group">
-                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">balance</span> Balance (Rear/Front)</h6>
-                                <div class="slider-section">
-                                    <div class="slider-stepper-control" data-slider-key="balance">
-                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Shift balance toward rear">-</button>
-                                        <div id="sliderBalance" class="slider-stepper-track"></div>
-                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Shift balance toward front">+</button>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Rear</span>
-                                        <span>Balanced</span>
-                                        <span>Front</span>
-                                    </div>
-                                </div>
-                            </div>
 
-                                <!-- Sensor Refresh Rate -->
-                                <div class="tuning-slider-group mb-0">
-                                    <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">memory</span> Sensor Refresh Rate</h6>
-                                    <div class="slider-section">
-                                        <div class="slider-stepper-control" data-slider-key="sensorRate">
-                                            <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease sensor refresh rate">-</button>
-                                            <div id="sliderSensorRate" class="slider-stepper-track"></div>
-                                            <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase sensor refresh rate">+</button>
-                                        </div>
-                                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                            <span>Low</span>
-                                            <span>Balanced</span>
-                                            <span>High</span>
-                                        </div>
-                                    </div>
-                                </div>
 
-                            
+
                         </div>
                     </div>
                 </div>
@@ -850,7 +831,7 @@
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="mb-0">
                                         <span class="material-symbols-outlined icon-danger">mobile_rotate</span>
-                                        RCDCC Orientation
+                                        RCDCC Setup
                                     </h6>
                                     <div class="d-flex align-items-center gap-2">
                                         <span class="material-symbols-outlined icon-action" id="mpuOrientationChevron" title="Collapse RCDCC orientation" onclick="toggleCardCollapse('mpuOrientationCard', 'mpuOrientationChevron', 'mpuOrientationCardCollapsed')">keyboard_arrow_down</span>
@@ -863,7 +844,7 @@
                                                 <h6 class="mb-3">
                                                     <!-- transform: rotate(-45deg);  -->
                                                     <span class="material-symbols-outlined" style="color: var(--danger);">qr_code</span>
-                                                    Select Orientation 
+                                                    How is RCDCC mounted?
                                                 </h6>
                                                 <div class="slider-section">
                                                     <select class="form-select" id="mpuOrientation">
@@ -878,79 +859,189 @@
                                             </div>
                                         </div>
                                     </div>
+
+                                    <!-- Sensor Refresh Rate -->
+                                    <div class="tuning-slider-group mt-3">
+                                        <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">memory</span> Sensor Refresh Rate</h6>
+                                        <div class="slider-section">
+                                            <div class="slider-stepper-control" data-slider-key="sensorRate">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease sensor refresh rate">-</button>
+                                                <div id="sliderSensorRate" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase sensor refresh rate">+</button>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                                <span>Low</span>
+                                                <span>Balanced</span>
+                                                <span>High</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- Servo Range sub-section -->
+                            <!-- Per-Servo Settings sub-section -->
                             <hr class="mt-4 mb-3">
-                            <div id="servoRangeCard">
+                            <div id="perServoSettingsCard">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="mb-0">
-                                        <span class="material-symbols-outlined icon-danger">radar</span>
-                                        Servo Range
+                                        <span class="material-symbols-outlined icon-danger">tune</span>
+                                        Per-Servo Setup
                                     </h6>
                                     <div class="d-flex align-items-center gap-2">
-                                        <span class="material-symbols-outlined icon-action" id="servoRangeChevron" title="Collapse servo range" onclick="toggleCardCollapse('servoRangeCard', 'servoRangeChevron', 'servoRangeCardCollapsed')">keyboard_arrow_down</span>
+                                        <span class="material-symbols-outlined icon-action" id="perServoSettingsChevron" title="Collapse per-servo setup" onclick="toggleCardCollapse('perServoSettingsCard', 'perServoSettingsChevron', 'perServoSettingsCardCollapsed')">keyboard_arrow_down</span>
                                     </div>
                                 </div>
-                                <div class="card-body p-0" id="servoRangeCardBody">
-                                    <div class="row g-3">
-                                        <div class="col-12 col-md-6">
-                                            <div class="tuning-slider-group mb-0">
-                                                <h6 class="mb-3">
-                                                    <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span>
-                                                    Front Left
-                                                </h6>
-                                                <div class="slider-section">
-                                                    <div id="sliderFrontLeft"></div>
-                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                        <span>Min</span>
-                                                        <span>Max</span>
-                                                    </div>
-                                                </div>
+                                <div class="card-body p-0" id="perServoSettingsCardBody">
+                                <div class="per-servo-grid">
+                                    <!-- Front Left -->
+                                    <div class="per-servo-panel">
+                                        <div class="per-servo-header">
+                                            <span class="material-symbols-outlined" style="transform: rotate(-45deg); color: var(--danger);">arrow_warm_up</span>
+                                            <span>Front Left</span>
+                                        </div>
+                                        <div class="per-servo-invert-row">
+                                            <label class="form-check-label" for="servoFLInvert">Invert</label>
+                                            <div class="form-check form-switch mb-0">
+                                                <input class="form-check-input" type="checkbox" id="servoFLInvert" role="switch">
                                             </div>
                                         </div>
-                                        <div class="col-12 col-md-6">
-                                            <div class="tuning-slider-group mb-0">
-                                                <h6 class="mb-3"><span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span> Front Right</h6>
-                                                <div class="slider-section">
-                                                    <div id="sliderFrontRight"></div>
-                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                        <span>Min</span>
-                                                        <span>Max</span>
-                                                    </div>
-                                                </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Trim</span>
+                                            <div class="slider-stepper-control" data-servo-trim="frontLeft">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease front left trim">-</button>
+                                                <div id="sliderFrontLeftTrim" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase front left trim">+</button>
                                             </div>
                                         </div>
-                                        <div class="col-12 col-md-6">
-                                            <div class="tuning-slider-group mb-0">
-                                                <h6 class="mb-3">
-                                                    <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span> Rear Left
-                                                </h6>
-                                                <div class="slider-section">
-                                                    <div id="sliderRearLeft"></div>
-                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                        <span>Min</span>
-                                                        <span>Max</span>
-                                                    </div>
-                                                </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Min</span>
+                                            <div class="slider-stepper-control" data-servo-min="frontLeft">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease front left min">-</button>
+                                                <div id="sliderFrontLeftMin" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase front left min">+</button>
                                             </div>
                                         </div>
-                                        <div class="col-12 col-md-6">
-                                            <div class="tuning-slider-group mb-0">
-                                                <h6 class="mb-3">
-                                                    <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span> Rear Right
-                                                </h6>
-                                                <div class="slider-section">
-                                                    <div id="sliderRearRight"></div>
-                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                        <span>Min</span>
-                                                        <span>Max</span>
-                                                    </div>
-                                                </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Max</span>
+                                            <div class="slider-stepper-control" data-servo-max="frontLeft">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease front left max">-</button>
+                                                <div id="sliderFrontLeftMax" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase front left max">+</button>
                                             </div>
                                         </div>
                                     </div>
+                                    <!-- Front Right -->
+                                    <div class="per-servo-panel">
+                                        <div class="per-servo-header">
+                                            <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
+                                            <span>Front Right</span>
+                                        </div>
+                                        <div class="per-servo-invert-row">
+                                            <label class="form-check-label" for="servoFRInvert">Invert</label>
+                                            <div class="form-check form-switch mb-0">
+                                                <input class="form-check-input" type="checkbox" id="servoFRInvert" role="switch">
+                                            </div>
+                                        </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Trim</span>
+                                            <div class="slider-stepper-control" data-servo-trim="frontRight">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease front right trim">-</button>
+                                                <div id="sliderFrontRightTrim" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase front right trim">+</button>
+                                            </div>
+                                        </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Min</span>
+                                            <div class="slider-stepper-control" data-servo-min="frontRight">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease front right min">-</button>
+                                                <div id="sliderFrontRightMin" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase front right min">+</button>
+                                            </div>
+                                        </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Max</span>
+                                            <div class="slider-stepper-control" data-servo-max="frontRight">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease front right max">-</button>
+                                                <div id="sliderFrontRightMax" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase front right max">+</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Rear Left -->
+                                    <div class="per-servo-panel">
+                                        <div class="per-servo-header">
+                                            <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span>
+                                            <span>Rear Left</span>
+                                        </div>
+                                        <div class="per-servo-invert-row">
+                                            <label class="form-check-label" for="servoRLInvert">Invert</label>
+                                            <div class="form-check form-switch mb-0">
+                                                <input class="form-check-input" type="checkbox" id="servoRLInvert" role="switch">
+                                            </div>
+                                        </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Trim</span>
+                                            <div class="slider-stepper-control" data-servo-trim="rearLeft">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease rear left trim">-</button>
+                                                <div id="sliderRearLeftTrim" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase rear left trim">+</button>
+                                            </div>
+                                        </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Min</span>
+                                            <div class="slider-stepper-control" data-servo-min="rearLeft">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease rear left min">-</button>
+                                                <div id="sliderRearLeftMin" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase rear left min">+</button>
+                                            </div>
+                                        </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Max</span>
+                                            <div class="slider-stepper-control" data-servo-max="rearLeft">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease rear left max">-</button>
+                                                <div id="sliderRearLeftMax" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase rear left max">+</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Rear Right -->
+                                    <div class="per-servo-panel">
+                                        <div class="per-servo-header">
+                                            <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span>
+                                            <span>Rear Right</span>
+                                        </div>
+                                        <div class="per-servo-invert-row">
+                                            <label class="form-check-label" for="servoRRInvert">Invert</label>
+                                            <div class="form-check form-switch mb-0">
+                                                <input class="form-check-input" type="checkbox" id="servoRRInvert" role="switch">
+                                            </div>
+                                        </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Trim</span>
+                                            <div class="slider-stepper-control" data-servo-trim="rearRight">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease rear right trim">-</button>
+                                                <div id="sliderRearRightTrim" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase rear right trim">+</button>
+                                            </div>
+                                        </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Min</span>
+                                            <div class="slider-stepper-control" data-servo-min="rearRight">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease rear right min">-</button>
+                                                <div id="sliderRearRightMin" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase rear right min">+</button>
+                                            </div>
+                                        </div>
+                                        <div class="per-servo-param-row">
+                                            <span class="per-servo-label">Max</span>
+                                            <div class="slider-stepper-control" data-servo-max="rearRight">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease rear right max">-</button>
+                                                <div id="sliderRearRightMax" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase rear right max">+</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                                 </div>
                             </div>
 
@@ -959,14 +1050,31 @@
                             <div id="servoSettingsCard">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="mb-0">
-                                        <span class="material-symbols-outlined icon-danger">tune</span>
-                                        Trim / Rotation
+                                        <span class="material-symbols-outlined icon-danger">expand_circle_down</span>
+                                        Chassis Setup
                                     </h6>
-                                    <div class="d-flex align-items-center gap-2 servo-settings-header-actions">
-                                        <span class="material-symbols-outlined icon-action" id="servoSettingsChevron" title="Collapse servo trim &amp; rotation" onclick="toggleCardCollapse('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed')">keyboard_arrow_down</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="material-symbols-outlined icon-action" id="servoSettingsChevron" title="Collapse ride height" onclick="toggleCardCollapse('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed')">keyboard_arrow_down</span>
                                     </div>
                                 </div>
                                 <div class="card-body p-0" id="servoSettingsCardBody">
+
+                                    <!-- Suspension Height -->
+                                    <div class="tuning-slider-group mb-3">
+                                        <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger); transform: rotate(90deg);">arrows_outward</span> Suspension Height</h6>
+                                        <div class="slider-section">
+                                            <div class="slider-stepper-control" data-slider-key="rideHeight">
+                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease suspension height">-</button>
+                                                <div id="sliderRideHeight" class="slider-stepper-track"></div>
+                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase suspension height">+</button>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                                <span>Min</span>
+                                                <span>Mid</span>
+                                                <span>Max</span>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <!-- Auto Calibrate & Level -->
                                     <div class="servo-settings-footer">
@@ -994,163 +1102,12 @@
                                         </div>
                                     </div>
 
-                                    
-                                    <div class="servo-settings-block">
-                                        <div class="servo-settings-section tuning-slider-group">
-                                            <div class="servo-settings-title">
-                                                <div class="servo-settings-title-main">
-                                                    <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span>
-                                                    <span>Front Left Trim</span>
-                                                </div>
-                                                <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Front Left direction" id="servoFLRevBadge">
-                                                    <button type="button" class="btn servo-direction-btn" id="servoFLCwBtn" data-dir="cw" aria-label="Front Left clockwise rotation">
-                                                        <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                    </button>
-                                                    <button type="button" class="btn servo-direction-btn" id="servoFLCcwBtn" data-dir="ccw" aria-label="Front Left counterclockwise rotation">
-                                                        <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <!-- <div class="servo-settings-slider-labels">
-                                                <span id="servoFLTrimDisplay"></span>
-                                            </div> -->
-                                            <div class="slider-stepper-control" data-servo-trim="frontLeft">
-                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease front left trim">-</button>
-                                                <div id="sliderFrontLeftTrim" class="slider-stepper-track"></div>
-                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase front left trim">+</button>
-                                            </div>
-                                            <div class="servo-settings-value-labels">
-                                                <span>Up</span>
-                                                <span>Center</span>
-                                                <span>Down</span>
-                                            </div>
-                                            <input class="form-check-input" type="checkbox" id="servoFLReversed" style="display: none;">
-                                        </div>
 
-                                        <div class="servo-settings-section tuning-slider-group">
-                                            <div class="servo-settings-title">
-                                                <div class="servo-settings-title-main">
-                                                    <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
-                                                    <span>Front Right Trim</span>
-                                                </div>
-                                                <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Front Right direction" id="servoFRRevBadge">
-                                                    <button type="button" class="btn servo-direction-btn" id="servoFRCwBtn" data-dir="cw" aria-label="Front Right clockwise rotation">
-                                                        <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                    </button>
-                                                    <button type="button" class="btn servo-direction-btn" id="servoFRCcwBtn" data-dir="ccw" aria-label="Front Right counterclockwise rotation">
-                                                        <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <!-- <div class="servo-settings-slider-labels">
-                                                <span id="servoFRTrimDisplay"></span>
-                                            </div> -->
-                                            <div class="slider-stepper-control" data-servo-trim="frontRight">
-                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease front right trim">-</button>
-                                                <div id="sliderFrontRightTrim" class="slider-stepper-track"></div>
-                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase front right trim">+</button>
-                                            </div>
-                                            <div class="servo-settings-value-labels">
-                                                <span>Up</span>
-                                                <span>Center</span>
-                                                <span>Down</span>
-                                            </div>
-                                            <input class="form-check-input" type="checkbox" id="servoFRReversed" style="display: none;">
-                                        </div>
-
-                                        <div class="servo-settings-section tuning-slider-group">
-                                            <div class="servo-settings-title">
-                                                <div class="servo-settings-title-main">
-                                                    <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span>
-                                                    <span>Rear Left Trim</span>
-                                                </div>
-                                                <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Rear Left direction" id="servoRLRevBadge">
-                                                    <button type="button" class="btn servo-direction-btn" id="servoRLCwBtn" data-dir="cw" aria-label="Rear Left clockwise rotation">
-                                                        <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                    </button>
-                                                    <button type="button" class="btn servo-direction-btn" id="servoRLCcwBtn" data-dir="ccw" aria-label="Rear Left counterclockwise rotation">
-                                                        <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <!-- <div class="servo-settings-slider-labels">
-                                                <span id="servoRLTrimDisplay"></span>
-                                            </div> -->
-                                            <div class="slider-stepper-control" data-servo-trim="rearLeft">
-                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease rear left trim">-</button>
-                                                <div id="sliderRearLeftTrim" class="slider-stepper-track"></div>
-                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase rear left trim">+</button>
-                                            </div>
-                                            <div class="servo-settings-value-labels">
-                                                <span>Up</span>
-                                                <span>Center</span>
-                                                <span>Down</span>
-                                            </div>
-                                            <input class="form-check-input" type="checkbox" id="servoRLReversed" style="display: none;">
-                                        </div>
-
-                                        <div class="servo-settings-section tuning-slider-group">
-                                            <div class="servo-settings-title">
-                                                <div class="servo-settings-title-main">
-                                                    <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span>
-                                                    <span>Rear Right Trim</span>
-                                                </div>
-                                                <div class="btn-group servo-direction-toggle servo-direction-toggle-inline" role="group" aria-label="Rear Right direction" id="servoRRRevBadge">
-                                                    <button type="button" class="btn servo-direction-btn" id="servoRRCwBtn" data-dir="cw" aria-label="Rear Right clockwise rotation">
-                                                        <span class="material-symbols-outlined rotate-cw">rotate_right</span>
-                                                    </button>
-                                                    <button type="button" class="btn servo-direction-btn" id="servoRRCcwBtn" data-dir="ccw" aria-label="Rear Right counterclockwise rotation">
-                                                        <span class="material-symbols-outlined rotate-ccw">rotate_left</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <!-- <div class="servo-settings-slider-labels">
-                                                <span id="servoRRTrimDisplay"></span>
-                                            </div> -->
-                                            <div class="slider-stepper-control" data-servo-trim="rearRight">
-                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease rear right trim">-</button>
-                                                <div id="sliderRearRightTrim" class="slider-stepper-track"></div>
-                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase rear right trim">+</button>
-                                            </div>
-                                            <div class="servo-settings-value-labels">
-                                                <span>Up</span>
-                                                <span>Center</span>
-                                                <span>Down</span>
-                                            </div>
-                                            <input class="form-check-input" type="checkbox" id="servoRRReversed" style="display: none;">
-                                        </div>
-
-                                        <!-- Auto Calibrate & Level -->
-                                        <!-- <div class="servo-settings-footer">
-                                            <button type="button" class="btn btn-gold w-100" id="servoAutoCalibrateBtn">
-                                                <span class="material-symbols-outlined">wand_stars</span>
-                                                Auto Calibrate
-                                            </button>
-                                        </div>
-
-                                        <div id="autoLevelProgressContainer" class="col-12" style="display: none;">
-                                            <div class="card">
-                                                <div class="card-body">
-                                                    <div class="bubble-level-card">
-                                                        <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
-                                                        <div class="bubble-level-face" id="bubbleLevelFace">
-                                                            <div class="bubble-level-crosshair horizontal"></div>
-                                                            <div class="bubble-level-crosshair vertical"></div>
-                                                            <div class="bubble-level-target"></div>
-                                                            <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
-                                                            <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
-                                                        </div>
-                                                        <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div> -->
-                                    </div>
                                 </div>
                             </div>
 
                             <!-- Save Settings to NVS (persistent storage) -->
-                            <hr class="mt-4 mb-3">
+                            <!-- <hr class="mt-4 mb-3"> -->
                             <button id="system-save-btn" class="btn btn-secondary w-100" disabled onclick="savePage('system')">
                                 Save Settings
                             </button>
@@ -1161,32 +1118,72 @@
 
                 <!-- Servo Card -->
                 <div class="col-12 col-md-6">
-                    <div class="card">
-                        <div class="card-header" style="background-color: black; color: white;">
-                            <span class="material-symbols-outlined" style="color: var(--danger);">
-                            info
-                            </span>
-                            Servo Test
+                    <div class="card" id="servoTestCard">
+                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="material-symbols-outlined" style="color: var(--danger);">
+                                info
+                                </span>
+                                <span>Servo Test</span>
+                            </div>
+                            <span class="material-symbols-outlined icon-action" id="servoTestChevron" title="Collapse servo test" onclick="toggleCardCollapse('servoTestCard', 'servoTestChevron', 'servoTestCardCollapsed')">keyboard_arrow_down</span>
                         </div>
                         <div class="card-body">
-                                <p style="text-align: left;">Select the suspension servos to activate for testing. This will run a simple test sequence to verify servo functionality and channel order. Use this to identify which servo corresponds to each wheel and confirm that all four suspension servos are working properly.</p>
-                                <div class="btn-group w-100" role="group" aria-label="Basic checkbox toggle button group" style="flex-wrap: nowrap;">
-                                <input type="checkbox" class="btn-check" id="testFrontLeft" autocomplete="off">
-                                <label class="btn btn-gold" for="testFrontLeft">Front Left</label>
+                                <p style="text-align: left;">Use Raise and Lower buttons to move each servo to its maximum or minimum travel limit (limits are set by the servo's Min and Max values in Per-Servo Settings). This confirms the servo is responding and moving in the desired direction. If they are not, adjust the Invert slider in the Hardware Configuration > Per-Servo Setup.</p>
+                                <div class="servo-test-grid">
+                                    <div class="servo-settings-section tuning-slider-group">
+                                        <div class="servo-settings-title">
+                                            <div class="servo-settings-title-main">
+                                                <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span>
+                                                <span>F. Left</span>
+                                            </div>
+                                        </div>
+                                        <div class="servo-test-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="frontLeft" data-servo-test-dir="1" onclick="runServoTestAction('frontLeft', 1)">Raise</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="frontLeft" data-servo-test-dir="-1" onclick="runServoTestAction('frontLeft', -1)">Lower</button>
+                                        </div>
+                                    </div>
 
-                                <input type="checkbox" class="btn-check" id="testFrontRight" autocomplete="off">
-                                <label class="btn btn-gold" for="testFrontRight">Front Right</label>
+                                    <div class="servo-settings-section tuning-slider-group">
+                                        <div class="servo-settings-title">
+                                            <div class="servo-settings-title-main">
+                                                <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
+                                                <span>F. Right</span>
+                                            </div>
+                                        </div>
+                                        <div class="servo-test-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="frontRight" data-servo-test-dir="1" onclick="runServoTestAction('frontRight', 1)">Raise</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="frontRight" data-servo-test-dir="-1" onclick="runServoTestAction('frontRight', -1)">Lower</button>
+                                        </div>
+                                    </div>
 
-                                <input type="checkbox" class="btn-check" id="testRearLeft" autocomplete="off">
-                                <label class="btn btn-gold" for="testRearLeft">Rear Left</label>
+                                    <div class="servo-settings-section tuning-slider-group">
+                                        <div class="servo-settings-title">
+                                            <div class="servo-settings-title-main">
+                                                <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span>
+                                                <span>R. Left</span>
+                                            </div>
+                                        </div>
+                                        <div class="servo-test-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="rearLeft" data-servo-test-dir="1" onclick="runServoTestAction('rearLeft', 1)">Raise</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="rearLeft" data-servo-test-dir="-1" onclick="runServoTestAction('rearLeft', -1)">Lower</button>
+                                        </div>
+                                    </div>
 
-                                <input type="checkbox" class="btn-check" id="testRearRight" autocomplete="off">
-                                <label class="btn btn-gold" for="testRearRight">Rear Right</label>
+                                    <div class="servo-settings-section tuning-slider-group">
+                                        <div class="servo-settings-title">
+                                            <div class="servo-settings-title-main">
+                                                <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span>
+                                                <span>R. Right</span>
+                                            </div>
+                                        </div>
+                                        <div class="servo-test-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="rearRight" data-servo-test-dir="1" onclick="runServoTestAction('rearRight', 1)">Raise</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="rearRight" data-servo-test-dir="-1" onclick="runServoTestAction('rearRight', -1)">Lower</button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="d-grid gap-2 mt-3">
-                                    <button class="btn btn-gold" id="initiateServoTestBtn" type="button" onclick="startServoTestSequence()" value="Activate Servos">Initiate Test Sequence</button>
-                                    <button class="btn btn-outline-secondary" id="abortServoTestBtn" type="button" onclick="abortServoTestSequence()" disabled>Abort Test</button>
-                                </div>
+                                <!-- <div id="servoTestStatus" class="servo-test-status mt-3">Ready. Select a wheel and tap Raise or Lower.</div> -->
                         </div>
                     </div>
                 </div>
@@ -1346,7 +1343,7 @@
         </section>
 
         <!-- Lights Section -->
-                <!-- Simple 5-LED Blue Test -->
+            <!-- Simple 5-LED Blue Lower -->
                 <section id="simpleLedTest" class="page-section">
                     <div class="col-12">
                         <div class="card" id="simpleLedTestCard">

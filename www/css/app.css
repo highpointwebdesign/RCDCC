@@ -2951,8 +2951,12 @@
         
         /* Horizontal sliders - single handle, no colored range */
         #sliderRideHeight .range-slider__thumb[data-lower],
-        #sliderDamping .range-slider__thumb[data-lower],
-        #sliderStiffness .range-slider__thumb[data-lower],
+        #sliderMasterFeel .range-slider__thumb[data-lower],
+        #sliderOmegaN .range-slider__thumb[data-lower],
+        #sliderZeta .range-slider__thumb[data-lower],
+        #sliderRange .range-slider__thumb[data-lower],
+        #sliderDeadband .range-slider__thumb[data-lower],
+        #sliderHyst .range-slider__thumb[data-lower],
         #sliderReactionSpeed .range-slider__thumb[data-lower],
         #sliderBalance .range-slider__thumb[data-lower],
         #sliderSensorRate .range-slider__thumb[data-lower],
@@ -2974,8 +2978,12 @@
         }
         
         #sliderRideHeight .range-slider__range,
-        #sliderDamping .range-slider__range,
-        #sliderStiffness .range-slider__range,
+            #sliderMasterFeel .range-slider__range,
+            #sliderOmegaN .range-slider__range,
+            #sliderZeta .range-slider__range,
+            #sliderRange .range-slider__range,
+            #sliderDeadband .range-slider__range,
+            #sliderHyst .range-slider__range,
         #sliderReactionSpeed .range-slider__range,
         #sliderBalance .range-slider__range,
         #sliderSensorRate .range-slider__range,
@@ -2991,8 +2999,9 @@
         #lightGroupBrightnessSlider .range-slider__range,
         #lightGroupIntensitySlider .range-slider__range,
         #lightGroupSpeedSlider .range-slider__range {
-            background: transparent;
+            background: transparent !important;
         }
+
 
         /* Slider lock styling */
         .slider-lock-icon {
@@ -3047,11 +3056,38 @@
         }
 
         .servo-settings-section {
-            padding: 0.75rem;
+            /* padding: 0.75rem; */
         }
 
         .servo-settings-section + .servo-settings-section {
             margin-top: 0.75rem;
+        }
+
+        .servo-test-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        .servo-test-grid .servo-settings-section + .servo-settings-section {
+            margin-top: 0;
+        }
+
+        .servo-test-actions {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 0.5rem;
+        }
+
+        .servo-test-btn {
+            min-height: 2.35rem;
+            font-weight: 600;
+            width: 100%;
+        }
+
+        .servo-test-status {
+            font-size: 0.8rem;
+            color: var(--text-muted);
         }
 
         .servo-settings-title {
@@ -3235,24 +3271,94 @@
             margin-top: 1rem;
             padding-top: 1rem;
             padding-bottom: 0.5rem;
-            border-top: 2px solid rgba(200, 168, 0, 0.32);
         }
 
-        /* Tuning + Servo Range + Trim Sliders - Labeled Thumbs */
+        .per-servo-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 0.75rem;
+        }
+
+        .per-servo-panel {
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background-color: #f9fafb;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .per-servo-panel:hover {
+            background-color: #f3f4f6;
+            border-color: var(--primary);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+        }
+
+        .per-servo-header {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-weight: 700;
+            font-size: 0.82rem;
+            margin-bottom: 0.1rem;
+        }
+
+        .per-servo-invert-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            padding: 0.15rem 0;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 0.1rem;
+        }
+
+        .per-servo-param-row {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .per-servo-label {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            width: 2.2rem;
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .per-servo-param-row .slider-stepper-control {
+            flex: 1;
+        }
+
+        /* Tuning + Per-Servo Sliders - Labeled Thumbs */
         #sliderRideHeight .range-slider__thumb,
+        #sliderMasterFeel .range-slider__thumb,
+        #sliderOmegaN .range-slider__thumb,
+        #sliderZeta .range-slider__thumb,
+        #sliderRange .range-slider__thumb,
+        #sliderDeadband .range-slider__thumb,
+        #sliderHyst .range-slider__thumb,
         #sliderDamping .range-slider__thumb,
         #sliderStiffness .range-slider__thumb,
         #sliderReactionSpeed .range-slider__thumb,
         #sliderBalance .range-slider__thumb,
         #sliderSensorRate .range-slider__thumb,
-        #sliderFrontLeft .range-slider__thumb,
-        #sliderFrontRight .range-slider__thumb,
-        #sliderRearLeft .range-slider__thumb,
-        #sliderRearRight .range-slider__thumb,
         #sliderFrontLeftTrim .range-slider__thumb,
         #sliderFrontRightTrim .range-slider__thumb,
         #sliderRearLeftTrim .range-slider__thumb,
         #sliderRearRightTrim .range-slider__thumb,
+        #sliderFrontLeftMin .range-slider__thumb,
+        #sliderFrontRightMin .range-slider__thumb,
+        #sliderRearLeftMin .range-slider__thumb,
+        #sliderRearRightMin .range-slider__thumb,
+        #sliderFrontLeftMax .range-slider__thumb,
+        #sliderFrontRightMax .range-slider__thumb,
+        #sliderRearLeftMax .range-slider__thumb,
+        #sliderRearRightMax .range-slider__thumb,
         #basicScenarioLedCount .range-slider__thumb,
         #basicScenarioBrightness .range-slider__thumb,
         #basicScenarioLarsonSpeed .range-slider__thumb,
@@ -3270,28 +3376,30 @@
             background-color: var(--high-impact-color);
         }
 
-        #sliderFrontLeft .range-slider__thumb[data-lower],
-        #sliderFrontRight .range-slider__thumb[data-lower],
-        #sliderRearLeft .range-slider__thumb[data-lower],
-        #sliderRearRight .range-slider__thumb[data-lower] {
-            width: 32px;
-            height: 32px;
-        }
-
-        #sliderRideHeight .range-slider__thumb[data-upper],
+#sliderRideHeight .range-slider__thumb[data-upper],
+        #sliderMasterFeel .range-slider__thumb[data-upper],
+        #sliderOmegaN .range-slider__thumb[data-upper],
+        #sliderZeta .range-slider__thumb[data-upper],
+        #sliderRange .range-slider__thumb[data-upper],
+        #sliderDeadband .range-slider__thumb[data-upper],
+        #sliderHyst .range-slider__thumb[data-upper],
         #sliderDamping .range-slider__thumb[data-upper],
         #sliderStiffness .range-slider__thumb[data-upper],
         #sliderReactionSpeed .range-slider__thumb[data-upper],
         #sliderBalance .range-slider__thumb[data-upper],
         #sliderSensorRate .range-slider__thumb[data-upper],
-        #sliderFrontLeft .range-slider__thumb[data-upper],
-        #sliderFrontRight .range-slider__thumb[data-upper],
-        #sliderRearLeft .range-slider__thumb[data-upper],
-        #sliderRearRight .range-slider__thumb[data-upper],
         #sliderFrontLeftTrim .range-slider__thumb[data-upper],
         #sliderFrontRightTrim .range-slider__thumb[data-upper],
         #sliderRearLeftTrim .range-slider__thumb[data-upper],
         #sliderRearRightTrim .range-slider__thumb[data-upper],
+        #sliderFrontLeftMin .range-slider__thumb[data-upper],
+        #sliderFrontRightMin .range-slider__thumb[data-upper],
+        #sliderRearLeftMin .range-slider__thumb[data-upper],
+        #sliderRearRightMin .range-slider__thumb[data-upper],
+        #sliderFrontLeftMax .range-slider__thumb[data-upper],
+        #sliderFrontRightMax .range-slider__thumb[data-upper],
+        #sliderRearLeftMax .range-slider__thumb[data-upper],
+        #sliderRearRightMax .range-slider__thumb[data-upper],
         #basicScenarioLedCount .range-slider__thumb[data-upper],
         #basicScenarioBrightness .range-slider__thumb[data-upper],
         #basicScenarioLarsonSpeed .range-slider__thumb[data-upper],
@@ -3322,11 +3430,19 @@
             z-index: 2;
         }
 
-        /* Re-hide lower thumbs for single-thumb (Trim) sliders - override general display:flex rule */
+        /* Re-hide lower thumbs for single-thumb sliders (Trim, Min, Max) */
         #sliderFrontLeftTrim .range-slider__thumb[data-lower],
         #sliderFrontRightTrim .range-slider__thumb[data-lower],
         #sliderRearLeftTrim .range-slider__thumb[data-lower],
-        #sliderRearRightTrim .range-slider__thumb[data-lower] {
+        #sliderRearRightTrim .range-slider__thumb[data-lower],
+        #sliderFrontLeftMin .range-slider__thumb[data-lower],
+        #sliderFrontRightMin .range-slider__thumb[data-lower],
+        #sliderRearLeftMin .range-slider__thumb[data-lower],
+        #sliderRearRightMin .range-slider__thumb[data-lower],
+        #sliderFrontLeftMax .range-slider__thumb[data-lower],
+        #sliderFrontRightMax .range-slider__thumb[data-lower],
+        #sliderRearLeftMax .range-slider__thumb[data-lower],
+        #sliderRearRightMax .range-slider__thumb[data-lower] {
             width: 0 !important;
             height: 0 !important;
             display: none !important;
@@ -3336,7 +3452,15 @@
         #sliderFrontLeftTrim .range-slider__range,
         #sliderFrontRightTrim .range-slider__range,
         #sliderRearLeftTrim .range-slider__range,
-        #sliderRearRightTrim .range-slider__range {
+        #sliderRearRightTrim .range-slider__range,
+        #sliderFrontLeftMin .range-slider__range,
+        #sliderFrontRightMin .range-slider__range,
+        #sliderRearLeftMin .range-slider__range,
+        #sliderRearRightMin .range-slider__range,
+        #sliderFrontLeftMax .range-slider__range,
+        #sliderFrontRightMax .range-slider__range,
+        #sliderRearLeftMax .range-slider__range,
+        #sliderRearRightMax .range-slider__range {
             background: transparent !important;
         }
 

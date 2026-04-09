@@ -1,5 +1,7 @@
 package com.rcdcc.app;
 
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.view.WindowManager;
 import androidx.core.view.WindowInsetsCompat;
@@ -12,6 +14,13 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Phones stay portrait; tablets are allowed to rotate.
+        if (isTabletDevice()) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR);
+        } else {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        }
+
         // Modern edge-to-edge (replaces FLAG_LAYOUT_NO_LIMITS)
         EdgeToEdge.enable(this);
 
@@ -22,5 +31,10 @@ public class MainActivity extends BridgeActivity {
         insetsController.setSystemBarsBehavior(
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         );
+    }
+
+    private boolean isTabletDevice() {
+        Configuration config = getResources().getConfiguration();
+        return config.smallestScreenWidthDp >= 600;
     }
 }

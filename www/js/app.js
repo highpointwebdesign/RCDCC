@@ -98,8 +98,8 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.635';
-        const BUILD_DATE = '2026-04-04';
+        const APP_VERSION = '1.1.668';
+        const BUILD_DATE = '2026-04-09';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -132,11 +132,14 @@ window.addEventListener('beforeunload', function(event) {
         const DANCE_DEADZONE_MAX_DEG = 15;
         const DANCE_DEADZONE_DEFAULT_DEG = 5;
         const DANCE_DEADZONE_STORAGE_KEY = 'danceModeDeadzoneDeg';
+        const DANCE_ORIENTATION_STORAGE_KEY = 'danceModePhoneOrientation';
+        const SERVO_REVERSED_STORAGE_KEY = 'servoReversedStates';
 
         const danceModeState = {
             enabled: false,
             toggleSync: false,
             deadzoneDeg: DANCE_DEADZONE_DEFAULT_DEG,
+            orientationMode: 'portrait',
             latestRawRollDeg: 0,
             latestRawPitchDeg: 0,
             orientationListenerAttached: false,
@@ -474,6 +477,7 @@ window.addEventListener('beforeunload', function(event) {
                 dancePanel.style.display = 'none';
             }
             updateDashboardBleUI(isBleConnected());
+                updateSuspendSuspensionBtn();
         }
 
         function updateDashboardBleUI(connected) {
@@ -1648,6 +1652,7 @@ window.addEventListener('beforeunload', function(event) {
 
         function captureCurrentTuningValues() {
             return {
+                masterFeel: tuningSliderValues.masterFeel ?? 50,
                 rideHeightOffset: tuningSliderValues.rideHeightOffset ?? 50,
                 omegaN: tuningSliderValues.omegaN ?? 3.0,
                 zeta: tuningSliderValues.zeta ?? 0.25,
@@ -1656,7 +1661,8 @@ window.addEventListener('beforeunload', function(event) {
                 inputHyst: tuningSliderValues.inputHyst ?? 0.15,
                 reactionSpeed: tuningSliderValues.reactionSpeed ?? 1.0,
                 frontRearBalance: tuningSliderValues.frontRearBalance ?? 50,
-                sampleRate: tuningSliderValues.sampleRate ?? 25
+                sampleRate: tuningSliderValues.sampleRate ?? 25,
+                tuningConfigMode: localStorage.getItem('tuningConfigMode') ?? 'auto'
             };
         }
 
@@ -1843,173 +1849,131 @@ window.addEventListener('beforeunload', function(event) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
-        // ==================== Help: Servo Test Sequence ====================
-        const SERVO_TEST_STEP_DEGREES = [10, 90, 170, 90];
-        const SERVO_TEST_DWELL_MS = 2000;
-        let servoTestRunning = false;
-        let servoTestAbortRequested = false;
+        // ==================== Servo Test Actions ====================
+        let servoTestActionPending = false;
+        let servoTestActiveKey = null;
+        let servoTestActiveDir = null;
 
         function getServoTestDescriptors() {
-            return [
-                {
-                    checkboxId: 'testFrontLeft',
+            return {
+                frontLeft: {
+                    index: 0,
                     label: 'Front Left',
-                    trimKey: window.RCDCC_KEYS?.SERVO_FL_TRIM,
-                    fullCfgKey: 'srv_fl'
+                    trimKey: window.RCDCC_KEYS?.SERVO_FL_TRIM
                 },
-                {
-                    checkboxId: 'testFrontRight',
+                frontRight: {
+                    index: 1,
                     label: 'Front Right',
-                    trimKey: window.RCDCC_KEYS?.SERVO_FR_TRIM,
-                    fullCfgKey: 'srv_fr'
+                    trimKey: window.RCDCC_KEYS?.SERVO_FR_TRIM
                 },
-                {
-                    checkboxId: 'testRearLeft',
+                rearLeft: {
+                    index: 2,
                     label: 'Rear Left',
-                    trimKey: window.RCDCC_KEYS?.SERVO_RL_TRIM,
-                    fullCfgKey: 'srv_rl'
+                    trimKey: window.RCDCC_KEYS?.SERVO_RL_TRIM
                 },
-                {
-                    checkboxId: 'testRearRight',
+                rearRight: {
+                    index: 3,
                     label: 'Rear Right',
-                    trimKey: window.RCDCC_KEYS?.SERVO_RR_TRIM,
-                    fullCfgKey: 'srv_rr'
+                    trimKey: window.RCDCC_KEYS?.SERVO_RR_TRIM
                 }
-            ];
+            };
         }
 
-        function setServoTestButtonsState(isRunning) {
-            const startBtn = document.getElementById('initiateServoTestBtn');
-            const abortBtn = document.getElementById('abortServoTestBtn');
-            if (startBtn) startBtn.disabled = isRunning;
-            if (abortBtn) abortBtn.disabled = !isRunning;
+        function mapDegreesToMicroseconds(degrees) {
+            const clamped = Math.max(0, Math.min(180, Number(degrees) || 0));
+            return 1000 + Math.round((clamped / 180) * 1000);
         }
 
-        function getServoLimitsFromRam(fullCfgKey) {
-            const servo = (fullConfig && typeof fullConfig === 'object') ? fullConfig[fullCfgKey] : null;
-            const minUs = Number(servo?.min);
-            const maxUs = Number(servo?.max);
-            if (!Number.isFinite(minUs) || !Number.isFinite(maxUs)) {
-                return { minUs: 1000, maxUs: 2000 };
-            }
+        async function writeServoTestTrimFallback(servoKey, descriptor, dir) {
+            if (!descriptor?.trimKey || !bleManager || typeof bleManager.writeValue !== 'function') return;
 
-            const safeMin = Math.max(900, Math.min(2100, Math.round(Math.min(minUs, maxUs))));
-            const safeMax = Math.max(safeMin + 1, Math.min(2100, Math.round(Math.max(minUs, maxUs))));
-            return { minUs: safeMin, maxUs: safeMax };
+            const servoState = servoSliderValues?.[servoKey];
+            if (!servoState) return;
+
+            const minDeg = Math.max(0, Math.min(180, Math.round(Number(servoState.min) || 10)));
+            const maxDeg = Math.max(0, Math.min(180, Math.round(Number(servoState.max) || 170)));
+            const lowDeg = Math.min(minDeg, maxDeg);
+            const highDeg = Math.max(minDeg, maxDeg);
+            const targetDeg = dir > 0 ? highDeg : (dir < 0 ? lowDeg : Math.round(Number(servoState.trim) || 0));
+            const targetUs = mapDegreesToMicroseconds(targetDeg);
+
+            await bleManager.writeValue(descriptor.trimKey, targetUs);
         }
 
-        function mapDegreesToUsWithinLimits(degrees, minUs, maxUs) {
-            const deg = Math.max(0, Math.min(180, Number(degrees) || 0));
-            const span = maxUs - minUs;
-            return Math.round(minUs + (deg / 180) * span);
-        }
+        // function updateServoTestStatus(message) {
+        //     const statusEl = document.getElementById('servoTestStatus');
+        //     if (statusEl) statusEl.textContent = message;
+        // }
 
-        async function waitWithAbort(totalMs) {
-            const stepMs = 100;
-            let elapsed = 0;
-            while (elapsed < totalMs) {
-                if (servoTestAbortRequested) return false;
-                await delay(stepMs);
-                elapsed += stepMs;
-            }
-            return true;
-        }
-
-        async function writeServoTrimUs(trimKey, microseconds) {
-            ensureBleConnectedOrThrow();
-            if (!trimKey) throw new Error('Servo trim key not configured');
-            await bleManager.writeValue(trimKey, Math.round(microseconds));
-        }
-
-        async function runSingleServoTest(descriptor) {
-            const { minUs, maxUs } = getServoLimitsFromRam(descriptor.fullCfgKey);
-
-            // Bring servo to center first for predictable behavior.
-            const centerUs = mapDegreesToUsWithinLimits(90, minUs, maxUs);
-            await writeServoTrimUs(descriptor.trimKey, centerUs);
-            if (!(await waitWithAbort(1000))) return false;
-
-            for (const degrees of SERVO_TEST_STEP_DEGREES) {
-                if (servoTestAbortRequested) return false;
-                const targetUs = mapDegreesToUsWithinLimits(degrees, minUs, maxUs);
-                await writeServoTrimUs(descriptor.trimKey, targetUs);
-                if (!(await waitWithAbort(SERVO_TEST_DWELL_MS))) return false;
-            }
-
-            return true;
-        }
-
-        function getSelectedServoDescriptors() {
-            return getServoTestDescriptors().filter((descriptor) => {
-                const checkbox = document.getElementById(descriptor.checkboxId);
-                return !!(checkbox && checkbox.checked);
+        function setServoTestButtonsState(isBusy) {
+            const buttons = document.querySelectorAll('.servo-test-btn');
+            buttons.forEach((button) => {
+                const buttonKey = button.getAttribute('data-servo-test-key');
+                const buttonDir = Number(button.getAttribute('data-servo-test-dir'));
+                const isActive = isBusy && buttonKey === servoTestActiveKey && buttonDir === servoTestActiveDir;
+                // Only disable the button that is actually executing — others stay interactive.
+                button.disabled = isActive;
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                button.classList.toggle('btn-gold', isActive);
+                button.classList.toggle('btn-outline-secondary', !isActive);
             });
         }
 
-        function clearServoTestSelections() {
-            getServoTestDescriptors().forEach((descriptor) => {
-                const checkbox = document.getElementById(descriptor.checkboxId);
-                if (checkbox) checkbox.checked = false;
-            });
-        }
+        window.runServoTestAction = async function runServoTestAction(servoKey, dir) {
+            if (servoTestActionPending) return;
 
-        window.abortServoTestSequence = function abortServoTestSequence() {
-            if (!servoTestRunning) return;
-            servoTestAbortRequested = true;
-            if (window.toast) toast.warning('Servo test abort requested', { duration: 1800 });
-        };
-
-        window.startServoTestSequence = async function startServoTestSequence() {
-            if (servoTestRunning) return;
+            const descriptors = getServoTestDescriptors();
+            const descriptor = descriptors[servoKey];
+            if (!descriptor) return;
 
             try {
                 ensureBleConnectedOrThrow();
             } catch (error) {
-                if (window.toast) toast.warning('Connect to Bluetooth before running Servo Test');
+                //  updateServoTestStatus('Connect to Bluetooth before using Servo Test.');
+                if (window.toast) toast.warning('Connect to Bluetooth before using Servo Test');
                 return;
             }
 
-            const selected = getSelectedServoDescriptors();
-            if (!selected.length) {
-                if (window.toast) toast.warning('Select at least one servo to test');
-                return;
-            }
+            const directionLabel = dir > 0 ? 'Test +' : 'Test -';
+            const previousActiveKey = servoTestActiveKey;
+            const previousActiveDir = servoTestActiveDir;
 
-            servoTestRunning = true;
-            servoTestAbortRequested = false;
+            servoTestActiveKey = servoKey;
+            servoTestActiveDir = dir;
+            servoTestActionPending = true;
             setServoTestButtonsState(true);
+            // updateServoTestStatus(`${descriptor.label}: sending ${directionLabel}...`);
 
-            if (window.toast) {
-                const labels = selected.map((s) => s.label).join(', ');
-                toast.info(`Running Servo Test: ${labels}`, { duration: 2200 });
-            }
-
-            let completed = false;
             try {
-                for (const descriptor of selected) {
-                    if (servoTestAbortRequested) break;
-                    if (window.toast) toast.info(`Starting ${descriptor.label}`, { duration: 1800 });
-                    const ok = await runSingleServoTest(descriptor);
-                    if (!ok) break;
-                    if (!servoTestAbortRequested && window.toast) toast.success(`Completed ${descriptor.label}`, { duration: 1800 });
+                let systemCommandSent = false;
+                try {
+                    await bleManager.sendSystemCommand('testServo', {
+                        idx: descriptor.index,
+                        dir
+                    });
+                    systemCommandSent = true;
+                } catch (commandError) {
+                    console.warn('testServo system command failed, using trim-key fallback:', commandError);
                 }
-                completed = !servoTestAbortRequested;
+
+                await writeServoTestTrimFallback(servoKey, descriptor, dir);
+
+                if (!systemCommandSent) {
+                    console.warn(`[SERVO-TEST] Fallback write used for ${descriptor.label}`);
+                }
+                // updateServoTestStatus(`${descriptor.label}: ${directionLabel} sent.`);
+                if (window.toast) toast.success(`${descriptor.label} ${directionLabel}`, { duration: 1500 });
             } catch (error) {
-                console.error('Servo test sequence failed:', error);
+                servoTestActiveKey = previousActiveKey;
+                servoTestActiveDir = previousActiveDir;
+                console.error('Servo test action failed:', error);
+                // updateServoTestStatus(`${descriptor.label}: test failed.`);
                 if (window.toast) toast.error(`Servo test failed: ${String(error?.message || error)}`);
             } finally {
-                clearServoTestSelections();
+                servoTestActionPending = false;
+                servoTestActiveKey = null;
+                servoTestActiveDir = null;
                 setServoTestButtonsState(false);
-                servoTestRunning = false;
-                servoTestAbortRequested = false;
-            }
-
-            if (window.toast) {
-                if (completed) {
-                    toast.success('Servo testing complete', { duration: 2200 });
-                } else {
-                    toast.warning('Servo testing stopped', { duration: 1800 });
-                }
             }
         };
 
@@ -2732,7 +2696,9 @@ window.addEventListener('beforeunload', function(event) {
                 deadzoneCircle: document.getElementById('danceDeadzoneCircle'),
                 slider: document.getElementById('danceDeadzoneSlider'),
                 deadzoneValue: document.getElementById('danceDeadzoneValue'),
-                indicatorWrap: document.getElementById('danceTiltIndicatorWrap')
+                indicatorWrap: document.getElementById('danceTiltIndicatorWrap'),
+                orientationPortrait: document.getElementById('danceOrientationPortrait'),
+                orientationLandscape: document.getElementById('danceOrientationLandscape')
             };
         }
 
@@ -2817,6 +2783,37 @@ window.addEventListener('beforeunload', function(event) {
                     box-shadow: 0 0 14px rgba(80, 255, 154, 0.65);
                     transition: transform 40ms linear;
                 }
+                .dance-mode-panel .form-label,
+                .dance-mode-panel .form-label strong {
+                    color: #e6eef8;
+                }
+                .dance-mode-panel #danceDeadzoneValue {
+                    color: #ffe69a;
+                }
+                .dance-orientation-toggle {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 8px;
+                }
+                .dance-orientation-btn {
+                    border: 1px solid rgba(79, 156, 255, 0.45);
+                    color: #9ecbff;
+                    background: rgba(18, 28, 42, 0.9);
+                    border-radius: 10px;
+                    padding: 8px 10px;
+                    font-weight: 600;
+                    transition: background 100ms ease, border-color 100ms ease, color 100ms ease;
+                }
+                .dance-orientation-btn.is-active {
+                    color: #0d1b2a;
+                    border-color: rgba(80, 255, 154, 0.95);
+                    background: linear-gradient(180deg, rgba(80, 255, 154, 0.95) 0%, rgba(58, 217, 133, 0.95) 100%);
+                }
+                .dance-orientation-help {
+                    margin-top: 6px;
+                    color: #9fb0c3;
+                    font-size: 0.78rem;
+                }
                 @keyframes dancePulseBorder {
                     0% { box-shadow: 0 0 0 0 rgba(200, 168, 0, 0.35); }
                     70% { box-shadow: 0 0 0 8px rgba(200, 168, 0, 0); }
@@ -2852,6 +2849,14 @@ window.addEventListener('beforeunload', function(event) {
                     </div>
                 </div>
                 <div class="mt-3">
+                    <label class="form-label mb-1"><strong>Phone Orientation</strong></label>
+                    <div class="dance-orientation-toggle" role="group" aria-label="Dance Mode phone orientation">
+                        <button type="button" id="danceOrientationPortrait" class="dance-orientation-btn">Portrait</button>
+                        <button type="button" id="danceOrientationLandscape" class="dance-orientation-btn">Landscape</button>
+                    </div>
+                    <div class="dance-orientation-help">Portrait matches normal app hold.</div>
+                </div>
+                <div class="mt-3">
                     <label for="danceDeadzoneSlider" class="form-label mb-1"><strong>Deadzone</strong> <span id="danceDeadzoneValue">${DANCE_DEADZONE_DEFAULT_DEG}°</span></label>
                     <input type="range" id="danceDeadzoneSlider" class="form-range" min="${DANCE_DEADZONE_MIN_DEG}" max="${DANCE_DEADZONE_MAX_DEG}" step="1" value="${DANCE_DEADZONE_DEFAULT_DEG}">
                 </div>
@@ -2876,6 +2881,57 @@ window.addEventListener('beforeunload', function(event) {
             const normalized = (magnitude - deadzoneDeg) / headroom;
             const signed = (rawTiltDeg >= 0 ? 1 : -1) * Math.min(1, normalized);
             return Math.max(-1, Math.min(1, signed));
+        }
+
+        function getDanceOrientationAngle() {
+            const screenAngle = Number(window?.screen?.orientation?.angle);
+            if (Number.isFinite(screenAngle)) {
+                return ((screenAngle % 360) + 360) % 360;
+            }
+            const legacyAngle = Number(window.orientation);
+            if (Number.isFinite(legacyAngle)) {
+                return ((legacyAngle % 360) + 360) % 360;
+            }
+            return 90;
+        }
+
+        function transformDanceAxesForOrientation(rawRollDeg, rawPitchDeg) {
+            if (danceModeState.orientationMode === 'landscape') {
+                return { roll: rawRollDeg, pitch: rawPitchDeg };
+            }
+
+            const angle = getDanceOrientationAngle();
+            // Rotate axes for portrait. Use screen angle when available to preserve left/right handed hold.
+            if (angle >= 225 && angle < 315) {
+                return {
+                    roll: -rawPitchDeg,
+                    pitch: rawRollDeg
+                };
+            }
+
+            return {
+                roll: rawPitchDeg,
+                pitch: -rawRollDeg
+            };
+        }
+
+        function updateDanceOrientationUi() {
+            const { orientationPortrait, orientationLandscape } = getDanceModeElements();
+            if (!orientationPortrait || !orientationLandscape) return;
+
+            const isPortrait = danceModeState.orientationMode !== 'landscape';
+            orientationPortrait.classList.toggle('is-active', isPortrait);
+            orientationLandscape.classList.toggle('is-active', !isPortrait);
+            orientationPortrait.setAttribute('aria-pressed', isPortrait ? 'true' : 'false');
+            orientationLandscape.setAttribute('aria-pressed', !isPortrait ? 'true' : 'false');
+        }
+
+        function setDanceOrientationMode(mode, persist = true) {
+            danceModeState.orientationMode = (mode === 'landscape') ? 'landscape' : 'portrait';
+            if (persist) {
+                localStorage.setItem(DANCE_ORIENTATION_STORAGE_KEY, danceModeState.orientationMode);
+            }
+            updateDanceOrientationUi();
         }
 
         function updateDanceDeadzoneUi() {
@@ -2979,9 +3035,20 @@ window.addEventListener('beforeunload', function(event) {
                     return;
                 }
 
-                const rollNorm = normalizeDanceAxis(danceModeState.latestRawRollDeg, danceModeState.deadzoneDeg);
-                const pitchNorm = normalizeDanceAxis(danceModeState.latestRawPitchDeg, danceModeState.deadzoneDeg);
-                updateDanceTiltIndicator(rollNorm, pitchNorm);
+                const transformedTilt = transformDanceAxesForOrientation(
+                    danceModeState.latestRawRollDeg,
+                    danceModeState.latestRawPitchDeg
+                );
+
+                const rollNorm = normalizeDanceAxis(transformedTilt.roll, danceModeState.deadzoneDeg);
+                const pitchNorm = normalizeDanceAxis(transformedTilt.pitch, danceModeState.deadzoneDeg);
+
+                // Display-only remap so the bubble follows the physical phone direction per mode.
+                // Portrait: camera=top=forward, right=right. Landscape (camera-left): volume=forward, camera=left.
+                const isLandscape = danceModeState.orientationMode === 'landscape';
+                const dispRoll  = isLandscape ? -pitchNorm :  pitchNorm;
+                const dispPitch = isLandscape ? -rollNorm  :  rollNorm;
+                updateDanceTiltIndicator(dispRoll, dispPitch);
                 queueDanceTiltUpdate(rollNorm, pitchNorm);
             }, DANCE_TILT_INTERVAL_MS);
         }
@@ -3085,7 +3152,7 @@ window.addEventListener('beforeunload', function(event) {
 
         function initDanceModeUi() {
             ensureDanceModePanel();
-            const { toggle, slider } = getDanceModeElements();
+            const { toggle, slider, orientationPortrait, orientationLandscape } = getDanceModeElements();
             if (!toggle) return;
 
             const storedDeadzone = parseInt(localStorage.getItem(DANCE_DEADZONE_STORAGE_KEY) || `${DANCE_DEADZONE_DEFAULT_DEG}`, 10);
@@ -3093,6 +3160,8 @@ window.addEventListener('beforeunload', function(event) {
                 DANCE_DEADZONE_MIN_DEG,
                 Math.min(DANCE_DEADZONE_MAX_DEG, Number.isFinite(storedDeadzone) ? storedDeadzone : DANCE_DEADZONE_DEFAULT_DEG)
             );
+            const storedOrientation = localStorage.getItem(DANCE_ORIENTATION_STORAGE_KEY);
+            setDanceOrientationMode(storedOrientation === 'landscape' ? 'landscape' : 'portrait', false);
             updateDanceDeadzoneUi();
             centerDanceTiltIndicator();
 
@@ -3105,6 +3174,18 @@ window.addEventListener('beforeunload', function(event) {
                     danceModeState.deadzoneDeg = Math.max(DANCE_DEADZONE_MIN_DEG, Math.min(DANCE_DEADZONE_MAX_DEG, next));
                     localStorage.setItem(DANCE_DEADZONE_STORAGE_KEY, String(danceModeState.deadzoneDeg));
                     updateDanceDeadzoneUi();
+                });
+            }
+
+            if (orientationPortrait) {
+                orientationPortrait.addEventListener('click', function() {
+                    setDanceOrientationMode('portrait', true);
+                });
+            }
+
+            if (orientationLandscape) {
+                orientationLandscape.addEventListener('click', function() {
+                    setDanceOrientationMode('landscape', true);
                 });
             }
         }
@@ -3185,7 +3266,7 @@ window.addEventListener('beforeunload', function(event) {
             };
             const abbrev = servoAbbrevMap[servo];
             if (!abbrev) return false;
-            return !!document.getElementById(`servo${abbrev}Reversed`)?.checked;
+            return !!document.getElementById(`servo${abbrev}Invert`)?.checked;
         }
 
         function buildAutoCalibrateServoConfigFromUi() {
@@ -3366,7 +3447,27 @@ window.addEventListener('beforeunload', function(event) {
                 }
             }
         }
-        
+
+        // Restore servo invert toggle states from localStorage when firmware config has no servo data.
+        function restoreServoReversedFromStorage() {
+            let stored = {};
+            try { stored = JSON.parse(localStorage.getItem(SERVO_REVERSED_STORAGE_KEY) || '{}'); } catch (_) {}
+            const abbrevMap = { frontLeft: 'FL', frontRight: 'FR', rearLeft: 'RL', rearRight: 'RR' };
+            Object.keys(abbrevMap).forEach(servoName => {
+                if (stored[servoName] === undefined) return;
+                const isReversed = coerceBooleanValue(stored[servoName], false);
+                // Only apply if the current UI state doesn't already reflect a non-default value
+                const abbrev = abbrevMap[servoName];
+                const invertToggle = document.getElementById(`servo${abbrev}Invert`);
+                if (invertToggle && !invertToggle.checked && isReversed) {
+                    invertToggle.checked = true;
+                    invertToggle.setAttribute('aria-checked', 'true');
+                    servoSliderValues[servoName] = servoSliderValues[servoName] || {};
+                    servoSliderValues[servoName].reversed = true;
+                }
+            });
+        }
+
         async function updateServoReversed(servo, value) {
             // Update reversed using the servo-config API
             const payload = {
@@ -3406,15 +3507,11 @@ window.addEventListener('beforeunload', function(event) {
             };
             const abbrev = servoAbbrevMap[servo];
             if (abbrev) {
-                const checkbox = document.getElementById(`servo${abbrev}Reversed`);
-                if (checkbox) {
-                    checkbox.checked = value;
-                }
-                const cwBtn = document.getElementById(`servo${abbrev}CwBtn`);
-                const ccwBtn = document.getElementById(`servo${abbrev}CcwBtn`);
-                if (cwBtn && ccwBtn) {
-                    cwBtn.classList.toggle('is-active', !value);
-                    ccwBtn.classList.toggle('is-active', !!value);
+                const invertToggle = document.getElementById(`servo${abbrev}Invert`);
+                if (invertToggle) {
+                    const isReversed = coerceBooleanValue(value, false);
+                    invertToggle.checked = isReversed;
+                    invertToggle.setAttribute('aria-checked', isReversed ? 'true' : 'false');
                 }
             }
         }
@@ -3513,7 +3610,7 @@ window.addEventListener('beforeunload', function(event) {
                     const configuredTrim = fullConfig.servos[servo].trim;
                     servoState[servo] = {
                         trim: Number.isFinite(configuredTrim) ? configuredTrim : 0,
-                        reversed: fullConfig.servos[servo].reversed || false
+                        reversed: coerceBooleanValue(fullConfig.servos[servo].reversed, false)
                     };
                 } else {
                     const uiTrim = Number(servoSliderValues?.[servo]?.trim);
@@ -3783,6 +3880,9 @@ window.addEventListener('beforeunload', function(event) {
                     if (danceModeState.enabled) {
                         disableDanceMode({ sendCommand: false, bleDisconnected: true });
                     }
+                    // Auto-clear suspension pause on disconnect so it doesn't persist stale state
+                    suspensionPaused = false;
+                    updateSuspendSuspensionBtn();
                     if (typeof setDrivingProfileBusy === 'function') {
                         setDrivingProfileBusy(false);
                     }
@@ -3809,6 +3909,7 @@ window.addEventListener('beforeunload', function(event) {
                     stopAutoReconnect();
                     updateConnectionStatus(true);
                     updateConnectionMethodDisplay();
+                    updateSuspendSuspensionBtn();
                 });
             }
 
@@ -4004,8 +4105,9 @@ window.addEventListener('beforeunload', function(event) {
 
             syncCardCollapseState('tuningParametersCard', 'tuningParametersChevron', 'tuningParametersCardCollapsed');
             syncCardCollapseState('mpuOrientationCard', 'mpuOrientationChevron', 'mpuOrientationCardCollapsed');
-            syncCardCollapseState('servoRangeCard', 'servoRangeChevron', 'servoRangeCardCollapsed');
+            syncCardCollapseState('perServoSettingsCard', 'perServoSettingsChevron', 'perServoSettingsCardCollapsed');
             syncCardCollapseState('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed');
+            syncCardCollapseState('servoTestCard', 'servoTestChevron', 'servoTestCardCollapsed');
             syncCardCollapseState('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed');
             syncCardCollapseState('basicLedFxOutputCard', 'basicLedFxOutputChevron', 'basicLedFxOutputCardCollapsed');
             syncCardCollapseState('basicActiveLedAllocationCard', 'basicActiveLedAllocationChevron', 'basicActiveLedAllocationCardCollapsed');
@@ -4018,19 +4120,6 @@ window.addEventListener('beforeunload', function(event) {
             syncHardwareSetupCardUI();
             syncManageLightGroupsLockUI();
             
-            // Restore servo range lock state from localStorage
-            servoRangeLocked = localStorage.getItem('servoRangeLocked') === 'true';
-            const servoRangeLockIcon = document.getElementById('servoRangeLockIcon');
-            const servoRangeCard = document.getElementById('servoRangeCard');
-            if (servoRangeLockIcon && servoRangeCard) {
-                servoRangeCard.classList.toggle('slider-locked', servoRangeLocked);
-                servoRangeLockIcon.textContent = servoRangeLocked ? 'lock' : 'lock_open_right';
-                servoRangeLockIcon.style.color = servoRangeLocked ? 'var(--lime-green)' : 'var(--high-impact-color)'; // Lime green if locked, yellow if unlocked
-            } else if (servoRangeCard) {
-                servoRangeLocked = false;
-                localStorage.setItem('servoRangeLocked', 'false');
-                servoRangeCard.classList.remove('slider-locked');
-            }
             
             // Restore servo settings lock state from localStorage.
             // Older builds stored trim and direction separately; the UI now uses one combined lock.
@@ -9081,7 +9170,10 @@ window.addEventListener('beforeunload', function(event) {
         function updateConnectionStatus(connected) {
             const icon = document.getElementById('wifiIcon');
             const cameraIcon = document.getElementById('setLevelBtn');
-            if (!icon) return;
+                if (!icon) {
+                    updateSuspendSuspensionBtn();
+                    return;
+                }
 
             const bleConnected = !!(bleManager && bleManager.getConnectionStatus && bleManager.getConnectionStatus());
 
@@ -9103,6 +9195,7 @@ window.addEventListener('beforeunload', function(event) {
                 updateDashboardVehicleName(null);
                 updateVehicleQuickNav();
                 updateDashboardBleUI(true);
+                updateSuspendSuspensionBtn();
                 return;
             }
 
@@ -9120,6 +9213,7 @@ window.addEventListener('beforeunload', function(event) {
             updateDashboardVehicleName(null);
             updateVehicleQuickNav();
             updateDashboardBleUI(false);
+            updateSuspendSuspensionBtn();
         }
 
         function setHeaderSearching(active) {
@@ -9913,6 +10007,44 @@ window.addEventListener('beforeunload', function(event) {
             }
         }
 
+        // ==================== Suspend Suspension ====================
+        let suspensionPaused = false;
+
+        function updateSuspendSuspensionBtn() {
+            const btn = document.getElementById('suspendSuspensionBtn');
+            const label = document.getElementById('suspendSuspensionLabel');
+            if (!btn || !label) return;
+            btn.disabled = !isBleConnected();
+            if (suspensionPaused) {
+                btn.classList.remove('btn-outline-secondary');
+                btn.classList.add('btn-warning');
+                btn.querySelector('span.material-symbols-outlined').textContent = 'play_circle';
+                label.textContent = 'Resume Suspension';
+            } else {
+                btn.classList.remove('btn-warning');
+                btn.classList.add('btn-outline-secondary');
+                btn.querySelector('span.material-symbols-outlined').textContent = 'pause_circle';
+                label.textContent = 'Pause Suspension';
+            }
+        }
+
+        window.toggleSuspendSuspension = async function toggleSuspendSuspension() {
+            if (!isBleConnected()) {
+                toast.warning('Connect to Bluetooth before pausing suspension');
+                return;
+            }
+            suspensionPaused = !suspensionPaused;
+            updateSuspendSuspensionBtn();
+            try {
+                await pushSystemCommand('suspend_suspension', { paused: suspensionPaused });
+            } catch (e) {
+                console.error('suspend_suspension failed:', e);
+                suspensionPaused = !suspensionPaused; // revert
+                updateSuspendSuspensionBtn();
+                toast.error('Could not pause suspension — check connection');
+            }
+        };
+
         function toggleDrivingProfilesLock() {
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
             clickSound.play().catch(e => console.log('Sound play failed:', e));
@@ -10353,6 +10485,10 @@ window.addEventListener('beforeunload', function(event) {
 
                 // Load settings into Settings page
                 loadSettingsFromConfig(data);
+                updateServoSliders(data);
+
+                // If the firmware config had no servo data, restore invert states from localStorage.
+                restoreServoReversedFromStorage();
 
                 const localProfileSnapshot = getActiveDrivingProfileConfigSnapshot();
                 fullConfig = mergeConfigSnapshots(fullConfig, localProfileSnapshot);
@@ -10568,6 +10704,11 @@ window.addEventListener('beforeunload', function(event) {
                 if (display) display.textContent = `${balancePercent}%`;
             }
             
+            // Restore Tuning Mode (Auto/Custom)
+            if (config.tuningConfigMode !== undefined) {
+                setTuningConfigMode(config.tuningConfigMode);
+            }
+
             // Update tuning sliders
             updateTuningSliders(config);
         }
@@ -10583,7 +10724,7 @@ window.addEventListener('beforeunload', function(event) {
             const newRange    = Number(lerp(0.8,  3.4,  t).toFixed(1));
             const newReact    = Number(lerp(0.25, 0.95, t).toFixed(2));
 
-            const labels = ['Race', 'Sport', 'Balanced', 'Touring', 'Relaxed', 'Loose'];
+            const labels = ['Firm', 'Sport', 'Balanced', 'Touring', 'Relaxed', 'Loose'];
             const thresholds = [16, 33, 50, 66, 83, 100];
             const feelPct = feel;
             let label = labels[labels.length - 1];
@@ -10615,12 +10756,15 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function setTuningConfigMode(mode) {
+            const previousMode = localStorage.getItem('tuningConfigMode') ?? 'auto';
             const masterRow = document.getElementById('tuningMasterRow');
+            const driveModeGroup = document.getElementById('tuningDriveModeGroup');
             const autoBtn   = document.getElementById('tuningModeAutoBtn');
             const custBtn   = document.getElementById('tuningModeCustomBtn');
 
             const isAuto = mode === 'auto';
             if (masterRow) masterRow.style.display = isAuto ? '' : 'none';
+            if (driveModeGroup) driveModeGroup.style.display = isAuto ? '' : 'none';
 
             const allSuspSliders = ['omegaN', 'zeta', 'range', 'deadband', 'hyst', 'reactionSpeed'];
             allSuspSliders.forEach(key => {
@@ -10632,15 +10776,18 @@ window.addEventListener('beforeunload', function(event) {
             });
 
             if (autoBtn) {
-                autoBtn.classList.toggle('btn-outline-danger',    isAuto);
+                autoBtn.classList.toggle('btn-gold',              isAuto);
                 autoBtn.classList.toggle('btn-outline-secondary', !isAuto);
             }
             if (custBtn) {
-                custBtn.classList.toggle('btn-outline-danger',    !isAuto);
+                custBtn.classList.toggle('btn-gold',              !isAuto);
                 custBtn.classList.toggle('btn-outline-secondary', isAuto);
             }
 
             localStorage.setItem('tuningConfigMode', mode);
+            if (!isLoadingTuningConfig && previousMode !== mode) {
+                markPageDirty('tuning');
+            }
         }
 
         // ==================== Tuning Functions ====================
@@ -11249,10 +11396,10 @@ window.addEventListener('beforeunload', function(event) {
 
         // Store servo slider instances for later updates
         const servoSliderInstances = {
-            frontLeft: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170], lastTrimValue: 0 },
-            frontRight: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170], lastTrimValue: 0 },
-            rearLeft: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170], lastTrimValue: 0 },
-            rearRight: { rangeElement: null, trimElement: null, rangeInstance: null, trimInstance: null, lastRangeValue: [10, 170], lastTrimValue: 0 }
+            frontLeft: { minElement: null, maxElement: null, trimElement: null, minInstance: null, maxInstance: null, trimInstance: null, lastMinValue: 10, lastMaxValue: 170, lastTrimValue: 0 },
+            frontRight: { minElement: null, maxElement: null, trimElement: null, minInstance: null, maxInstance: null, trimInstance: null, lastMinValue: 10, lastMaxValue: 170, lastTrimValue: 0 },
+            rearLeft: { minElement: null, maxElement: null, trimElement: null, minInstance: null, maxInstance: null, trimInstance: null, lastMinValue: 10, lastMaxValue: 170, lastTrimValue: 0 },
+            rearRight: { minElement: null, maxElement: null, trimElement: null, minInstance: null, maxInstance: null, trimInstance: null, lastMinValue: 10, lastMaxValue: 170, lastTrimValue: 0 }
         };
 
         // Debounce timers for servo parameter saves
@@ -11265,16 +11412,8 @@ window.addEventListener('beforeunload', function(event) {
 
         // ==================== Servo Slider Initialization ====================
         function initServoSliders() {
-            // Helper function to update thumb labels
-            function updateThumbLabels(sliderId, values) {
-                const slider = document.querySelector(`#${sliderId}`);
-                if (!slider) return;
-                const thumbs = slider.querySelectorAll('.range-slider__thumb');
-                if (thumbs[0]) thumbs[0].textContent = Math.round(values[0]);
-                if (thumbs[1]) thumbs[1].textContent = Math.round(values[1]);
-            }
-
-            function updateTrimThumbLabel(sliderId, value) {
+            // Helper function to update single-thumb slider label
+            function updateSingleThumbLabel(sliderId, value) {
                 const slider = document.querySelector(`#${sliderId}`);
                 if (!slider) return;
                 const thumb = slider.querySelector('.range-slider__thumb[data-upper]')
@@ -11298,49 +11437,53 @@ window.addEventListener('beforeunload', function(event) {
             }
 
             const servoPendingSave = {
-                frontLeft: { range: false, trim: false },
-                frontRight: { range: false, trim: false },
-                rearLeft: { range: false, trim: false },
-                rearRight: { range: false, trim: false }
+                frontLeft: { min: false, max: false, trim: false },
+                frontRight: { min: false, max: false, trim: false },
+                rearLeft: { min: false, max: false, trim: false },
+                rearRight: { min: false, max: false, trim: false }
             };
 
             function commitServoSliderSave(servoName, sliderType) {
                 if (!servoPendingSave[servoName] || !servoPendingSave[servoName][sliderType]) return;
                 servoPendingSave[servoName][sliderType] = false;
 
-                if (sliderType === 'range' && servoRangeLocked) return;
                 if (sliderType === 'trim' && servoTrimLocked) return;
 
                 const sliderData = servoSliderInstances[servoName];
                 const values = servoSliderValues[servoName];
                 if (!sliderData || !values) return;
 
-                if (sliderType === 'range') {
-                    const nextRange = [Math.round(values.min), Math.round(values.max)];
-                    const lastRange = sliderData.lastRangeValue || [10, 170];
-                    if (nextRange[0] === lastRange[0] && nextRange[1] === lastRange[1]) return;
-
-                    const keyMap = {
-                        frontLeft: [window.RCDCC_KEYS.SERVO_FL_MIN, window.RCDCC_KEYS.SERVO_FL_MAX],
-                        frontRight: [window.RCDCC_KEYS.SERVO_FR_MIN, window.RCDCC_KEYS.SERVO_FR_MAX],
-                        rearLeft: [window.RCDCC_KEYS.SERVO_RL_MIN, window.RCDCC_KEYS.SERVO_RL_MAX],
-                        rearRight: [window.RCDCC_KEYS.SERVO_RR_MIN, window.RCDCC_KEYS.SERVO_RR_MAX]
+                if (sliderType === 'min') {
+                    const nextMin = Math.round(values.min);
+                    if (nextMin === sliderData.lastMinValue) return;
+                    const minKeyMap = {
+                        frontLeft: window.RCDCC_KEYS.SERVO_FL_MIN,
+                        frontRight: window.RCDCC_KEYS.SERVO_FR_MIN,
+                        rearLeft: window.RCDCC_KEYS.SERVO_RL_MIN,
+                        rearRight: window.RCDCC_KEYS.SERVO_RR_MIN
                     };
-                    const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
-                    if (canUseKv) {
-                        markPageDirty('servo');
-                        bleManager.writeValue(keyMap[servoName][0], degToUs(nextRange[0])).catch(e => console.error(`KV ${servoName} min:`, e));
-                        bleManager.writeValue(keyMap[servoName][1], degToUs(nextRange[1])).catch(e => console.error(`KV ${servoName} max:`, e));
-                    } else {
-                        saveServoRange(servoName, nextRange[0], nextRange[1]);
-                    }
-                    sliderData.lastRangeValue = nextRange;
+                    servoKvWrite(minKeyMap[servoName], degToUs(nextMin), servoName, 'min', nextMin);
+                    sliderData.lastMinValue = nextMin;
                     return;
                 }
 
+                if (sliderType === 'max') {
+                    const nextMax = Math.round(values.max);
+                    if (nextMax === sliderData.lastMaxValue) return;
+                    const maxKeyMap = {
+                        frontLeft: window.RCDCC_KEYS.SERVO_FL_MAX,
+                        frontRight: window.RCDCC_KEYS.SERVO_FR_MAX,
+                        rearLeft: window.RCDCC_KEYS.SERVO_RL_MAX,
+                        rearRight: window.RCDCC_KEYS.SERVO_RR_MAX
+                    };
+                    servoKvWrite(maxKeyMap[servoName], degToUs(nextMax), servoName, 'max', nextMax);
+                    sliderData.lastMaxValue = nextMax;
+                    return;
+                }
+
+                // trim
                 const trimValue = Math.round(values.trim);
                 if (trimValue === sliderData.lastTrimValue) return;
-
                 const trimKeyMap = {
                     frontLeft: window.RCDCC_KEYS.SERVO_FL_TRIM,
                     frontRight: window.RCDCC_KEYS.SERVO_FR_TRIM,
@@ -11367,7 +11510,8 @@ window.addEventListener('beforeunload', function(event) {
 
             function flushPendingServoSaves() {
                 Object.entries(servoPendingSave).forEach(([servoName, pending]) => {
-                    if (pending.range) commitServoSliderSave(servoName, 'range');
+                    if (pending.min) commitServoSliderSave(servoName, 'min');
+                    if (pending.max) commitServoSliderSave(servoName, 'max');
                     if (pending.trim) commitServoSliderSave(servoName, 'trim');
                 });
             }
@@ -11387,253 +11531,169 @@ window.addEventListener('beforeunload', function(event) {
             // Safe defaults: min=10, max=170 to prevent mechanical damage
             const defaultMin = 10;
             const defaultMax = 170;
-            const SERVO_RANGE_MIN_GAP_DEG = 2;
+            const defaultTrim = 0;
 
-            function normalizeServoRangePair(minValue, maxValue) {
-                let nextMin = Math.round(Number(minValue) || 0);
-                let nextMax = Math.round(Number(maxValue) || 0);
+            // Initialize per-servo sliders (Trim, Min, Max) for each corner
+            const servoKeys = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'];
+            const servoTrimIds = {
+                frontLeft: 'sliderFrontLeftTrim',
+                frontRight: 'sliderFrontRightTrim',
+                rearLeft: 'sliderRearLeftTrim',
+                rearRight: 'sliderRearRightTrim'
+            };
+            const servoMinIds = {
+                frontLeft: 'sliderFrontLeftMin',
+                frontRight: 'sliderFrontRightMin',
+                rearLeft: 'sliderRearLeftMin',
+                rearRight: 'sliderRearRightMin'
+            };
+            const servoMaxIds = {
+                frontLeft: 'sliderFrontLeftMax',
+                frontRight: 'sliderFrontRightMax',
+                rearLeft: 'sliderRearLeftMax',
+                rearRight: 'sliderRearRightMax'
+            };
 
-                nextMin = Math.max(0, Math.min(180, nextMin));
-                nextMax = Math.max(0, Math.min(180, nextMax));
-
-                if (nextMax - nextMin < SERVO_RANGE_MIN_GAP_DEG) {
-                    if (nextMin + SERVO_RANGE_MIN_GAP_DEG <= 180) {
-                        nextMax = nextMin + SERVO_RANGE_MIN_GAP_DEG;
-                    } else {
-                        nextMin = Math.max(0, 180 - SERVO_RANGE_MIN_GAP_DEG);
-                        nextMax = 180;
-                    }
+            servoKeys.forEach(function(servoName) {
+                // Trim slider (-30 to +30)
+                const trimEl = document.querySelector(`#${servoTrimIds[servoName]}`);
+                if (trimEl) {
+                    const trimInst = rangeSlider(trimEl, {
+                        value: [-30, defaultTrim],
+                        min: -30,
+                        max: 30,
+                        step: 1,
+                        thumbsDisabled: [true, false],
+                        rangeSlideDisabled: true,
+                        onInput: function(value) {
+                            updateSingleThumbLabel(servoTrimIds[servoName], value[1]);
+                            if (!isLoadingTuningConfig && !servoTrimLocked) {
+                                servoSliderValues[servoName].trim = Math.round(value[1]);
+                                markPageDirty('servo');
+                                servoPendingSave[servoName].trim = true;
+                            }
+                            syncServoTrimStepperButtons();
+                        }
+                    });
+                    servoSliderInstances[servoName].trimElement = trimEl;
+                    servoSliderInstances[servoName].trimInstance = trimInst;
+                    updateSingleThumbLabel(servoTrimIds[servoName], defaultTrim);
+                    attachServoReleaseSaveHandler(trimEl, servoName, 'trim');
                 }
 
-                return [nextMin, nextMax];
-            }
+                // Min slider (0 to 180)
+                const minEl = document.querySelector(`#${servoMinIds[servoName]}`);
+                if (minEl) {
+                    const minInst = rangeSlider(minEl, {
+                        value: [0, defaultMin],
+                        min: 0,
+                        max: 180,
+                        step: 1,
+                        thumbsDisabled: [true, false],
+                        rangeSlideDisabled: true,
+                        onInput: function(value) {
+                            const rawValue = Math.round(value[1]);
+                            const normalizedMin = normalizeServoMinStepperValue(servoName, rawValue);
+                            if (normalizedMin !== rawValue) {
+                                minInst.value([0, normalizedMin]);
+                            }
+                            updateSingleThumbLabel(servoMinIds[servoName], normalizedMin);
+                            if (!isLoadingTuningConfig) {
+                                servoSliderValues[servoName].min = normalizedMin;
+                                markPageDirty('servo');
+                                servoPendingSave[servoName].min = true;
+                            }
+                            syncServoMinMaxStepperButtons();
+                        }
+                    });
+                    servoSliderInstances[servoName].minElement = minEl;
+                    servoSliderInstances[servoName].minInstance = minInst;
+                    updateSingleThumbLabel(servoMinIds[servoName], defaultMin);
+                    attachServoReleaseSaveHandler(minEl, servoName, 'min');
+                }
 
-            // Front Left Servo
-            let frontLeftElement = document.querySelector('#sliderFrontLeft');
-            if (frontLeftElement) {
-                const frontLeftInstance = rangeSlider(frontLeftElement, {
-                    value: [defaultMin, defaultMax],
-                    min: 0,
-                    max: 180,
-                    step: 2,
-                    onInput: function(value) {
-                        const normalizedRange = normalizeServoRangePair(value[0], value[1]);
-                        if (normalizedRange[0] !== Math.round(value[0]) || normalizedRange[1] !== Math.round(value[1])) {
-                            frontLeftInstance.value(normalizedRange);
-                            return;
+                // Max slider (0 to 180)
+                const maxEl = document.querySelector(`#${servoMaxIds[servoName]}`);
+                if (maxEl) {
+                    const maxInst = rangeSlider(maxEl, {
+                        value: [0, defaultMax],
+                        min: 0,
+                        max: 180,
+                        step: 1,
+                        thumbsDisabled: [true, false],
+                        rangeSlideDisabled: true,
+                        onInput: function(value) {
+                            const rawValue = Math.round(value[1]);
+                            const normalizedMax = normalizeServoMaxStepperValue(servoName, rawValue);
+                            if (normalizedMax !== rawValue) {
+                                maxInst.value([0, normalizedMax]);
+                            }
+                            updateSingleThumbLabel(servoMaxIds[servoName], normalizedMax);
+                            if (!isLoadingTuningConfig) {
+                                servoSliderValues[servoName].max = normalizedMax;
+                                markPageDirty('servo');
+                                servoPendingSave[servoName].max = true;
+                            }
+                            syncServoMinMaxStepperButtons();
                         }
-                        updateThumbLabels('sliderFrontLeft', value);
-                        if (!isLoadingTuningConfig && !servoRangeLocked) {
-                            servoSliderValues.frontLeft.min = Math.round(value[0]);
-                            servoSliderValues.frontLeft.max = Math.round(value[1]);
-                            markPageDirty('servo');
-                            servoPendingSave.frontLeft.range = true;
-                        }
-                    }
-                });
-                servoSliderInstances.frontLeft.rangeElement = frontLeftElement;
-                servoSliderInstances.frontLeft.rangeInstance = frontLeftInstance;
-                updateThumbLabels('sliderFrontLeft', [defaultMin, defaultMax]);
-                attachServoReleaseSaveHandler(frontLeftElement, 'frontLeft', 'range');
-            }
+                    });
+                    servoSliderInstances[servoName].maxElement = maxEl;
+                    servoSliderInstances[servoName].maxInstance = maxInst;
+                    updateSingleThumbLabel(servoMaxIds[servoName], defaultMax);
+                    attachServoReleaseSaveHandler(maxEl, servoName, 'max');
+                }
+            });
 
-            // Front Left Servo Trim
-            let frontLeftTrimElement = document.querySelector('#sliderFrontLeftTrim');
-            if (frontLeftTrimElement) {
-                const frontLeftTrimInstance = rangeSlider(frontLeftTrimElement, {
-                    value: [-20, 0],
-                    min: -20,
-                    max: 20,
-                    step: 1,
-                    thumbsDisabled: [true, false],
-                    rangeSlideDisabled: true,
-                    onInput: function(value) {
-                        updateTrimThumbLabel('sliderFrontLeftTrim', value[1]);
-                        if (!isLoadingTuningConfig && !servoTrimLocked) {
-                            servoSliderValues.frontLeft.trim = Math.round(value[1]);
+            // Invert toggle handlers
+            const invertAbbrevMap = { frontLeft: 'FL', frontRight: 'FR', rearLeft: 'RL', rearRight: 'RR' };
+            servoKeys.forEach(function(servoName) {
+                const abbrev = invertAbbrevMap[servoName];
+                const invertToggle = document.getElementById(`servo${abbrev}Invert`);
+                if (invertToggle) {
+                    invertToggle.addEventListener('change', function() {
+                        const isReversed = this.checked;
+                        // Keep in-memory state in sync
+                        servoSliderValues[servoName].reversed = isReversed;
+                        // Persist reversed states to localStorage so they survive restart
+                        try {
+                            const stored = JSON.parse(localStorage.getItem(SERVO_REVERSED_STORAGE_KEY) || '{}');
+                            stored[servoName] = isReversed;
+                            localStorage.setItem(SERVO_REVERSED_STORAGE_KEY, JSON.stringify(stored));
+                        } catch (_) {}
+                        const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                        if (canUseKv) {
                             markPageDirty('servo');
-                            servoPendingSave.frontLeft.trim = true;
+                            bleManager.writeValue(window.RCDCC_KEYS[`SERVO_${abbrev}_REVERSE`], isReversed ? 1 : 0)
+                                .catch(e => console.error(`KV write ${abbrev}_REVERSE failed:`, e));
+                        } else {
+                            saveServoParameter(servoName, 'reversed', isReversed);
                         }
-                        syncServoTrimStepperButtons();
-                    }
-                });
-                servoSliderInstances.frontLeft.trimElement = frontLeftTrimElement;
-                servoSliderInstances.frontLeft.trimInstance = frontLeftTrimInstance;
-                updateTrimThumbLabel('sliderFrontLeftTrim', 0);
-                attachServoReleaseSaveHandler(frontLeftTrimElement, 'frontLeft', 'trim');
-            }
-
-            // Front Right Servo
-            let frontRightElement = document.querySelector('#sliderFrontRight');
-            if (frontRightElement) {
-                const frontRightInstance = rangeSlider(frontRightElement, {
-                    value: [defaultMin, defaultMax],
-                    min: 0,
-                    max: 180,
-                    step: 2,
-                    onInput: function(value) {
-                        const normalizedRange = normalizeServoRangePair(value[0], value[1]);
-                        if (normalizedRange[0] !== Math.round(value[0]) || normalizedRange[1] !== Math.round(value[1])) {
-                            frontRightInstance.value(normalizedRange);
-                            return;
-                        }
-                        updateThumbLabels('sliderFrontRight', value);
-                        if (!isLoadingTuningConfig && !servoRangeLocked) {
-                            servoSliderValues.frontRight.min = Math.round(value[0]);
-                            servoSliderValues.frontRight.max = Math.round(value[1]);
-                            markPageDirty('servo');
-                            servoPendingSave.frontRight.range = true;
-                        }
-                    }
-                });
-                servoSliderInstances.frontRight.rangeElement = frontRightElement;
-                servoSliderInstances.frontRight.rangeInstance = frontRightInstance;
-                updateThumbLabels('sliderFrontRight', [defaultMin, defaultMax]);
-                attachServoReleaseSaveHandler(frontRightElement, 'frontRight', 'range');
-            }
-
-            // Front Right Servo Trim
-            let frontRightTrimElement = document.querySelector('#sliderFrontRightTrim');
-            if (frontRightTrimElement) {
-                const frontRightTrimInstance = rangeSlider(frontRightTrimElement, {
-                    value: [-20, 0],
-                    min: -20,
-                    max: 20,
-                    step: 1,
-                    thumbsDisabled: [true, false],
-                    rangeSlideDisabled: true,
-                    onInput: function(value) {
-                        updateTrimThumbLabel('sliderFrontRightTrim', value[1]);
-                        if (!isLoadingTuningConfig && !servoTrimLocked) {
-                            servoSliderValues.frontRight.trim = Math.round(value[1]);
-                            markPageDirty('servo');
-                            servoPendingSave.frontRight.trim = true;
-                        }
-                        syncServoTrimStepperButtons();
-                    }
-                });
-                servoSliderInstances.frontRight.trimElement = frontRightTrimElement;
-                servoSliderInstances.frontRight.trimInstance = frontRightTrimInstance;
-                updateTrimThumbLabel('sliderFrontRightTrim', 0);
-                attachServoReleaseSaveHandler(frontRightTrimElement, 'frontRight', 'trim');
-            }
-
-            // Rear Left Servo
-            let rearLeftElement = document.querySelector('#sliderRearLeft');
-            if (rearLeftElement) {
-                const rearLeftInstance = rangeSlider(rearLeftElement, {
-                    value: [defaultMin, defaultMax],
-                    min: 0,
-                    max: 180,
-                    step: 2,
-                    onInput: function(value) {
-                        const normalizedRange = normalizeServoRangePair(value[0], value[1]);
-                        if (normalizedRange[0] !== Math.round(value[0]) || normalizedRange[1] !== Math.round(value[1])) {
-                            rearLeftInstance.value(normalizedRange);
-                            return;
-                        }
-                        updateThumbLabels('sliderRearLeft', value);
-                        if (!isLoadingTuningConfig && !servoRangeLocked) {
-                            servoSliderValues.rearLeft.min = Math.round(value[0]);
-                            servoSliderValues.rearLeft.max = Math.round(value[1]);
-                            markPageDirty('servo');
-                            servoPendingSave.rearLeft.range = true;
-                        }
-                    }
-                });
-                servoSliderInstances.rearLeft.rangeElement = rearLeftElement;
-                servoSliderInstances.rearLeft.rangeInstance = rearLeftInstance;
-                updateThumbLabels('sliderRearLeft', [defaultMin, defaultMax]);
-                attachServoReleaseSaveHandler(rearLeftElement, 'rearLeft', 'range');
-            }
-
-            // Rear Left Servo Trim
-            let rearLeftTrimElement = document.querySelector('#sliderRearLeftTrim');
-            if (rearLeftTrimElement) {
-                const rearLeftTrimInstance = rangeSlider(rearLeftTrimElement, {
-                    value: [-20, 0],
-                    min: -20,
-                    max: 20,
-                    step: 1,
-                    thumbsDisabled: [true, false],
-                    rangeSlideDisabled: true,
-                    onInput: function(value) {
-                        updateTrimThumbLabel('sliderRearLeftTrim', value[1]);
-                        if (!isLoadingTuningConfig && !servoTrimLocked) {
-                            servoSliderValues.rearLeft.trim = Math.round(value[1]);
-                            markPageDirty('servo');
-                            servoPendingSave.rearLeft.trim = true;
-                        }
-                        syncServoTrimStepperButtons();
-                    }
-                });
-                servoSliderInstances.rearLeft.trimElement = rearLeftTrimElement;
-                servoSliderInstances.rearLeft.trimInstance = rearLeftTrimInstance;
-                updateTrimThumbLabel('sliderRearLeftTrim', 0);
-                attachServoReleaseSaveHandler(rearLeftTrimElement, 'rearLeft', 'trim');
-            }
-
-            // Rear Right Servo
-            let rearRightElement = document.querySelector('#sliderRearRight');
-            if (rearRightElement) {
-                const rearRightInstance = rangeSlider(rearRightElement, {
-                    value: [defaultMin, defaultMax],
-                    min: 0,
-                    max: 180,
-                    step: 2,
-                    onInput: function(value) {
-                        const normalizedRange = normalizeServoRangePair(value[0], value[1]);
-                        if (normalizedRange[0] !== Math.round(value[0]) || normalizedRange[1] !== Math.round(value[1])) {
-                            rearRightInstance.value(normalizedRange);
-                            return;
-                        }
-                        updateThumbLabels('sliderRearRight', value);
-                        if (!isLoadingTuningConfig && !servoRangeLocked) {
-                            servoSliderValues.rearRight.min = Math.round(value[0]);
-                            servoSliderValues.rearRight.max = Math.round(value[1]);
-                            markPageDirty('servo');
-                            servoPendingSave.rearRight.range = true;
-                        }
-                    }
-                });
-                servoSliderInstances.rearRight.rangeElement = rearRightElement;
-                servoSliderInstances.rearRight.rangeInstance = rearRightInstance;
-                updateThumbLabels('sliderRearRight', [defaultMin, defaultMax]);
-                attachServoReleaseSaveHandler(rearRightElement, 'rearRight', 'range');
-            }
-
-            // Rear Right Servo Trim
-            let rearRightTrimElement = document.querySelector('#sliderRearRightTrim');
-            if (rearRightTrimElement) {
-                const rearRightTrimInstance = rangeSlider(rearRightTrimElement, {
-                    value: [-20, 0],
-                    min: -20,
-                    max: 20,
-                    step: 1,
-                    thumbsDisabled: [true, false],
-                    rangeSlideDisabled: true,
-                    onInput: function(value) {
-                        updateTrimThumbLabel('sliderRearRightTrim', value[1]);
-                        if (!isLoadingTuningConfig && !servoTrimLocked) {
-                            servoSliderValues.rearRight.trim = Math.round(value[1]);
-                            markPageDirty('servo');
-                            servoPendingSave.rearRight.trim = true;
-                        }
-                        syncServoTrimStepperButtons();
-                    }
-                });
-                servoSliderInstances.rearRight.trimElement = rearRightTrimElement;
-                servoSliderInstances.rearRight.trimInstance = rearRightTrimInstance;
-                updateTrimThumbLabel('sliderRearRightTrim', 0);
-                attachServoReleaseSaveHandler(rearRightTrimElement, 'rearRight', 'trim');
-            }
+                    });
+                }
+            });
 
             function setServoTrimSliderElementValue(servoName, newValue) {
                 const sliderData = servoSliderInstances[servoName];
                 if (!sliderData || !sliderData.trimInstance || !sliderData.trimElement) return;
                 const normalizedValue = normalizeServoTrimStepperValue(servoName, newValue);
-                sliderData.trimInstance.value([-20, normalizedValue]);
+                sliderData.trimInstance.value([-30, normalizedValue]);
                 sliderData.trimElement.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            function setServoMinSliderElementValue(servoName, newValue) {
+                const sliderData = servoSliderInstances[servoName];
+                if (!sliderData || !sliderData.minInstance || !sliderData.minElement) return;
+                const clamped = normalizeServoMinStepperValue(servoName, newValue);
+                sliderData.minInstance.value([0, clamped]);
+                sliderData.minElement.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            function setServoMaxSliderElementValue(servoName, newValue) {
+                const sliderData = servoSliderInstances[servoName];
+                if (!sliderData || !sliderData.maxInstance || !sliderData.maxElement) return;
+                const clamped = normalizeServoMaxStepperValue(servoName, newValue);
+                sliderData.maxInstance.value([0, clamped]);
+                sliderData.maxElement.dispatchEvent(new Event('input', { bubbles: true }));
             }
 
             function bindServoTrimStepperButtons() {
@@ -11659,8 +11719,52 @@ window.addEventListener('beforeunload', function(event) {
                 });
             }
 
+            function bindServoMinMaxStepperButtons() {
+                document.querySelectorAll('.slider-stepper-control[data-servo-min]').forEach(control => {
+                    if (control.dataset.bound === 'true') return;
+                    control.dataset.bound = 'true';
+
+                    const servoName = control.dataset.servoMin;
+                    const config = servoMinStepperConfigs[servoName];
+                    if (!config) return;
+
+                    control.querySelectorAll('.slider-stepper-btn').forEach(button => {
+                        button.addEventListener('click', () => {
+                            const current = Math.round(servoSliderValues?.[servoName]?.min ?? config.min);
+                            const nextValue = normalizeServoMinStepperValue(servoName, current + (Number(button.dataset.direction) || 0) * config.step);
+                            if (nextValue === current) return;
+                            setServoMinSliderElementValue(servoName, nextValue);
+                            commitServoSliderSave(servoName, 'min');
+                            syncServoMinMaxStepperButtons();
+                        });
+                    });
+                });
+
+                document.querySelectorAll('.slider-stepper-control[data-servo-max]').forEach(control => {
+                    if (control.dataset.bound === 'true') return;
+                    control.dataset.bound = 'true';
+
+                    const servoName = control.dataset.servoMax;
+                    const config = servoMaxStepperConfigs[servoName];
+                    if (!config) return;
+
+                    control.querySelectorAll('.slider-stepper-btn').forEach(button => {
+                        button.addEventListener('click', () => {
+                            const current = Math.round(servoSliderValues?.[servoName]?.max ?? config.max);
+                            const nextValue = normalizeServoMaxStepperValue(servoName, current + (Number(button.dataset.direction) || 0) * config.step);
+                            if (nextValue === current) return;
+                            setServoMaxSliderElementValue(servoName, nextValue);
+                            commitServoSliderSave(servoName, 'max');
+                            syncServoMinMaxStepperButtons();
+                        });
+                    });
+                });
+            }
+
             bindServoTrimStepperButtons();
             syncServoTrimStepperButtons();
+            bindServoMinMaxStepperButtons();
+            syncServoMinMaxStepperButtons();
 
             // Force layout recalculation to render slider colors correctly
             setTimeout(() => {
@@ -11747,10 +11851,24 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         const servoTrimStepperConfigs = {
-            frontLeft: { min: -20, max: 20, step: 1 },
-            frontRight: { min: -20, max: 20, step: 1 },
-            rearLeft: { min: -20, max: 20, step: 1 },
-            rearRight: { min: -20, max: 20, step: 1 }
+            frontLeft: { min: -30, max: 30, step: 1 },
+            frontRight: { min: -30, max: 30, step: 1 },
+            rearLeft: { min: -30, max: 30, step: 1 },
+            rearRight: { min: -30, max: 30, step: 1 }
+        };
+
+        const servoMinStepperConfigs = {
+            frontLeft: { min: 0, max: 178, step: 1 },
+            frontRight: { min: 0, max: 178, step: 1 },
+            rearLeft: { min: 0, max: 178, step: 1 },
+            rearRight: { min: 0, max: 178, step: 1 }
+        };
+
+        const servoMaxStepperConfigs = {
+            frontLeft: { min: 2, max: 180, step: 1 },
+            frontRight: { min: 2, max: 180, step: 1 },
+            rearLeft: { min: 2, max: 180, step: 1 },
+            rearRight: { min: 2, max: 180, step: 1 }
         };
 
         function normalizeServoTrimStepperValue(servoName, value) {
@@ -11758,6 +11876,32 @@ window.addEventListener('beforeunload', function(event) {
             if (!config) return Math.round(Number(value) || 0);
             const stepped = config.min + Math.round((Number(value) - config.min) / config.step) * config.step;
             return Math.max(config.min, Math.min(config.max, Math.round(stepped)));
+        }
+
+        function normalizeServoMinStepperValue(servoName, value) {
+            const config = servoMinStepperConfigs[servoName];
+            const maxConfig = servoMaxStepperConfigs[servoName];
+            if (!config) return Math.round(Number(value) || 0);
+
+            const fallbackMax = maxConfig ? maxConfig.max : 180;
+            const currentMax = Math.round(servoSliderValues?.[servoName]?.max ?? fallbackMax);
+            const maxAllowed = Math.max(config.min, Math.min(config.max, currentMax - 1));
+
+            const stepped = config.min + Math.round((Number(value) - config.min) / config.step) * config.step;
+            return Math.max(config.min, Math.min(maxAllowed, Math.round(stepped)));
+        }
+
+        function normalizeServoMaxStepperValue(servoName, value) {
+            const config = servoMaxStepperConfigs[servoName];
+            const minConfig = servoMinStepperConfigs[servoName];
+            if (!config) return Math.round(Number(value) || 0);
+
+            const fallbackMin = minConfig ? minConfig.min : 0;
+            const currentMin = Math.round(servoSliderValues?.[servoName]?.min ?? fallbackMin);
+            const minAllowed = Math.min(config.max, Math.max(config.min, currentMin + 1));
+
+            const stepped = config.min + Math.round((Number(value) - config.min) / config.step) * config.step;
+            return Math.max(minAllowed, Math.min(config.max, Math.round(stepped)));
         }
 
         function syncServoTrimStepperButtons() {
@@ -11773,6 +11917,45 @@ window.addEventListener('beforeunload', function(event) {
                     button.disabled = !!servoTrimLocked || atMin || atMax;
                 });
             });
+        }
+
+        function syncServoMinMaxStepperButtons() {
+            document.querySelectorAll('.slider-stepper-control[data-servo-min]').forEach(control => {
+                const servoName = control.dataset.servoMin;
+                const config = servoMinStepperConfigs[servoName];
+                if (!config) return;
+                const current = Math.round(servoSliderValues?.[servoName]?.min ?? config.min);
+                const currentMax = Math.round(servoSliderValues?.[servoName]?.max ?? servoMaxStepperConfigs?.[servoName]?.max ?? 180);
+                const maxAllowed = Math.max(config.min, Math.min(config.max, currentMax - 1));
+                control.querySelectorAll('.slider-stepper-btn').forEach(button => {
+                    const direction = Number(button.dataset.direction) || 0;
+                    button.disabled = (direction < 0 && current <= config.min) || (direction > 0 && current >= maxAllowed);
+                });
+            });
+            document.querySelectorAll('.slider-stepper-control[data-servo-max]').forEach(control => {
+                const servoName = control.dataset.servoMax;
+                const config = servoMaxStepperConfigs[servoName];
+                if (!config) return;
+                const current = Math.round(servoSliderValues?.[servoName]?.max ?? config.max);
+                const currentMin = Math.round(servoSliderValues?.[servoName]?.min ?? servoMinStepperConfigs?.[servoName]?.min ?? 0);
+                const minAllowed = Math.min(config.max, Math.max(config.min, currentMin + 1));
+                control.querySelectorAll('.slider-stepper-btn').forEach(button => {
+                    const direction = Number(button.dataset.direction) || 0;
+                    button.disabled = (direction < 0 && current <= minAllowed) || (direction > 0 && current >= config.max);
+                });
+            });
+        }
+
+        function coerceBooleanValue(value, fallback = false) {
+            if (value === undefined || value === null) return fallback;
+            if (typeof value === 'boolean') return value;
+            if (typeof value === 'number') return value !== 0;
+            if (typeof value === 'string') {
+                const normalized = value.trim().toLowerCase();
+                if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on' || normalized === 'enabled') return true;
+                if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off' || normalized === 'disabled' || normalized === '') return false;
+            }
+            return Boolean(value);
         }
 
         function updateTuningSliders(config) {
@@ -11814,6 +11997,33 @@ window.addEventListener('beforeunload', function(event) {
             }
             
             // Update each slider
+            // Support older saved profiles that predate explicit masterFeel storage.
+            let nextMasterFeel = config.masterFeel;
+            if (nextMasterFeel === undefined
+                && config.tuningConfigMode === 'auto'
+                && Number.isFinite(Number(config.omegaN))) {
+                const inferred = ((Number(config.omegaN) - 2.0) / (9.5 - 2.0)) * 100;
+                nextMasterFeel = Math.max(0, Math.min(100, Math.round(inferred)));
+            }
+
+            if (nextMasterFeel !== undefined) {
+                tuningSliderValues.masterFeel = Math.round(nextMasterFeel);
+                updateSliderElement('masterFeel', 'masterFeel', 0, tuningSliderValues.masterFeel);
+                updateThumbnailLabel('sliderMasterFeel', tuningSliderValues.masterFeel, 0);
+
+                const labels = ['Firm', 'Sport', 'Balanced', 'Touring', 'Relaxed', 'Loose'];
+                const thresholds = [16, 33, 50, 66, 83, 100];
+                let label = labels[labels.length - 1];
+                for (let i = 0; i < thresholds.length; i++) {
+                    if (tuningSliderValues.masterFeel < thresholds[i]) {
+                        label = labels[i];
+                        break;
+                    }
+                }
+                const labelEl = document.getElementById('masterFeelLabel');
+                if (labelEl) labelEl.textContent = label;
+            }
+
             if (config.rideHeightOffset !== undefined) {
                 tuningSliderValues.rideHeightOffset = Math.round(config.rideHeightOffset);
                 updateSliderElement('rideHeight', 'rideHeightOffset', 0, config.rideHeightOffset);
@@ -11902,9 +12112,25 @@ window.addEventListener('beforeunload', function(event) {
 
                 console.log(`Processing ${servoName}:`, servoConfig);
 
-                // Update stored values for this servo
-                servoSliderValues[servoName].min = servoConfig.min !== undefined ? servoConfig.min : 10;
-                servoSliderValues[servoName].max = servoConfig.max !== undefined ? servoConfig.max : 170;
+                // Update stored values for this servo with strict min<max normalization.
+                const minConfig = servoMinStepperConfigs[servoName] || { min: 0, max: 178 };
+                const maxConfig = servoMaxStepperConfigs[servoName] || { min: 2, max: 180 };
+                let minValue = Math.round(servoConfig.min !== undefined ? servoConfig.min : 10);
+                let maxValue = Math.round(servoConfig.max !== undefined ? servoConfig.max : 170);
+
+                minValue = Math.max(minConfig.min, Math.min(minConfig.max, minValue));
+                maxValue = Math.max(maxConfig.min, Math.min(maxConfig.max, maxValue));
+
+                if (minValue >= maxValue) {
+                    if (maxValue < maxConfig.max) {
+                        maxValue = minValue + 1;
+                    } else {
+                        minValue = Math.max(minConfig.min, maxValue - 1);
+                    }
+                }
+
+                servoSliderValues[servoName].min = minValue;
+                servoSliderValues[servoName].max = maxValue;
                 servoSliderValues[servoName].trim = servoConfig.trim !== undefined ? servoConfig.trim : 0;
 
                 const sliderData = servoSliderInstances[servoName];
@@ -11913,44 +12139,66 @@ window.addEventListener('beforeunload', function(event) {
                     continue;
                 }
 
-                // Update range slider (min/max PWM)
-                if (sliderData.rangeInstance) {
-                    const rangeMin = servoConfig.min !== undefined ? servoConfig.min : 10;
-                    const rangeMax = servoConfig.max !== undefined ? servoConfig.max : 170;
-                    console.log(`Setting ${servoName} range to [${rangeMin}, ${rangeMax}]`);
-                    sliderData.rangeInstance.value([rangeMin, rangeMax]);
-                    sliderData.lastRangeValue = [rangeMin, rangeMax];
-                    
-                    // Update thumb labels
-                    if (sliderData.rangeElement) {
-                        const thumbs = sliderData.rangeElement.querySelectorAll('.range-slider__thumb');
-                        if (thumbs[0]) thumbs[0].textContent = Math.round(rangeMin);
-                        if (thumbs[1]) thumbs[1].textContent = Math.round(rangeMax);
+                // Update Invert toggle — prefer live config, fall back to localStorage
+                const abbrevMap = { frontLeft: 'FL', frontRight: 'FR', rearLeft: 'RL', rearRight: 'RR' };
+                const abbrev = abbrevMap[servoName];
+                if (abbrev) {
+                    const invertToggle = document.getElementById(`servo${abbrev}Invert`);
+                    if (invertToggle) {
+                        let reverseRaw = servoConfig.reversed !== undefined
+                            ? servoConfig.reversed
+                            : servoConfig.reverse;
+                        if (reverseRaw === undefined || reverseRaw === null) {
+                            try {
+                                const stored = JSON.parse(localStorage.getItem(SERVO_REVERSED_STORAGE_KEY) || '{}');
+                                if (stored[servoName] !== undefined) reverseRaw = stored[servoName];
+                            } catch (_) {}
+                        }
+                        const isReversed = coerceBooleanValue(reverseRaw, false);
+                        invertToggle.checked = isReversed;
+                        invertToggle.setAttribute('aria-checked', isReversed ? 'true' : 'false');
+                        servoSliderValues[servoName].reversed = isReversed;
                     }
-                } else {
-                    console.warn(`No rangeInstance for ${servoName}`);
+                }
+
+                // Update min slider
+                if (sliderData.minInstance) {
+                    sliderData.minInstance.value([0, minValue]);
+                    sliderData.lastMinValue = Math.round(minValue);
+                    if (sliderData.minElement) {
+                        const minThumb = sliderData.minElement.querySelector('.range-slider__thumb[data-upper]')
+                            || sliderData.minElement.querySelector('.range-slider__thumb');
+                        if (minThumb) minThumb.textContent = Math.round(minValue);
+                    }
+                }
+
+                // Update max slider
+                if (sliderData.maxInstance) {
+                    sliderData.maxInstance.value([0, maxValue]);
+                    sliderData.lastMaxValue = Math.round(maxValue);
+                    if (sliderData.maxElement) {
+                        const maxThumb = sliderData.maxElement.querySelector('.range-slider__thumb[data-upper]')
+                            || sliderData.maxElement.querySelector('.range-slider__thumb');
+                        if (maxThumb) maxThumb.textContent = Math.round(maxValue);
+                    }
                 }
 
                 // Update trim slider
                 if (sliderData.trimInstance) {
                     const trimValue = servoConfig.trim !== undefined ? servoConfig.trim : 0;
                     console.log(`Setting ${servoName} trim to ${trimValue}`);
-                    // Trim slider has fixed min:-20, max:20 range with right thumb as trim value
-                    sliderData.trimInstance.value([-20, trimValue]);
+                    sliderData.trimInstance.value([-30, trimValue]);
                     sliderData.lastTrimValue = Math.round(trimValue);
-                    
-                    // Update thumb label
                     if (sliderData.trimElement) {
                         const trimThumb = sliderData.trimElement.querySelector('.range-slider__thumb[data-upper]')
                             || sliderData.trimElement.querySelector('.range-slider__thumb');
                         if (trimThumb) trimThumb.textContent = Math.round(trimValue);
                     }
-                } else {
-                    console.warn(`No trimInstance for ${servoName}`);
                 }
             }
 
             syncServoTrimStepperButtons();
+            syncServoMinMaxStepperButtons();
             
             // Clear flag after updating all sliders
             isLoadingTuningConfig = false;
@@ -12052,6 +12300,12 @@ window.addEventListener('beforeunload', function(event) {
                 chevron.classList.toggle('is-collapsed', isCollapsed);
             } else {
                 chevron.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+            }
+
+            // Keep the chassis Save Settings button hidden when Chassis Setup is collapsed.
+            if (cardId === 'servoSettingsCard') {
+                const saveBtn = document.getElementById('system-save-btn');
+                if (saveBtn) saveBtn.style.display = isCollapsed ? 'none' : '';
             }
         }
 

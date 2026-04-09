@@ -86,6 +86,7 @@ LegacyLightGroupSlot legacyLightGroupSlots[LIGHT_GROUP_SLOT_COUNT];
 
 // ==================== Phase 6: Dance Mode ====================
 DanceMode gDanceMode = { false, 0.0f, 0.0f };
+static bool gSuspensionPaused = false;
 
 static float clampNorm(float value) {
   if (value < -1.0f) return -1.0f;
@@ -144,6 +145,29 @@ static void writeTrimToAllSuspensionServos() {
   pwmOutputs.setChannelMicroseconds(3, static_cast<uint16_t>(rrTrim));
 }
 
+static void writeCenteredToAllSuspensionServos() {
+  const RCDCCConfigState& state = storageManager.getCurrentState();
+
+  const int32_t flMin = min(state.servoFL.minUs, state.servoFL.maxUs);
+  const int32_t flMax = max(state.servoFL.minUs, state.servoFL.maxUs);
+  const int32_t frMin = min(state.servoFR.minUs, state.servoFR.maxUs);
+  const int32_t frMax = max(state.servoFR.minUs, state.servoFR.maxUs);
+  const int32_t rlMin = min(state.servoRL.minUs, state.servoRL.maxUs);
+  const int32_t rlMax = max(state.servoRL.minUs, state.servoRL.maxUs);
+  const int32_t rrMin = min(state.servoRR.minUs, state.servoRR.maxUs);
+  const int32_t rrMax = max(state.servoRR.minUs, state.servoRR.maxUs);
+
+  const int32_t flCenter = clampI32Safe((flMin + flMax) / 2, flMin, flMax);
+  const int32_t frCenter = clampI32Safe((frMin + frMax) / 2, frMin, frMax);
+  const int32_t rlCenter = clampI32Safe((rlMin + rlMax) / 2, rlMin, rlMax);
+  const int32_t rrCenter = clampI32Safe((rrMin + rrMax) / 2, rrMin, rrMax);
+
+  pwmOutputs.setChannelMicroseconds(0, static_cast<uint16_t>(flCenter));
+  pwmOutputs.setChannelMicroseconds(1, static_cast<uint16_t>(frCenter));
+  pwmOutputs.setChannelMicroseconds(2, static_cast<uint16_t>(rlCenter));
+  pwmOutputs.setChannelMicroseconds(3, static_cast<uint16_t>(rrCenter));
+}
+
   static void clearManualServoOverrides() {
     for (auto& overrideState : gManualServoOverrides) {
       overrideState.active = false;
@@ -174,6 +198,38 @@ static void refreshSuspensionRuntimeFromStorage() {
   const SuspensionConfig cfg = storageManager.getConfig();
   const ServoConfig servoCfg = storageManager.getServoConfig();
   suspensionSimulator.init(cfg, servoCfg);
+}
+
+static bool runServoTestCommand(uint8_t index, int dir) {
+  if (index >= 4) return false;
+
+  const RCDCCConfigState& state = storageManager.getCurrentState();
+  const RCDCCServoState* servo = nullptr;
+  switch (index) {
+    case 0: servo = &state.servoFL; break;
+    case 1: servo = &state.servoFR; break;
+    case 2: servo = &state.servoRL; break;
+    case 3: servo = &state.servoRR; break;
+    default: return false;
+  }
+
+  const int32_t servoMin = min(servo->minUs, servo->maxUs);
+  const int32_t servoMax = max(servo->minUs, servo->maxUs);
+  const int32_t safeMin = clampI32Safe(servoMin, 900, 2100);
+  const int32_t safeMax = clampI32Safe(servoMax, safeMin + 1, 2100);
+  const int32_t safeTrim = clampI32Safe(servo->trimUs, safeMin, safeMax);
+
+  int32_t targetUs = safeTrim;
+  if (dir > 0) {
+    targetUs = safeMax;
+  } else if (dir < 0) {
+    targetUs = safeMin;
+  }
+
+  setManualServoOverride(index, static_cast<uint16_t>(targetUs));
+  pwmOutputs.setChannelMicroseconds(index, static_cast<uint16_t>(targetUs));
+  Serial.printf("[SERVO-TEST] idx=%u dir=%d targetUs=%ld\n", index, dir, static_cast<long>(targetUs));
+  return true;
 }
 
 static void applyDanceModeTilt(float rollNorm, float pitchNorm) {
@@ -815,6 +871,12 @@ bool applySystemCommandPayload(const String& payload) {
     return true;
   }
 
+  if (command == "testservo" || command == "test_servo") {
+    const uint8_t idx = doc["idx"] | 0;
+    const int dir = doc["dir"] | 0;
+    return runServoTestCommand(idx, dir);
+  }
+
   if (command == "reset" || command == "resetconfig") {
     storageManager.resetToDefaults();
     return true;
@@ -933,6 +995,15 @@ bool applySystemCommandPayload(const String& payload) {
   }
 
   // ==================== Phase 6: Dance Mode ====================
+
+  if (command == "suspend_suspension") {
+    gSuspensionPaused = doc["paused"] | false;
+    if (gSuspensionPaused) {
+      writeCenteredToAllSuspensionServos();
+    }
+    Serial.printf("{\"status\":\"suspend_suspension\",\"paused\":%s}\n", gSuspensionPaused ? "true" : "false");
+    return true;
+  }
 
   if (command == "dance_mode") {
     const bool enabled = doc["enabled"] | false;
@@ -1386,8 +1457,8 @@ void loop() {
     // CHECKPOINT: PWM writes
     unsigned long beforePWM = millis();
 
-    if (!gDanceMode.enabled) {
-      // Normal suspension loop runs only while Dance Mode is off.
+    if (!gDanceMode.enabled && !gSuspensionPaused) {
+      // Normal suspension loop runs only while Dance Mode is off and suspension is not paused.
       unsigned long beforeSuspUpdate = millis();
       suspensionSimulator.update(roll, pitch, verticalAccel);
       unsigned long suspUpdateTime = millis() - beforeSuspUpdate;

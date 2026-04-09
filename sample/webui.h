@@ -310,7 +310,7 @@ function lerp(a, b, t) {
 }
 
 function masterFeelText(v) {
-  if (v < 16) return 'Race';
+  if (v < 16) return 'Firm';
   if (v < 33) return 'Sport';
   if (v < 50) return 'Balanced';
   if (v < 66) return 'Touring';
