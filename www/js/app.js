@@ -98,7 +98,7 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.693';
+        const APP_VERSION = '1.1.703';
         const BUILD_DATE = '2026-04-10';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -4393,14 +4393,11 @@ window.addEventListener('beforeunload', function(event) {
                 });
             }
 
-            // Tuning Configuration Copy button
-            const tuningConfigCopyBtn = document.getElementById('tuningConfigCopyBtn');
-            if (tuningConfigCopyBtn) {
-                tuningConfigCopyBtn.addEventListener('click', function() {
-                    const tuningConfigData = document.getElementById('tuningConfigData');
-                    if (tuningConfigData && tuningConfigData.textContent) {
-                        copyToClipboard(tuningConfigData.textContent, tuningConfigCopyBtn);
-                    }
+            // Application Data Download button
+            const appDataDownloadBtn = document.getElementById('appDataDownloadBtn');
+            if (appDataDownloadBtn) {
+                appDataDownloadBtn.addEventListener('click', async function() {
+                    await downloadApplicationDataSnapshot(appDataDownloadBtn);
                 });
             }
 
@@ -6348,7 +6345,7 @@ window.addEventListener('beforeunload', function(event) {
                 _basicScenarioBrightnessSyncing = true;
                 _basicScenarioBrightnessSliderInstance.value([0, safePercent]);
                 _basicScenarioBrightnessSyncing = false;
-                _setBasicScenarioThumbLabel('basicScenarioBrightness', `${safePercent}%`);
+                _setBasicScenarioThumbLabel('basicScenarioBrightness', safePercent);
             }
             const label = document.getElementById('basicScenarioBrightnessLabel');
             if (label) label.textContent = `${safePercent}%`;
@@ -7128,6 +7125,19 @@ window.addEventListener('beforeunload', function(event) {
         };
 
         window.basicLedMapSave = async function() {
+            const activeProfile = (Array.isArray(lightingProfiles) ? lightingProfiles : [])
+                .find(p => Number(p.index) === Number(activeLightingProfileIndex));
+            const activeProfileName = activeProfile?.name || `Profile ${Number(activeLightingProfileIndex)}`;
+
+            const confirmed = await showActionConfirmDialog(
+                'Confirm Hardware Setup Save',
+                `Saving Hardware Setup can clear LED mappings for "${activeProfileName}". Any mapping in this lighting profile may need to be remapped. Proceed?`,
+                'Proceed',
+                'Cancel',
+                'hardware-setup-save-confirm-overlay'
+            );
+            if (!confirmed) return;
+
             const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             config.assignment = Object.assign({}, _basicLedMapDraftAssignment);
             config.colors = Object.assign({}, _basicLedMapDraftColors);
@@ -7751,7 +7761,7 @@ window.addEventListener('beforeunload', function(event) {
                         window.basicScenarioBrightnessChange(safe);
                     }
                 });
-                _setBasicScenarioThumbLabel('basicScenarioBrightness', `${_basicScenarioConfig.brightnessPercent}%`);
+                _setBasicScenarioThumbLabel('basicScenarioBrightness', _basicScenarioConfig.brightnessPercent);
             }
 
             const fxIntensitySliderElement = document.getElementById('basicScenarioFxIntensity');
@@ -10437,6 +10447,7 @@ window.addEventListener('beforeunload', function(event) {
 
         // ==================== Config Fetching ====================
         let hasShownInitialConfigToast = false;
+        const APP_DATA_LAST_EXPORT_AT_KEY = 'rcdcc_last_appdata_export_at';
 
         function buildLocalStorageSnapshot() {
             const snapshot = {};
@@ -10461,10 +10472,120 @@ window.addEventListener('beforeunload', function(event) {
             return orderedSnapshot;
         }
 
+        function formatSnapshotSize(bytes) {
+            if (!Number.isFinite(bytes) || bytes < 1024) return `${Math.max(0, Math.round(bytes || 0))} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        function formatAppDataLastExportTimestamp() {
+            const raw = localStorage.getItem(APP_DATA_LAST_EXPORT_AT_KEY);
+            if (!raw) return 'Never';
+            const date = new Date(raw);
+            if (Number.isNaN(date.getTime())) return 'Never';
+            return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+        }
+
+        function appDataDownloadTextFile(filename, content) {
+            const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(url);
+        }
+
+        function appDataToBase64Utf8(text) {
+            return btoa(unescape(encodeURIComponent(String(text || ''))));
+        }
+
+        async function appDataExportViaNativeShare(filename, content) {
+            const plugins = window.Capacitor?.Plugins;
+            const Filesystem = plugins?.Filesystem;
+            const Share = plugins?.Share;
+            if (!Filesystem || !Share) return false;
+
+            const directory = Filesystem?.Directory?.Cache || 'CACHE';
+            const path = `exports/${filename}`;
+            await Filesystem.writeFile({
+                path,
+                data: appDataToBase64Utf8(content),
+                directory,
+                recursive: true
+            });
+            const uriResult = await Filesystem.getUri({ path, directory });
+            await Share.share({
+                title: 'Export Application Data',
+                text: 'Choose where to save/share appdata.json.',
+                url: uriResult.uri,
+                dialogTitle: 'Save or share appdata.json'
+            });
+            return true;
+        }
+
+        async function appDataExportViaSavePicker(filename, content) {
+            if (typeof window.showSaveFilePicker !== 'function') return false;
+            const fileHandle = await window.showSaveFilePicker({
+                suggestedName: filename,
+                types: [{
+                    description: 'JSON Files',
+                    accept: { 'application/json': ['.json'] }
+                }]
+            });
+            const writable = await fileHandle.createWritable();
+            await writable.write(content);
+            await writable.close();
+            return true;
+        }
+
+        async function downloadApplicationDataSnapshot(triggerEl = null) {
+            try {
+                const snapshot = buildLocalStorageSnapshot();
+                const json = JSON.stringify(snapshot, null, 2);
+                const filename = 'appdata.json';
+                const isNative = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+
+                if (isNative && await appDataExportViaNativeShare(filename, json)) {
+                    if (window.toast) {
+                        toast.success('Export ready. Choose destination in the share/save dialog.');
+                    }
+                } else if (await appDataExportViaSavePicker(filename, json)) {
+                    if (window.toast) {
+                        toast.success('Application data exported');
+                    }
+                } else {
+                    appDataDownloadTextFile(filename, json);
+                    if (window.toast) {
+                        toast.success('Application data exported to your default Downloads location');
+                    }
+                }
+
+                localStorage.setItem(APP_DATA_LAST_EXPORT_AT_KEY, new Date().toISOString());
+                refreshApplicationDataCard();
+
+                if (triggerEl) {
+                    showCopyFeedback(triggerEl);
+                }
+            } catch (error) {
+                console.error('Application data export failed:', error);
+                if (window.toast) {
+                    toast.error(`Application data export failed: ${String(error?.message || error)}`);
+                }
+            }
+        }
+
         function refreshApplicationDataCard() {
             const appDataEl = document.getElementById('tuningConfigData');
             if (!appDataEl) return;
-            appDataEl.textContent = JSON.stringify(buildLocalStorageSnapshot(), null, 2);
+            const snapshot = buildLocalStorageSnapshot();
+            const json = JSON.stringify(snapshot, null, 2);
+            const keyCount = Object.keys(snapshot).length;
+            const sizeLabel = formatSnapshotSize(new Blob([json]).size);
+            const lastExport = formatAppDataLastExportTimestamp();
+            appDataEl.textContent = `Ready to download appdata.json\n${keyCount} keys • ${sizeLabel}\nLast exported: ${lastExport}`;
         }
 
         function ensureApplicationDataStorageHooks() {

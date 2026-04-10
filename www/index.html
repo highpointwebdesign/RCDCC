@@ -278,14 +278,73 @@
                         <span class="material-symbols-outlined icon-action" id="dashboardHelpChevron" title="Collapse help">keyboard_arrow_down</span>
                     </div>
                     <div class="card-body">
-                        <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.85;">
-                            <li><strong>Roll/Pitch/GPS card:</strong> View live roll and pitch plus GPS coordinates (latitude, longitude, elevation, and accuracy). Use the satellite icon to manually refresh sensor values.</li>
-                            <li><strong>Current Settings card:</strong> See the active vehicle, driving profile, and current suspension tuning values at a glance before making changes.</li>
-                            <li><strong>Trail Session card:</strong> Track distance, elevation gain or loss, duration, average speed, and max elevation for your run.</li>
-                            <li><strong>Trail Session controls:</strong> Tap <em>Start</em> to begin logging, <em>Stop</em> to pause the session, and <em>Reset</em> to clear the metrics.</li>
-                            <li><strong>Top-right toolbar:</strong> Use the camera icon to trigger gyro reset or level capture, and use the Bluetooth icon to view connection state and open connection actions.</li>
-                            <li><strong>Bottom navigation:</strong> Jump quickly between Dashboard, Garage, Tuning, FPV, and More while staying connected to your selected vehicle.</li>
-                        </ol>
+                        <div class="row">
+                            <div class="col-12 col-md-6 mb-3">
+                                <div class="text-muted small">
+                                    <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                        <span class="material-symbols-outlined" style="color: var(--danger);">explore</span> Roll / Pitch / GPS
+                                    </div>
+                                    <div style="font-size: 0.7rem; line-height: 1.4;">
+                                        View live roll and pitch plus GPS coordinates (latitude, longitude, elevation, and accuracy). Use the satellite icon to manually refresh sensor values.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 mb-3">
+                                <div class="text-muted small">
+                                    <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                        <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Current Settings
+                                    </div>
+                                    <div style="font-size: 0.7rem; line-height: 1.4;">
+                                        See the active vehicle, driving profile, and current suspension tuning values at a glance before making changes.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 mb-3">
+                                <div class="text-muted small">
+                                    <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                        <span class="material-symbols-outlined" style="color: var(--danger);">route</span> Trail Session
+                                    </div>
+                                    <div style="font-size: 0.7rem; line-height: 1.4;">
+                                        Track distance, elevation gain or loss, duration, average speed, and max elevation for your run.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 mb-3">
+                                <div class="text-muted small">
+                                    <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                        <span class="material-symbols-outlined" style="color: var(--danger);">play_circle</span> Session Controls
+                                    </div>
+                                    <div style="font-size: 0.7rem; line-height: 1.4;">
+                                        Tap Start to begin logging, Stop to pause the session, and Reset to clear the metrics.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 mb-3">
+                                <div class="text-muted small">
+                                    <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                        <span class="material-symbols-outlined" style="color: var(--danger);">settings_bluetooth</span> Top-Right Toolbar
+                                    </div>
+                                    <div style="font-size: 0.7rem; line-height: 1.4;">
+                                        Use the camera icon to trigger gyro reset or level capture, and the Bluetooth icon for connection status and actions.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6 mb-3">
+                                <div class="text-muted small">
+                                    <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                        <span class="material-symbols-outlined" style="color: var(--danger);">dashboard</span> Bottom Navigation
+                                    </div>
+                                    <div style="font-size: 0.7rem; line-height: 1.4;">
+                                        Jump quickly between Dashboard, Garage, Tuning, FPV, and More while staying connected to your selected vehicle.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -515,13 +574,11 @@
                                 </span>
                                     Application Data
                                 </div>
-                                <span class="material-symbols-outlined icon-action" id="tuningConfigCopyBtn" title="Copy tuning configuration to clipboard">content_copy</span>
+                                <span class="material-symbols-outlined icon-action" id="appDataDownloadBtn" title="Download application data as appdata.json">download</span>
 
                             </div>
                             <div class="card-body" style="background-color: #1E1E1E;">
-                                <div class="data-display" id="tuningConfigData">{
-  "loading": "Fetching tuning configuration..."
-}</div>
+                                <div class="data-display" id="tuningConfigData">Preparing application data summary...</div>
                             </div>
                         </div>
                     </div>
@@ -1574,13 +1631,13 @@
                             </div>
                             <div class="card-body" id="basicLightsTestCardBody">
                                 <div id="basicLedFxOutputCard">
-                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-3" style="cursor:pointer;" onclick="toggleCardCollapse('basicLedFxOutputCard', 'basicLedFxOutputChevron', 'basicLedFxOutputCardCollapsed')">
                                         <h6 class="mb-0">
                                             <span class="material-symbols-outlined icon-danger">auto_awesome</span>
                                             LED Fx &amp; Output
                                         </h6>
                                         <div class="d-flex align-items-center gap-2">
-                                            <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="basicLedFxOutputChevron" title="Collapse LED FX and output" onclick="toggleCardCollapse('basicLedFxOutputCard', 'basicLedFxOutputChevron', 'basicLedFxOutputCardCollapsed')">keyboard_arrow_down</span>
+                                            <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="basicLedFxOutputChevron" title="Collapse LED FX and output">keyboard_arrow_down</span>
                                         </div>
                                     </div>
                                     <div class="card-body p-0" id="basicLedFxOutputCardBody">
@@ -1707,13 +1764,13 @@
 
                                 <hr class="mt-4 mb-3">
                                 <div id="basicActiveLedAllocationCard">
-                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-3" style="cursor:pointer;" onclick="toggleCardCollapse('basicActiveLedAllocationCard', 'basicActiveLedAllocationChevron', 'basicActiveLedAllocationCardCollapsed')">
                                         <h6 class="mb-0">
                                             <span class="material-symbols-outlined icon-danger">format_list_bulleted</span>
                                             Groups
                                         </h6>
                                         <div class="d-flex align-items-center gap-2">
-                                            <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="basicActiveLedAllocationChevron" title="Collapse active LED allocation" onclick="toggleCardCollapse('basicActiveLedAllocationCard', 'basicActiveLedAllocationChevron', 'basicActiveLedAllocationCardCollapsed')">keyboard_arrow_down</span>
+                                            <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="basicActiveLedAllocationChevron" title="Collapse active LED allocation">keyboard_arrow_down</span>
                                         </div>
                                     </div>
                                     <div class="card-body p-0" id="basicActiveLedAllocationCardBody">
@@ -1732,12 +1789,12 @@
                                 <hr class="mt-4 mb-3">
 
                                 <div id="basicLedMappingSection">
-                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-3" style="cursor:pointer;" onclick="basicToggleLedMapInline()">
                                         <h6 class="mb-0">
                                             <span class="material-symbols-outlined icon-danger">hub</span>
                                             LED Mapping
                                         </h6>
-                                        <span class="material-symbols-outlined icon-action lights-collapse-chevron is-collapsed" id="basicLedMapInlineChevron" title="Expand LED mapping" onclick="event.stopPropagation(); basicToggleLedMapInline()">keyboard_arrow_down</span>
+                                        <span class="material-symbols-outlined icon-action lights-collapse-chevron is-collapsed" id="basicLedMapInlineChevron" title="Expand LED mapping">keyboard_arrow_down</span>
                                     </div>
                                     <div id="basicLedMapInlineSummary" class="basic-led-map-meta mb-2"></div>
                                     <div id="basicLedMapInline" style="display:none;">
@@ -1996,12 +2053,12 @@
                         <div class="card-body">
                             <div class="d-grid gap-2">
                                 <button type="button" class="btn btn-gold" id="garageExportBtn">
-                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">upload</span>
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">backup</span>
                                     Backup
                                 </button>
                                 <div id="lastBackupTimestamp" class="form-text text-center mt-1" style="color:#aaa;"></div>
                                 <button type="button" class="btn btn-gold" id="garageImportBtn">
-                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">download</span>
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">history</span>
                                     Restore
                                 </button>
                                 <input type="file" id="garageImportInput" accept="application/json,.json" style="display:none;" />
@@ -2117,7 +2174,7 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">upload</span> Backup
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">backup</span> Backup
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             Tap Backup to export garage, light groups, and lighting profiles to a JSON file.
@@ -2128,7 +2185,7 @@
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">download</span> Restore
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">history</span> Restore
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             Tap Restore to import a backup file. This replaces current stored data.
