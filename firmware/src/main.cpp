@@ -2,7 +2,6 @@
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <MPU6050.h>
-#include <Adafruit_NeoPixel.h>
 // #include <FastLED.h>
 #include "Config.h"
 #include "SensorFusion.h"
@@ -46,19 +45,7 @@ static constexpr bool BLE_STARTUP_ENABLED = true;
 static constexpr bool CALIBRATE_IMU_ON_BOOT = false;
 static constexpr bool SUSPENSION_PWM_ENABLED = true;
 
-enum StripColorOrder : uint8_t {
-  STRIP_ORDER_GRB = 0,
-  STRIP_ORDER_RGB = 1,
-  STRIP_ORDER_RBG = 2,
-  STRIP_ORDER_GBR = 3,
-  STRIP_ORDER_BRG = 4,
-  STRIP_ORDER_BGR = 5,
-};
-
-// Addressable LED (NeoPixel) - kept for backward compatibility
-Adafruit_NeoPixel statusLED(STATUS_LED_COUNT, STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
 uint32_t currentLEDColor = 0;
-bool legacyStatusLedEnabled = true;
 bool lightsMasterEnabled = false;
 bool lightsBasicEnabled = false;
 bool lightsDiagEnabled = false;
@@ -69,20 +56,7 @@ uint8_t lightsBasicBri = 100;
 uint16_t lightsDiagIntervalMs = 500;
 unsigned long lightsDiagLastStepMs = 0;
 uint8_t lightsDiagStep = 0;
-StripColorOrder stripColorOrder = STRIP_ORDER_GRB;
 static uint32_t lastSuspensionDebugMs = 0;
-
-static constexpr uint8_t LIGHT_GROUP_SLOT_COUNT = 15;
-struct LegacyLightGroupSlot {
-  bool configured = false;
-  bool enabled = false;
-  uint8_t r = 0;
-  uint8_t g = 0;
-  uint8_t b = 0;
-  uint8_t bri = 100;
-  bool ledMask[STATUS_LED_COUNT] = { false };
-};
-LegacyLightGroupSlot legacyLightGroupSlots[LIGHT_GROUP_SLOT_COUNT];
 
 // ==================== Phase 6: Dance Mode ====================
 DanceMode gDanceMode = { false, 0.0f, 0.0f };
@@ -281,7 +255,9 @@ void updateStatusLEDColor() {
   LEDConfig ledConfig = storageManager.getLEDConfig();
   uint8_t r, g, b;
   getLEDColorRGB(ledConfig.color, r, g, b);
-  currentLEDColor = statusLED.Color(r, g, b);
+  currentLEDColor = (static_cast<uint32_t>(r) << 16)
+    | (static_cast<uint32_t>(g) << 8)
+    | static_cast<uint32_t>(b);
 }
 
 // Function to flash the alert LED (LED index 2)
@@ -313,222 +289,28 @@ void startLedBlink() {
   ledBlinkEndTime = millis() + 250;
 }
 
-uint32_t parseHexColor(const String& colorStr) {
-  String normalized = colorStr;
-  normalized.trim();
-  if (normalized.startsWith("#")) {
-    normalized.remove(0, 1);
-  }
-  if (normalized.length() == 0) {
-    return 0;
-  }
-  return strtoul(normalized.c_str(), nullptr, 16) & 0xFFFFFF;
-}
-
-void remapColorForOrder(uint8_t inR, uint8_t inG, uint8_t inB, uint8_t& outR, uint8_t& outG, uint8_t& outB) {
-  switch (stripColorOrder) {
-    case STRIP_ORDER_RGB: outR = inR; outG = inG; outB = inB; break;
-    case STRIP_ORDER_RBG: outR = inR; outG = inB; outB = inG; break;
-    case STRIP_ORDER_GBR: outR = inG; outG = inB; outB = inR; break;
-    case STRIP_ORDER_BRG: outR = inB; outG = inR; outB = inG; break;
-    case STRIP_ORDER_BGR: outR = inB; outG = inG; outB = inR; break;
-    case STRIP_ORDER_GRB:
-    default: outR = inG; outG = inR; outB = inB; break;
-  }
-}
-
-void clearStrip() {
-  if (!legacyStatusLedEnabled) return;
-  statusLED.clear();
-  statusLED.show();
-}
-
-void clearLegacyGroupSlot(uint8_t groupIndex) {
-  if (groupIndex >= LIGHT_GROUP_SLOT_COUNT) return;
-  LegacyLightGroupSlot& slot = legacyLightGroupSlots[groupIndex];
-  slot.configured = false;
-  slot.enabled = false;
-  slot.r = 0;
-  slot.g = 0;
-  slot.b = 0;
-  slot.bri = 100;
-  for (uint16_t i = 0; i < STATUS_LED_COUNT; i++) {
-    slot.ledMask[i] = false;
-  }
-}
-
-void clearAllLegacyGroupSlots() {
-  for (uint8_t i = 0; i < LIGHT_GROUP_SLOT_COUNT; i++) {
-    clearLegacyGroupSlot(i);
-  }
-}
-
-bool slotHasAnyLed(const LegacyLightGroupSlot& slot) {
-  for (uint16_t i = 0; i < STATUS_LED_COUNT; i++) {
-    if (slot.ledMask[i]) return true;
-  }
-  return false;
-}
-
-bool hasAnyEnabledLegacyGroups() {
-  for (uint8_t i = 0; i < LIGHT_GROUP_SLOT_COUNT; i++) {
-    const LegacyLightGroupSlot& slot = legacyLightGroupSlots[i];
-    if (slot.configured && slot.enabled && slotHasAnyLed(slot)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-void applyLegacyGroupCompositeOutput() {
-  if (!legacyStatusLedEnabled) return;
-  if (!lightsMasterEnabled) {
-    clearStrip();
-    return;
-  }
-
-  uint8_t outR[STATUS_LED_COUNT] = { 0 };
-  uint8_t outG[STATUS_LED_COUNT] = { 0 };
-  uint8_t outB[STATUS_LED_COUNT] = { 0 };
-  bool hasOutput = false;
-
-  // Deterministic overlay order: higher slot index can override earlier slots.
-  for (uint8_t group = 0; group < LIGHT_GROUP_SLOT_COUNT; group++) {
-    const LegacyLightGroupSlot& slot = legacyLightGroupSlots[group];
-    if (!slot.configured || !slot.enabled) continue;
-
-    const uint16_t safeBri = constrain(static_cast<int>(slot.bri), 0, 100);
-    const uint16_t scaledR = (static_cast<uint16_t>(slot.r) * safeBri) / 100;
-    const uint16_t scaledG = (static_cast<uint16_t>(slot.g) * safeBri) / 100;
-    const uint16_t scaledB = (static_cast<uint16_t>(slot.b) * safeBri) / 100;
-
-    uint8_t mappedR = 0;
-    uint8_t mappedG = 0;
-    uint8_t mappedB = 0;
-    remapColorForOrder(static_cast<uint8_t>(scaledR), static_cast<uint8_t>(scaledG), static_cast<uint8_t>(scaledB), mappedR, mappedG, mappedB);
-
-    // DEBUG: Log which group is contributing to output
-    bool groupHasLeds = false;
-    for (uint16_t i = 0; i < STATUS_LED_COUNT; i++) {
-      if (slot.ledMask[i]) {
-        groupHasLeds = true;
-        break;
-      }
-    }
-    if (groupHasLeds) {
-      Serial.printf("[Composite] Group %d active: rgb=(%d,%d,%d) mapped=(%d,%d,%d)\n", 
-        group, slot.r, slot.g, slot.b, mappedR, mappedG, mappedB);
-    }
-
-    for (uint16_t i = 0; i < STATUS_LED_COUNT; i++) {
-      if (!slot.ledMask[i]) continue;
-      outR[i] = mappedR;
-      outG[i] = mappedG;
-      outB[i] = mappedB;
-      hasOutput = true;
-    }
-  }
-
-  if (!hasOutput) {
-    clearStrip();
-    return;
-  }
-
-  for (uint16_t i = 0; i < STATUS_LED_COUNT; i++) {
-    statusLED.setPixelColor(i, outR[i], outG[i], outB[i]);
-  }
-  statusLED.show();
-}
-
-void updateLegacyGroupSlotLeds(uint8_t groupIndex, const JsonArray& leds) {
-  if (groupIndex >= LIGHT_GROUP_SLOT_COUNT) return;
-  LegacyLightGroupSlot& slot = legacyLightGroupSlots[groupIndex];
-  for (uint16_t i = 0; i < STATUS_LED_COUNT; i++) {
-    slot.ledMask[i] = false;
-  }
-
-  for (JsonVariant v : leds) {
-    if (!v.is<int>()) continue;
-    const int idx = v.as<int>();
-    if (idx < 0 || idx >= STATUS_LED_COUNT) continue;
-    slot.ledMask[static_cast<uint16_t>(idx)] = true;
-  }
-}
-
-void setAllStripLeds(uint8_t r, uint8_t g, uint8_t b, uint8_t briPercent) {
-  if (!legacyStatusLedEnabled) return;
-
-  const uint16_t safeBri = constrain(static_cast<int>(briPercent), 0, 100);
-  const uint16_t scaledR = (static_cast<uint16_t>(r) * safeBri) / 100;
-  const uint16_t scaledG = (static_cast<uint16_t>(g) * safeBri) / 100;
-  const uint16_t scaledB = (static_cast<uint16_t>(b) * safeBri) / 100;
-
-  uint8_t mappedR = 0;
-  uint8_t mappedG = 0;
-  uint8_t mappedB = 0;
-  remapColorForOrder(static_cast<uint8_t>(scaledR), static_cast<uint8_t>(scaledG), static_cast<uint8_t>(scaledB), mappedR, mappedG, mappedB);
-
-  for (uint16_t i = 0; i < STATUS_LED_COUNT; i++) {
-    statusLED.setPixelColor(i, mappedR, mappedG, mappedB);
-  }
-  statusLED.show();
-}
-
-void setIndexedStripLeds(const JsonArray& leds, uint8_t r, uint8_t g, uint8_t b, uint8_t briPercent) {
-  if (!legacyStatusLedEnabled) return;
-
-  statusLED.clear();
-  const uint16_t safeBri = constrain(static_cast<int>(briPercent), 0, 100);
-  const uint16_t scaledR = (static_cast<uint16_t>(r) * safeBri) / 100;
-  const uint16_t scaledG = (static_cast<uint16_t>(g) * safeBri) / 100;
-  const uint16_t scaledB = (static_cast<uint16_t>(b) * safeBri) / 100;
-
-  uint8_t mappedR = 0;
-  uint8_t mappedG = 0;
-  uint8_t mappedB = 0;
-  remapColorForOrder(static_cast<uint8_t>(scaledR), static_cast<uint8_t>(scaledG), static_cast<uint8_t>(scaledB), mappedR, mappedG, mappedB);
-
-  for (JsonVariant v : leds) {
-    if (!v.is<int>()) continue;
-    const int idx = v.as<int>();
-    if (idx < 0 || idx >= STATUS_LED_COUNT) continue;
-    statusLED.setPixelColor(static_cast<uint16_t>(idx), mappedR, mappedG, mappedB);
-  }
-  statusLED.show();
-}
-
-void applyBasicLightsOutput() {
-  if (!legacyStatusLedEnabled) return;
-  if (!lightsMasterEnabled || !lightsBasicEnabled) {
-    clearStrip();
-    return;
-  }
-  setAllStripLeds(lightsBasicR, lightsBasicG, lightsBasicB, lightsBasicBri);
-}
-
 void applyDiagStep() {
-  if (!legacyStatusLedEnabled) return;
+  if (!lightsEngine) return;
 
   switch (lightsDiagStep % 5) {
-    case 0: setAllStripLeds(255, 0, 0, 100); break;
-    case 1: setAllStripLeds(0, 255, 0, 100); break;
-    case 2: setAllStripLeds(0, 0, 255, 100); break;
-    case 3: setAllStripLeds(255, 255, 255, 100); break;
+    case 0:
+      lightsEngine->setBasicMode(true, 255, 0, 0, STATUS_LED_COUNT);
+      break;
+    case 1:
+      lightsEngine->setBasicMode(true, 0, 255, 0, STATUS_LED_COUNT);
+      break;
+    case 2:
+      lightsEngine->setBasicMode(true, 0, 0, 255, STATUS_LED_COUNT);
+      break;
+    case 3:
+      lightsEngine->setBasicMode(true, 255, 255, 255, STATUS_LED_COUNT);
+      break;
     case 4:
-    default: clearStrip(); break;
+    default:
+      lightsEngine->setBasicMode(false);
+      break;
   }
   lightsDiagStep = (lightsDiagStep + 1) % 5;
-}
-
-StripColorOrder parseStripColorOrder(const String& input) {
-  String order = input;
-  order.toLowerCase();
-  if (order == "rgb") return STRIP_ORDER_RGB;
-  if (order == "rbg") return STRIP_ORDER_RBG;
-  if (order == "gbr") return STRIP_ORDER_GBR;
-  if (order == "brg") return STRIP_ORDER_BRG;
-  if (order == "bgr") return STRIP_ORDER_BGR;
-  return STRIP_ORDER_GRB;
 }
 
 bool applyConfigUpdatePayload(const String& payload) {
@@ -713,91 +495,6 @@ bool applyLightsPayload(const String& payload) {
   lightsDiagEnabled = false;
   lightsBasicEnabled = false;
   return true;
-
-  DynamicJsonDocument doc(3072);
-  DeserializationError error = deserializeJson(doc, payload);
-  if (error) {
-    Serial.printf("BLE lights JSON parse error: %s\n", error.c_str());
-    return false;
-  }
-
-  const bool enabled = doc["enabled"] | true;
-  const uint8_t brightness = static_cast<uint8_t>(constrain(static_cast<int>(doc["brightness"] | 100), 0, 100));
-
-  uint32_t color = 0x0000FF;
-  if (doc["color"].is<const char*>()) {
-    color = parseHexColor(String(doc["color"].as<const char*>()));
-  } else if (doc["color"].is<uint32_t>()) {
-    color = doc["color"].as<uint32_t>() & 0xFFFFFF;
-  }
-
-  const uint8_t r = static_cast<uint8_t>((color >> 16) & 0xFF);
-  const uint8_t g = static_cast<uint8_t>((color >> 8) & 0xFF);
-  const uint8_t b = static_cast<uint8_t>(color & 0xFF);
-
-  const bool hasGroup = doc.containsKey("group") && doc["group"].is<int>();
-  const int groupIndex = hasGroup ? doc["group"].as<int>() : -1;
-
-  lightsDiagEnabled = false;
-
-  if (hasGroup && groupIndex >= 0 && groupIndex < LIGHT_GROUP_SLOT_COUNT) {
-    LegacyLightGroupSlot& slot = legacyLightGroupSlots[static_cast<uint8_t>(groupIndex)];
-    slot.configured = true;
-    slot.enabled = enabled;
-    slot.r = r;
-    slot.g = g;
-    slot.b = b;
-    slot.bri = brightness;
-
-    if (doc.containsKey("leds") && doc["leds"].is<JsonArray>()) {
-      updateLegacyGroupSlotLeds(static_cast<uint8_t>(groupIndex), doc["leds"].as<JsonArray>());
-    } else {
-      for (uint16_t i = 0; i < STATUS_LED_COUNT; i++) {
-        slot.ledMask[i] = false;
-      }
-    }
-
-    // DEBUG: Log all group payloads
-    Serial.printf("[LightGroup %d] enabled=%d rgb=(%d,%d,%d) bri=%d  leds=[", 
-      groupIndex, enabled, r, g, b, brightness);
-    for (uint16_t i = 0; i < STATUS_LED_COUNT && i < 100; i++) {
-      if (slot.ledMask[i]) {
-        Serial.printf("%d,", i);
-      }
-    }
-    Serial.println("]");
-
-    lightsBasicEnabled = false;
-    if (!lightsMasterEnabled) {
-      clearStrip();
-      return true;
-    }
-
-    applyLegacyGroupCompositeOutput();
-    return true;
-  }
-
-  lightsBasicEnabled = enabled;
-  lightsBasicR = r;
-  lightsBasicG = g;
-  lightsBasicB = b;
-  lightsBasicBri = brightness;
-
-  if (!lightsMasterEnabled || !enabled) {
-    clearStrip();
-    return true;
-  }
-
-  if (doc.containsKey("leds") && doc["leds"].is<JsonArray>()) {
-    JsonArray leds = doc["leds"].as<JsonArray>();
-    if (leds.size() > 0) {
-      setIndexedStripLeds(leds, r, g, b, brightness);
-      return true;
-    }
-  }
-
-  setAllStripLeds(r, g, b, brightness);
-  return true;
 }
 
 bool applySystemCommandPayload(const String& payload) {
@@ -818,22 +515,12 @@ bool applySystemCommandPayload(const String& payload) {
   // Simple 5-LED blue on/off test
   if (command == "leds_simple_onoff") {
     bool on = doc["on"] | false;
-    if (on) {
-      if (legacyStatusLedEnabled) {
-        for (uint16_t i = 0; i < 5 && i < STATUS_LED_COUNT; i++) {
-          statusLED.setPixelColor(i, 0, 0, 255); // Blue
-        }
-        for (uint16_t i = 5; i < STATUS_LED_COUNT; i++) {
-          statusLED.setPixelColor(i, 0, 0, 0); // Off
-        }
-        statusLED.show();
-      }
-    } else {
-      if (legacyStatusLedEnabled) {
-        for (uint16_t i = 0; i < 5 && i < STATUS_LED_COUNT; i++) {
-          statusLED.setPixelColor(i, 0, 0, 0); // Off
-        }
-        statusLED.show();
+    if (lightsEngine) {
+      if (on) {
+        lightsEngine->setMaster(true);
+        lightsEngine->setBasicMode(true, 0, 0, 255, min(static_cast<int>(STATUS_LED_COUNT), 5));
+      } else {
+        lightsEngine->setBasicMode(false);
       }
     }
     Serial.printf("{\"status\":\"leds_simple_onoff\",\"on\":%s}\n", on ? "true" : "false");
@@ -909,20 +596,6 @@ bool applySystemCommandPayload(const String& payload) {
 
     Serial.printf("{\"status\":\"lights_master\",\"enabled\":%s}\n", lightsMasterEnabled ? "true" : "false");
     return true;
-
-    if (!lightsMasterEnabled) {
-      lightsDiagEnabled = false;
-      lightsBasicEnabled = false;
-      clearStrip();
-    } else {
-      if (hasAnyEnabledLegacyGroups()) {
-        applyLegacyGroupCompositeOutput();
-      } else {
-        applyBasicLightsOutput();
-      }
-    }
-    Serial.printf("{\"status\":\"lights_master\",\"enabled\":%s}\n", lightsMasterEnabled ? "true" : "false");
-    return true;
   }
 
   if (command == "lights_clear_all") {
@@ -932,28 +605,16 @@ bool applySystemCommandPayload(const String& payload) {
       lightsEngine->setBasicMode(false);
       lightsEngine->clearAllGroups(true);
     }
-    clearAllLegacyGroupSlots();
     Serial.println("{\"status\":\"lights_cleared\"}");
     return true;
   }
 
   if (command == "lights_color_order") {
     const String order = doc["order"] | "grb";
-    stripColorOrder = parseStripColorOrder(order);
     if (lightsEngine) {
       lightsEngine->setColorOrderByName(order.c_str());
     }
 
-    Serial.printf("{\"status\":\"lights_color_order\",\"order\":\"%s\"}\n", order.c_str());
-    return true;
-
-    if (lightsDiagEnabled) {
-      applyDiagStep();
-    } else if (hasAnyEnabledLegacyGroups()) {
-      applyLegacyGroupCompositeOutput();
-    } else {
-      applyBasicLightsOutput();
-    }
     Serial.printf("{\"status\":\"lights_color_order\",\"order\":\"%s\"}\n", order.c_str());
     return true;
   }
@@ -985,7 +646,7 @@ bool applySystemCommandPayload(const String& payload) {
     lightsDiagLastStepMs = 0;
     lightsDiagStep = 0;
     if (!diagOn) {
-      clearStrip();
+      if (lightsEngine) lightsEngine->setBasicMode(false);
     } else {
       applyDiagStep();
       lightsDiagLastStepMs = millis();
@@ -1122,41 +783,19 @@ bool applySystemCommandPayload(const String& payload) {
 void setup() {
   Serial.begin(115200);
   delay(500);
-
-  // Adafruit NeoPixel LED initialization - TEST 1.1
-  statusLED.begin();
-  statusLED.show();  // Initialize all pixels to off
   
   Serial.println("\n\nR/C Dynamic Chassis Control - Starting...");
   
   // Load configuration from storage
   storageManager.init();
 
-  // Lights runtime disabled for debugging
-  // if (LIGHTS_ENTRYPOINT_ENABLED) {
-  //   lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
-  //   lightsEngine->begin();
-  //   lightsEngine->setMaster(false);
-  //   lightsEngine->setColorOrderByName("grb");
-  //   legacyStatusLedEnabled = false;
-  // } else {
-  //   lightsEngine = nullptr;
-  //   legacyStatusLedEnabled = true;
-  //   Serial.println("Lights runtime disabled");
-  // }
   lightsEngine = nullptr;
-  legacyStatusLedEnabled = true;  // TEST 1.3: Re-enable LightsEngine allocation
   
-  // TEST 1.3: Re-enable LightsEngine allocation
   if (LIGHTS_ENTRYPOINT_ENABLED) {
     lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);
     lightsEngine->begin();
     lightsEngine->setMaster(false);
     lightsEngine->setColorOrderByName("grb");
-    legacyStatusLedEnabled = false;
-  } else {
-    lightsEngine = nullptr;
-    legacyStatusLedEnabled = true;
   }
 
   storageManager.loadConfig();
@@ -1222,15 +861,7 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   
-  // Initialize addressable LED (NeoPixel) - TEST 1.2
-  if (legacyStatusLedEnabled) {
-    statusLED.begin();
-    statusLED.setBrightness(50); // Set brightness (0-255)
-    statusLED.clear();
-    statusLED.show();
-    updateStatusLEDColor(); // Load color from config
-    Serial.println("Status LED initialized");
-  }
+  updateStatusLEDColor();
   
   // Calibrate to current position as level
   if (mpuConnected && CALIBRATE_IMU_ON_BOOT) {
@@ -1312,14 +943,10 @@ void loop() {
   if (ledBlinkEndTime > 0 && currentTime >= ledBlinkEndTime) {
     // After a blink: keep LED on if BLE is still connected, otherwise off.
     digitalWrite(LED_PIN, ledBleOn ? HIGH : LOW);
-    if (legacyStatusLedEnabled && !lightsMasterEnabled && !lightsDiagEnabled && !lightsBasicEnabled) {
-      statusLED.clear();
-      statusLED.show();
-    }
     ledBlinkEndTime = 0;
   }
 
-  if (lightsDiagEnabled && legacyStatusLedEnabled && (currentTime - lightsDiagLastStepMs >= lightsDiagIntervalMs)) {
+  if (lightsDiagEnabled && (currentTime - lightsDiagLastStepMs >= lightsDiagIntervalMs)) {
     applyDiagStep();
     lightsDiagLastStepMs = currentTime;
   }
