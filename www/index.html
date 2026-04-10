@@ -270,12 +270,12 @@
             <!-- Help: Dashboard Card -->
             <div class="col-12">
                 <div class="card" id="dashboardHelpCard">
-                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                    <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor: pointer;" onclick="toggleCardCollapse('dashboardHelpCard', 'dashboardHelpChevron', 'dashboardHelpCardCollapsed')">
                         <div class="d-flex align-items-center gap-2">
                             <span class="material-symbols-outlined" style="color: var(--danger);">help</span>
                             Help: Dashboard
                         </div>
-                        <span class="material-symbols-outlined icon-action" id="dashboardHelpChevron" title="Collapse help" onclick="toggleCardCollapse('dashboardHelpCard', 'dashboardHelpChevron', 'dashboardHelpCardCollapsed')">keyboard_arrow_down</span>
+                        <span class="material-symbols-outlined icon-action" id="dashboardHelpChevron" title="Collapse help">keyboard_arrow_down</span>
                     </div>
                     <div class="card-body">
                         <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.85;">
@@ -457,6 +457,14 @@
                         </div>
                     </div> -->
 
+                    <!-- Clear Local Storage -->
+                    <div class="col-12">
+                        <button type="button" class="btn btn-outline-danger w-100" onclick="clearAllLocalStorage()">
+                            <span class="material-symbols-outlined" style="vertical-align:middle;font-size:1.1em;">delete_forever</span>
+                            Clear All Local Storage
+                        </button>
+                    </div>
+
                     <!-- Console Card -->
                     <div class="col-12 col-md-6">
                         <div class="card h-100"  style="background-color: #1E1E1E;">
@@ -516,6 +524,8 @@
 }</div>
                             </div>
                         </div>
+                    </div>
+
                     </div>
                 </div>
             </div>
@@ -582,13 +592,20 @@
         <!-- Tuning Section -->
         <section id="tuning" class="page-section">
             <div class="section-title-row">
-                <h2 class="section-title">Tuning</h2>
+                <div class="d-flex align-items-center justify-content-between w-100 gap-2">
+                    <h2 class="section-title">Tuning</h2>
+                    <button type="button" id="suspendSuspensionBtn" class="btn btn-outline-secondary"
+                            onclick="toggleSuspendSuspension()"
+                            disabled>
+                        <span id="suspendSuspensionLabel">Suspension Active</span>
+                    </button>
+                </div>
             </div>
             <div class="row g-3">
                 <!-- Driving Profiles Card -->
                 <div class="col-12">
                     <div class="card" id="drivingProfilesCard">
-                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor:pointer;" onclick="toggleDrivingProfilesCard()">
                             <div class="d-flex align-items-center gap-2">
                                 <span style="position:relative;display:inline-flex;width:22px;height:22px;">
                                     <span class="material-symbols-outlined" style="font-size:22px;color:var(--danger);line-height:1;">directions_car</span>
@@ -597,8 +614,8 @@
                                 Driving Profiles
                             </div>
                             <div class="d-flex align-items-center gap-2 profile-card-header-actions">
-                                <span class="material-symbols-outlined icon-action" id="drivingProfilesLockIcon" title="Lock driving profiles to prevent changes" onclick="toggleDrivingProfilesLock(this)">lock_open_right</span>
-                                <span class="material-symbols-outlined icon-action" id="drivingProfilesChevron" title="Collapse driving profiles" onclick="toggleDrivingProfilesCard()">keyboard_arrow_down</span>
+                                <span class="material-symbols-outlined icon-action" id="drivingProfilesLockIcon" title="Lock driving profiles to prevent changes" onclick="event.stopPropagation(); toggleDrivingProfilesLock(this)">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action" id="drivingProfilesChevron" title="Collapse driving profiles">keyboard_arrow_down</span>
                             </div>
                         </div>
                         <div class="card-body p-2" id="drivingProfilesCardBody" style="background:#1a1a1a;">
@@ -621,26 +638,16 @@
                     </div>
                 </div>
 
-                <!-- Suspend Suspension Button -->
-                <div class="col-12">
-                    <button type="button" id="suspendSuspensionBtn" class="btn btn-outline-secondary w-100"
-                            onclick="toggleSuspendSuspension()"
-                            disabled>
-                        <!-- <span class="material-symbols-outlined" style="vertical-align:middle;font-size:1.1em;">pause_circle</span> -->
-                        <span id="suspendSuspensionLabel">Suspension Active</span>
-                    </button>
-                </div>
-
                 <!-- Parameters Card -->
                 <div class="col-12 col-md-6">
                     <div class="card" id="tuningParametersCard">
-                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
+                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white; cursor:pointer;" onclick="toggleCardCollapse('tuningParametersCard', 'tuningParametersChevron', 'tuningParametersCardCollapsed')">
                             <div>
                                 <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Tuning
                             </div>
                             <div class="d-flex align-items-center gap-2">
-                                <span class="material-symbols-outlined icon-action" id="tuningLockIcon" title="Lock all sliders to prevent accidental changes" onclick="toggleTuningLock(this)">lock</span>
-                                <span class="material-symbols-outlined icon-action" id="tuningParametersChevron" title="Collapse suspension card" onclick="toggleCardCollapse('tuningParametersCard', 'tuningParametersChevron', 'tuningParametersCardCollapsed')">keyboard_arrow_down</span>
+                                <span class="material-symbols-outlined icon-action" id="tuningLockIcon" title="Lock all sliders to prevent accidental changes" onclick="event.stopPropagation(); toggleTuningLock(this)">lock</span>
+                                <span class="material-symbols-outlined icon-action" id="tuningParametersChevron" title="Collapse suspension card">keyboard_arrow_down</span>
                             </div>
                         </div>
                         <div class="card-body" id="tuningParametersCardBody">
@@ -668,25 +675,24 @@
                                     <div style="text-align:center; margin-top: 4px; font-size: 0.75rem; color: var(--text-muted);" id="masterFeelLabel">Balanced</div>
                                 </div>
                             </div>
-                            
-                            <!-- Balance (Rear/Front) -->
-                            <div class="tuning-slider-group">
-                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">balance</span> Balance (Rear/Front)</h6>
+
+                            <!-- Suspension Height -->
+                            <div class="tuning-slider-group mb-3">
+                                <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger); transform: rotate(90deg);">arrows_outward</span> Suspension Height</h6>
                                 <div class="slider-section">
-                                    <div class="slider-stepper-control" data-slider-key="balance">
-                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Shift balance toward rear">-</button>
-                                        <div id="sliderBalance" class="slider-stepper-track"></div>
-                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Shift balance toward front">+</button>
+                                    <div class="slider-stepper-control" data-slider-key="rideHeight">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease suspension height">-</button>
+                                        <div id="sliderRideHeight" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase suspension height">+</button>
                                     </div>
                                     <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>Rear</span>
-                                        <span>Balanced</span>
-                                        <span>Front</span>
+                                        <span>Min</span>
+                                        <span>Mid</span>
+                                        <span>Max</span>
                                     </div>
                                 </div>
                             </div>
-                             
-
+                            
                             <!-- Bounce Speed (omegaN) -->
                             <div class="tuning-slider-group">
                                 <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">settings_motion_mode</span> Bounce Speed</h6>
@@ -789,6 +795,23 @@
                                 </div>
                             </div>
 
+                            <!-- Balance (Rear/Front) -->
+                            <div class="tuning-slider-group">
+                                <h6 class="mb-3"><span class="material-symbols-outlined icon-danger">balance</span> Balance (Rear/Front)</h6>
+                                <div class="slider-section">
+                                    <div class="slider-stepper-control" data-slider-key="balance">
+                                        <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Shift balance toward rear">-</button>
+                                        <div id="sliderBalance" class="slider-stepper-track"></div>
+                                        <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Shift balance toward front">+</button>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>Rear</span>
+                                        <span>Balanced</span>
+                                        <span>Front</span>
+                                    </div>
+                                </div>
+                            </div>
+
 
 
 
@@ -799,14 +822,14 @@
                 <!-- RCDCC Configuration Card -->
                 <div class="col-12 col-md-6">
                     <div class="card" id="rcdccConfigurationCard">
-                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
+                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white; cursor:pointer;" onclick="toggleCardCollapse('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed')">
                             <div>
                                 <span class="material-symbols-outlined" style="color: var(--danger);">arrows_input</span>
                                 Hardware Configuration
                             </div>
                             <div class="d-flex align-items-center gap-2">
-                                <span class="material-symbols-outlined icon-action" id="rcdccConfigurationLockIcon" title="Lock hardware configuration controls" onclick="toggleRcdccConfigurationLock(this)">lock_open_right</span>
-                                <span class="material-symbols-outlined icon-action" id="rcdccConfigurationChevron" title="Collapse hardware configuration card" onclick="toggleCardCollapse('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed')">keyboard_arrow_down</span>
+                                <span class="material-symbols-outlined icon-action" id="rcdccConfigurationLockIcon" title="Lock hardware configuration controls" onclick="event.stopPropagation(); toggleRcdccConfigurationLock(this)">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action" id="rcdccConfigurationChevron" title="Collapse hardware configuration card">keyboard_arrow_down</span>
                             </div>
                         </div>
                         <div class="card-body" id="rcdccConfigurationCardBody">
@@ -828,13 +851,13 @@
                             <!-- RCDCC Orientation sub-section -->
                             <!-- <hr class="mt-4 mb-3"> -->
                             <div id="mpuOrientationCard">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-3" style="cursor:pointer;" onclick="toggleCardCollapse('mpuOrientationCard', 'mpuOrientationChevron', 'mpuOrientationCardCollapsed')">
                                     <h6 class="mb-0">
                                         <span class="material-symbols-outlined icon-danger">mobile_rotate</span>
                                         RCDCC Setup
                                     </h6>
                                     <div class="d-flex align-items-center gap-2">
-                                        <span class="material-symbols-outlined icon-action" id="mpuOrientationChevron" title="Collapse RCDCC orientation" onclick="toggleCardCollapse('mpuOrientationCard', 'mpuOrientationChevron', 'mpuOrientationCardCollapsed')">keyboard_arrow_down</span>
+                                        <span class="material-symbols-outlined icon-action" id="mpuOrientationChevron" title="Collapse RCDCC orientation">keyboard_arrow_down</span>
                                     </div>
                                 </div>
                                 <div class="card-body p-0" id="mpuOrientationCardBody">
@@ -882,13 +905,13 @@
                             <!-- Per-Servo Settings sub-section -->
                             <hr class="mt-4 mb-3">
                             <div id="perServoSettingsCard">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-3" style="cursor:pointer;" onclick="toggleCardCollapse('perServoSettingsCard', 'perServoSettingsChevron', 'perServoSettingsCardCollapsed')">
                                     <h6 class="mb-0">
                                         <span class="material-symbols-outlined icon-danger">tune</span>
                                         Per-Servo Setup
                                     </h6>
                                     <div class="d-flex align-items-center gap-2">
-                                        <span class="material-symbols-outlined icon-action" id="perServoSettingsChevron" title="Collapse per-servo setup" onclick="toggleCardCollapse('perServoSettingsCard', 'perServoSettingsChevron', 'perServoSettingsCardCollapsed')">keyboard_arrow_down</span>
+                                        <span class="material-symbols-outlined icon-action" id="perServoSettingsChevron" title="Collapse per-servo setup">keyboard_arrow_down</span>
                                     </div>
                                 </div>
                                 <div class="card-body p-0" id="perServoSettingsCardBody">
@@ -1045,67 +1068,6 @@
                                 </div>
                             </div>
 
-                            <!-- Trim / Rotation sub-section -->
-                            <hr class="mt-4 mb-3">
-                            <div id="servoSettingsCard">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="mb-0">
-                                        <span class="material-symbols-outlined icon-danger">expand_circle_down</span>
-                                        Chassis Setup
-                                    </h6>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="material-symbols-outlined icon-action" id="servoSettingsChevron" title="Collapse ride height" onclick="toggleCardCollapse('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed')">keyboard_arrow_down</span>
-                                    </div>
-                                </div>
-                                <div class="card-body p-0" id="servoSettingsCardBody">
-
-                                    <!-- Suspension Height -->
-                                    <div class="tuning-slider-group mb-3">
-                                        <h6 class="mb-3"><span class="material-symbols-outlined" style="color: var(--danger); transform: rotate(90deg);">arrows_outward</span> Suspension Height</h6>
-                                        <div class="slider-section">
-                                            <div class="slider-stepper-control" data-slider-key="rideHeight">
-                                                <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease suspension height">-</button>
-                                                <div id="sliderRideHeight" class="slider-stepper-track"></div>
-                                                <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase suspension height">+</button>
-                                            </div>
-                                            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                <span>Min</span>
-                                                <span>Mid</span>
-                                                <span>Max</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Auto Calibrate & Level -->
-                                    <div class="servo-settings-footer">
-                                        <button type="button" class="btn btn-gold w-100" id="servoAutoCalibrateBtn">
-                                            <span class="material-symbols-outlined">wand_stars</span>
-                                            Auto Calibrate
-                                        </button>
-                                    </div>
-
-                                    <div id="autoLevelProgressContainer" class="col-12" style="display: none; padding-bottom: 0.5rem;">
-                                        <div class="card">
-                                            <div class="card-body">
-                                                <div class="bubble-level-card">
-                                                    <div class="bubble-level-status" id="bubbleLevelStatus">Ready to auto-level.</div>
-                                                    <div class="bubble-level-face" id="bubbleLevelFace">
-                                                        <div class="bubble-level-crosshair horizontal"></div>
-                                                        <div class="bubble-level-crosshair vertical"></div>
-                                                        <div class="bubble-level-target"></div>
-                                                        <div class="bubble-level-bubble" id="bubbleLevelBubble"></div>
-                                                        <div class="bubble-level-badge" id="bubbleLevelBadge">LEVEL</div>
-                                                    </div>
-                                                    <div class="bubble-level-label">Chassis Level Indicator (±5°)</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-
-                                </div>
-                            </div>
-
                             <!-- Save Settings to NVS (persistent storage) -->
                             <!-- <hr class="mt-4 mb-3"> -->
                             <button id="system-save-btn" class="btn btn-secondary w-100" disabled onclick="savePage('system')">
@@ -1119,17 +1081,17 @@
                 <!-- Servo Card -->
                 <div class="col-12 col-md-6">
                     <div class="card" id="servoTestCard">
-                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white;">
+                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white; cursor:pointer;" onclick="toggleCardCollapse('servoTestCard', 'servoTestChevron', 'servoTestCardCollapsed')">
                             <div class="d-flex align-items-center gap-2">
                                 <span class="material-symbols-outlined" style="color: var(--danger);">
                                 info
                                 </span>
                                 <span>Servo Test</span>
                             </div>
-                            <span class="material-symbols-outlined icon-action" id="servoTestChevron" title="Collapse servo test" onclick="toggleCardCollapse('servoTestCard', 'servoTestChevron', 'servoTestCardCollapsed')">keyboard_arrow_down</span>
+                            <span class="material-symbols-outlined icon-action" id="servoTestChevron" title="Collapse servo test">keyboard_arrow_down</span>
                         </div>
                         <div class="card-body">
-                                <p style="text-align: left;">Use Raise and Lower buttons to move each servo to its maximum or minimum travel limit (limits are set by the servo's Min and Max values in Per-Servo Settings). This confirms the servo is responding and moving in the desired direction. If they are not, adjust the Invert slider in the Hardware Configuration > Per-Servo Setup.</p>
+
                                 <div class="servo-test-grid">
                                     <div class="servo-settings-section tuning-slider-group">
                                         <div class="servo-settings-title">
@@ -1199,146 +1161,322 @@
                         </div>
                         <div class="card-body" id="formulasCardBody" style="display: none;">
                             <div class="row">
-                                <div class="col-12 col-md-6 mb-3">
-                                    <div class="text-muted small">
-                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">lock</span> Servo Lock
-                                        </div>
-                                        <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div>Use the padlock in Servo Trim &amp; Direction to freeze both the trim sliders and the CW or CCW direction buttons before a test drive.</div>
-                                            <div style="margin-top: 5px;">Its purpose is to prevent accidental edits while scrolling, reviewing values, or handing the phone to someone else.</div>
-                                        </div>
-                                    </div>
-                                </div>
 
+                                <!-- Mode -->
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrows_input</span> Hardware Configuration
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Mode
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div>Select how your DCC is physically mounted. The arrow is printed on the box.</div>
-                                            <div style="margin-top: 5px;">Correct orientation is critical for accurate roll and pitch readings, so change this any time the controller is re-mounted.</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Ride Height Formula -->
-                                <div class="col-12 col-md-6 mb-3">
-                                    <div class="text-muted small">
-                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">height</span> Ride Height
-                                        </div>
-                                        <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div><strong>Definition:</strong> Sets the suspension's resting position, controlling how high or low the chassis sits before the vehicle starts reacting to movement.</div>
-                                            <div><strong>Formula:</strong> servoOffset = rideHeight × (maxServo - minServo) / 100</div>
+                                            <div><strong>Definition:</strong> Selects how tuning values are driven.</div>
                                             <div style="margin-top: 5px;">
-                                                <div>0% = Lowest ride height (maximum compression)</div>
-                                                <div>50% = Mid-range ride height (neutral)</div>
-                                                <div>100% = Highest ride height (maximum extension)</div>
+                                                <div><strong>Auto:</strong> Uses Drive Mode to automatically blend key tuning parameters for quick setup and easy profile switching.</div>
+                                                <div><strong>Custom:</strong> Unlocks individual sliders so you can tune each parameter directly for maximum control.</div>
                                             </div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Start in Auto to get close quickly, then switch to Custom for fine tuning once handling is stable.</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Damping Formula -->
+                                <!-- Drive Mode -->
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">waves</span> Damping
-                                            
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">directions_car</span> Drive Mode
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div><strong>Definition:</strong> Controls how much the system resists vertical motion, smoothing bumps and limiting bounce after the chassis is disturbed.</div>
-                                            <div><strong>Workflow:</strong> Start around the default and run over your roughest section. Increase damping if the truck keeps bouncing after bumps; reduce damping if it feels harsh and loses grip on choppy terrain.</div>
-                                            <div><strong>Formula:</strong> verticalEffect = -verticalAccel × damping</div>
+                                            <div><strong>Definition:</strong> Master blends between fully passive (no servo movement) and fully re-active suspension response.</div>
                                             <div style="margin-top: 5px;">
-                                                <div>0.1 = Soft damping (minimal vertical compensation)</div>
-                                                <div>0.8 = Default normal damping</div>
-                                                <div>2.0 = Stiff damping (maximum vertical compensation)</div>
+                                                <div>0% = Off — servos hold position, no re-active response</div>
+                                                <div>50% = Mixed — partial re-active response blended in</div>
+                                                <div>100% = Sport — full re-active suspension engaged</div>
                                             </div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Start at 50% on a new build and increase once servo direction and range are confirmed correct.</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Stiffness Formula -->
+                                <!-- Suspension Height -->
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">compress</span> Stiffness
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrows_outward</span> Suspension Height
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div><strong>Definition:</strong> Sets how strongly the suspension counters body roll and pitch when the vehicle leans under cornering, braking, or acceleration.</div>
-                                            <div><strong>Workflow:</strong> Tune stiffness after ride height and damping feel close. Raise it if body roll is excessive in turns; lower it if the chassis feels twitchy or over-corrects during quick transitions.</div>
-                                            <div><strong>Formula:</strong> rollEffect = roll × stiffness, pitchEffect = pitch × stiffness</div>
+                                            <div><strong>Definition:</strong> Sets the neutral resting position of all four servos — how high or low the chassis sits before any re-active correction is applied.</div>
                                             <div style="margin-top: 5px;">
-                                                <div>0.5 = Soft response (minimal roll/pitch correction)</div>
-                                                <div>1.0 = Default normal response</div>
-                                                <div>3.0 = Stiff response (maximum roll/pitch correction)</div>
+                                                <div>0% = Lowest (maximum compression)</div>
+                                                <div>50% = Mid-range neutral (default)</div>
+                                                <div>100% = Highest (maximum extension)</div>
                                             </div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Set this with the vehicle on a flat surface. Adjust until the chassis sits at the desired ride height before tuning response.</div>
+                                            <div style="margin-top: 5px;"><strong>Warning:</strong> If chassis is set at upper or lower limits, re-active correction will be limited.</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Reaction Speed Formula -->
-                                <div class="col-12 col-md-6 mb-3">
-                                    <div class="text-muted small">
-                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">speed</span>
-                                            Reaction Speed
-                                        </div>
-                                        <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div><strong>Definition:</strong> Determines how quickly suspension corrections are applied after motion is detected, balancing sharp response against smoothness.</div>
-                                            <div><strong>Workflow:</strong> Set reaction speed to match terrain and driving style. Increase it for high-speed or aggressive driving where fast correction helps, and decrease it for crawling or mixed terrain to keep motion smoother.</div>
-                                            <div><strong>Formula:</strong> smoothing = 1.0 / (1.0 + (5.0 / reactionSpeed))</div>
-                                            <div style="margin-top: 5px;">
-                                                <div>0.1 = Very slow/smooth response (smoothing ≈ 0.02)</div>
-                                                <div>1.0 = Default balanced response (smoothing ≈ 0.17)</div>
-                                                <div>5.0 = Very fast/aggressive response (smoothing ≈ 0.5)</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Balance Formula -->
+                                <!-- Balance -->
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
                                             <span class="material-symbols-outlined" style="color: var(--danger);">balance</span> Balance (Rear/Front)
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div><strong>Definition:</strong> Splits pitch correction between the front and rear axles so you can favor nose control, rear stability, or an even mix.</div>
-                                            <div><strong>Workflow:</strong> Use this after core response is dialed in. Shift toward front if the nose dives too much under braking, or toward rear if acceleration squat and rear instability are the bigger issue.</div>
-                                            <div><strong>Formula:</strong> frontFactor = balance, rearFactor = 1.0 - balance</div>
+                                            <div><strong>Definition:</strong> Splits pitch correction between front and rear axles — favor nose control, rear stability, or an even mix.</div>
                                             <div style="margin-top: 5px;">
-                                                <div>0% = All rear (front: 0%, rear: 100% pitch effect)</div>
-                                                <div>50% = Balanced (front: 50%, rear: 50% pitch effect)</div>
-                                                <div>100% = All front (front: 100%, rear: 0% pitch effect)</div>
+                                                <div>Rear = All pitch correction at the rear axle</div>
+                                                <div>Balanced = Equal split front and rear (default)</div>
+                                                <div>Front = All pitch correction at the front axle</div>
                                             </div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Dial this in last. Shift toward Front if the nose dives under braking; shift toward Rear if acceleration squat is the bigger issue.</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Sensor Rate Formula -->
+                                <!-- Bounce Speed -->
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">memory</span> Sensor Refresh Rate
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">settings_motion_mode</span> Bounce Speed
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div>Controls sensor reading and suspension update frequency. Higher = faster response but more CPU load. 25 Hz is recommended.</div>
+                                            <div><strong>Definition:</strong> The natural frequency of the suspension model — how quickly it wants to oscillate and recover after a disturbance.</div>
                                             <div style="margin-top: 5px;">
-                                                <div>5 Hz = Low/Conservative (less CPU load)</div>
-                                                <div>25 Hz = Recommended/Balanced (default)</div>
-                                                <div>50 Hz = High/Fast (maximum CPU load)</div>
+                                                <div>Slow = Soft, floaty response (low frequency)</div>
+                                                <div>Balanced = Default recommended starting point</div>
+                                                <div>Fast = Snappy, stiff response (high frequency)</div>
                                             </div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Increase for rock crawling where slow deliberate movement is needed; decrease for high-speed runs to keep corrections quick.</div>
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- Bounce Decay -->
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">airwave</span> Bounce Decay
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Damping ratio — controls how quickly oscillations die out after the chassis is disturbed.</div>
+                                            <div style="margin-top: 5px;">
+                                                <div>Bouncy = Underdamped, servos oscillate after bumps</div>
+                                                <div>Balanced = Critically damped, settles cleanly (default)</div>
+                                                <div>Firm = Overdamped, very little bounce but slower recovery</div>
+                                            </div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> If the chassis keeps bobbing after a bump, increase decay. If it feels sluggish returning to neutral, decrease it.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Motion Amount -->
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrows_outward</span> Motion Amount
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Scales the total servo travel used for active corrections — how dramatically the chassis moves in response to roll and pitch input.</div>
+                                            <div style="margin-top: 5px;">
+                                                <div>Small = Subtle corrections, minimal visible movement</div>
+                                                <div>Normal = Default balanced travel (recommended)</div>
+                                                <div>Large = Exaggerated movement, maximum visual effect</div>
+                                            </div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Keep at Normal until other parameters feel right, then increase for more dramatic lean and squat effects.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Noise Guard -->
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">noise_aware</span> Noise Guard
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Deadband threshold — sensor readings below this level are ignored, preventing servos from reacting to vibration, idle noise, or micro-movements.</div>
+                                            <div style="margin-top: 5px;">
+                                                <div>Off = No filtering, reacts to all sensor input</div>
+                                                <div>Normal = Default recommended threshold</div>
+                                                <div>High = Only reacts to significant movement</div>
+                                            </div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> If servos twitch or hunt while the vehicle is stationary, increase Noise Guard until they settle.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Reaction Speed -->
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">speed</span> Reaction Speed
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Low-pass filter speed — how quickly corrections ramp up after motion is detected. Balances sharp response against smooth movement.</div>
+                                            <div style="margin-top: 5px;">
+                                                <div>Slow = Gradual, smooth corrections (heavy filtering)</div>
+                                                <div>Balanced = Default recommended starting point</div>
+                                                <div>Fast = Immediate, sharp corrections (minimal filtering)</div>
+                                            </div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Increase for high-speed bashing; decrease for crawling or mixed terrain to keep motion looking natural.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Noise Latch -->
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">lock</span> Noise Latch
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Hysteresis band around the Noise Guard threshold — once the signal drops back inside the deadband, it must fall further before corrections stop. Prevents rapid on/off chatter at the edge.</div>
+                                            <div style="margin-top: 5px;">
+                                                <div>Low = Corrections cut out as soon as signal re-enters deadband</div>
+                                                <div>Normal = Small buffer prevents rapid toggling (default)</div>
+                                                <div>High = Wide buffer, corrections linger slightly longer</div>
+                                            </div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Only adjust if servos are flickering rapidly at the edge of movement. Raise slightly until chatter stops.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Help: Hardware Configuration Card -->
+                <div class="col-12 col-md-6">
+                    <div class="card" id="helpHardwareConfigCard">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" onclick="toggleCardCollapse('helpHardwareConfigCard', 'helpHardwareConfigChevron', 'helpHardwareConfigCardCollapsed')">
+                            <div>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">arrows_input</span> Help: Hardware Configuration
+                            </div>
+                            <span class="material-symbols-outlined" id="helpHardwareConfigChevron" style="color: var(--high-impact-color);">keyboard_arrow_right</span>
+                        </div>
+                        <div class="card-body" style="display: none;">
+                            <div class="row">
+
+                                <!-- How it works -->
+                                <div class="col-12 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">info</span> How It Works
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <ul class="mb-0 ps-3" style="display:flex;flex-direction:column;gap:4px;">
+                                                <li>Changes apply to the vehicle <strong>in real-time</strong> — adjust a setting and observe the effect immediately.</li>
+                                                <li>If something goes wrong, <strong>power cycle the RCDCC unit</strong> — it will revert to the last saved configuration automatically.</li>
+                                                <li>Once settings are dialed in, tap <strong>Save Settings</strong>. This becomes the new last known good and will be loaded automatically on the next power cycle.</li>
+                                                <li>The <strong>lock icon</strong> on each section prevents accidental changes.</li>
+                                                <li><strong>Sensor Refresh Rate</strong> controls how often the accelerometer is sampled and suspension corrections are calculated. Higher rates respond faster but increase CPU load. <strong>25 Hz</strong> (25 times per second) is the recommended default — only go higher if corrections feel sluggish, or lower to reduce heat/power consumption.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Invert -->
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">sync_alt</span> Invert
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Reverses the direction a servo moves in response to roll and pitch inputs.</div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Enable if a corner rises when it should drop. Use Servo Test (Raise/Lower) first to confirm which servos need inverting before a test drive.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Trim -->
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">tune</span> Trim
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> Fine offset applied to a servo's neutral center position, independent of Suspension Height.</div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Use trim only for small mechanical offsets (e.g. a link rod that doesn't sit perfectly level). Large trim values are a sign that Min/Max need adjusting instead.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Min / Max -->
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">expand</span> Min &amp; Max
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div><strong>Definition:</strong> The microsecond pulse-width limits for each servo — the physical travel range the firmware is allowed to command.</div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Set Min and Max to the safe mechanical limits of each corner's linkage. Going beyond these risks binding gears or damaging components. Use Raise/Lower in Servo Test to find the limits safely.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help: Servo Test Card -->
+                <div class="col-12 col-md-6">
+                    <div class="card" id="helpServoTestCard">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" onclick="toggleCardCollapse('helpServoTestCard', 'helpServoTestChevron', 'helpServoTestCardCollapsed')">
+                            <div>
+                                <span class="material-symbols-outlined" style="color: var(--danger);">info</span> Help: Servo Test
+                            </div>
+                            <span class="material-symbols-outlined" id="helpServoTestChevron" style="color: var(--high-impact-color);">keyboard_arrow_right</span>
+                        </div>
+                        <div class="card-body" style="display: none;">
+                            <div class="row">
+
+                                <!-- Purpose -->
+                                <div class="col-12 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">info</span> Purpose
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div>Use the <strong>Raise</strong> and <strong>Lower</strong> buttons to move each servo to its maximum or minimum travel limit. Limits are defined by the Min and Max values in Per-Servo Setup.</div>
+                                            <div style="margin-top: 5px;">This confirms each servo is responding and moving in the correct direction. If a corner moves in the wrong direction, enable <strong>Invert</strong> for that servo in Hardware Configuration &rsaquo; Per-Servo Setup.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Raise -->
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrow_upward</span> Raise
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div>Commands the servo to its <strong>Max</strong> position. The corner should rise (extend upward).</div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> If the corner drops instead of rises, enable Invert for that servo.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Lower -->
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrow_downward</span> Lower
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            <div>Commands the servo to its <strong>Min</strong> position. The corner should drop (compress downward).</div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> If binding or resistance is felt before full travel, reduce Min or Max to stay within the safe mechanical range.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </section>
 
@@ -1372,7 +1510,12 @@
                 </section>
         <section id="lights" class="page-section">
             <div class="section-title-row">
-                <h2 class="section-title">Lights</h2>
+                <div class="d-flex align-items-center justify-content-between w-100 gap-2">
+                    <h2 class="section-title">Lights</h2>
+                    <button type="button" id="basicScenarioStripSwitch" class="btn btn-outline-secondary" aria-pressed="false" onclick="basicScenarioStripToggle()">
+                        <span id="basicScenarioStripLabel">Lights are OFF</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Lights Controls -->
@@ -1382,7 +1525,7 @@
 
                     <div class="col-12">
                     <div class="card" id="lightingProfilesCard">
-                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor:pointer;" onclick="toggleLightingProfilesCard()">
                             <div class="d-flex align-items-center gap-2">
                                 <span style="position:relative;display:inline-flex;width:22px;height:22px;">
                                     <span class="material-symbols-outlined" style="font-size:22px;color:var(--danger);line-height:1;">lightbulb</span>
@@ -1391,8 +1534,8 @@
                                 Lighting Profiles
                             </div>
                             <div class="d-flex align-items-center gap-2 profile-card-header-actions">
-                                <span class="material-symbols-outlined icon-action" id="lightingProfilesLockIcon" title="Lock lighting profiles to prevent changes" onclick="toggleLightingProfilesLock(this)">lock_open_right</span>
-                                <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="lightingProfilesChevron" title="Collapse lighting profiles" onclick="toggleLightingProfilesCard()">keyboard_arrow_down</span>
+                                <span class="material-symbols-outlined icon-action" id="lightingProfilesLockIcon" title="Lock lighting profiles to prevent changes" onclick="event.stopPropagation(); toggleLightingProfilesLock(this)">lock_open_right</span>
+                                <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="lightingProfilesChevron" title="Collapse lighting profiles">keyboard_arrow_down</span>
                             </div>
                         </div>
                         <div class="card-body p-2" id="lightingProfilesCardBody" style="background:#1a1a1a;">
@@ -1415,26 +1558,18 @@
                     </div>
                     </div>
             
-                    <!-- Lights Master Toggle -->
-                    <div class="col-12">
-                        <button type="button" id="basicScenarioStripSwitch" class="btn btn-outline-secondary w-100" aria-pressed="false" onclick="basicScenarioStripToggle()">
-                            <!-- <span class="material-symbols-outlined" style="vertical-align:middle;font-size:1.1em;">light_off</span> -->
-                            <span id="basicScenarioStripLabel">Lights are OFF</span>
-                        </button>
-                    </div>
-
                     <!-- Basic Lights Test (Stage 1) -->
                     <div class="col-12">
                         <div class="card" id="basicLightsTestCard">
                             
-                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
+                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor:pointer;" onclick="toggleLightingControlCard()">
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="material-symbols-outlined" style="color: var(--danger);">tune</span>
                                     Profile Look
                                 </div>
                                 <div class="d-flex align-items-center gap-2 profile-card-header-actions">
-                                    <span class="material-symbols-outlined icon-action" id="lightingControlLockIcon" title="Lock profile look to prevent changes" onclick="toggleLightingControlLock(this)">lock_open_right</span>
-                                    <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="lightingControlChevron" title="Collapse profile look" onclick="toggleLightingControlCard()">keyboard_arrow_down</span>
+                                    <span class="material-symbols-outlined icon-action" id="lightingControlLockIcon" title="Lock profile look to prevent changes" onclick="event.stopPropagation(); toggleLightingControlLock(this)">lock_open_right</span>
+                                    <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="lightingControlChevron" title="Collapse profile look">keyboard_arrow_down</span>
                                 </div>
                             </div>
                             <div class="card-body" id="basicLightsTestCardBody">
@@ -1912,17 +2047,106 @@
                             <span class="material-symbols-outlined" id="garageHelpChevron" style="color: var(--high-impact-color);">keyboard_arrow_right</span>
                         </div>
                         <div class="card-body" id="garageHelpCardBody" style="display:none;">
-                            <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.9;">
-                                <li><strong>Adding a vehicle</strong> &mdash; Tap the <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">directions_car</span>+ button in the card header to scan for a nearby ESP32 and add it to your garage.</li>
-                                <li><strong>Connecting</strong> &mdash; Tap a vehicle card to connect. The card turns green when connected.</li>
-                                <li><strong>Disconnecting</strong> &mdash; Long-press (hold) a connected card, or tap &nbsp;<strong>⋮</strong>&nbsp; &rarr; <em>Disconnect</em> from the menu.</li>
-                                <li><strong>Navigating</strong> &mdash; Tap &nbsp;<strong>⋮</strong>&nbsp; &rarr; <em>Suspension</em>, <em>Lights</em>, or <em>FPV</em> to jump directly to that section for the selected vehicle.</li>
-                                <li><strong>Renaming</strong> &mdash; Tap &nbsp;<strong>⋮</strong>&nbsp; &rarr; <em>Rename</em> to give your vehicle a custom display name (up to 10 characters).</li>
-                                <li><strong>About</strong> &mdash; Tap &nbsp;<strong>⋮</strong>&nbsp; &rarr; <em>About</em> to see the device MAC ID and firmware details.</li>
-                                <li><strong>Backup</strong> &mdash; Tap <em>Backup</em> to export your garage, light groups, and lighting profiles to a JSON file. Store it somewhere safe.</li>
-                                <li><strong>Restore</strong> &mdash; Tap <em>Restore</em> to import a previously exported backup file. This replaces current data.</li>
-                                <li><strong>Deleting a vehicle</strong> &mdash; Tap &nbsp;<strong>⋮</strong>&nbsp; &rarr; <em>Delete</em>. All driving profiles, lighting profiles, and light groups saved for that truck are also removed.</li>
-                            </ol>
+                            <div class="row">
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">directions_car</span> Adding a Vehicle
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            Tap the car+ button in the Garage card header to scan for a nearby ESP32 and add it to your garage.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">bluetooth</span> Connecting
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            Tap a vehicle card to connect. The card turns green when connected.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">link_off</span> Disconnecting
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            Long-press a connected card, or open the three-dot menu and choose Disconnect.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">route</span> Quick Navigation
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            Use the three-dot menu to jump directly to Suspension, Lights, or FPV for the selected vehicle.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">edit</span> Renaming
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            Open the three-dot menu and select Rename to set a custom display name (up to 10 characters).
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">info</span> About
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            Open the three-dot menu and select About to view MAC ID and firmware details.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">upload</span> Backup
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            Tap Backup to export garage, light groups, and lighting profiles to a JSON file.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">download</span> Restore
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            Tap Restore to import a backup file. This replaces current stored data.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 mb-3">
+                                    <div class="text-muted small">
+                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">delete</span> Deleting a Vehicle
+                                        </div>
+                                        <div style="font-size: 0.7rem; line-height: 1.4;">
+                                            Open the three-dot menu and choose Delete. Driving profiles, lighting profiles, and light groups for that truck are also removed.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

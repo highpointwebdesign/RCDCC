@@ -3146,7 +3146,8 @@
             user-select: none;
         }
 
-        .lights-collapse-chevron {
+        .lights-collapse-chevron,
+        .card-collapse-chevron {
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -3161,8 +3162,16 @@
             will-change: transform;
         }
 
-        .lights-collapse-chevron.is-collapsed {
+        .lights-collapse-chevron.is-collapsed,
+        .card-collapse-chevron.is-collapsed {
             transform: rotate(-180deg);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .lights-collapse-chevron,
+            .card-collapse-chevron {
+                transition: none;
+            }
         }
 
         .hardware-setup-title-wrap {

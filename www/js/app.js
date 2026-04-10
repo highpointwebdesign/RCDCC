@@ -98,8 +98,8 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.676';
-        const BUILD_DATE = '2026-04-09';
+        const APP_VERSION = '1.1.693';
+        const BUILD_DATE = '2026-04-10';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -744,7 +744,7 @@ window.addEventListener('beforeunload', function(event) {
         // pageKey: 'tuning' | 'servo' | 'system'
         const dirtyPages = new Set();
         const DIRTY_PAGE_LABELS = {
-            tuning: 'Suspension',
+            tuning: 'Tuning',
             servo: 'Trim / Rotation',
             system: 'Hardware Configuration'
         };
@@ -1296,8 +1296,10 @@ window.addEventListener('beforeunload', function(event) {
             const chevron = document.getElementById('garageHelpChevron');
             if (!cardBody || !chevron) return;
             const isCollapsed = cardBody.style.display === 'none';
-            cardBody.style.display = isCollapsed ? '' : 'none';
-            chevron.textContent = isCollapsed ? 'keyboard_arrow_down' : 'keyboard_arrow_right';
+            setCollapsibleBodyState(cardBody, !isCollapsed, true);
+            chevron.textContent = 'keyboard_arrow_down';
+            chevron.classList.add('card-collapse-chevron');
+            chevron.classList.toggle('is-collapsed', !isCollapsed);
             localStorage.setItem('garageHelpCardCollapsed', isCollapsed ? 'false' : 'true');
         }
         window.toggleGarageHelpCard = toggleGarageHelpCard;
@@ -4061,6 +4063,33 @@ window.addEventListener('beforeunload', function(event) {
 
             // Initialize bubble level container
             initBubbleLevelContainer();
+
+            // First-run behavior: default all Tuning and Lights cards to collapsed.
+            // If a user has already toggled a card, keep their saved preference.
+            const initialCollapsedCardKeys = [
+                'drivingProfilesCardCollapsed',
+                'tuningParametersCardCollapsed',
+                'mpuOrientationCardCollapsed',
+                'perServoSettingsCardCollapsed',
+                'servoSettingsCardCollapsed',
+                'servoTestCardCollapsed',
+                'rcdccConfigurationCardCollapsed',
+                'formulasCardCollapsed',
+                'helpHardwareConfigCardCollapsed',
+                'helpServoTestCardCollapsed',
+                'lightingProfilesCardCollapsed',
+                'lightingControlCardCollapsed',
+                'basicLedFxOutputCardCollapsed',
+                'basicActiveLedAllocationCardCollapsed',
+                'manageLightGroupsCardCollapsed',
+                'hardwareSetupCardCollapsed',
+                'lightsGuideCardCollapsed'
+            ];
+            initialCollapsedCardKeys.forEach((key) => {
+                if (localStorage.getItem(key) === null) {
+                    localStorage.setItem(key, 'true');
+                }
+            });
             
             // Restore tuning parameters lock state from localStorage
             const tuningLocked = localStorage.getItem('tuningParametersLocked') === 'true';
@@ -4090,17 +4119,30 @@ window.addEventListener('beforeunload', function(event) {
             const formulasCardBody = document.getElementById('formulasCardBody');
             const formulasChevron = document.getElementById('formulasChevron');
             if (formulasCardBody && formulasChevron) {
-                formulasCardBody.style.display = formulasCollapsed ? 'none' : 'block';
-                formulasChevron.textContent = formulasCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+                setCollapsibleBodyState(formulasCardBody, formulasCollapsed, false);
+                formulasChevron.textContent = 'keyboard_arrow_down';
+                formulasChevron.classList.add('card-collapse-chevron');
+                formulasChevron.classList.toggle('is-collapsed', formulasCollapsed);
             }
 
             const lightsGuideCollapsed = localStorage.getItem('lightsGuideCardCollapsed') === 'true';
             const lightsGuideCardBody = document.getElementById('lightsGuideCardBody');
             const lightsGuideChevron = document.getElementById('lightsGuideChevron');
             if (lightsGuideCardBody && lightsGuideChevron) {
-                lightsGuideCardBody.style.display = lightsGuideCollapsed ? 'none' : 'block';
+                setCollapsibleBodyState(lightsGuideCardBody, lightsGuideCollapsed, false);
                 lightsGuideChevron.textContent = 'keyboard_arrow_down';
+                lightsGuideChevron.classList.add('card-collapse-chevron');
                 lightsGuideChevron.classList.toggle('is-collapsed', lightsGuideCollapsed);
+            }
+
+            const garageHelpCollapsed = localStorage.getItem('garageHelpCardCollapsed') !== 'false';
+            const garageHelpCardBody = document.getElementById('garageHelpCardBody');
+            const garageHelpChevron = document.getElementById('garageHelpChevron');
+            if (garageHelpCardBody && garageHelpChevron) {
+                setCollapsibleBodyState(garageHelpCardBody, garageHelpCollapsed, false);
+                garageHelpChevron.textContent = 'keyboard_arrow_down';
+                garageHelpChevron.classList.add('card-collapse-chevron');
+                garageHelpChevron.classList.toggle('is-collapsed', garageHelpCollapsed);
             }
 
             syncCardCollapseState('tuningParametersCard', 'tuningParametersChevron', 'tuningParametersCardCollapsed');
@@ -4109,6 +4151,8 @@ window.addEventListener('beforeunload', function(event) {
             syncCardCollapseState('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed');
             syncCardCollapseState('servoTestCard', 'servoTestChevron', 'servoTestCardCollapsed');
             syncCardCollapseState('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed');
+            syncCardCollapseState('helpHardwareConfigCard', 'helpHardwareConfigChevron', 'helpHardwareConfigCardCollapsed');
+            syncCardCollapseState('helpServoTestCard', 'helpServoTestChevron', 'helpServoTestCardCollapsed');
             syncCardCollapseState('basicLedFxOutputCard', 'basicLedFxOutputChevron', 'basicLedFxOutputCardCollapsed');
             syncCardCollapseState('basicActiveLedAllocationCard', 'basicActiveLedAllocationChevron', 'basicActiveLedAllocationCardCollapsed');
             syncCardCollapseState('manageLightGroupsCard', 'manageLightGroupsChevron', 'manageLightGroupsCardCollapsed');
@@ -4307,6 +4351,14 @@ window.addEventListener('beforeunload', function(event) {
                 }
             });
             
+            // Clear All Local Storage button
+            window.clearAllLocalStorage = function clearAllLocalStorage() {
+                if (confirm('Clear ALL local storage? This cannot be undone.')) {
+                    localStorage.clear();
+                    location.reload();
+                }
+            };
+
             // Console Clear button
             const consoleClearBtn = document.getElementById('consoleClearBtn');
             if (consoleClearBtn) {
@@ -5364,7 +5416,7 @@ window.addEventListener('beforeunload', function(event) {
             updateBtn.disabled = !showUpdate || lightingProfileBusy || lightingProfilesLocked || !isBleConnected();
         }
 
-        function syncLightingProfilesCardUI() {
+        function syncLightingProfilesCardUI(animateBody = false) {
             const card = document.getElementById('lightingProfilesCard');
             const body = document.getElementById('lightingProfilesCardBody');
             const lockIcon = document.getElementById('lightingProfilesLockIcon');
@@ -5372,9 +5424,10 @@ window.addEventListener('beforeunload', function(event) {
             const isCollapsed = localStorage.getItem('lightingProfilesCardCollapsed') === 'true';
 
             if (card) card.classList.toggle('profile-card-locked', lightingProfilesLocked);
-            if (body) body.style.display = isCollapsed ? 'none' : 'block';
+            setCollapsibleBodyState(body, isCollapsed, animateBody);
             if (chevron) {
                 chevron.textContent = 'keyboard_arrow_down';
+                chevron.classList.add('card-collapse-chevron');
                 chevron.classList.toggle('is-collapsed', isCollapsed);
                 chevron.title = isCollapsed ? 'Expand lighting profiles' : 'Collapse lighting profiles';
             }
@@ -5385,7 +5438,7 @@ window.addEventListener('beforeunload', function(event) {
             }
         }
 
-        function syncLightingControlCardUI() {
+        function syncLightingControlCardUI(animateBody = false) {
             const card = document.getElementById('basicLightsTestCard');
             const body = document.getElementById('basicLightsTestCardBody') || card?.querySelector('.card-body');
             const lockIcon = document.getElementById('lightingControlLockIcon');
@@ -5394,7 +5447,7 @@ window.addEventListener('beforeunload', function(event) {
 
             if (card) card.classList.toggle('profile-card-locked', lightingControlLocked);
             if (body) {
-                body.style.display = isCollapsed ? 'none' : 'block';
+                setCollapsibleBodyState(body, isCollapsed, animateBody);
 
                 const controls = body.querySelectorAll('input, select, textarea, button');
                 controls.forEach(control => {
@@ -5404,6 +5457,7 @@ window.addEventListener('beforeunload', function(event) {
             }
             if (chevron) {
                 chevron.textContent = 'keyboard_arrow_down';
+                chevron.classList.add('card-collapse-chevron');
                 chevron.classList.toggle('is-collapsed', isCollapsed);
                 chevron.title = isCollapsed ? 'Expand lighting controls' : 'Collapse lighting controls';
             }
@@ -5426,7 +5480,7 @@ window.addEventListener('beforeunload', function(event) {
         function toggleLightingProfilesCard() {
             const isCollapsed = localStorage.getItem('lightingProfilesCardCollapsed') === 'true';
             localStorage.setItem('lightingProfilesCardCollapsed', isCollapsed ? 'false' : 'true');
-            syncLightingProfilesCardUI();
+            syncLightingProfilesCardUI(true);
         }
 
         function toggleLightingControlLock() {
@@ -5440,7 +5494,7 @@ window.addEventListener('beforeunload', function(event) {
         function toggleLightingControlCard() {
             const isCollapsed = localStorage.getItem('lightingControlCardCollapsed') === 'true';
             localStorage.setItem('lightingControlCardCollapsed', isCollapsed ? 'false' : 'true');
-            syncLightingControlCardUI();
+            syncLightingControlCardUI(true);
         }
 
         function syncManageLightGroupsLockUI() {
@@ -6978,7 +7032,7 @@ window.addEventListener('beforeunload', function(event) {
         function toggleHardwareSetupCard() {
             const isCollapsed = localStorage.getItem('hardwareSetupCardCollapsed') !== 'false';
             localStorage.setItem('hardwareSetupCardCollapsed', isCollapsed ? 'false' : 'true');
-            syncHardwareSetupCardUI();
+            syncHardwareSetupCardUI(true);
         }
 
         function toggleHardwareSetupLock() {
@@ -7001,7 +7055,7 @@ window.addEventListener('beforeunload', function(event) {
             chevron.setAttribute('aria-disabled', lightingControlLocked ? 'true' : 'false');
         }
 
-        function syncHardwareSetupCardUI() {
+        function syncHardwareSetupCardUI(animateBody = false) {
             const card = document.getElementById('hardwareSetupCard');
             const body = document.getElementById('hardwareSetupCardBody');
             const lockIcon = document.getElementById('hardwareSetupLockIcon');
@@ -7009,7 +7063,7 @@ window.addEventListener('beforeunload', function(event) {
             // Default is collapsed (true). 'false' means expanded.
             const isCollapsed = localStorage.getItem('hardwareSetupCardCollapsed') !== 'false';
             if (card) card.classList.toggle('profile-card-locked', hardwareSetupLocked);
-            if (body) body.style.display = isCollapsed ? 'none' : 'block';
+            setCollapsibleBodyState(body, isCollapsed, animateBody);
             if (body) {
                 const controls = body.querySelectorAll('input, select, textarea, button');
                 controls.forEach(control => {
@@ -7018,6 +7072,7 @@ window.addEventListener('beforeunload', function(event) {
                 });
             }
             if (chevron) {
+                chevron.classList.add('card-collapse-chevron');
                 chevron.classList.toggle('is-collapsed', isCollapsed);
                 chevron.title = isCollapsed ? 'Expand hardware setup' : 'Collapse hardware setup';
             }
@@ -9997,7 +10052,7 @@ window.addEventListener('beforeunload', function(event) {
             updateBtn.disabled = !showUpdate || drivingProfileBusy || drivingProfilesLocked;
         }
 
-        function syncDrivingProfilesCardUI() {
+        function syncDrivingProfilesCardUI(animateBody = false) {
             const card = document.getElementById('drivingProfilesCard');
             const body = document.getElementById('drivingProfilesCardBody');
             const lockIcon = document.getElementById('drivingProfilesLockIcon');
@@ -10005,9 +10060,11 @@ window.addEventListener('beforeunload', function(event) {
             const isCollapsed = localStorage.getItem('drivingProfilesCardCollapsed') === 'true';
 
             if (card) card.classList.toggle('profile-card-locked', drivingProfilesLocked);
-            if (body) body.style.display = isCollapsed ? 'none' : 'block';
+            setCollapsibleBodyState(body, isCollapsed, animateBody);
             if (chevron) {
-                chevron.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+                chevron.textContent = 'keyboard_arrow_down';
+                chevron.classList.add('card-collapse-chevron');
+                chevron.classList.toggle('is-collapsed', isCollapsed);
                 chevron.title = isCollapsed ? 'Expand driving profiles' : 'Collapse driving profiles';
             }
             if (lockIcon) {
@@ -10067,7 +10124,7 @@ window.addEventListener('beforeunload', function(event) {
         function toggleDrivingProfilesCard() {
             const isCollapsed = localStorage.getItem('drivingProfilesCardCollapsed') === 'true';
             localStorage.setItem('drivingProfilesCardCollapsed', isCollapsed ? 'false' : 'true');
-            syncDrivingProfilesCardUI();
+            syncDrivingProfilesCardUI(true);
         }
 
         async function runDrivingProfileOperation(context, action, options = {}) {
@@ -12260,18 +12317,12 @@ window.addEventListener('beforeunload', function(event) {
             
             if (!cardBody || !chevron) return;
             
-            // Toggle visibility
             const isCollapsed = cardBody.style.display === 'none';
-            
-            if (isCollapsed) {
-                cardBody.style.display = 'block';
-                chevron.textContent = 'keyboard_arrow_down';
-                localStorage.setItem('formulasCardCollapsed', 'false');
-            } else {
-                cardBody.style.display = 'none';
-                chevron.textContent = 'keyboard_arrow_right';
-                localStorage.setItem('formulasCardCollapsed', 'true');
-            }
+            setCollapsibleBodyState(cardBody, !isCollapsed, true);
+            chevron.textContent = 'keyboard_arrow_down';
+            chevron.classList.add('card-collapse-chevron');
+            chevron.classList.toggle('is-collapsed', !isCollapsed);
+            localStorage.setItem('formulasCardCollapsed', isCollapsed ? 'false' : 'true');
         }
 
         function toggleLightsGuideCard() {
@@ -12281,21 +12332,84 @@ window.addEventListener('beforeunload', function(event) {
             if (!cardBody || !chevron) return;
 
             const isCollapsed = cardBody.style.display === 'none';
-
-            if (isCollapsed) {
-                cardBody.style.display = 'block';
-                chevron.textContent = 'keyboard_arrow_down';
-                chevron.classList.remove('is-collapsed');
-                localStorage.setItem('lightsGuideCardCollapsed', 'false');
-            } else {
-                cardBody.style.display = 'none';
-                chevron.textContent = 'keyboard_arrow_down';
-                chevron.classList.add('is-collapsed');
-                localStorage.setItem('lightsGuideCardCollapsed', 'true');
-            }
+            setCollapsibleBodyState(cardBody, !isCollapsed, true);
+            chevron.textContent = 'keyboard_arrow_down';
+            chevron.classList.add('card-collapse-chevron');
+            chevron.classList.toggle('is-collapsed', !isCollapsed);
+            localStorage.setItem('lightsGuideCardCollapsed', isCollapsed ? 'false' : 'true');
         }
 
-        function syncCardCollapseState(cardId, chevronId, storageKey) {
+        function setCollapsibleBodyState(cardBody, isCollapsed, animate = false) {
+            if (!cardBody) return;
+
+            const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const shouldAnimate = !!animate && !prefersReducedMotion;
+
+            cardBody.classList.add('card-collapse-body');
+
+            if (cardBody._collapseTransitionHandler) {
+                cardBody.removeEventListener('transitionend', cardBody._collapseTransitionHandler);
+                cardBody._collapseTransitionHandler = null;
+            }
+
+            if (!shouldAnimate) {
+                cardBody.style.display = isCollapsed ? 'none' : 'block';
+                cardBody.style.height = '';
+                cardBody.style.overflow = '';
+                cardBody.style.opacity = '';
+                cardBody.style.transition = '';
+                return;
+            }
+
+            cardBody.style.display = 'block';
+            cardBody.style.overflow = 'hidden';
+            cardBody.style.transition = 'height 0.24s ease, opacity 0.2s ease';
+
+            if (isCollapsed) {
+                const startHeight = cardBody.scrollHeight;
+                cardBody.style.height = `${startHeight}px`;
+                cardBody.style.opacity = '1';
+                void cardBody.offsetHeight;
+                cardBody.style.height = '0px';
+                cardBody.style.opacity = '0';
+
+                const onCollapseEnd = (event) => {
+                    if (event.propertyName !== 'height') return;
+                    cardBody.style.display = 'none';
+                    cardBody.style.height = '';
+                    cardBody.style.overflow = '';
+                    cardBody.style.opacity = '';
+                    cardBody.style.transition = '';
+                    cardBody.removeEventListener('transitionend', onCollapseEnd);
+                    cardBody._collapseTransitionHandler = null;
+                };
+
+                cardBody._collapseTransitionHandler = onCollapseEnd;
+                cardBody.addEventListener('transitionend', onCollapseEnd);
+                return;
+            }
+
+            cardBody.style.height = '0px';
+            cardBody.style.opacity = '0';
+            void cardBody.offsetHeight;
+            cardBody.style.height = `${cardBody.scrollHeight}px`;
+            cardBody.style.opacity = '1';
+
+            const onExpandEnd = (event) => {
+                if (event.propertyName !== 'height') return;
+                cardBody.style.height = '';
+                cardBody.style.overflow = '';
+                cardBody.style.opacity = '';
+                cardBody.style.transition = '';
+                cardBody.removeEventListener('transitionend', onExpandEnd);
+                cardBody._collapseTransitionHandler = null;
+            };
+
+            cardBody._collapseTransitionHandler = onExpandEnd;
+            cardBody.addEventListener('transitionend', onExpandEnd);
+        }
+
+        function syncCardCollapseState(cardId, chevronId, storageKey, animate = false) {
             const card = document.getElementById(cardId);
             const chevron = document.getElementById(chevronId);
             if (!card || !chevron) return;
@@ -12304,13 +12418,10 @@ window.addEventListener('beforeunload', function(event) {
             if (!cardBody) return;
 
             const isCollapsed = localStorage.getItem(storageKey) === 'true';
-            cardBody.style.display = isCollapsed ? 'none' : 'block';
-            if (chevron.classList.contains('lights-collapse-chevron')) {
-                chevron.textContent = 'keyboard_arrow_down';
-                chevron.classList.toggle('is-collapsed', isCollapsed);
-            } else {
-                chevron.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
-            }
+            setCollapsibleBodyState(cardBody, isCollapsed, animate);
+            chevron.textContent = 'keyboard_arrow_down';
+            chevron.classList.add('card-collapse-chevron');
+            chevron.classList.toggle('is-collapsed', isCollapsed);
 
             // Keep the chassis Save Settings button hidden when Chassis Setup is collapsed.
             if (cardId === 'servoSettingsCard') {
@@ -12322,7 +12433,7 @@ window.addEventListener('beforeunload', function(event) {
         function toggleCardCollapse(cardId, chevronId, storageKey) {
             const isCollapsed = localStorage.getItem(storageKey) === 'true';
             localStorage.setItem(storageKey, isCollapsed ? 'false' : 'true');
-            syncCardCollapseState(cardId, chevronId, storageKey);
+            syncCardCollapseState(cardId, chevronId, storageKey, true);
         }
 
         function syncRcdccConfigurationLockUI() {
