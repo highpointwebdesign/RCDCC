@@ -972,6 +972,8 @@ bool LightsEngine::updateGroupFromJson(const String& payload) {
   EngineLightGroup& group = _groups[idx];
   const LightEffect prevEffect = group.effect;
   const bool prevEnabled = group.enabled;
+  const uint32_t prevColorPrimary = group.colorPrimary;
+  const uint32_t prevColorSecond = group.colorSecond;
   const uint8_t prevLedCount = group.ledCount;
   uint16_t prevLeds[LIGHTS_ENGINE_MAX_GROUP_LEDS];
   memcpy(prevLeds, group.leds, sizeof(prevLeds));
@@ -981,8 +983,28 @@ bool LightsEngine::updateGroupFromJson(const String& payload) {
     group.name[sizeof(group.name) - 1] = '\0';
   }
   if (doc.containsKey("enabled")) group.enabled = doc["enabled"].as<bool>();
-  if (doc.containsKey("color")) group.colorPrimary = _parseHex(doc["color"].as<const char*>());
-  if (doc.containsKey("color2")) group.colorSecond = _parseHex(doc["color2"].as<const char*>());
+  if (doc.containsKey("color")) {
+    JsonVariantConst colorValue = doc["color"];
+    if (colorValue.is<const char*>()) {
+      group.colorPrimary = _parseHex(colorValue.as<const char*>());
+    } else if (colorValue.is<unsigned long>() || colorValue.is<long>() || colorValue.is<unsigned int>() || colorValue.is<int>()) {
+      group.colorPrimary = static_cast<uint32_t>(colorValue.as<unsigned long>()) & 0xFFFFFFUL;
+    } else {
+      const String colorStr = colorValue.as<String>();
+      group.colorPrimary = _parseHex(colorStr.c_str());
+    }
+  }
+  if (doc.containsKey("color2")) {
+    JsonVariantConst color2Value = doc["color2"];
+    if (color2Value.is<const char*>()) {
+      group.colorSecond = _parseHex(color2Value.as<const char*>());
+    } else if (color2Value.is<unsigned long>() || color2Value.is<long>() || color2Value.is<unsigned int>() || color2Value.is<int>()) {
+      group.colorSecond = static_cast<uint32_t>(color2Value.as<unsigned long>()) & 0xFFFFFFUL;
+    } else {
+      const String color2Str = color2Value.as<String>();
+      group.colorSecond = _parseHex(color2Str.c_str());
+    }
+  }
   if (doc.containsKey("brightness")) group.brightness = constrain((int)doc["brightness"], 0, 100);
   if (doc.containsKey("effect")) group.effect = effectFromString(doc["effect"].as<const char*>());
 
@@ -996,12 +1018,27 @@ bool LightsEngine::updateGroupFromJson(const String& payload) {
   group.check2 = doc.containsKey("check2") ? doc["check2"].as<bool>() : meta.defaultCheck2;
   group.check3 = doc.containsKey("check3") ? doc["check3"].as<bool>() : meta.defaultCheck3;
 
-  if (doc.containsKey("leds")) {
-    JsonArray arr = doc["leds"].as<JsonArray>();
+  if (doc.containsKey("leds") || doc.containsKey("indices")) {
+    JsonArray arr = doc.containsKey("leds") ? doc["leds"].as<JsonArray>() : doc["indices"].as<JsonArray>();
     group.ledCount = 0;
-    for (uint16_t ledIdx : arr) {
+
+    // Heuristic: if there are no zeros and values are in 1.._numLeds, treat as 1-based indices.
+    bool sawZero = false;
+    bool allWithinOneBasedRange = true;
+    for (JsonVariantConst value : arr) {
+      const int raw = value.as<int>();
+      if (raw == 0) sawZero = true;
+      if (raw < 1 || raw > static_cast<int>(_numLeds)) allWithinOneBasedRange = false;
+    }
+    const bool oneBased = !sawZero && allWithinOneBasedRange;
+
+    for (JsonVariantConst value : arr) {
       if (group.ledCount >= LIGHTS_ENGINE_MAX_GROUP_LEDS) break;
-      if (ledIdx < _numLeds) group.leds[group.ledCount++] = ledIdx;
+      int ledIdx = value.as<int>();
+      if (oneBased) ledIdx -= 1;
+      if (ledIdx >= 0 && ledIdx < static_cast<int>(_numLeds)) {
+        group.leds[group.ledCount++] = static_cast<uint16_t>(ledIdx);
+      }
     }
   }
 
@@ -1013,12 +1050,13 @@ bool LightsEngine::updateGroupFromJson(const String& payload) {
 
   const bool effectChanged = (group.effect != prevEffect);
   const bool becameEnabled = (!prevEnabled && group.enabled);
+  const bool colorChanged = (group.colorPrimary != prevColorPrimary) || (group.colorSecond != prevColorSecond);
   const bool ledCountChanged = (group.ledCount != prevLedCount);
   const bool ledMapChanged = ledCountChanged || memcmp(prevLeds, group.leds, sizeof(prevLeds)) != 0;
 
   // Preserve runtime animation state across control updates so effects like
   // Larson keep sweeping continuously instead of restarting each payload.
-  if (effectChanged || becameEnabled || ledMapChanged) {
+  if (effectChanged || becameEnabled || colorChanged || ledMapChanged) {
     _resetGroupRuntime(group);
   }
 
@@ -1172,7 +1210,20 @@ void LightsEngine::_task(void* arg) {
 }
 
 void LightsEngine::_tick() {
-  // Basic diagnostic mode: write solid colour directly, skip all group logic.
+#if LIGHTS_DIAGNOSTIC_BASICONLY
+  // Diagnostic mode: ALWAYS render a pattern, either basicMode if set or default white diagnostic pattern
+  if (!_basicMode) {
+    // Auto-enable white diagnostic pattern so user can see LEDs are working
+    for (int i = 0; i < (int)_numLeds; i++) {
+      _setPixelColorMapped(i, 255, 255, 255);  // All white
+    }
+    _strip.show();
+    return;
+  }
+  // Otherwise fall through to basicMode rendering below
+#endif
+
+  // Basic mode: write solid colour directly, skip all group logic.
   if (_basicMode) {
     const int n = (_basicCount < 0) ? 0 : ((_basicCount > (int)_numLeds) ? (int)_numLeds : _basicCount);
     const uint8_t r = _basicR, g = _basicG, b = _basicB;
@@ -1184,19 +1235,88 @@ void LightsEngine::_tick() {
     return;
   }
 
+#if LIGHTS_DIAGNOSTIC_STABLE_SINE
+  // Deterministic diagnostic path: no group mapping, no random effects, no runtime churn.
+  const uint32_t nowMs = millis();
+  const uint16_t ledSpan = max<uint16_t>(_numLeds, 1U);
+  for (uint16_t i = 0; i < _numLeds; i++) {
+    const uint8_t phase = static_cast<uint8_t>(((nowMs / 6U) + ((i * 256U) / ledSpan)) & 0xFFU);
+    const uint8_t v = triwave8(phase);
+    _setPixelColorMapped(i, v, 0, 0);
+  }
+  _strip.show();
+  return;
+#endif
+
+  // Group rendering path (normal mode).
   if (xSemaphoreTake(_mutex, 0) != pdTRUE) return;
 
   memset(_frameBuffer, 0, _numLeds * sizeof(uint32_t));
 
   if (_master) {
     const uint32_t nowMs = millis();
+#if LIGHTS_DIAGNOSTIC_FORCE_FIRST_GROUP_FULL_STRIP
     for (int i = 0; i < _groupCount; i++) {
+      EngineLightGroup& src = _groups[i];
+      if (!src.enabled || src.ledCount == 0) continue;
+
+      const uint8_t savedLedCount = src.ledCount;
+      uint16_t savedLeds[LIGHTS_ENGINE_MAX_GROUP_LEDS];
+      memcpy(savedLeds, src.leds, sizeof(savedLeds));
+
+      src.ledCount = static_cast<uint8_t>(min<uint16_t>(_numLeds, LIGHTS_ENGINE_MAX_GROUP_LEDS));
+      for (uint8_t p = 0; p < src.ledCount; p++) {
+        src.leds[p] = p;
+      }
+
+      runEffect(src, nowMs);
+      for (uint8_t p = 0; p < src.ledCount; p++) {
+        _frameBuffer[p] = src.pixels[p];
+      }
+
+      src.ledCount = savedLedCount;
+      memcpy(src.leds, savedLeds, sizeof(savedLeds));
+      src.runtime.tick++;
+      break;
+    }
+#else
+    int renderOrder[LIGHTS_ENGINE_MAX_GROUPS];
+    int renderCount = 0;
+    for (int i = 0; i < _groupCount && i < LIGHTS_ENGINE_MAX_GROUPS; i++) {
       EngineLightGroup& group = _groups[i];
       if (!group.enabled || group.ledCount == 0) continue;
+      renderOrder[renderCount++] = i;
+    }
+
+    // Render broad/background groups first and narrower mapped groups last so mapped colors win overlaps.
+    // Ties use index priority where lower index renders later (wins).
+    for (int a = 0; a < renderCount - 1; a++) {
+      for (int b = a + 1; b < renderCount; b++) {
+        EngineLightGroup& ga = _groups[renderOrder[a]];
+        EngineLightGroup& gb = _groups[renderOrder[b]];
+        const bool swapByCoverage = ga.ledCount < gb.ledCount;
+        const bool sameCoverage = ga.ledCount == gb.ledCount;
+        const bool swapByIndex = sameCoverage && (renderOrder[a] < renderOrder[b]);
+        if (swapByCoverage || swapByIndex) {
+          const int tmp = renderOrder[a];
+          renderOrder[a] = renderOrder[b];
+          renderOrder[b] = tmp;
+        }
+      }
+    }
+
+    int renderedGroups = 0;
+    for (int i = 0; i < renderCount; i++) {
+#if LIGHTS_DIAGNOSTIC_MAX_GROUPS > 0
+      if (renderedGroups >= LIGHTS_DIAGNOSTIC_MAX_GROUPS) break;
+#endif
+      EngineLightGroup& group = _groups[renderOrder[i]];
       runEffect(group, nowMs);
       _blitGroupPixels(group);
       group.runtime.tick++;
+      renderedGroups++;
     }
+#endif
   }
 
   _showFrameBuffer();

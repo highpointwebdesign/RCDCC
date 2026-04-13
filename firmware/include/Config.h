@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "26.04.30"
+#define FIRMWARE_VERSION "26.04.50"
 #endif
 
 // Sensor configuration
@@ -25,6 +25,17 @@
 #define STATUS_LED_PIN 27         // GPIO pin for addressable LED strip (WS2812B/NeoPixel)
 #define STATUS_LED_COUNT 30       // Buffer size for addressable LEDs; app configures actual count
 #define LED_BRIGHTNESS_MAX 255    // Maximum brightness value
+
+// Lights diagnostic mode: when enabled, _tick() only renders basicMode and skips all group rendering
+// Lights diagnostics:
+// - LIGHTS_DIAGNOSTIC_BASICONLY: when 1, skip group rendering and show only basic mode (or white fallback)
+// - LIGHTS_DIAGNOSTIC_MAX_GROUPS: when >0, render at most N enabled groups per frame (0 = no limit)
+// - LIGHTS_DIAGNOSTIC_FORCE_FIRST_GROUP_FULL_STRIP: when 1, render first enabled group's FX across all LEDs
+// - LIGHTS_DIAGNOSTIC_STABLE_SINE: when 1, render deterministic sine wave directly (bypasses effect/group runtime)
+#define LIGHTS_DIAGNOSTIC_BASICONLY 0
+#define LIGHTS_DIAGNOSTIC_MAX_GROUPS 0
+#define LIGHTS_DIAGNOSTIC_FORCE_FIRST_GROUP_FULL_STRIP 0
+#define LIGHTS_DIAGNOSTIC_STABLE_SINE 0
 
 // Phase 1 default values (NVS-backed schema)
 #define DEFAULT_DEVICE_NAME "RCDCC"

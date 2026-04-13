@@ -304,6 +304,17 @@
         .icon-action:hover {
             opacity: 0.8;
         }
+
+        .icon-action.card-lock-icon {
+            opacity: 0.85;
+            color: var(--high-impact-color);
+            transition: opacity 0.2s ease, color 0.2s ease;
+        }
+
+        .icon-action.card-lock-icon.is-locked {
+            opacity: 1;
+            color: var(--lime-green);
+        }
         
         .icon-danger {
             color: var(--danger);
@@ -2749,11 +2760,44 @@
             border-radius: 999px;
         }
 
+        .basic-scenario-name-inline {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            max-width: 100%;
+            width: 100%;
+        }
+
+        .basic-scenario-name-inline .light-group-name {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .basic-scenario-inline-pencil {
+            font-size: 1.05rem;
+            line-height: 1;
+            color: #9ca3af;
+            cursor: pointer;
+            user-select: none;
+            margin-left: auto;
+        }
+
+        .basic-scenario-inline-pencil:hover,
+        .basic-scenario-inline-pencil:focus-visible {
+            color: #f9fafb;
+            outline: none;
+        }
+
         .basic-scenario-color-count-wrap {
             position: relative;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            width: 1.2rem;
+            height: 1.2rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            flex: 0 0 auto;
         }
 
         .basic-scenario-color-chip {
@@ -2819,9 +2863,25 @@
             width: 16px;
             height: 16px;
             border-radius: 50%;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             border: 1.5px solid rgba(0,0,0,0.2);
-            display: inline-block;
             flex-shrink: 0;
+        }
+
+        .basic-led-map-pill-swatch-count {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.62rem;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1;
+            text-shadow: 0 0 2px rgba(255, 255, 255, 0.65);
+            pointer-events: none;
         }
 
         .basic-led-map-pill-color {
@@ -2858,6 +2918,28 @@
             min-width: 0;
             flex: 1;
             text-align: left;
+        }
+
+        .basic-led-map-pill-name span.material-symbols-outlined.basic-led-map-pill-pencil {
+            font-size: 12px !important;
+            line-height: 1;
+            color: #6b7280;
+            cursor: pointer;
+            margin-left: auto;
+            user-select: none;
+            width: 12px;
+            height: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transform: scale(1.0);
+            transform-origin: center;
+        }
+
+        .basic-led-map-pill-pencil:hover,
+        .basic-led-map-pill-pencil:focus-visible {
+            color: #111827;
+            outline: none;
         }
 
         .basic-led-map-mode-icon {
@@ -3128,6 +3210,10 @@
         }
 
         .profile-card-locked .card-body {
+            opacity: 0.72;
+        }
+
+        .locked-section-opacity {
             opacity: 0.72;
         }
 

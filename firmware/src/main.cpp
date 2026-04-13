@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <MPU6050.h>
+#include <driver/gpio.h>
 // #include <FastLED.h>
 #include "Config.h"
 #include "SensorFusion.h"
@@ -790,6 +791,11 @@ void setup() {
   storageManager.init();
 
   lightsEngine = nullptr;
+
+#ifdef ESP32
+  // Improve WS2812 signal integrity on long/noisy runs.
+  gpio_set_drive_capability(static_cast<gpio_num_t>(STATUS_LED_PIN), GPIO_DRIVE_CAP_3);
+#endif
   
   if (LIGHTS_ENTRYPOINT_ENABLED) {
     lightsEngine = new LightsEngine(STATUS_LED_PIN, STATUS_LED_COUNT);

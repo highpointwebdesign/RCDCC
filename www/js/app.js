@@ -98,8 +98,8 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.704';
-        const BUILD_DATE = '2026-04-10';
+        const APP_VERSION = '1.1.754';
+        const BUILD_DATE = '2026-04-13';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -458,8 +458,7 @@ window.addEventListener('beforeunload', function(event) {
                 'saveNewLightingProfileBtn',
                 'ltProfileUpdateBtn',
                 'addAuxServoBtn',
-                'danceModeToggle',
-                'addLightGroupBtn'
+                'danceModeToggle'
             ];
             idsToDisable.forEach(id => {
                 const el = document.getElementById(id);
@@ -491,11 +490,6 @@ window.addEventListener('beforeunload', function(event) {
             if (masterBtn) {
                 masterBtn.classList.toggle('ble-data-off', !connected);
                 masterBtn.setAttribute('aria-disabled', connected ? 'false' : 'true');
-            }
-            const masterBtnLg = document.getElementById('lightsToggleLightGroups');
-            if (masterBtnLg) {
-                masterBtnLg.classList.toggle('ble-data-off', !connected);
-                masterBtnLg.setAttribute('aria-disabled', connected ? 'false' : 'true');
             }
         }
 
@@ -4081,7 +4075,6 @@ window.addEventListener('beforeunload', function(event) {
                 'lightingControlCardCollapsed',
                 'basicLedFxOutputCardCollapsed',
                 'basicActiveLedAllocationCardCollapsed',
-                'manageLightGroupsCardCollapsed',
                 'hardwareSetupCardCollapsed',
                 'lightsGuideCardCollapsed'
             ];
@@ -4092,27 +4085,7 @@ window.addEventListener('beforeunload', function(event) {
             });
             
             // Restore tuning parameters lock state from localStorage
-            const tuningLocked = localStorage.getItem('tuningParametersLocked') === 'true';
-            const tuningLockIcon = document.getElementById('tuningLockIcon');
-            const tuningCard = document.getElementById('tuningParametersCard');
-            if (tuningLockIcon && tuningCard) {
-                if (tuningLocked) {
-                    tuningCard.classList.add('slider-locked');
-                    tuningLockIcon.textContent = 'lock';
-                    tuningLockIcon.style.color = 'var(--lime-green)'; // Lime green
-                    // Set all individual slider locks to true
-                    Object.keys(tuningSliderLocks).forEach(key => {
-                        tuningSliderLocks[key] = true;
-                    });
-                } else {
-                    tuningCard.classList.remove('slider-locked');
-                    tuningLockIcon.textContent = 'lock_open_right';
-                    tuningLockIcon.style.color = 'var(--high-impact-color)'; // Yellow
-                    Object.keys(tuningSliderLocks).forEach(key => {
-                        tuningSliderLocks[key] = false;
-                    });
-                }
-            }
+            syncTuningParametersLockUI();
             
             // Restore formulas card collapse state from localStorage
             const formulasCollapsed = localStorage.getItem('formulasCardCollapsed') !== 'false';
@@ -4155,14 +4128,12 @@ window.addEventListener('beforeunload', function(event) {
             syncCardCollapseState('helpServoTestCard', 'helpServoTestChevron', 'helpServoTestCardCollapsed');
             syncCardCollapseState('basicLedFxOutputCard', 'basicLedFxOutputChevron', 'basicLedFxOutputCardCollapsed');
             syncCardCollapseState('basicActiveLedAllocationCard', 'basicActiveLedAllocationChevron', 'basicActiveLedAllocationCardCollapsed');
-            syncCardCollapseState('manageLightGroupsCard', 'manageLightGroupsChevron', 'manageLightGroupsCardCollapsed');
             syncCardCollapseState('dashboardHelpCard', 'dashboardHelpChevron', 'dashboardHelpCardCollapsed');
 
             syncDrivingProfilesCardUI();
             syncLightingProfilesCardUI();
             syncLightingControlCardUI();
             syncHardwareSetupCardUI();
-            syncManageLightGroupsLockUI();
             
             
             // Restore servo settings lock state from localStorage.
@@ -4324,11 +4295,9 @@ window.addEventListener('beforeunload', function(event) {
             // ==================== Light Hierarchy Controls ====================
             const lightsToggle = document.getElementById('lightsToggle');
             const lightsToggleDashboard = document.getElementById('lightsToggleDashboard');
-            const lightsToggleLightGroups = document.getElementById('lightsToggleLightGroups');
 
             bindMasterLightSwitch(lightsToggle);
             bindMasterLightSwitch(lightsToggleDashboard);
-            bindMasterLightSwitch(lightsToggleLightGroups);
             syncMasterLightSwitches(getMasterLightsEnabled());
             // Ensure lighting controls are always visible (master light state controls hardware writes, not UI visibility)
             syncLightsControlsVisibility(true);
@@ -5413,6 +5382,20 @@ window.addEventListener('beforeunload', function(event) {
             updateBtn.disabled = !showUpdate || lightingProfileBusy || lightingProfilesLocked || !isBleConnected();
         }
 
+        function syncSharedCardLockUI({ card = null, body = null, lockIcon = null, isLocked = false, lockedTitle = '', unlockedTitle = '' } = {}) {
+            if (card) card.classList.toggle('profile-card-locked', isLocked);
+            if (body) body.classList.toggle('locked-section-opacity', isLocked);
+
+            if (lockIcon) {
+                lockIcon.classList.add('card-lock-icon');
+                lockIcon.classList.toggle('is-locked', isLocked);
+                lockIcon.textContent = isLocked ? 'lock' : 'lock_open_right';
+                if (lockedTitle || unlockedTitle) {
+                    lockIcon.title = isLocked ? lockedTitle : unlockedTitle;
+                }
+            }
+        }
+
         function syncLightingProfilesCardUI(animateBody = false) {
             const card = document.getElementById('lightingProfilesCard');
             const body = document.getElementById('lightingProfilesCardBody');
@@ -5420,18 +5403,20 @@ window.addEventListener('beforeunload', function(event) {
             const chevron = document.getElementById('lightingProfilesChevron');
             const isCollapsed = localStorage.getItem('lightingProfilesCardCollapsed') === 'true';
 
-            if (card) card.classList.toggle('profile-card-locked', lightingProfilesLocked);
             setCollapsibleBodyState(body, isCollapsed, animateBody);
+            syncSharedCardLockUI({
+                card,
+                body,
+                lockIcon,
+                isLocked: lightingProfilesLocked,
+                lockedTitle: 'Unlock lighting profiles',
+                unlockedTitle: 'Lock lighting profiles to prevent changes'
+            });
             if (chevron) {
                 chevron.textContent = 'keyboard_arrow_down';
                 chevron.classList.add('card-collapse-chevron');
                 chevron.classList.toggle('is-collapsed', isCollapsed);
                 chevron.title = isCollapsed ? 'Expand lighting profiles' : 'Collapse lighting profiles';
-            }
-            if (lockIcon) {
-                lockIcon.textContent = lightingProfilesLocked ? 'lock' : 'lock_open_right';
-                lockIcon.style.color = lightingProfilesLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
-                lockIcon.title = lightingProfilesLocked ? 'Unlock lighting profiles' : 'Lock lighting profiles to prevent changes';
             }
         }
 
@@ -5442,7 +5427,6 @@ window.addEventListener('beforeunload', function(event) {
             const chevron = document.getElementById('lightingControlChevron');
             const isCollapsed = localStorage.getItem('lightingControlCardCollapsed') === 'true';
 
-            if (card) card.classList.toggle('profile-card-locked', lightingControlLocked);
             if (body) {
                 setCollapsibleBodyState(body, isCollapsed, animateBody);
 
@@ -5452,16 +5436,19 @@ window.addEventListener('beforeunload', function(event) {
                     control.setAttribute('aria-disabled', lightingControlLocked ? 'true' : 'false');
                 });
             }
+            syncSharedCardLockUI({
+                card,
+                body,
+                lockIcon,
+                isLocked: lightingControlLocked,
+                lockedTitle: 'Unlock lighting controls',
+                unlockedTitle: 'Lock lighting controls to prevent changes'
+            });
             if (chevron) {
                 chevron.textContent = 'keyboard_arrow_down';
                 chevron.classList.add('card-collapse-chevron');
                 chevron.classList.toggle('is-collapsed', isCollapsed);
                 chevron.title = isCollapsed ? 'Expand lighting controls' : 'Collapse lighting controls';
-            }
-            if (lockIcon) {
-                lockIcon.textContent = lightingControlLocked ? 'lock' : 'lock_open_right';
-                lockIcon.style.color = lightingControlLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
-                lockIcon.title = lightingControlLocked ? 'Unlock lighting controls' : 'Lock lighting controls to prevent changes';
             }
         }
 
@@ -5495,64 +5482,32 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function syncManageLightGroupsLockUI() {
-            const card = document.getElementById('manageLightGroupsCard');
-            const lockIcon = document.getElementById('manageLightGroupsLockIcon');
-            const masterToggle = document.getElementById('lightsToggleLightGroups');
-            const addGroupBtn = document.getElementById('addLightGroupBtn');
-            const totalLedInput = document.getElementById('totalLEDCount');
-            const colorOrderInput = document.getElementById('lightColorOrder');
-            const controlsLocked = manageLightGroupsLocked || !isBleConnected();
-
-            if (card) card.classList.toggle('profile-card-locked', manageLightGroupsLocked);
-            if (lockIcon) {
-                lockIcon.textContent = manageLightGroupsLocked ? 'lock' : 'lock_open_right';
-                lockIcon.style.color = manageLightGroupsLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
-                lockIcon.title = manageLightGroupsLocked
-                    ? 'Unlock light group controls'
-                    : 'Lock light group controls';
-            }
-            if (masterToggle) {
-                masterToggle.disabled = controlsLocked;
-                masterToggle.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
-            }
-            if (addGroupBtn) {
-                addGroupBtn.disabled = controlsLocked;
-                addGroupBtn.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
-            }
-            if (totalLedInput) {
-                totalLedInput.disabled = controlsLocked;
-                totalLedInput.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
-            }
-            if (colorOrderInput) {
-                colorOrderInput.disabled = controlsLocked;
-                colorOrderInput.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
-            }
+            // Legacy Light Groups UI retired.
+            return;
         }
 
         function toggleManageLightGroupsLock() {
-            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
-            clickSound.play().catch(e => lightingDebugLog('Sound play failed:', e));
+            // Keep stored setting for backward compatibility only.
             manageLightGroupsLocked = !manageLightGroupsLocked;
             localStorage.setItem('manageLightGroupsLocked', manageLightGroupsLocked.toString());
-            syncManageLightGroupsLockUI();
-            renderLightGroupsList();
         }
 
         function syncLightStripConfigLockUI() {
             const card = document.getElementById('lightStripConfigCard');
+            const body = card?.querySelector('.card-body') || null;
             const lockIcon = document.getElementById('lightStripConfigLockIcon');
             const totalLedInput = document.getElementById('totalLEDCount');
             const colorOrderInput = document.getElementById('lightColorOrder');
             const controlsLocked = manageLightGroupsLocked;
 
-            if (card) card.classList.toggle('profile-card-locked', lightStripConfigLocked);
-            if (lockIcon) {
-                lockIcon.textContent = lightStripConfigLocked ? 'lock' : 'lock_open_right';
-                lockIcon.style.color = lightStripConfigLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
-                lockIcon.title = lightStripConfigLocked
-                    ? 'Unlock light strip configuration'
-                    : 'Lock light strip configuration';
-            }
+            syncSharedCardLockUI({
+                card,
+                body,
+                lockIcon,
+                isLocked: lightStripConfigLocked,
+                lockedTitle: 'Unlock light strip configuration',
+                unlockedTitle: 'Lock light strip configuration'
+            });
             if (totalLedInput) {
                 totalLedInput.disabled = controlsLocked;
                 totalLedInput.setAttribute('aria-disabled', controlsLocked ? 'true' : 'false');
@@ -5893,6 +5848,7 @@ window.addEventListener('beforeunload', function(event) {
             // Always show controls regardless of master light state; master only gates hardware writes
             syncLightsControlsVisibility(true);
             _basicScenarioStripEnabled = nextEnabled;
+            _syncBasicScenarioStripSwitch();
             _syncBasicScenarioButtons();
         }
 
@@ -6183,7 +6139,7 @@ window.addEventListener('beforeunload', function(event) {
             const ledsA = _parseGroupLedIndices('basicGroupALeds');
             const ledsB = _parseGroupLedIndices('basicGroupBLeds');
             if (!ledsA.length && !ledsB.length) {
-                notifyBasicLightsStatus('No valid LED indices in either group.', 'warning');
+                notifyBasicLightsStatus('No valid LED indices in either segment.', 'warning');
                 return;
             }
             // Overlap check — warn but don't block
@@ -6232,7 +6188,7 @@ window.addEventListener('beforeunload', function(event) {
                 await bleManager.sendSystemCommand('lights_master', { enabled: false });
                 await bleManager.sendSystemCommand('lights_clear_all', {});
                 _syncMasterLightState(false);
-                notifyBasicLightsStatus('Groups cleared. Strip off.', 'success');
+                notifyBasicLightsStatus('Segments cleared. Strip off.', 'success');
             } catch (e) {
                 notifyBasicLightsStatus(`Clear failed: ${e?.message || e}`, 'error', { duration: 5000 });
             }
@@ -6263,6 +6219,7 @@ window.addEventListener('beforeunload', function(event) {
         var _basicScenarioLedCountSliderInstance = null;
         var _basicScenarioLedCountSyncing = false;
         var _basicScenarioLedCountCurrent = 11;
+        var _basicScenarioLedCountApplyTimer = null;
         var _basicScenarioBrightnessApplyTimer = null;
         var _basicScenarioConfigApplyTimer = null;
         var _basicLedMapActiveScenario = 'brake';
@@ -6351,10 +6308,17 @@ window.addEventListener('beforeunload', function(event) {
             if (label) label.textContent = `${safePercent}%`;
         }
 
-        function _resolveBasicScenarioLedCount(value) {
+        function _resolveBasicScenarioMinLedCount(forceEnabled = null) {
+            const isEnabled = typeof forceEnabled === 'boolean' ? forceEnabled : !!_basicScenarioStripEnabled;
+            return isEnabled ? 1 : 0;
+        }
+
+        function _resolveBasicScenarioLedCount(value, forceEnabled = null) {
             const parsed = Math.floor(Number(value));
-            if (Number.isFinite(parsed) && parsed >= 0 && parsed <= MAX_LIGHTS_TOTAL_LEDS) return parsed;
-            return BASIC_SCENARIO_DEFAULT_LED_COUNT;
+            const minCount = _resolveBasicScenarioMinLedCount(forceEnabled);
+            const maxCount = Math.min(30, MAX_LIGHTS_TOTAL_LEDS);
+            if (Number.isFinite(parsed)) return Math.max(minCount, Math.min(maxCount, parsed));
+            return Math.max(minCount, Math.min(maxCount, BASIC_SCENARIO_DEFAULT_LED_COUNT));
         }
 
         function _sanitizeBasicScenarioColorOrder(value, fallback = DEFAULT_LIGHT_COLOR_ORDER) {
@@ -6367,9 +6331,11 @@ window.addEventListener('beforeunload', function(event) {
             const colorOrderEl = document.getElementById('basicScenarioColorOrder');
             const safeCount = _resolveBasicScenarioLedCount(config?.ledCount);
             const safeOrder = _sanitizeBasicScenarioColorOrder(config?.colorOrder, getVehicleScopedLightColorOrder());
+            const minLabel = document.getElementById('basicScenarioLedCountMinLabel');
             _basicScenarioLedCountCurrent = safeCount;
             const label = document.getElementById('basicScenarioLedCountLabel');
             if (label) label.textContent = String(safeCount);
+            if (minLabel) minLabel.textContent = String(_resolveBasicScenarioMinLedCount());
             if (_basicScenarioLedCountSliderInstance && typeof _basicScenarioLedCountSliderInstance.value === 'function') {
                 _basicScenarioLedCountSyncing = true;
                 _basicScenarioLedCountSliderInstance.value([0, safeCount]);
@@ -6754,12 +6720,32 @@ window.addEventListener('beforeunload', function(event) {
             syncVehicleLightingDefaultsFromBasicScenario(config);
         }
 
+        function _syncBasicScenarioAddSegmentButton(configLike = null) {
+            const addBtn = document.getElementById('basicScenarioAddSegmentBtn');
+            if (!addBtn) return;
+
+            const config = configLike && typeof configLike === 'object'
+                ? configLike
+                : (_basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig()));
+            const cardCount = _getBasicScenarioCardDefs(config).length;
+            const maxCards = _basicScenarioMaxGroupCount(config);
+            const atMax = cardCount >= maxCards;
+
+            addBtn.disabled = atMax;
+            addBtn.setAttribute('aria-disabled', atMax ? 'true' : 'false');
+            addBtn.title = atMax
+                ? `Max segments reached (${maxCards}) for current LED count.`
+                : 'Add a new segment';
+        }
+
         function renderBasicScenarioList() {
             const container = document.getElementById('basicScenarioList');
             if (!container) return;
             const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             const cards = _getBasicScenarioCardDefs(config);
             container.innerHTML = '';
+
+            _syncBasicScenarioAddSegmentButton(config);
 
             cards.forEach(card => {
                 const item = document.createElement('div');
@@ -6768,22 +6754,27 @@ window.addEventListener('beforeunload', function(event) {
 
                 const color = config.colors?.[card.mode] || '#888';
                 const ledCount = Object.entries(config.assignment || {}).filter(([, m]) => m === card.mode).length;
+                const countTextColor = _isColorDark(color) ? '#fff' : '#111';
                 const displayName = _getBasicScenarioDisplayName(card.mode, config);
 
                 item.innerHTML = `
                     <div class="basic-scenario-card" data-basic-scenario-mode="${card.mode}">
                     <div class="light-group-info">
                         <div class="light-group-name-row">
-                            <div class="light-group-name">${displayName}</div>
-                            <button type="button" class="light-group-details-toggle basic-scenario-inline-edit" title="Edit ${displayName}" onclick="event.stopPropagation(); basicOpenScenarioGroupModal('${card.mode}')">
-                                <span class="material-symbols-outlined">edit</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="light-group-controls">
-                        <div class="basic-scenario-color-count-wrap" title="${displayName} assigned LEDs">
-                            <span class="light-group-color-input basic-scenario-color-chip" style="background:${color};border-color:${color};"></span>
-                            <span class="basic-scenario-color-count">${ledCount}</span>
+                            <div class="basic-scenario-name-inline" title="${displayName} assigned LEDs">
+                                <span class="basic-scenario-color-count-wrap" style="background:${color};border-color:${color};">
+                                    <span class="basic-scenario-color-count" style="color:${countTextColor};">${ledCount}</span>
+                                </span>
+                                <div class="light-group-name">${displayName}</div>
+                                <span
+                                    class="material-symbols-outlined basic-scenario-inline-pencil"
+                                    role="button"
+                                    tabindex="0"
+                                    title="Edit ${displayName}"
+                                    onclick="event.stopPropagation(); basicOpenScenarioGroupModal('${card.mode}')"
+                                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();basicOpenScenarioGroupModal('${card.mode}');}"
+                                >edit</span>
+                            </div>
                         </div>
                     </div>
                     </div>
@@ -6799,7 +6790,10 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== LED Strip Map Modal ====================
 
         function _isColorDark(hex) {
-            const h = (hex || '#000').replace('#', '');
+            const raw = String(hex || '#000').replace('#', '').trim();
+            const h = raw.length === 3
+                ? raw.split('').map(ch => ch + ch).join('')
+                : raw;
             const r = parseInt(h.substring(0, 2), 16) || 0;
             const g = parseInt(h.substring(2, 4), 16) || 0;
             const b = parseInt(h.substring(4, 6), 16) || 0;
@@ -6810,6 +6804,10 @@ window.addEventListener('beforeunload', function(event) {
             lightingGroupsDirty = true;
             _isLightingProfileLookDirty = true;
             syncLightingProfileActionButtons();
+        }
+
+        function _isProfileLookLockedForMapping() {
+            return !!lightingControlLocked;
         }
 
         function _renderLedMapPalette() {
@@ -6828,7 +6826,9 @@ window.addEventListener('beforeunload', function(event) {
                 _basicLedMapActiveScenario = null;
                 _renderLedMapPalette();
                 _renderLedMapGrid();
-                _markLedMapDirty();
+                if (!_isProfileLookLockedForMapping()) {
+                    _markLedMapDirty();
+                }
             };
             palette.appendChild(clearPill);
 
@@ -6836,6 +6836,7 @@ window.addEventListener('beforeunload', function(event) {
                 const color = _basicLedMapDraftColors[card.mode] || '#888';
                 const count = Object.values(_basicLedMapDraftAssignment).filter(m => m === card.mode).length;
                 const isActive = _basicLedMapActiveScenario === card.mode;
+                const countTextColor = _isColorDark(color) ? '#fff' : '#111';
                 const displayName = _getBasicScenarioDisplayName(card.mode);
                 const reverseIcon = card.reverse
                     ? '<span class="material-symbols-outlined basic-led-map-mode-icon basic-led-map-mode-icon--reverse">ac_unit</span> '
@@ -6844,12 +6845,14 @@ window.addEventListener('beforeunload', function(event) {
                 const pill = document.createElement('button');
                 pill.type = 'button';
                 pill.className = 'basic-led-map-pill' + (isActive ? ' is-active' : '');
-                pill.innerHTML = `<span class="basic-led-map-pill-swatch" style="background:${color};border-color:${color};"></span><span class="basic-led-map-pill-name">${reverseIcon}${displayName} <span class="basic-led-map-pill-count">${count}</span></span>`;
+                pill.innerHTML = `<span class="basic-led-map-pill-swatch" role="button" tabindex="0" title="Set ${displayName} color" onclick="event.stopPropagation(); basicLedMapPickColor('${card.mode}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();basicLedMapPickColor('${card.mode}');}" style="background:${color};border-color:${color};"><span class="basic-led-map-pill-swatch-count" style="color:${countTextColor};">${count}</span></span><span class="basic-led-map-pill-name">${reverseIcon}${displayName} <span class="material-symbols-outlined basic-led-map-pill-pencil" role="button" tabindex="0" title="Edit ${displayName}" onclick="event.stopPropagation(); basicOpenScenarioGroupModal('${card.mode}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();basicOpenScenarioGroupModal('${card.mode}');}">edit</span></span>`;
                 pill.onclick = () => {
                     _basicLedMapActiveScenario = card.mode;
                     _renderLedMapPalette();
                     _renderLedMapGrid();
-                    _markLedMapDirty();
+                    if (!_isProfileLookLockedForMapping()) {
+                        _markLedMapDirty();
+                    }
                 };
                 palette.appendChild(pill);
             });
@@ -6865,7 +6868,7 @@ window.addEventListener('beforeunload', function(event) {
             if (_basicLedMapActiveScenario === null) {
                 colorInput.disabled = true;
                 colorInput.value = '#e5e7eb';
-                if (labelEl) labelEl.textContent = 'Clear mode selected';
+                if (labelEl) labelEl.textContent = 'No segment selected';
                 return;
             }
 
@@ -6875,6 +6878,18 @@ window.addEventListener('beforeunload', function(event) {
             colorInput.value = color;
             if (labelEl) labelEl.textContent = displayName;
         }
+
+        window.basicEditSelectedSegment = function() {
+            if (_isProfileLookLockedForMapping()) {
+                notifyBasicLightsStatus('Profile Look is locked. Unlock to edit segment names.', 'warning');
+                return;
+            }
+            if (_basicLedMapActiveScenario === null) {
+                notifyBasicLightsStatus('Select a segment first.', 'warning');
+                return;
+            }
+            basicOpenScenarioGroupModal(_basicLedMapActiveScenario);
+        };
 
         function _renderLedMapGrid() {
             const grid = document.getElementById('basicLedMapGrid');
@@ -6916,6 +6931,10 @@ window.addEventListener('beforeunload', function(event) {
                     btn.style.color = _isColorDark(color) ? '#fff' : '#111';
                 }
                 btn.onclick = () => {
+                    if (_isProfileLookLockedForMapping()) {
+                        notifyBasicLightsStatus('Profile Look is locked. Unlock to edit LED mapping.', 'warning');
+                        return;
+                    }
                     if (_basicLedMapActiveScenario === null) {
                         delete _basicLedMapDraftAssignment[i];
                     } else if (mode === _basicLedMapActiveScenario) {
@@ -7009,7 +7028,6 @@ window.addEventListener('beforeunload', function(event) {
         };
 
         window.basicToggleLedMapInline = function() {
-            if (lightingControlLocked) return;
             const inline = document.getElementById('basicLedMapInline');
             if (!inline) return;
             if (inline.style.display !== 'none') {
@@ -7047,9 +7065,9 @@ window.addEventListener('beforeunload', function(event) {
             const isCollapsed = inline.style.display === 'none';
             chevron.classList.toggle('is-collapsed', isCollapsed);
             chevron.title = isCollapsed ? 'Expand LED mapping' : 'Collapse LED mapping';
-            chevron.style.opacity = lightingControlLocked ? '0.4' : '1';
-            chevron.style.pointerEvents = lightingControlLocked ? 'none' : 'auto';
-            chevron.setAttribute('aria-disabled', lightingControlLocked ? 'true' : 'false');
+            chevron.style.opacity = '1';
+            chevron.style.pointerEvents = 'auto';
+            chevron.setAttribute('aria-disabled', 'false');
         }
 
         function syncHardwareSetupCardUI(animateBody = false) {
@@ -7059,7 +7077,6 @@ window.addEventListener('beforeunload', function(event) {
             const chevron = document.getElementById('hardwareSetupChevron');
             // Default is collapsed (true). 'false' means expanded.
             const isCollapsed = localStorage.getItem('hardwareSetupCardCollapsed') !== 'false';
-            if (card) card.classList.toggle('profile-card-locked', hardwareSetupLocked);
             setCollapsibleBodyState(body, isCollapsed, animateBody);
             if (body) {
                 const controls = body.querySelectorAll('input, select, textarea, button');
@@ -7068,15 +7085,18 @@ window.addEventListener('beforeunload', function(event) {
                     control.setAttribute('aria-disabled', hardwareSetupLocked ? 'true' : 'false');
                 });
             }
+            syncSharedCardLockUI({
+                card,
+                body,
+                lockIcon,
+                isLocked: hardwareSetupLocked,
+                lockedTitle: 'Unlock hardware setup',
+                unlockedTitle: 'Lock hardware setup to prevent changes'
+            });
             if (chevron) {
                 chevron.classList.add('card-collapse-chevron');
                 chevron.classList.toggle('is-collapsed', isCollapsed);
                 chevron.title = isCollapsed ? 'Expand hardware setup' : 'Collapse hardware setup';
-            }
-            if (lockIcon) {
-                lockIcon.textContent = hardwareSetupLocked ? 'lock' : 'lock_open_right';
-                lockIcon.style.color = hardwareSetupLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
-                lockIcon.title = hardwareSetupLocked ? 'Unlock hardware setup' : 'Lock hardware setup to prevent changes';
             }
             syncHardwareSetupSummary();
             syncBasicLedMapInlineToggleUI();
@@ -7093,10 +7113,15 @@ window.addEventListener('beforeunload', function(event) {
                 const i = parseInt(k, 10);
                 return Number.isFinite(i) && i >= 0 && i < ledCount;
             }).length;
-            summaryEl.textContent = `${ledCount} LEDs · ${colorOrder} · ${groupCount} groups · ${assignedCount} assigned`;
+            summaryEl.textContent = `${ledCount} LEDs · ${colorOrder} · ${groupCount} segments · ${assignedCount} assigned`;
         }
 
         window.basicLedMapSelectedColorChange = function(value) {
+            if (_isProfileLookLockedForMapping()) {
+                notifyBasicLightsStatus('Profile Look is locked. Unlock to change segment colors.', 'warning');
+                _syncLedMapSelectedColorInput();
+                return;
+            }
             if (_basicLedMapActiveScenario === null) return;
             _basicLedMapDraftColors[_basicLedMapActiveScenario] = _sanitizeBasicScenarioHexColor(
                 value,
@@ -7107,7 +7132,37 @@ window.addEventListener('beforeunload', function(event) {
             _markLedMapDirty();
         };
 
+        window.basicLedMapPickColor = function(mode) {
+            if (_isProfileLookLockedForMapping()) {
+                notifyBasicLightsStatus('Profile Look is locked. Unlock to change segment colors.', 'warning');
+                return;
+            }
+            if (!_getBasicScenarioCardByMode(mode)) return;
+
+            _basicLedMapActiveScenario = mode;
+            _renderLedMapPalette();
+            _renderLedMapGrid();
+            _syncLedMapSelectedColorInput();
+
+            const colorInput = document.getElementById('basicLedMapSelectedColor');
+            if (!colorInput || colorInput.disabled) return;
+
+            try {
+                if (typeof colorInput.showPicker === 'function') {
+                    colorInput.showPicker();
+                } else {
+                    colorInput.click();
+                }
+            } catch (_) {
+                colorInput.click();
+            }
+        };
+
         window.basicLedMapClearScenario = function() {
+            if (_isProfileLookLockedForMapping()) {
+                notifyBasicLightsStatus('Profile Look is locked. Unlock to edit LED mapping.', 'warning');
+                return;
+            }
             if (_basicLedMapActiveScenario === null) return;
             Object.keys(_basicLedMapDraftAssignment).forEach(k => {
                 if (_basicLedMapDraftAssignment[k] === _basicLedMapActiveScenario) delete _basicLedMapDraftAssignment[k];
@@ -7118,6 +7173,10 @@ window.addEventListener('beforeunload', function(event) {
         };
 
         window.basicLedMapClearAll = function() {
+            if (_isProfileLookLockedForMapping()) {
+                notifyBasicLightsStatus('Profile Look is locked. Unlock to edit LED mapping.', 'warning');
+                return;
+            }
             _basicLedMapDraftAssignment = {};
             _renderLedMapPalette();
             _renderLedMapGrid();
@@ -7160,7 +7219,7 @@ window.addEventListener('beforeunload', function(event) {
                 const result = await _applyBasicScenarioOutput();
                 notifyBasicLightsStatus(
                     result.groups.length
-                        ? `LED strip map saved and applied. Configured groups: ${result.labels.join(', ')}.`
+                        ? `LED strip map saved and applied. Configured segments: ${result.labels.join(', ')}.`
                         : 'LED strip map saved, but no valid LEDs are assigned.',
                     result.groups.length ? 'success' : 'warning'
                 );
@@ -7194,7 +7253,7 @@ window.addEventListener('beforeunload', function(event) {
                 const result = await _applyBasicScenarioOutput();
                 notifyBasicLightsStatus(
                     result.groups.length
-                        ? `${_getBasicScenarioDisplayName(mode)} color applied. Configured groups: ${result.labels.join(', ')}.`
+                        ? `${_getBasicScenarioDisplayName(mode)} color applied. Configured segments: ${result.labels.join(', ')}.`
                         : `${_getBasicScenarioDisplayName(mode)} color saved.`,
                     result.groups.length ? 'success' : 'info'
                 );
@@ -7204,10 +7263,18 @@ window.addEventListener('beforeunload', function(event) {
         };
 
         window.basicOpenScenarioGroupModal = function(mode = null) {
+            if (_isProfileLookLockedForMapping()) {
+                notifyBasicLightsStatus('Profile Look is locked. Unlock to edit segment names.', 'warning');
+                return;
+            }
             const modal = document.getElementById('basicScenarioGroupModal');
             const input = document.getElementById('basicScenarioGroupNameInput');
             const title = document.getElementById('basicScenarioGroupModalTitle');
             const deleteBtn = document.getElementById('basicScenarioGroupDeleteBtn');
+            const icon = document.getElementById('basicScenarioGroupModalIcon');
+            const saveBtn = document.getElementById('basicScenarioGroupSaveBtn');
+            const saveIcon = document.getElementById('basicScenarioGroupSaveIcon');
+            const saveText = document.getElementById('basicScenarioGroupSaveText');
             if (!modal || !input || !title || !deleteBtn) return;
 
             const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
@@ -7217,24 +7284,36 @@ window.addEventListener('beforeunload', function(event) {
             if (mode && !card) return;
 
             _basicScenarioGroupEditMode = card ? card.mode : null;
-            title.textContent = card ? 'Edit Group' : 'Add Group';
+            title.textContent = card ? 'Edit Segment' : 'Add Segment';
             input.value = card ? _getBasicScenarioDisplayName(card.mode, config) : '';
-            input.placeholder = card ? card.label : 'New group name';
+            input.placeholder = card ? card.label : 'New segment name';
             deleteBtn.style.display = card ? '' : 'none';
+            if (icon) icon.textContent = card ? 'edit' : 'add_circle';
+            if (saveIcon) saveIcon.textContent = card ? 'save' : 'add';
+            if (saveText) saveText.textContent = card ? 'Save Changes' : 'Add Segment';
+            if (saveBtn) saveBtn.title = card ? 'Save segment changes' : 'Add this segment';
 
             if (window.bootstrap && bootstrap.Modal) {
                 _basicScenarioGroupModalInstance = bootstrap.Modal.getOrCreateInstance(modal);
                 _basicScenarioGroupModalInstance.show();
+                setTimeout(() => {
+                    input.focus();
+                    input.select();
+                }, 60);
             }
         };
 
         window.basicScenarioGroupSave = function() {
+            if (_isProfileLookLockedForMapping()) {
+                notifyBasicLightsStatus('Profile Look is locked. Unlock to edit segment names.', 'warning');
+                return;
+            }
             const input = document.getElementById('basicScenarioGroupNameInput');
             if (!input) return;
 
             const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             const cards = _getBasicScenarioCardDefs(config).slice();
-            const providedName = _sanitizeBasicScenarioGroupLabel(input.value, 'Group');
+            const providedName = _sanitizeBasicScenarioGroupLabel(input.value, 'Segment');
             const maxGroups = _basicScenarioMaxGroupCount(config);
 
             if (_basicScenarioGroupEditMode) {
@@ -7248,10 +7327,10 @@ window.addEventListener('beforeunload', function(event) {
                 // Refresh palette so updated display name is shown.
                 _renderLedMapPalette();
                 _markLedMapDirty();
-                notifyBasicLightsStatus(`Group renamed to ${providedName}.`, 'success');
+                notifyBasicLightsStatus(`Segment renamed to ${providedName}.`, 'success');
             } else {
                 if (cards.length >= maxGroups) {
-                    notifyBasicLightsStatus(`Max groups reached (${maxGroups}) for current LED count.`, 'warning');
+                    notifyBasicLightsStatus(`Max segments reached (${maxGroups}) for current LED count.`, 'warning');
                     return;
                 }
                 const existingModes = new Set(cards.map(c => c.mode));
@@ -7271,13 +7350,17 @@ window.addEventListener('beforeunload', function(event) {
                 _renderLedMapGrid();
                 renderBasicScenarioList();
                 _markLedMapDirty();
-                notifyBasicLightsStatus(`Added group ${providedName}.`, 'success');
+                notifyBasicLightsStatus(`Added segment ${providedName}.`, 'success');
             }
 
             if (_basicScenarioGroupModalInstance) _basicScenarioGroupModalInstance.hide();
         };
 
         window.basicScenarioGroupDelete = async function() {
+            if (_isProfileLookLockedForMapping()) {
+                notifyBasicLightsStatus('Profile Look is locked. Unlock to edit segment names.', 'warning');
+                return;
+            }
             const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
             const cards = _getBasicScenarioCardDefs(config);
             const mode = _basicScenarioGroupEditMode;
@@ -7285,7 +7368,7 @@ window.addEventListener('beforeunload', function(event) {
             if (!card) return;
 
             const confirmed = await showActionConfirmDialog(
-                'Delete Group',
+                'Delete Segment',
                 `Delete ${_getBasicScenarioDisplayName(mode, config)}? Assigned LEDs will become unassigned.`,
                 'Delete',
                 'Cancel',
@@ -7331,10 +7414,16 @@ window.addEventListener('beforeunload', function(event) {
             _renderLedMapGrid();
             _markLedMapDirty();
             if (_basicScenarioGroupModalInstance) _basicScenarioGroupModalInstance.hide();
-            notifyBasicLightsStatus(`Deleted group ${_getBasicScenarioDisplayName(mode, config)}. Its LEDs are now available.`, 'success');
+            notifyBasicLightsStatus(`Deleted segment ${_getBasicScenarioDisplayName(mode, config)}. Its LEDs are now available.`, 'success');
         };
 
         window.basicScenarioBrightnessChange = function(value) {
+            if (lightingControlLocked) {
+                const current = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+                _syncBasicScenarioBrightnessUI(current.brightnessPercent);
+                notifyBasicLightsStatus('Profile Look is locked. Unlock to change LED brightness.', 'warning');
+                return;
+            }
             const safe = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
             _basicScenarioBrightnessCurrent = safe;
             _syncBasicScenarioBrightnessUI(safe);
@@ -7377,6 +7466,12 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         window.basicScenarioLedCountChange = function(value) {
+            if (hardwareSetupLocked) {
+                const current = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+                _syncBasicScenarioCountAndColorOrderUI(current);
+                notifyBasicLightsStatus('Hardware Setup is locked. Unlock to change LED count.', 'warning');
+                return;
+            }
             const safe = _resolveBasicScenarioLedCount(value);
             _basicScenarioLedCountCurrent = safe;
             const label = document.getElementById('basicScenarioLedCountLabel');
@@ -7389,15 +7484,20 @@ window.addEventListener('beforeunload', function(event) {
             _basicScenarioConfig = _normalizeBasicScenarioConfig(_readBasicScenarioConfigFromUI());
             _writeBasicScenarioConfigToUI(_basicScenarioConfig);
             _saveBasicScenarioConfig(_basicScenarioConfig);
-            notifyBasicLightsStatus(`LED count set to ${safe}. Max groups is now ${_basicScenarioMaxGroupCount(_basicScenarioConfig)}.`, 'info');
+            _queueBasicScenarioLedCountApply();
+            notifyBasicLightsStatus(`LED count set to ${safe}. Max segments is now ${_basicScenarioMaxGroupCount(_basicScenarioConfig)}.`, 'info');
             syncHardwareSetupSummary();
         };
 
         window.basicScenarioLedCountStep = function(delta) {
+            if (hardwareSetupLocked) {
+                notifyBasicLightsStatus('Hardware Setup is locked. Unlock to change LED count.', 'warning');
+                return;
+            }
             const base = Number.isFinite(Number(_basicScenarioLedCountCurrent))
                 ? Number(_basicScenarioLedCountCurrent)
                 : _resolveBasicScenarioLedCount(document.getElementById('basicScenarioLedCount')?.value);
-            const next = Math.max(0, Math.min(MAX_LIGHTS_TOTAL_LEDS, Math.round(base + Number(delta || 0))));
+            const next = Math.round(base + Number(delta || 0));
             window.basicScenarioLedCountChange(next);
         };
 
@@ -7485,6 +7585,25 @@ window.addEventListener('beforeunload', function(event) {
             basicScenarioConfigChanged();
         };
 
+        function _queueBasicScenarioLedCountApply() {
+            if (!_basicScenarioStripEnabled) return;
+            if (!bleManager || !bleManager.isConnected) return;
+
+            if (_basicScenarioLedCountApplyTimer) {
+                clearTimeout(_basicScenarioLedCountApplyTimer);
+            }
+
+            _basicScenarioLedCountApplyTimer = setTimeout(async () => {
+                _basicScenarioLedCountApplyTimer = null;
+                try {
+                    await _applyBasicScenarioOutput();
+                } catch (error) {
+                    console.warn('[BasicLights] LED count apply failed:', error?.message || error);
+                    notifyBasicLightsStatus(`LED count apply failed: ${error?.message || error}`, 'error', { duration: 3500 });
+                }
+            }, 500);
+        }
+
         function _queueBasicScenarioConfigApply() {
             if (!_basicScenarioStripEnabled) return;
             if (!bleManager || !bleManager.isConnected) return;
@@ -7568,8 +7687,8 @@ window.addEventListener('beforeunload', function(event) {
             const slot = cardIndex % LIGHTS_ENGINE_MAX_GROUPS;
             const leds = Object.entries(assignment)
                 .filter(([, m]) => m === mode)
-                .map(([k]) => parseInt(k, 10))
-                .filter(n => Number.isFinite(n))
+                .map(([k]) => parseInt(k, 10) + 1)  // Convert 0-based storage to 1-based for firmware heuristic
+                .filter(n => Number.isFinite(n) && n >= 1)
                 .sort((a, b) => a - b);
             return [{
                 group: slot,
@@ -7592,20 +7711,26 @@ window.addEventListener('beforeunload', function(event) {
         function _syncBasicScenarioStripSwitch() {
             const buttonEl = document.getElementById('basicScenarioStripSwitch');
             const labelEl = document.getElementById('basicScenarioStripLabel');
-            if (!buttonEl) return;
+            const hwButtonEl = document.getElementById('basicScenarioStripSwitchHardware');
+            const hwLabelEl = document.getElementById('basicScenarioStripLabelHardware');
+            if (!buttonEl && !hwButtonEl) return;
             const isOn = !!_basicScenarioStripEnabled;
-            buttonEl.setAttribute('aria-pressed', isOn ? 'true' : 'false');
-            if (isOn) {
-                buttonEl.classList.remove('btn-outline-secondary');
-                buttonEl.classList.add('btn-warning');
-                // buttonEl.querySelector('span.material-symbols-outlined').textContent = 'lightbulb';
-                if (labelEl) labelEl.textContent = 'Lights are ON';
-            } else {
-                buttonEl.classList.remove('btn-warning');
-                buttonEl.classList.add('btn-outline-secondary');
-                // buttonEl.querySelector('span.material-symbols-outlined').textContent = 'light_off';
-                if (labelEl) labelEl.textContent = 'Lights are OFF';
-            }
+            [buttonEl, hwButtonEl].forEach(btn => {
+                if (!btn) return;
+                btn.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+                if (isOn) {
+                    btn.classList.remove('btn-outline-secondary');
+                    btn.classList.add('btn-warning');
+                } else {
+                    btn.classList.remove('btn-warning');
+                    btn.classList.add('btn-outline-secondary');
+                }
+            });
+            if (labelEl) labelEl.textContent = isOn ? 'Turn Lights Off' : 'Turn Lights On';
+            if (hwLabelEl) hwLabelEl.textContent = isOn ? 'Turn Lights Off' : 'Turn Lights On';
+
+            const minLabel = document.getElementById('basicScenarioLedCountMinLabel');
+            if (minLabel) minLabel.textContent = String(_resolveBasicScenarioMinLedCount());
         }
 
         function _buildActiveBasicScenarioGroups() {
@@ -7695,13 +7820,23 @@ window.addEventListener('beforeunload', function(event) {
             const labels = _selectedScenarioModeLabels();
 
             if (nextEnabled && (!bleManager || !bleManager.isConnected)) {
-                _syncMasterLightState(false, false);
-                notifyBasicLightsStatus(`${_basicScenarioSelectionStatus(labels)} Not connected.`, 'warning');
+                _syncMasterLightState(nextEnabled);
+                notifyBasicLightsStatus(`Lighting enabled. Connect to vehicle to activate LEDs.`, 'warning');
                 return;
             }
 
             try {
                 _syncMasterLightState(nextEnabled);
+                if (_basicScenarioStripEnabled) {
+                    const config = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+                    const nextLedCount = _resolveBasicScenarioLedCount(config.ledCount, true);
+                    if (Number(config.ledCount) !== nextLedCount || Number(_basicScenarioLedCountCurrent) !== nextLedCount) {
+                        _basicScenarioLedCountCurrent = nextLedCount;
+                        _basicScenarioConfig = _normalizeBasicScenarioConfig(Object.assign({}, config, { ledCount: nextLedCount }));
+                        _writeBasicScenarioConfigToUI(_basicScenarioConfig);
+                        _saveBasicScenarioConfig(_basicScenarioConfig);
+                    }
+                }
                 const result = await _applyBasicScenarioOutput();
 
                 if (!_basicScenarioStripEnabled) {
@@ -7739,7 +7874,12 @@ window.addEventListener('beforeunload', function(event) {
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         if (_basicScenarioLedCountSyncing) return;
-                        const safe = Math.max(0, Math.min(30, Math.round(Number(value[1]) || 0)));
+                        if (hardwareSetupLocked) {
+                            const current = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+                            _syncBasicScenarioCountAndColorOrderUI(current);
+                            return;
+                        }
+                        const safe = _resolveBasicScenarioLedCount(value[1]);
                         basicScenarioLedCountChange(safe);
                     }
                 });
@@ -7757,6 +7897,11 @@ window.addEventListener('beforeunload', function(event) {
                     rangeSlideDisabled: true,
                     onInput: function(value) {
                         if (_basicScenarioBrightnessSyncing) return;
+                        if (lightingControlLocked) {
+                            const current = _basicScenarioConfig || _normalizeBasicScenarioConfig(_getDefaultBasicScenarioConfig());
+                            _syncBasicScenarioBrightnessUI(current.brightnessPercent);
+                            return;
+                        }
                         const safe = Math.max(0, Math.min(100, Math.round(Number(value[1]) || 0)));
                         window.basicScenarioBrightnessChange(safe);
                     }
@@ -7832,8 +7977,7 @@ window.addEventListener('beforeunload', function(event) {
         function syncMasterLightSwitches(isEnabled) {
             const masterToggle = document.getElementById('lightsToggle');
             const dashboardToggle = document.getElementById('lightsToggleDashboard');
-            const lightGroupsToggle = document.getElementById('lightsToggleLightGroups');
-            [masterToggle, dashboardToggle, lightGroupsToggle].forEach(toggleBtn => {
+            [masterToggle, dashboardToggle].forEach(toggleBtn => {
                 if (!toggleBtn) return;
                 toggleBtn.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
                 toggleBtn.classList.toggle('is-active', isEnabled);
@@ -7942,6 +8086,16 @@ window.addEventListener('beforeunload', function(event) {
             return fallback;
         }
 
+        function resolveGroupPrimaryColor(groupLike) {
+            const group = groupLike && typeof groupLike === 'object' ? groupLike : {};
+            return toHexColor(group.color ?? group.primaryColor ?? '#ffffff', '#ffffff');
+        }
+
+        function resolveGroupSecondaryColor(groupLike) {
+            const group = groupLike && typeof groupLike === 'object' ? groupLike : {};
+            return toHexColor(group.color2 ?? group.secondaryColor ?? group.glitterColor ?? '#000000', '#000000');
+        }
+
         function buildFirmwareGroupPayload(group, groupIndex) {
             const normalized = normalizeLightGroup(group);
             const rawBrightness = Number(normalized.brightness);
@@ -7954,8 +8108,8 @@ window.addEventListener('beforeunload', function(event) {
                 group: Number(groupIndex),
                 name: normalizeLightGroupName(normalized.name || `Group ${groupIndex + 1}`),
                 enabled: !!normalized.enabled,
-                color: toHexColor(normalized.color, '#ffffff'),
-                color2: toHexColor(normalized.color2, '#000000'),
+                color: resolveGroupPrimaryColor(normalized),
+                color2: resolveGroupSecondaryColor(normalized),
                 brightness: Math.max(0, Math.min(100, brightness100)),
                 effect: normalizeEffectNameForEngine(normalized.pattern),
                 speed: Number(normalized.speed ?? 128),
@@ -8036,8 +8190,8 @@ window.addEventListener('beforeunload', function(event) {
                     : 255;
 
                 // Convert hex colors to firmware format (remove #)
-                const colorStr = (group.color || '#ff0000').replace('#', '');
-                const color2Str = (group.color2 || '#000000').replace('#', '');
+                const colorStr = resolveGroupPrimaryColor(group).replace('#', '');
+                const color2Str = resolveGroupSecondaryColor(group).replace('#', '');
 
                 return {
                     name: group.name || 'Unnamed Group',
@@ -8103,164 +8257,19 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function isolateGroupForPreview(index, draftGroup = null) {
-            const previewGroups = lightGroups.map((group, i) => ({
-                ...group,
-                enabled: i === index
-            }));
-
-            if (index !== null && draftGroup) {
-                previewGroups[index] = {
-                    ...previewGroups[index],
-                    ...draftGroup,
-                    enabled: true
-                };
-            }
-
-            if (index === null && draftGroup) {
-                previewGroups.push({ ...draftGroup, enabled: true });
-            }
-
-            return applyLightsHierarchyToHardware({
-                forceMasterOn: true,
-                groups: previewGroups,
-                masterEnabled: true
-            });
+            // Legacy Light Groups editor retired.
+            return Promise.resolve();
         }
 
         function restoreLightsAfterModal() {
-            if (!lightGroupsStateBeforeModal) {
-                applyLightsHierarchyToHardware();
-                return;
-            }
-
-            // Restore enabled state exactly as it was before edit/test
-            lightGroups = lightGroups.map((group, idx) => ({
-                ...group,
-                enabled: !!lightGroupsStateBeforeModal[idx]?.enabled
-            }));
-
-            saveLightGroups(false);
-            //setMasterLightsEnabled(masterStateBeforeModal, false);
-            applyLightsHierarchyToHardware();
-
+            // Legacy Light Groups editor retired.
             lightGroupsStateBeforeModal = null;
+            return;
         }
 
         function renderLightGroupsList() {
-            const listContainer = document.getElementById('lightGroupsList');
-            const emptyState = document.getElementById('lightGroupsEmptyState');
-            
-            if (!listContainer) return;
-            
-            listContainer.innerHTML = '';
-            
-            if (lightGroups.length === 0) {
-                emptyState.style.display = 'block';
-            } else {
-                emptyState.style.display = 'none';
-                // Render in current order (top = priority 1)
-                lightGroups.forEach((group, index) => {
-                    const item = document.createElement('div');
-                    item.className = 'light-group-item';
-                    item.setAttribute('data-group-id', group.id || '');
-                    item.setAttribute('data-index', index);
-                    
-                    const assignedIndices = normalizeLedIndices(
-                        Array.isArray(group.indices) ? group.indices : group.leds
-                    );
-                    const ledCount = assignedIndices.length;
-                    const ledDisplay = ledCount > 0 ? formatLedRanges(assignedIndices) : '--';
-                    const brightnessPercent = group.brightness !== undefined ?
-                        Math.round(group.brightness * 100 / 255) : 100;
-                    const color = group.color || '#ff0000';
-                    const color2 = group.color2 || '#000000';
-                    const pattern = group.pattern || LIGHT_GROUP_DEFAULT_PATTERN;
-                    const patternDisplay = (pattern === 'Cycle' || pattern === 'Cycle Favorites')
-                        ? `${pattern} (${LIGHT_GROUP_CYCLE_INTERVAL_SECONDS}s)`
-                        : pattern;
-                    const isConfigured = ledCount > 0;
-                    const detailsExpanded = expandedLightGroupIds.has(group.id);
-                    const hasSecondaryColor = color2 !== '#000000' && color2 !== '#00000000';
-                    const warningIcon = !isConfigured
-                        ? '<button type="button" class="light-group-warning-btn" aria-label="No LEDs assigned" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top" data-bs-content="No LED lights assigned."><span class="material-symbols-outlined light-group-warning-icon" aria-hidden="true">warning</span></button>'
-                        : '';
-                    
-                    item.innerHTML = `
-                        <div class="light-group-leading-controls" aria-label="Reorder group">
-                            <button type="button" class="light-group-order-btn" aria-label="Move group up" title="Move up" onclick="moveLightGroup(${index}, -1)" ${(index === 0 || manageLightGroupsLocked || !isBleConnected()) ? 'disabled' : ''}>
-                                <span class="material-symbols-outlined">keyboard_arrow_up</span>
-                            </button>
-                            <button type="button" class="light-group-order-btn" aria-label="Move group down" title="Move down" onclick="moveLightGroup(${index}, 1)" ${(index === lightGroups.length - 1 || manageLightGroupsLocked || !isBleConnected()) ? 'disabled' : ''}>
-                                <span class="material-symbols-outlined">keyboard_arrow_down</span>
-                            </button>
-                        </div>
-                        <div class="light-group-info">
-                            <div class="light-group-name-row">
-                                <div class="light-group-name">${group.name}${warningIcon}</div>
-                            </div>
-                            <div class="light-group-meta-row">
-                                <div class="form-check form-switch m-0 light-group-enabled-toggle-wrap" title="Toggle this light group on or off">
-                                    <input class="form-check-input light-group-enabled-toggle" type="checkbox" ${group.enabled ? 'checked' : ''} ${(manageLightGroupsLocked || !isBleConnected()) ? 'disabled' : ''} aria-label="Toggle ${group.name} on or off">
-                                </div>
-                                <div class="light-group-swatch-row" aria-label="Group colors">
-                                    <span class="light-group-swatch" style="background-color: ${color};" title="Primary color"></span>
-                                    ${hasSecondaryColor ? `<span class="light-group-swatch" style="background-color: ${color2};" title="Secondary color"></span>` : ''}
-                                </div>
-                            </div>
-                            <div class="light-group-details ${detailsExpanded ? 'expanded' : ''}">
-                                <div class="-small">LED Assignment: ${ledDisplay}</div>
-                                <div class="-small">Pattern: ${patternDisplay}</div>
-                                <div class="-small">Brightness: ${brightnessPercent}%</div>
-                            </div>
-                        </div>
-                        <div class="light-group-controls">
-                            <button type="button" class="light-group-details-toggle" aria-label="${detailsExpanded ? 'Collapse details' : 'Expand details'}" title="${detailsExpanded ? 'Collapse details' : 'Expand details'}" onclick="toggleLightGroupDetails('${group.id}')">
-                                <span class="material-symbols-outlined">${detailsExpanded ? 'expand_less' : 'expand_more'}</span>
-                            </button>
-                            <div class="garage-card-overflow dropdown" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                <button type="button" class="garage-card-overflow-btn dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Light group options" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    <span class="material-symbols-outlined">more_vert</span>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end garage-card-menu" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    <li>
-                                        <button type="button" class="dropdown-item" ${(manageLightGroupsLocked || !isBleConnected()) ? 'disabled' : ''} onclick="event.stopPropagation(); editLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Edit</button>
-                                    </li>
-                                    <li>
-                                        <button type="button" class="dropdown-item text-danger" ${(manageLightGroupsLocked || !isBleConnected()) ? 'disabled' : ''} onclick="event.stopPropagation(); deleteLightGroup(${index})" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">Delete</button>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    `;
-
-                    const enabledInput = item.querySelector('.light-group-enabled-toggle');
-                    if (enabledInput) {
-                        enabledInput.addEventListener('change', () => {
-                            if (!isBleConnected()) {
-                                enabledInput.checked = !enabledInput.checked;
-                                toast.warning('Connect to Bluetooth before editing light groups.');
-                                return;
-                            }
-                            if (manageLightGroupsLocked) {
-                                enabledInput.checked = !enabledInput.checked;
-                                toast.warning('Manage Light Groups is locked. Unlock to make changes.');
-                                return;
-                            }
-                            lightGroups[index].enabled = enabledInput.checked;
-                            saveLightGroups(false);
-                            lightingGroupsDirty = true;
-                            syncLightingProfileActionButtons();
-                            pushLightGroupToESP32(index).catch(error => {
-                                console.error('Failed to push single light group toggle:', error);
-                            });
-                        });
-                    }
-
-                    listContainer.appendChild(item);
-                });
-
-                initLightGroupWarningPopovers(listContainer);
-            }
+            // Legacy Light Groups list retired.
+            return;
         }
 
         function initLightGroupWarningPopovers(scopeElement = document) {
@@ -8313,24 +8322,8 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function moveLightGroup(index, delta) {
-            if (!isBleConnected()) {
-                toast.warning('Connect to Bluetooth before editing light groups.');
-                return;
-            }
-            if (manageLightGroupsLocked) {
-                toast.warning('Manage Light Groups is locked. Unlock to make changes.');
-                return;
-            }
-            const targetIndex = index + delta;
-            if (index < 0 || index >= lightGroups.length) return;
-            if (targetIndex < 0 || targetIndex >= lightGroups.length) return;
-
-            const previousPositions = captureLightGroupPositions();
-            const [movedGroup] = lightGroups.splice(index, 1);
-            lightGroups.splice(targetIndex, 0, movedGroup);
-
-            saveLightGroups();
-            requestAnimationFrame(() => animateLightGroupReorder(previousPositions));
+            // Legacy Light Groups list retired.
+            return;
         }
 
         function toggleLightGroupDetails(groupId) {
@@ -8481,170 +8474,18 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function openLightGroupModal(index = null) {
-            currentEditingGroupIndex = index;
-            currentSelectedLEDs = new Set();
-            lightGroupModalSaved = false;
-
-            // Snapshot pre-edit runtime state so Cancel/Close can fully restore it.
-            lightGroupsStateBeforeModal = JSON.parse(JSON.stringify(lightGroups));
-            masterStateBeforeModal = getMasterLightsEnabled();
-            
-            const modal = document.getElementById('lightGroupEditorModal');
-            const titleSpan = document.getElementById('lightGroupEditMode');
-            const nameInput = document.getElementById('lightGroupNameInput');
-            const brightnessSlider = document.getElementById('lightGroupBrightnessSlider');
-            const brightnessValue = document.getElementById('lightGroupBrightnessValue');
-            const patternSelect = document.getElementById('lightGroupPatternSelect');
-            const colorPicker = document.getElementById('lightGroupColorPicker');
-            const colorHex = document.getElementById('lightGroupColorHex');
-            const parsedTotalLEDCount = parseInt(document.getElementById('totalLEDCount').value, 10);
-            const totalLEDCount = Number.isInteger(parsedTotalLEDCount)
-                ? Math.max(0, Math.min(MAX_LIGHTS_TOTAL_LEDS, parsedTotalLEDCount))
-                : getVehicleScopedTotalLEDCount();
-            
-            if (index !== null) {
-                // Edit mode
-                const group = lightGroups[index];
-                titleSpan.textContent = 'Edit';
-                nameInput.value = group.name;
-                const groupIndices = Array.isArray(group.indices) ? group.indices : (Array.isArray(group.leds) ? group.leds : []);
-                groupIndices.forEach(idx => currentSelectedLEDs.add(idx));
-                
-                // Set brightness (convert 0-255 to 0-100 percentage)
-                const brightnessPercent = group.brightness !== undefined ? 
-                    Math.round(group.brightness * 100 / 255) : 80;
-                currentBrightness = brightnessPercent;
-                if (lightGroupBrightnessSliderInstance) {
-                    lightGroupBrightnessSliderInstance.value([0, brightnessPercent]);
-                }
-                updateLightGroupBrightnessThumbLabel(brightnessPercent);
-                brightnessValue.textContent = brightnessPercent + '%';
-
-                // Set intensity (0-255 range)
-                const intensity = group.intensity !== undefined ? group.intensity : 128;
-                currentIntensity = intensity;
-                const intensityValue = document.getElementById('lightGroupIntensityValue');
-                if (lightGroupIntensitySliderInstance) {
-                    lightGroupIntensitySliderInstance.value([0, intensity]);
-                }
-                updateLightGroupIntensityThumbLabel(intensity);
-                if (intensityValue) {
-                    intensityValue.textContent = String(intensity);
-                }
-
-                // Set speed (0-255 range)
-                const speed = group.speed !== undefined ? group.speed : 128;
-                currentSpeed = speed;
-                const speedValue = document.getElementById('lightGroupSpeedValue');
-                if (lightGroupSpeedSliderInstance) {
-                    lightGroupSpeedSliderInstance.value([0, speed]);
-                }
-                updateLightGroupSpeedThumbLabel(speed);
-                if (speedValue) {
-                    speedValue.textContent = String(speed);
-                }
-
-                // Set pattern
-                currentPattern = group.pattern || LIGHT_GROUP_DEFAULT_PATTERN;
-                populateLightGroupPatternOptions(currentPattern);
-                if (patternSelect) {
-                    patternSelect.value = currentPattern;
-                }
-                
-                // Set colors
-                const color = group.color || '#ff0000';
-                const color2 = group.color2 || '#000000';
-                currentColor = color;
-                currentColor2 = color2;
-                colorPicker.value = color;
-                colorHex.value = color.toUpperCase();
-                
-                const colorPicker2 = document.getElementById('lightGroupColorPicker2');
-                const colorHex2 = document.getElementById('lightGroupColorHex2');
-                if (colorPicker2) colorPicker2.value = color2;
-                if (colorHex2) colorHex2.value = color2.toUpperCase();
-            } else {
-                // Add mode
-                titleSpan.textContent = 'Add';
-                nameInput.value = '';
-                currentBrightness = 80;
-                if (lightGroupBrightnessSliderInstance) {
-                    lightGroupBrightnessSliderInstance.value([0, 80]);
-                }
-                updateLightGroupBrightnessThumbLabel(80);
-                brightnessValue.textContent = '80%';
-                
-                currentIntensity = 128;
-                const intensityValue = document.getElementById('lightGroupIntensityValue');
-                if (lightGroupIntensitySliderInstance) {
-                    lightGroupIntensitySliderInstance.value([0, 128]);
-                }
-                updateLightGroupIntensityThumbLabel(128);
-                if (intensityValue) {
-                    intensityValue.textContent = '128';
-                }
-
-                currentSpeed = 128;
-                const speedValue = document.getElementById('lightGroupSpeedValue');
-                if (lightGroupSpeedSliderInstance) {
-                    lightGroupSpeedSliderInstance.value([0, 128]);
-                }
-                updateLightGroupSpeedThumbLabel(128);
-                if (speedValue) {
-                    speedValue.textContent = '128';
-                }
-                
-                currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
-                populateLightGroupPatternOptions(LIGHT_GROUP_DEFAULT_PATTERN);
-                if (patternSelect) {
-                    patternSelect.value = LIGHT_GROUP_DEFAULT_PATTERN;
-                }
-                currentColor = '#ff0000';
-                currentColor2 = '#000000';
-                colorPicker.value = '#ff0000';
-                colorHex.value = '#FF0000';
-                
-                const colorPicker2 = document.getElementById('lightGroupColorPicker2');
-                const colorHex2 = document.getElementById('lightGroupColorHex2');
-                if (colorPicker2) colorPicker2.value = '#000000';
-                if (colorHex2) colorHex2.value = '#000000';
-            }
-            
-            renderLedGrid(totalLEDCount);
-
-            // While editing, isolate only this group for visual feedback.
-            if (index !== null) {
-                isolateGroupForPreview(index, lightGroups[index]);
-            } else {
-                applyLightsHierarchyToHardware({ masterEnabled: true, groups: [] });
-            }
-            
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
+            notifyBasicLightsStatus('Legacy group editor is no longer available. Use Segment Mapping instead.', 'info');
+            return;
         }
 
         function addLightGroup() {
-            if (!isBleConnected()) {
-                toast.warning('Connect to Bluetooth before editing light groups.');
-                return;
-            }
-            if (manageLightGroupsLocked) {
-                toast.warning('Manage Light Groups is locked. Unlock to make changes.');
-                return;
-            }
-            openLightGroupModal(null);
+            notifyBasicLightsStatus('Legacy group editor is no longer available. Use Segment Mapping instead.', 'info');
+            return;
         }
 
         function editLightGroup(index) {
-            if (!isBleConnected()) {
-                toast.warning('Connect to Bluetooth before editing light groups.');
-                return;
-            }
-            if (manageLightGroupsLocked) {
-                toast.warning('Manage Light Groups is locked. Unlock to make changes.');
-                return;
-            }
-            openLightGroupModal(index);
+            notifyBasicLightsStatus('Legacy group editor is no longer available. Use Segment Mapping instead.', 'info');
+            return;
         }
 
         function getLedGridColumns() {
@@ -8770,115 +8611,8 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         async function saveLightGroupFromModal() {
-            if (!isBleConnected()) {
-                toast.warning('Connect to Bluetooth before editing light groups.');
-                return;
-            }
-            const nameInput = document.getElementById('lightGroupNameInput');
-            const name = normalizeLightGroupName(nameInput?.value);
-            if (nameInput) nameInput.value = name;
-            
-            if (!name) {
-                await showSimpleNoticeDialog(
-                    'Missing Group Name',
-                    'Please enter a light group name before saving.',
-                    'OK',
-                    'light-group-name-required-overlay'
-                );
-                nameInput.focus();
-                return;
-            }
-            
-            const indices = Array.from(currentSelectedLEDs).sort((a, b) => a - b);
-            const patternSelect = document.getElementById('lightGroupPatternSelect');
-            const selectedPattern = (patternSelect && patternSelect.value) ? patternSelect.value : LIGHT_GROUP_DEFAULT_PATTERN;
-
-            if (indices.length > MAX_LIGHT_GROUP_LEDS) {
-                await showSimpleNoticeDialog(
-                    'Too Many LEDs In Group',
-                    `Each light group can include up to ${MAX_LIGHT_GROUP_LEDS} LEDs. Please reduce the selection and try again.`,
-                    'OK',
-                    'light-group-led-limit-overlay'
-                );
-                return;
-            }
-            
-            // Convert brightness percentage (0-100) to 0-255 scale
-            const brightness255 = Math.round(currentBrightness * 255 / 100);
-            const cycleIntervalSeconds = (selectedPattern === 'Cycle' || selectedPattern === 'Cycle Favorites') ? LIGHT_GROUP_CYCLE_INTERVAL_SECONDS : undefined;
-            
-            if (currentEditingGroupIndex !== null) {
-                // Update existing group while preserving enabled state.
-                const wasEnabled = !!lightGroups[currentEditingGroupIndex]?.enabled;
-                const existingId = lightGroups[currentEditingGroupIndex]?.id || createLightGroupId();
-                lightGroups[currentEditingGroupIndex] = {
-                    id: existingId,
-                    name: name,
-                    indices: indices,
-                    brightness: brightness255,
-                    color: currentColor,
-                    color2: currentColor2,
-                    pattern: selectedPattern,
-                    intensity: currentIntensity,
-                    speed: currentSpeed,
-                    cycleIntervalSeconds,
-                    enabled: wasEnabled
-                };
-                saveLightGroups(false);
-                lightingGroupsDirty = true;
-                syncLightingProfileActionButtons();
-                if (isBleConnected()) {
-                    await pushLightGroupToESP32(currentEditingGroupIndex);
-                }
-                window.toast.success(`Light group "${name}" updated!`);
-            } else {
-                if (lightGroups.length >= LIGHTS_ENGINE_MAX_GROUPS) {
-                    await showSimpleNoticeDialog(
-                        'Group Limit Reached',
-                        `You can create up to ${LIGHTS_ENGINE_MAX_GROUPS} light groups per vehicle.`,
-                        'OK',
-                        'light-group-limit-overlay'
-                    );
-                    return;
-                }
-
-                // Create new group disabled by default so save does not force it on.
-                lightGroups.push({
-                    id: createLightGroupId(),
-                    name: name,
-                    indices: indices,
-                    brightness: brightness255,
-                    color: currentColor,
-                    color2: currentColor2,
-                    pattern: selectedPattern,
-                    intensity: currentIntensity,
-                    speed: currentSpeed,
-                    cycleIntervalSeconds,
-                    enabled: false
-                });
-                saveLightGroups(false);
-                lightingGroupsDirty = true;
-                syncLightingProfileActionButtons();
-                if (isBleConnected()) {
-                    await pushLightGroupToESP32(lightGroups.length - 1);
-                }
-                window.toast.success(`Light group "${name}" created with ${indices.length} LED(s)!`);
-            }
-
-            lightGroupModalSaved = true;
-            
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('lightGroupEditorModal'));
-            if (modal) modal.hide();
-            
-            currentEditingGroupIndex = null;
-            currentSelectedLEDs.clear();
-            currentBrightness = 80;
-            currentColor = '#ff0000';
-            currentColor2 = '#000000';
-            currentPattern = LIGHT_GROUP_DEFAULT_PATTERN;
-            currentIntensity = 128;
-            currentSpeed = 128;
+            notifyBasicLightsStatus('Legacy group editor is no longer available. Use Segment Mapping instead.', 'info');
+            return;
         }
 
         function setLightGroupColor(color, target = 'primary') {
@@ -8900,47 +8634,8 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function deleteLightGroup(index) {
-            if (!isBleConnected()) {
-                toast.warning('Connect to Bluetooth before editing light groups.');
-                return;
-            }
-            if (manageLightGroupsLocked) {
-                toast.warning('Manage Light Groups is locked. Unlock to make changes.');
-                return;
-            }
-            const group = lightGroups[index];
-            if (!group) return;
-
-            const existing = document.getElementById('lg-delete-overlay');
-            if (existing) existing.remove();
-
-            const safeName = group.name.replace(/</g, '&lt;');
-            const subtext = lightGroups.length === 1
-                ? 'This is your last light group. You can create new ones anytime.'
-                : 'This cannot be undone.';
-
-            const overlay = document.createElement('div');
-            overlay.id = 'lg-delete-overlay';
-            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-            overlay.innerHTML = `
-              <div style="background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:24px;max-width:340px;width:100%;color:#fff;">
-                <h5 style="margin:0 0 12px;color:#fff;">Delete Light Group</h5>
-                <p style="margin:0 0 20px;color:#aaa;font-size:0.9rem;">Delete <strong style="color:#fff;">${safeName}</strong>? ${subtext}</p>
-                <div style="display:flex;gap:8px;">
-                                    <button id="lgd-cancel" style="flex:1;padding:10px;border:1px solid #555;border-radius:8px;background:#333;color:#aaa;cursor:pointer;">Cancel</button>
-                                    <button id="lgd-delete" style="flex:1;padding:10px;border:none;border-radius:8px;background:#c0392b;color:#fff;font-weight:600;cursor:pointer;">Delete</button>
-                </div>
-              </div>`;
-            document.body.appendChild(overlay);
-
-            overlay.querySelector('#lgd-cancel').onclick = () => overlay.remove();
-            overlay.querySelector('#lgd-delete').onclick = () => {
-                overlay.remove();
-                lightGroups.splice(index, 1);
-                if (group.id) expandedLightGroupIds.delete(group.id);
-                saveLightGroups();
-                window.toast.success('Light group deleted');
-            };
+            notifyBasicLightsStatus('Legacy group editor is no longer available. Use Segment Mapping instead.', 'info');
+            return;
         }
 
         function parseLEDIndices(str) {
@@ -8971,11 +8666,6 @@ window.addEventListener('beforeunload', function(event) {
 
         // Wire up Light Groups UI events
         window.addEventListener('DOMContentLoaded', async function() {
-            const addBtn = document.getElementById('addLightGroupBtn');
-            if (addBtn) {
-                addBtn.addEventListener('click', addLightGroup);
-            }
-
             const ltSaveBtn2 = document.getElementById('saveNewLightingProfileBtn');
             const ltUpdateBtn2 = document.getElementById('ltProfileUpdateBtn');
             if (ltSaveBtn2) ltSaveBtn2.addEventListener('click', saveAsNewLightingProfile);
@@ -10069,23 +9759,25 @@ window.addEventListener('beforeunload', function(event) {
             const chevron = document.getElementById('drivingProfilesChevron');
             const isCollapsed = localStorage.getItem('drivingProfilesCardCollapsed') === 'true';
 
-            if (card) card.classList.toggle('profile-card-locked', drivingProfilesLocked);
             setCollapsibleBodyState(body, isCollapsed, animateBody);
+            syncSharedCardLockUI({
+                card,
+                body,
+                lockIcon,
+                isLocked: drivingProfilesLocked,
+                lockedTitle: 'Unlock driving profiles',
+                unlockedTitle: 'Lock driving profiles to prevent changes'
+            });
             if (chevron) {
                 chevron.textContent = 'keyboard_arrow_down';
                 chevron.classList.add('card-collapse-chevron');
                 chevron.classList.toggle('is-collapsed', isCollapsed);
                 chevron.title = isCollapsed ? 'Expand driving profiles' : 'Collapse driving profiles';
             }
-            if (lockIcon) {
-                lockIcon.textContent = drivingProfilesLocked ? 'lock' : 'lock_open_right';
-                lockIcon.style.color = drivingProfilesLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
-                lockIcon.title = drivingProfilesLocked ? 'Unlock driving profiles' : 'Lock driving profiles to prevent changes';
-            }
         }
 
         // ==================== Suspend Suspension ====================
-        let suspensionPaused = false;
+        var suspensionPaused = false;
 
         function updateSuspendSuspensionBtn() {
             const btn = document.getElementById('suspendSuspensionBtn');
@@ -12392,6 +12084,30 @@ window.addEventListener('beforeunload', function(event) {
             isLoadingTuningConfig = false;
         }
 
+        function syncTuningParametersLockUI() {
+            const isLocked = localStorage.getItem('tuningParametersLocked') === 'true';
+            const card = document.getElementById('tuningParametersCard');
+            const body = document.getElementById('tuningParametersCardBody') || card?.querySelector('.card-body');
+            const lockIcon = document.getElementById('tuningLockIcon');
+
+            if (card) {
+                card.classList.toggle('slider-locked', isLocked);
+            }
+
+            syncSharedCardLockUI({
+                card,
+                body,
+                lockIcon,
+                isLocked,
+                lockedTitle: 'Unlock all sliders',
+                unlockedTitle: 'Lock all sliders to prevent accidental changes'
+            });
+
+            Object.keys(tuningSliderLocks).forEach(key => {
+                tuningSliderLocks[key] = isLocked;
+            });
+        }
+
         function toggleTuningLock(iconElement) {
             // Play click sound
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
@@ -12403,31 +12119,8 @@ window.addEventListener('beforeunload', function(event) {
             
             // Save to localStorage
             localStorage.setItem('tuningParametersLocked', newState.toString());
-            
-            // Find the card container
-            const card = iconElement.closest('.card');
-            
-            if (newState) {
-                // Lock all sliders
-                card.classList.add('slider-locked');
-                iconElement.textContent = 'lock';
-                iconElement.style.color = 'var(--lime-green)'; // Lime green
-                
-                // Set all individual slider locks to true
-                Object.keys(tuningSliderLocks).forEach(key => {
-                    tuningSliderLocks[key] = true;
-                });
-            } else {
-                // Unlock all sliders
-                card.classList.remove('slider-locked');
-                iconElement.textContent = 'lock_open_right';
-                iconElement.style.color = 'var(--high-impact-color)'; // Yellow
-                
-                // Set all individual slider locks to false
-                Object.keys(tuningSliderLocks).forEach(key => {
-                    tuningSliderLocks[key] = false;
-                });
-            }
+
+            syncTuningParametersLockUI();
 
             syncTuningStepperButtons();
         }
@@ -12559,19 +12252,21 @@ window.addEventListener('beforeunload', function(event) {
 
         function syncRcdccConfigurationLockUI() {
             const card = document.getElementById('rcdccConfigurationCard');
+            const body = document.getElementById('rcdccConfigurationCardBody') || card?.querySelector('.card-body');
             const lockIcon = document.getElementById('rcdccConfigurationLockIcon');
             const orientationSelect = document.getElementById('mpuOrientation');
 
             if (card) {
                 card.classList.toggle('slider-locked', rcdccConfigurationLocked);
             }
-            if (lockIcon) {
-                lockIcon.textContent = rcdccConfigurationLocked ? 'lock' : 'lock_open_right';
-                lockIcon.style.color = rcdccConfigurationLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
-                lockIcon.title = rcdccConfigurationLocked
-                    ? 'Unlock hardware configuration controls'
-                    : 'Lock hardware configuration controls';
-            }
+            syncSharedCardLockUI({
+                card,
+                body,
+                lockIcon,
+                isLocked: rcdccConfigurationLocked,
+                lockedTitle: 'Unlock hardware configuration controls',
+                unlockedTitle: 'Lock hardware configuration controls'
+            });
             if (orientationSelect) {
                 orientationSelect.disabled = rcdccConfigurationLocked;
             }
@@ -12599,18 +12294,18 @@ window.addEventListener('beforeunload', function(event) {
             
             // Find the card container
             const card = iconElement.closest('.card');
-            
-            if (servoRangeLocked) {
-                // Lock the sliders
-                card.classList.add('slider-locked');
-                iconElement.textContent = 'lock';
-                iconElement.style.color = 'var(--lime-green)'; // Lime green
-            } else {
-                // Unlock the sliders
-                card.classList.remove('slider-locked');
-                iconElement.textContent = 'lock_open_right';
-                iconElement.style.color = 'var(--high-impact-color)'; // Yellow
+
+            if (card) {
+                card.classList.toggle('slider-locked', servoRangeLocked);
             }
+            syncSharedCardLockUI({
+                card,
+                body: card?.querySelector('.card-body') || null,
+                lockIcon: iconElement,
+                isLocked: servoRangeLocked,
+                lockedTitle: 'Unlock slider controls',
+                unlockedTitle: 'Lock slider controls'
+            });
         }
         
         function toggleServoTrimLock(iconElement) {
@@ -12644,23 +12339,27 @@ window.addEventListener('beforeunload', function(event) {
         function syncServoSettingsLockUI(iconElement = null) {
             const card = document.getElementById('servoSettingsCard');
             const lockIcon = iconElement || document.getElementById('servoSettingsLockIcon');
+            const body = document.getElementById('servoSettingsCardBody') || card?.querySelector('.card-body');
             const autoCalibrateBtn = document.getElementById('servoAutoCalibrateBtn');
             const allLocked = servoTrimLocked && servoRotationLocked;
             if (card) {
                 card.classList.toggle('trim-locked', servoTrimLocked);
                 card.classList.toggle('rotation-locked', servoRotationLocked);
             }
+            syncSharedCardLockUI({
+                card,
+                body,
+                lockIcon,
+                isLocked: allLocked,
+                lockedTitle: 'Unlock trim and direction controls',
+                unlockedTitle: 'Lock trim and direction controls'
+            });
             if (autoCalibrateBtn) {
                 autoCalibrateBtn.disabled = allLocked;
                 autoCalibrateBtn.setAttribute('aria-disabled', allLocked ? 'true' : 'false');
                 autoCalibrateBtn.title = allLocked
                     ? 'Unlock Trim / Rotation to run Auto Calibrate'
                     : 'Run Auto Calibrate';
-            }
-            if (lockIcon) {
-                lockIcon.textContent = allLocked ? 'lock' : 'lock_open_right';
-                lockIcon.style.color = allLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
-                lockIcon.title = allLocked ? 'Unlock trim and direction controls' : 'Lock trim and direction controls';
             }
             syncServoTrimStepperButtons();
         }
