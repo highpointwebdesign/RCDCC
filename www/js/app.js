@@ -90,7 +90,7 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.734';
+        const APP_VERSION = '1.1.736';
         const BUILD_DATE = '2026-04-14';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -3428,6 +3428,7 @@ window.addEventListener('beforeunload', function(event) {
                     invertToggle.setAttribute('aria-checked', 'true');
                     servoSliderValues[servoName] = servoSliderValues[servoName] || {};
                     servoSliderValues[servoName].reversed = true;
+                    syncServoDirectionButtons(servoName);
                 }
             });
         }
@@ -10604,8 +10605,13 @@ window.addEventListener('beforeunload', function(event) {
                 loadSettingsFromConfig(data);
                 updateServoSliders(data);
 
-                // If the firmware config had no servo data, restore invert states from localStorage.
-                restoreServoReversedFromStorage();
+                // If firmware payload omitted servo objects, restore invert states from localStorage.
+                const hasServoConfig = !!(data && data.servos && (
+                    data.servos.frontLeft || data.servos.frontRight || data.servos.rearLeft || data.servos.rearRight
+                ));
+                if (!hasServoConfig) {
+                    restoreServoReversedFromStorage();
+                }
 
                 const localProfileSnapshot = getActiveDrivingProfileConfigSnapshot();
                 fullConfig = mergeConfigSnapshots(fullConfig, localProfileSnapshot);
@@ -11221,7 +11227,7 @@ window.addEventListener('beforeunload', function(event) {
                 value: [0, 50],
                 min: 0,
                 max: 100,
-                step: 1,
+                step: 5,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -11672,14 +11678,14 @@ window.addEventListener('beforeunload', function(event) {
             };
 
             servoKeys.forEach(function(servoName) {
-                // Trim slider (-30 to +30)
+                // Trim slider (-32 to +32)
                 const trimEl = document.querySelector(`#${servoTrimIds[servoName]}`);
                 if (trimEl) {
                     const trimInst = rangeSlider(trimEl, {
-                        value: [-30, defaultTrim],
-                        min: -30,
-                        max: 30,
-                        step: 1,
+                        value: [-32, defaultTrim],
+                        min: -32,
+                        max: 32,
+                        step: 4,
                         thumbsDisabled: [true, false],
                         rangeSlideDisabled: true,
                         onInput: function(value) {
@@ -11821,7 +11827,7 @@ window.addEventListener('beforeunload', function(event) {
                 const sliderData = servoSliderInstances[servoName];
                 if (!sliderData || !sliderData.trimInstance || !sliderData.trimElement) return;
                 const normalizedValue = normalizeServoTrimStepperValue(servoName, newValue);
-                sliderData.trimInstance.value([-30, normalizedValue]);
+                sliderData.trimInstance.value([-32, normalizedValue]);
                 sliderData.trimElement.dispatchEvent(new Event('input', { bubbles: true }));
             }
 
@@ -11953,7 +11959,7 @@ window.addEventListener('beforeunload', function(event) {
         };
 
         const tuningStepperConfigs = {
-            rideHeight:   { min: 0,    max: 100,  step: 1,    decimals: 0, valueKey: 'rideHeightOffset' },
+            rideHeight:   { min: 0,    max: 100,  step: 5,    decimals: 0, valueKey: 'rideHeightOffset' },
             omegaN:       { min: 0.5,  max: 15.0, step: 0.1,  decimals: 1, valueKey: 'omegaN' },
             zeta:         { min: 0.05, max: 0.95, step: 0.05, decimals: 2, valueKey: 'zeta' },
             range:        { min: 0.1,  max: 4.0,  step: 0.1,  decimals: 1, valueKey: 'range' },
@@ -11996,10 +12002,10 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         const servoTrimStepperConfigs = {
-            frontLeft: { min: -30, max: 30, step: 1 },
-            frontRight: { min: -30, max: 30, step: 1 },
-            rearLeft: { min: -30, max: 30, step: 1 },
-            rearRight: { min: -30, max: 30, step: 1 }
+            frontLeft: { min: -32, max: 32, step: 4 },
+            frontRight: { min: -32, max: 32, step: 4 },
+            rearLeft: { min: -32, max: 32, step: 4 },
+            rearRight: { min: -32, max: 32, step: 4 }
         };
 
         const servoMinStepperConfigs = {
@@ -12333,7 +12339,7 @@ window.addEventListener('beforeunload', function(event) {
                 if (sliderData.trimInstance) {
                     const trimValue = servoConfig.trim !== undefined ? servoConfig.trim : 0;
                     console.log(`Setting ${servoName} trim to ${trimValue}`);
-                    sliderData.trimInstance.value([-30, trimValue]);
+                    sliderData.trimInstance.value([-32, trimValue]);
                     sliderData.lastTrimValue = Math.round(trimValue);
                     if (sliderData.trimElement) {
                         const trimThumb = sliderData.trimElement.querySelector('.range-slider__thumb[data-upper]')

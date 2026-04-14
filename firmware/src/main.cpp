@@ -133,6 +133,30 @@ static void writeCenteredToAllSuspensionServos() {
   pwmOutputs.setChannelMicroseconds(3, static_cast<uint16_t>(rrCenter));
 }
 
+static int32_t mapRideHeightToServoUs(const RCDCCServoState& servo) {
+  // rideHeight 0..100 -> normalized -1..1
+  float norm = (static_cast<float>(clampI32Safe(servo.rideHeight, 0, 100)) - 50.0f) / 50.0f;
+  norm = clampNorm(norm);
+  if (servo.reverse != 0) {
+    norm = -norm;
+  }
+  return mapNormToServoUs(norm, servo);
+}
+
+static void writeRideHeightToAllSuspensionServos() {
+  const RCDCCConfigState& state = storageManager.getCurrentState();
+
+  const int32_t flUs = mapRideHeightToServoUs(state.servoFL);
+  const int32_t frUs = mapRideHeightToServoUs(state.servoFR);
+  const int32_t rlUs = mapRideHeightToServoUs(state.servoRL);
+  const int32_t rrUs = mapRideHeightToServoUs(state.servoRR);
+
+  pwmOutputs.setChannelMicroseconds(0, static_cast<uint16_t>(flUs));
+  pwmOutputs.setChannelMicroseconds(1, static_cast<uint16_t>(frUs));
+  pwmOutputs.setChannelMicroseconds(2, static_cast<uint16_t>(rlUs));
+  pwmOutputs.setChannelMicroseconds(3, static_cast<uint16_t>(rrUs));
+}
+
   static void clearManualServoOverrides() {
     for (auto& overrideState : gManualServoOverrides) {
       overrideState.active = false;
@@ -416,7 +440,16 @@ bool applyKVWritePayload(const String& payload) {
     Serial.printf("[SERVO-OVR] ch=3 us=%ld\n", static_cast<long>(value.as<int32_t>()));
   }
 
-  if (key.startsWith("suspension.") || key.startsWith("srv_f") || key == "imu.orient") {
+  // In paused setup mode, apply servo setup edits live.
+  if (gSuspensionPaused) {
+    if (key.startsWith("srv_") &&
+        (key.endsWith(".trim") || key.endsWith(".min") || key.endsWith(".max") ||
+         key.endsWith(".ride_ht") || key.endsWith(".reverse"))) {
+      writeRideHeightToAllSuspensionServos();
+    }
+  }
+
+  if (key.startsWith("suspension.") || key.startsWith("srv_") || key == "imu.orient") {
     refreshSuspensionRuntimeFromStorage();
   }
 
@@ -524,6 +557,11 @@ bool applySystemCommandPayload(const String& payload) {
     gSuspensionPaused = doc["paused"] | false;
     if (gSuspensionPaused) {
       writeCenteredToAllSuspensionServos();
+    } else {
+      // Reset simulator state and clear stale overrides so resume starts level
+      // with the latest per-servo calibration (trim/min/max/reverse/ride height).
+      refreshSuspensionRuntimeFromStorage();
+      clearManualServoOverrides();
     }
     Serial.printf("{\"status\":\"suspend_suspension\",\"paused\":%s}\n", gSuspensionPaused ? "true" : "false");
     return true;
@@ -955,16 +993,29 @@ void loop() {
       float rl = suspensionSimulator.getRearLeftOutput();
       float rr = suspensionSimulator.getRearRightOutput();
 
-      // CHECKPOINT: Servo config load (SPIFFS read - can be slow)
-      unsigned long beforeServoConfig = millis();
-      ServoConfig servoConfig = storageManager.getServoConfig();
-      unsigned long servoConfigTime = millis() - beforeServoConfig;
-      if (servoConfigTime > 100) {
-        Serial.printf("⚠️  SLOW SERVO CONFIG LOAD: %lums (SPIFFS read)\n", servoConfigTime);
-      }
+      // Normalize simulator outputs into [-1..1] against the simulator envelope,
+      // then map per-servo into each corner's own trim/min/max window.
+      const RCDCCConfigState& state = storageManager.getCurrentState();
+      const float halfTravel = SUSP_SIM_TRAVEL_DEG * 0.5f;
+      const float invHalfTravel = (halfTravel > 0.0001f) ? (1.0f / halfTravel) : 0.0f;
+
+      float flNorm = clampNorm((fl - SUSP_SIM_DEG_MID) * invHalfTravel);
+      float frNorm = clampNorm((fr - SUSP_SIM_DEG_MID) * invHalfTravel);
+      float rlNorm = clampNorm((rl - SUSP_SIM_DEG_MID) * invHalfTravel);
+      float rrNorm = clampNorm((rr - SUSP_SIM_DEG_MID) * invHalfTravel);
+
+      if (state.servoFL.reverse != 0) flNorm = -flNorm;
+      if (state.servoFR.reverse != 0) frNorm = -frNorm;
+      if (state.servoRL.reverse != 0) rlNorm = -rlNorm;
+      if (state.servoRR.reverse != 0) rrNorm = -rrNorm;
+
+      const int32_t flUs = mapNormToServoUs(flNorm, state.servoFL);
+      const int32_t frUs = mapNormToServoUs(frNorm, state.servoFR);
+      const int32_t rlUs = mapNormToServoUs(rlNorm, state.servoRL);
+      const int32_t rrUs = mapNormToServoUs(rrNorm, state.servoRR);
 
       if (SUSPENSION_DEBUG_LOGS && (currentTime - lastSuspensionDebugMs >= SUSPENSION_DEBUG_INTERVAL_MS)) {
-        const RCDCCConfigState& dbgState = storageManager.getCurrentState();
+        const RCDCCConfigState& dbgState = state;
         Serial.printf(
           "[SUSP-DBG] imu roll=%.2f pitch=%.2f vacc=%.2f | outDeg fl=%.1f fr=%.1f rl=%.1f rr=%.1f\n",
           roll,
@@ -1012,16 +1063,16 @@ void loop() {
       }
 
       if (manualServoOverrideActive(0, currentTime)) pwmOutputs.setChannelMicroseconds(0, gManualServoOverrides[0].targetUs);
-      else pwmOutputs.setChannel(0, fl, servoConfig.frontLeft);
+      else pwmOutputs.setChannelMicroseconds(0, static_cast<uint16_t>(flUs));
 
       if (manualServoOverrideActive(1, currentTime)) pwmOutputs.setChannelMicroseconds(1, gManualServoOverrides[1].targetUs);
-      else pwmOutputs.setChannel(1, fr, servoConfig.frontRight);
+      else pwmOutputs.setChannelMicroseconds(1, static_cast<uint16_t>(frUs));
 
       if (manualServoOverrideActive(2, currentTime)) pwmOutputs.setChannelMicroseconds(2, gManualServoOverrides[2].targetUs);
-      else pwmOutputs.setChannel(2, rl, servoConfig.rearLeft);
+      else pwmOutputs.setChannelMicroseconds(2, static_cast<uint16_t>(rlUs));
 
       if (manualServoOverrideActive(3, currentTime)) pwmOutputs.setChannelMicroseconds(3, gManualServoOverrides[3].targetUs);
-      else pwmOutputs.setChannel(3, rr, servoConfig.rearRight);
+      else pwmOutputs.setChannelMicroseconds(3, static_cast<uint16_t>(rrUs));
     }
 
 

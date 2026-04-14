@@ -6,11 +6,11 @@
 #include <Arduino.h>
 
 // ── Suspension travel envelope (degrees) ────────────────────────────────────
-// Center at 90°, ±30° travel = 60° total.
+// Center at 90°, ±80° travel = 160° total (mechanical 10..170 window).
 static constexpr float SUSP_SIM_DEG_MID      = 90.0f;
-static constexpr float SUSP_SIM_TRAVEL_DEG   = 60.0f;
-static constexpr float SUSP_SIM_MECH_MIN     = SUSP_SIM_DEG_MID - (SUSP_SIM_TRAVEL_DEG / 2.0f);  // 60°
-static constexpr float SUSP_SIM_MECH_MAX     = SUSP_SIM_DEG_MID + (SUSP_SIM_TRAVEL_DEG / 2.0f);  // 120°
+static constexpr float SUSP_SIM_TRAVEL_DEG   = 160.0f;
+static constexpr float SUSP_SIM_MECH_MIN     = SUSP_SIM_DEG_MID - (SUSP_SIM_TRAVEL_DEG / 2.0f);  // 10°
+static constexpr float SUSP_SIM_MECH_MAX     = SUSP_SIM_DEG_MID + (SUSP_SIM_TRAVEL_DEG / 2.0f);  // 170°
 
 class SuspensionSimulator {
 private:
