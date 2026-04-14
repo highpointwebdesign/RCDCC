@@ -556,7 +556,7 @@ bool applySystemCommandPayload(const String& payload) {
   if (command == "suspend_suspension") {
     gSuspensionPaused = doc["paused"] | false;
     if (gSuspensionPaused) {
-      writeCenteredToAllSuspensionServos();
+      writeTrimToAllSuspensionServos();
     } else {
       // Reset simulator state and clear stale overrides so resume starts level
       // with the latest per-servo calibration (trim/min/max/reverse/ride height).
