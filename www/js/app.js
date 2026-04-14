@@ -64,15 +64,7 @@ document.addEventListener('DOMContentLoaded', applySafeAreaInsets);
 
 // Warn about unsaved changes when leaving the page
 window.addEventListener('beforeunload', function(event) {
-    // Check if we're in the lights section with unsaved changes
-    const currentSection = document.querySelector('section.page-section:not([style*="display:none"])');
-    const isInLightsSection = currentSection?.id === 'lights';
-    
-    if (isInLightsSection && (_isLightingProfileLookDirty || lightingGroupsDirty)) {
-        event.preventDefault();
-        event.returnValue = '';
-        return '';
-    }
+    return;
 });
 
         // Hide Android navigation bar (immersive mode)
@@ -98,8 +90,8 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.703';
-        const BUILD_DATE = '2026-04-10';
+        const APP_VERSION = '1.1.734';
+        const BUILD_DATE = '2026-04-14';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -123,7 +115,7 @@ window.addEventListener('beforeunload', function(event) {
         const GARAGE_STORAGE_KEY = 'rcdcc_garage_vehicles';
         const DEBUG_MODE_STORAGE_KEY = 'settings_debug_mode_enabled';
         const VEHICLE_QUICK_SECTIONS = ['tuning', 'fpv'];
-        const VEHICLE_CONNECTION_REQUIRED_SECTIONS = ['tuning', 'lights', 'fpv'];
+        const VEHICLE_CONNECTION_REQUIRED_SECTIONS = ['tuning', 'fpv'];
 
         // ==================== Phase 6: Dance Mode ====================
         const DANCE_TILT_INTERVAL_MS = 50; // ~20Hz
@@ -208,7 +200,6 @@ window.addEventListener('beforeunload', function(event) {
 
             updateDashboardVehicleName(vehicleName);
             updateDashboardActiveProfile();
-            updateDashboardActiveLightingProfile();
 
             if (fullConfig && typeof fullConfig === 'object') {
                 updateSuspensionSettings(fullConfig);
@@ -344,7 +335,6 @@ window.addEventListener('beforeunload', function(event) {
 
         function clearDashboardActiveStatus() {
             setDashboardQuickNavDisplay('activeDrivingProfileDisplay', null, 'driving');
-            setDashboardQuickNavDisplay('activeLightingProfileDisplay', null, 'lighting');
             updateDashboardVehicleName(null);
 
             // Reset suspension settings card
@@ -1091,32 +1081,6 @@ window.addEventListener('beforeunload', function(event) {
                     updateTuningSliders(localProfileSnapshot);
                 }
 
-                const restoredLighting = loadLocalLightingProfiles();
-                lightingProfiles = Array.isArray(restoredLighting.profiles) ? restoredLighting.profiles : [];
-                activeLightingProfileIndex = Number(restoredLighting.activeIndex) || 0;
-                populateLightingProfileSelector();
-                syncLightingProfileActionButtons();
-
-                await loadLightGroups();
-                ensureLightingProfilesUpgraded();
-                populateLightingProfileSelector();
-                syncLightingProfileActionButtons();
-                // Ensure firmware starts from a clean group slate after reconnect.
-                // This prevents stale groups from previous sessions from overriding freshly synced LEDs.
-                try {
-                    await pushSystemCommand('lights_clear_all', {});
-                    lastPushedLightGroupCount = 0;
-                    lastPushedLightGroupSignatures = Array(LIGHTS_ENGINE_MAX_GROUPS).fill('');
-                    lastPushedLightsMasterEnabled = null;
-                } catch (error) {
-                    console.warn('[Lights] Could not clear firmware groups on connect:', error?.message || error);
-                }
-                // Core/basic mode: always start with master lights OFF on connect.
-                //  setMasterLightsEnabled(false, false);
-                lightingGroupsDirty = false;
-                syncLightingProfileActionButtons();
-                updateTotalLEDCountLabel();
-
                 updateConnectionStatus(true);
                 updateConnectionMethodDisplay();
 
@@ -1134,13 +1098,6 @@ window.addEventListener('beforeunload', function(event) {
                     return;
                 }
                 applyFeatureAvailabilityGate();
-
-                // Core/basic mode: enforce OFF state after connect before any manual user toggle.
-                // await setMasterLightsEnabled(false, true);
-                lastPushedLightsColorOrder = null;
-
-                // Update basic lights test card status
-                // notifyBasicLightsStatus('Connected — tap Master to test LEDs directly.', 'success');
 
                 const vehicleName = connectionLabel
                     || getGarageVehicleNameById(bleManager?.deviceId)
@@ -1234,7 +1191,6 @@ window.addEventListener('beforeunload', function(event) {
             if (!bleManager) return;
             bleSyncInProgress = false;
             bleSyncInternalWritesAllowed = false;
-            lightsWriteGateEnabled = false; // Reset gate on disconnect
             manualBleDisconnect = !!markManual;
             stopAutoReconnect();
             await bleManager.disconnect();
@@ -1247,16 +1203,10 @@ window.addEventListener('beforeunload', function(event) {
             clearDashboardActiveStatus();
             applyFeatureAvailabilityGate();
             resetSectionDataState();
-            lightingGroupsDirty = false;
-            syncLightingProfileActionButtons();
-            updateTotalLEDCountLabel();
             // Refresh garage UI so Connected badges and button labels update.
             if (window.GarageManager && typeof window.GarageManager.renderGarage === 'function') {
                 window.GarageManager.renderGarage();
             }
-            // Reset basic lights test UI
-            _resetBasicLightsUI();
-            notifyBasicLightsStatus('Waiting for connection…', 'info');
         }
 
         function purgeVehicleLocalData(deviceId) {
@@ -1264,14 +1214,7 @@ window.addEventListener('beforeunload', function(event) {
 
             [
                 DRIVING_PROFILES_STORAGE_KEY,
-                LIGHTING_PROFILES_STORAGE_KEY,
-                LIGHT_GROUPS_STORAGE_KEY,
-                LIGHT_GROUPS_INITIALIZED_KEY,
-                LIGHT_MASTER_STORAGE_KEY,
-                TOTAL_LED_COUNT_KEY,
-                LIGHT_COLOR_ORDER_KEY,
-                BASIC_SCENARIO_CONFIG_KEY,
-                VEHICLE_LIGHTING_DEFAULTS_STORAGE_KEY
+                BASIC_SCENARIO_CONFIG_KEY
             ].forEach((baseKey) => removeVehicleScopedStorage(baseKey, deviceId));
 
             if (normalizeVehicleStorageId(getPreferredReconnectDeviceId()) === normalizeVehicleStorageId(deviceId)) {
@@ -1615,9 +1558,9 @@ window.addEventListener('beforeunload', function(event) {
         let hasLoadedConfigFromDevice = false;
         let configRefreshInFlight = null;
         let hasAppliedInitialDeviceConfig = false;
-        const SECTION_LOAD_KEYS = ['tuning', 'lights', 'settings'];
-        const sectionDataLoaded = { tuning: false, lights: false, settings: false };
-        const sectionLoadPromises = { tuning: null, lights: null, settings: null };
+        const SECTION_LOAD_KEYS = ['tuning', 'settings'];
+        const sectionDataLoaded = { tuning: false, settings: false };
+        const sectionLoadPromises = { tuning: null, settings: null };
 
         // Phase 3: Driving profile state
         // Profiles are stored locally in localStorage — no firmware round-trips needed.
@@ -1907,17 +1850,20 @@ window.addEventListener('beforeunload', function(event) {
         //     if (statusEl) statusEl.textContent = message;
         // }
 
-        function setServoTestButtonsState(isBusy) {
-            const buttons = document.querySelectorAll('.servo-test-btn');
+        function setServoTestButtonsState() {
+            const buttons = document.querySelectorAll('.servo-direction-choice-btn');
             buttons.forEach((button) => {
                 const buttonKey = button.getAttribute('data-servo-test-key');
                 const buttonDir = Number(button.getAttribute('data-servo-test-dir'));
-                const isActive = isBusy && buttonKey === servoTestActiveKey && buttonDir === servoTestActiveDir;
-                // Only disable the button that is actually executing — others stay interactive.
-                button.disabled = isActive;
-                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-                button.classList.toggle('btn-gold', isActive);
-                button.classList.toggle('btn-outline-secondary', !isActive);
+                const buttonWantsReversed = button.getAttribute('data-servo-reversed') === 'true';
+                const currentReversed = getServoReverseFromUi(buttonKey);
+                const isSelected = buttonWantsReversed === currentReversed;
+                const isBusy = servoTestActionPending && buttonKey === servoTestActiveKey && buttonDir === servoTestActiveDir;
+
+                button.disabled = isBusy;
+                button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+                button.classList.toggle('btn-gold', isSelected || isBusy);
+                button.classList.toggle('btn-outline-secondary', !isSelected && !isBusy);
             });
         }
 
@@ -1936,14 +1882,14 @@ window.addEventListener('beforeunload', function(event) {
                 return;
             }
 
-            const directionLabel = dir > 0 ? 'Test +' : 'Test -';
+            const directionLabel = dir > 0 ? 'Rotate Right' : 'Rotate Left';
             const previousActiveKey = servoTestActiveKey;
             const previousActiveDir = servoTestActiveDir;
 
             servoTestActiveKey = servoKey;
             servoTestActiveDir = dir;
             servoTestActionPending = true;
-            setServoTestButtonsState(true);
+            setServoTestButtonsState();
             // updateServoTestStatus(`${descriptor.label}: sending ${directionLabel}...`);
 
             try {
@@ -1964,7 +1910,7 @@ window.addEventListener('beforeunload', function(event) {
                     console.warn(`[SERVO-TEST] Fallback write used for ${descriptor.label}`);
                 }
                 // updateServoTestStatus(`${descriptor.label}: ${directionLabel} sent.`);
-                if (window.toast) toast.success(`${descriptor.label} ${directionLabel}`, { duration: 1500 });
+                if (window.toast) toast.success(`${descriptor.label}: ${directionLabel}`, { duration: 1500 });
             } catch (error) {
                 servoTestActiveKey = previousActiveKey;
                 servoTestActiveDir = previousActiveDir;
@@ -1975,7 +1921,7 @@ window.addEventListener('beforeunload', function(event) {
                 servoTestActionPending = false;
                 servoTestActiveKey = null;
                 servoTestActiveDir = null;
-                setServoTestButtonsState(false);
+                setServoTestButtonsState();
             }
         };
 
@@ -2898,12 +2844,12 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function transformDanceAxesForOrientation(rawRollDeg, rawPitchDeg) {
-            if (danceModeState.orientationMode === 'landscape') {
+            if (danceModeState.orientationMode === 'portrait') {
                 return { roll: rawRollDeg, pitch: rawPitchDeg };
             }
 
             const angle = getDanceOrientationAngle();
-            // Rotate axes for portrait. Use screen angle when available to preserve left/right handed hold.
+            // Rotate axes for landscape. Use screen angle when available to preserve left/right handed hold.
             if (angle >= 225 && angle < 315) {
                 return {
                     roll: -rawPitchDeg,
@@ -3047,9 +2993,9 @@ window.addEventListener('beforeunload', function(event) {
 
                 // Display-only remap so the bubble follows the physical phone direction per mode.
                 // Portrait: camera=top=forward, right=right. Landscape (camera-left): volume=forward, camera=left.
-                const isLandscape = danceModeState.orientationMode === 'landscape';
-                const dispRoll  = isLandscape ? -pitchNorm :  pitchNorm;
-                const dispPitch = isLandscape ? -rollNorm  :  rollNorm;
+                const isPortrait = danceModeState.orientationMode === 'portrait';
+                const dispRoll  = isPortrait ?  pitchNorm : -pitchNorm;
+                const dispPitch = isPortrait ?  rollNorm  : -rollNorm;
                 updateDanceTiltIndicator(dispRoll, dispPitch);
                 queueDanceTiltUpdate(rollNorm, pitchNorm);
             }, DANCE_TILT_INTERVAL_MS);
@@ -3206,8 +3152,9 @@ window.addEventListener('beforeunload', function(event) {
 
             // Snap to center only when not in Phase A (disableSnapping = false)
             const isWithinThreshold = !disableSnapping && Math.abs(roll) < 5 && Math.abs(pitch) < 5;
-            const bubbleX = isWithinThreshold ? 8 : (roll * 3 + 8);
-            const bubbleY = isWithinThreshold ? 0 : (pitch * 3);
+            // Rotate motion mapping 90 degrees counter-clockwise.
+            const bubbleX = isWithinThreshold ? 8 : (pitch * 3 + 8);
+            const bubbleY = isWithinThreshold ? 0 : (-roll * 3);
 
             const bubble = document.getElementById('bubbleLevelBubble');
             if (bubble) {
@@ -3269,6 +3216,21 @@ window.addEventListener('beforeunload', function(event) {
             const abbrev = servoAbbrevMap[servo];
             if (!abbrev) return false;
             return !!document.getElementById(`servo${abbrev}Invert`)?.checked;
+        }
+
+        function syncServoDirectionButtons(servoName) {
+            document.querySelectorAll(`.servo-direction-choice-btn[data-servo-test-key="${servoName}"]`).forEach((button) => {
+                const buttonDir = Number(button.getAttribute('data-servo-test-dir'));
+                const buttonWantsReversed = button.getAttribute('data-servo-reversed') === 'true';
+                const currentReversed = getServoReverseFromUi(servoName);
+                const isSelected = buttonWantsReversed === currentReversed;
+                const isBusy = servoTestActionPending && servoTestActiveKey === servoName && buttonDir === servoTestActiveDir;
+
+                button.disabled = isBusy;
+                button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+                button.classList.toggle('btn-gold', isSelected || isBusy);
+                button.classList.toggle('btn-outline-secondary', !isSelected && !isBusy);
+            });
         }
 
         function buildAutoCalibrateServoConfigFromUi() {
@@ -4072,11 +4034,9 @@ window.addEventListener('beforeunload', function(event) {
                 'mpuOrientationCardCollapsed',
                 'perServoSettingsCardCollapsed',
                 'servoSettingsCardCollapsed',
-                'servoTestCardCollapsed',
                 'rcdccConfigurationCardCollapsed',
                 'formulasCardCollapsed',
                 'helpHardwareConfigCardCollapsed',
-                'helpServoTestCardCollapsed',
                 'lightingProfilesCardCollapsed',
                 'lightingControlCardCollapsed',
                 'basicLedFxOutputCardCollapsed',
@@ -4149,10 +4109,8 @@ window.addEventListener('beforeunload', function(event) {
             syncCardCollapseState('mpuOrientationCard', 'mpuOrientationChevron', 'mpuOrientationCardCollapsed');
             syncCardCollapseState('perServoSettingsCard', 'perServoSettingsChevron', 'perServoSettingsCardCollapsed');
             syncCardCollapseState('servoSettingsCard', 'servoSettingsChevron', 'servoSettingsCardCollapsed');
-            syncCardCollapseState('servoTestCard', 'servoTestChevron', 'servoTestCardCollapsed');
             syncCardCollapseState('rcdccConfigurationCard', 'rcdccConfigurationChevron', 'rcdccConfigurationCardCollapsed');
             syncCardCollapseState('helpHardwareConfigCard', 'helpHardwareConfigChevron', 'helpHardwareConfigCardCollapsed');
-            syncCardCollapseState('helpServoTestCard', 'helpServoTestChevron', 'helpServoTestCardCollapsed');
             syncCardCollapseState('basicLedFxOutputCard', 'basicLedFxOutputChevron', 'basicLedFxOutputCardCollapsed');
             syncCardCollapseState('basicActiveLedAllocationCard', 'basicActiveLedAllocationChevron', 'basicActiveLedAllocationCardCollapsed');
             syncCardCollapseState('manageLightGroupsCard', 'manageLightGroupsChevron', 'manageLightGroupsCardCollapsed');
@@ -4192,7 +4150,6 @@ window.addEventListener('beforeunload', function(event) {
             const compactHeaderPageLabels = {
                 garage: 'Garage',
                 tuning: 'Suspension',
-                lights: 'Lights',
                 fpv: 'FPV'
             };
             
@@ -4584,22 +4541,6 @@ window.addEventListener('beforeunload', function(event) {
                     if (!resolved) return;
                 }
 
-                if (currentSection === 'lights' && lightingGroupsDirty) {
-                    const choice = await showDirtyConfirmDialog(['lights']);
-                    if (choice === 'cancel') return;
-                    if (choice === 'save') {
-                        await updateActiveLightingProfile();
-                        if (lightingGroupsDirty) return;
-                    } else if (choice === 'discard') {
-                        try {
-                            await discardLightingProfileChanges();
-                        } catch (error) {
-                            console.warn('Lighting discard failed, continuing navigation:', error?.message || error);
-                            lightingGroupsDirty = false;
-                            syncLightingProfileActionButtons();
-                        }
-                    }
-                }
             }
 
             syncFooterNavActiveState(targetSection);
@@ -4761,7 +4702,6 @@ window.addEventListener('beforeunload', function(event) {
 
             bindNavBadge('activeVehicleDisplay', handleDashboardVehicleBadgeNav);
             bindNavBadge('activeDrivingProfileDisplay', handleDashboardDrivingProfilePickerNav);
-            bindNavBadge('activeLightingProfileDisplay', (event) => handleDashboardProfileBadgeNav(event, 'lights'));
         }
 
         window.navigateToSection = navigateToSection;
@@ -5361,22 +5301,11 @@ window.addEventListener('beforeunload', function(event) {
         };
 
         window.reloadLightingProfilesFromStorage = async function() {
-            const restored = loadLocalLightingProfiles();
-            lightingProfiles = Array.isArray(restored.profiles) ? restored.profiles : [];
-            activeLightingProfileIndex = Number(restored.activeIndex) || 0;
-            ensureLightingProfilesUpgraded();
-            populateLightingProfileSelector();
-            updateDashboardActiveLightingProfile();
-            syncLightingProfileActionButtons();
+            return;
         };
 
         function updateDashboardActiveLightingProfile() {
-            if (!isBleConnected()) {
-                setDashboardQuickNavDisplay('activeLightingProfileDisplay', null, 'lighting');
-                return;
-            }
-            const hit = lightingProfiles.find(p => Number(p.index) === Number(activeLightingProfileIndex));
-            setDashboardQuickNavDisplay('activeLightingProfileDisplay', hit ? (hit.name || `Profile ${hit.index}`) : '--', 'lighting');
+            return;
         }
 
         function getVehicleScopedTotalLEDCount() {
@@ -11832,32 +11761,60 @@ window.addEventListener('beforeunload', function(event) {
                 }
             });
 
-            // Invert toggle handlers
+            function persistServoReverseSelection(servoName, abbrev, isReversed) {
+                servoSliderValues[servoName].reversed = isReversed;
+
+                try {
+                    const stored = JSON.parse(localStorage.getItem(SERVO_REVERSED_STORAGE_KEY) || '{}');
+                    stored[servoName] = isReversed;
+                    localStorage.setItem(SERVO_REVERSED_STORAGE_KEY, JSON.stringify(stored));
+                } catch (_) {}
+
+                syncServoDirectionButtons(servoName);
+
+                const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
+                if (canUseKv) {
+                    markPageDirty('servo');
+                    bleManager.writeValue(window.RCDCC_KEYS[`SERVO_${abbrev}_REVERSE`], isReversed ? 1 : 0)
+                        .catch(e => console.error(`KV write ${abbrev}_REVERSE failed:`, e));
+                } else {
+                    saveServoParameter(servoName, 'reversed', isReversed);
+                }
+            }
+
+            // Raise-direction handlers
             const invertAbbrevMap = { frontLeft: 'FL', frontRight: 'FR', rearLeft: 'RL', rearRight: 'RR' };
             servoKeys.forEach(function(servoName) {
                 const abbrev = invertAbbrevMap[servoName];
                 const invertToggle = document.getElementById(`servo${abbrev}Invert`);
                 if (invertToggle) {
-                    invertToggle.addEventListener('change', function() {
-                        const isReversed = this.checked;
-                        // Keep in-memory state in sync
-                        servoSliderValues[servoName].reversed = isReversed;
-                        // Persist reversed states to localStorage so they survive restart
-                        try {
-                            const stored = JSON.parse(localStorage.getItem(SERVO_REVERSED_STORAGE_KEY) || '{}');
-                            stored[servoName] = isReversed;
-                            localStorage.setItem(SERVO_REVERSED_STORAGE_KEY, JSON.stringify(stored));
-                        } catch (_) {}
-                        const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
-                        if (canUseKv) {
-                            markPageDirty('servo');
-                            bleManager.writeValue(window.RCDCC_KEYS[`SERVO_${abbrev}_REVERSE`], isReversed ? 1 : 0)
-                                .catch(e => console.error(`KV write ${abbrev}_REVERSE failed:`, e));
-                        } else {
-                            saveServoParameter(servoName, 'reversed', isReversed);
-                        }
-                    });
+                    if (invertToggle.dataset.bound !== 'true') {
+                        invertToggle.dataset.bound = 'true';
+                        invertToggle.addEventListener('change', function() {
+                            persistServoReverseSelection(servoName, abbrev, this.checked);
+                        });
+                    }
                 }
+
+                document.querySelectorAll(`.servo-direction-choice-btn[data-servo-test-key="${servoName}"]`).forEach((button) => {
+                    if (button.dataset.bound === 'true') return;
+                    button.dataset.bound = 'true';
+                    button.addEventListener('click', async function() {
+                        const nextReversed = this.getAttribute('data-servo-reversed') === 'true';
+                        const testDir = Number(this.getAttribute('data-servo-test-dir'));
+
+                        if (invertToggle) {
+                            invertToggle.checked = nextReversed;
+                            invertToggle.dispatchEvent(new Event('change', { bubbles: true }));
+                        } else {
+                            persistServoReverseSelection(servoName, abbrev, nextReversed);
+                        }
+
+                        await window.runServoTestAction(servoName, testDir);
+                    });
+                });
+
+                syncServoDirectionButtons(servoName);
             });
 
             function setServoTrimSliderElementValue(servoName, newValue) {
@@ -12346,6 +12303,7 @@ window.addEventListener('beforeunload', function(event) {
                         invertToggle.checked = isReversed;
                         invertToggle.setAttribute('aria-checked', isReversed ? 'true' : 'false');
                         servoSliderValues[servoName].reversed = isReversed;
+                        syncServoDirectionButtons(servoName);
                     }
                 }
 

@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "26.04.30"
+#define FIRMWARE_VERSION "26.04.39"
 #endif
 
 // Sensor configuration
@@ -53,7 +53,6 @@
 #define DEFAULT_IMU_PITCH_TRIM 0.0f
 
 #define DEFAULT_ACTIVE_DRIVING_PROFILE 0
-#define DEFAULT_ACTIVE_LIGHTING_PROFILE 0
 
 // Legacy runtime defaults retained for simulator compatibility.
 #define DEFAULT_REACTION_SPEED 1.0f
@@ -82,9 +81,6 @@
 #define WIFI_AP_IP 192, 168, 4, 1
 #define WIFI_AP_GATEWAY 192, 168, 4, 1
 #define WIFI_AP_SUBNET 255, 255, 255, 0
-
-// Storage configuration
-#define LIGHTS_SPIFFS_PATH "/lights.json"
 
 // MPU6050 Orientation Options
 enum MPU6050Orientation {
@@ -148,7 +144,6 @@ struct RCDCCSystemState {
   char deviceName[64];
   char firmwareVersion[16];
   int32_t activeDrivingProfile;
-  int32_t activeLightingProfile;
 };
 
 // Phase 6 runtime-only Dance Mode state.
@@ -198,73 +193,6 @@ struct LEDConfig {
 };
 
 #define DEFAULT_LED_COLOR LED_COLOR_RED
-
-// Light modes/patterns enumeration
-enum LightMode {
-  LIGHT_MODE_OFF = 0,
-  LIGHT_MODE_SOLID = 1,      // mode: 1 (solid color)
-  LIGHT_MODE_BLINK = 2,      // mode: 2 (flash/blink patterns)
-  LIGHT_MODE_PULSE = 3,      // mode: 3 (pulse/breathe patterns)
-  LIGHT_MODE_WIPE = 4,       // mode: 4 (moving wipe)
-  LIGHT_MODE_CHASE = 5,      // mode: 5 (theater chase)
-  LIGHT_MODE_TWINKLE = 6,    // mode: 6 (random twinkle)
-  LIGHT_MODE_DUAL_BREATHE = 7 // mode: 7 (dual-color breathing)
-};
-
-// Individual light group configuration (for fixed 3-group mode)
-struct LightGroup {
-  bool enabled;           // Whether this light group is active
-  uint8_t brightness;     // Brightness 0-255
-  uint8_t mode;          // LightMode enum value
-  uint16_t blinkRate;    // Blink rate in milliseconds (for blink/pulse modes)
-};
-
-// Extended light group with arbitrary indices and RGB colors
-struct ExtendedLightGroup {
-  char name[64];          // Group name
-  char pattern[64];       // UI pattern label (for round-trip persistence)
-  bool enabled;           // Whether enabled
-  uint8_t brightness;     // 0-255
-  uint8_t mode;          // LightMode enum
-  uint16_t blinkRate;    // Blink rate in ms
-  uint32_t color;        // Primary color (RGB)
-  uint32_t color2;       // Secondary color (RGB)
-  uint16_t ledIndices[15]; // Which LED indices belong to this group (max 15 per group)
-  uint8_t ledCount;      // How many LEDs in this group
-};
-
-// Lights configuration structure (legacy: 3 fixed groups)
-struct LightsConfig {
-  LightGroup headlights;
-  LightGroup tailLights;
-  LightGroup emergencyLights;
-};
-
-// New lights configuration: support both legacy and arbitrary groups
-#define MAX_DYNAMIC_LIGHT_GROUPS 15
-#define MAX_DYNAMIC_GROUP_LEDS 15
-struct NewLightsConfig {
-  bool useLegacyMode;    // If true, use the 3 fixed groups; if false, use dynamic groups
-  LightsConfig legacy;   // Legacy 3-group config for backward compatibility
-  ExtendedLightGroup groups[MAX_DYNAMIC_LIGHT_GROUPS]; // Support up to 15 dynamic custom groups
-  uint8_t groupCount;    // Number of dynamic groups currently configured
-};
-
-// Default lights configuration
-#define DEFAULT_HEADLIGHTS_ENABLED false
-#define DEFAULT_HEADLIGHTS_BRIGHTNESS 100
-#define DEFAULT_HEADLIGHTS_MODE LIGHT_MODE_OFF
-#define DEFAULT_HEADLIGHTS_BLINK_RATE 500
-
-#define DEFAULT_TAILLIGHTS_ENABLED false
-#define DEFAULT_TAILLIGHTS_BRIGHTNESS 100
-#define DEFAULT_TAILLIGHTS_MODE LIGHT_MODE_OFF
-#define DEFAULT_TAILLIGHTS_BLINK_RATE 500
-
-#define DEFAULT_EMERGENCY_LIGHTS_ENABLED false
-#define DEFAULT_EMERGENCY_LIGHTS_BRIGHTNESS 100
-#define DEFAULT_EMERGENCY_LIGHTS_MODE LIGHT_MODE_OFF
-#define DEFAULT_EMERGENCY_LIGHTS_BLINK_RATE 500
 
 // ==================== Aux Servo Architecture (Phase 4) ====================
 #define MAX_AUX_SERVOS    10
@@ -356,69 +284,6 @@ struct DrivingProfile {
 
   // IMU orientation index
   int32_t imuOrient;
-};
-
-// ==================== Lighting Profile Schema (Phase 5) ====================
-// Lighting profiles are completely independent from driving profiles.
-// Profiles are stored as JSON files in LittleFS (lt_p0.json through lt_p9.json).
-// Only the active profile index (system.act_lt_prof) is stored in NVS.
-// LED indices are ZERO-BASED throughout — LED 0 is the first LED on the strip.
-
-#define MAX_LIGHTING_PROFILES 10
-#define MAX_LIGHTS_TOTAL_LEDS 30
-#define MAX_GROUP_LEDS 15  // Max individual LED indices per group
-#define MAX_GROUPS_PER_PROFILE 15
-
-// Effect names (string identifiers for JSON serialization)
-#define EFFECT_SOLID           "solid"
-#define EFFECT_BLINK           "blink"
-#define EFFECT_STROBE          "strobe"
-#define EFFECT_BREATHE         "breathe"
-#define EFFECT_FADE            "fade"
-#define EFFECT_TWINKLE         "twinkle"
-#define EFFECT_SPARKLE         "sparkle"
-#define EFFECT_FLASH_SPARKLE   "flash_sparkle"
-#define EFFECT_GLITTER         "glitter"
-#define EFFECT_SOLID_GLITTER   "solid_glitter"
-#define EFFECT_RUNNING         "running"
-#define EFFECT_LARSON          "larson"
-#define EFFECT_FLICKER         "flicker"
-#define EFFECT_FIRE_FLICKER    "fire_flicker"
-#define EFFECT_HEARTBEAT       "heartbeat"
-
-// Default effect for new groups
-#define DEFAULT_EFFECT EFFECT_SOLID
-#define DEFAULT_BRIGHTNESS 100
-#define DEFAULT_EFFECT_SPEED 50
-#define DEFAULT_EFFECT_INTENSITY 100
-
-// Single light group within a lighting profile.
-// A group is a named collection of individual LED indices (not a range).
-// The same LED index can appear in multiple groups — overlapping is allowed.
-// When two groups both write to the same LED, the last group processed wins.
-struct LightingGroup {
-  uint8_t  id;                  // 0-14, group identifier
-  char     name[64];            // Group name (e.g., "Headlights")
-  uint16_t leds[MAX_GROUP_LEDS]; // Array of zero-based LED indices (LED 0 = first LED)
-  uint16_t ledCount;            // How many LEDs in this group (0 = disabled)
-  
-  bool     enabled;             // Whether this group is active
-  char     effect[32];          // Effect name: solid, blink, strobe, etc.
-  char     colorPrimary[8];     // Hex color #RRGGBB (e.g., "#FFFFFF")
-  char     colorSecondary[8];   // Hex color #RRGGBB (e.g., "#FF0000")
-  uint8_t  brightness;          // 0-100 % brightness
-  uint8_t  effectSpeed;         // 0-100 effect speed/rate
-  uint8_t  effectIntensity;     // 0-100 effect intensity
-};
-
-// Complete lighting profile.
-// Profiles are serialized to JSON in LittleFS with filename lt_pN.json (0-9).
-struct LightingProfile {
-  char       name[64];          // Profile name (e.g., "Night Mode")
-  bool       master;            // Master enable/disable
-  uint16_t   totalLeds;         // Total LEDs on the strip (e.g., 100)
-  uint8_t    groupCount;        // Number of groups (0-15)
-  LightingGroup groups[MAX_GROUPS_PER_PROFILE];
 };
 
 #endif

@@ -3288,6 +3288,10 @@
             gap: 0.75rem;
         }
 
+        #perServoSettingsCardBody > #system-save-btn {
+            margin-top: 0.75rem;
+        }
+
         .per-servo-panel {
             padding: 0.75rem;
             border: 1px solid #e5e7eb;
@@ -3318,11 +3322,58 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 0.65rem;
             font-size: 0.8rem;
             color: var(--text-muted);
-            padding: 0.15rem 0;
+            padding: 0.2rem 0 0.35rem;
             border-bottom: 1px solid #e5e7eb;
-            margin-bottom: 0.1rem;
+            margin-bottom: 0.15rem;
+            flex-wrap: wrap;
+        }
+
+        .per-servo-direction-label {
+            flex: 1 1 9rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            line-height: 1.35;
+        }
+
+        .servo-direction-choice-group {
+            flex: 0 0 auto;
+            box-shadow: none;
+        }
+
+        .servo-direction-choice-btn {
+            min-width: 2.55rem;
+            min-height: 2.2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem 0.5rem;
+            font-weight: 600;
+        }
+
+        .servo-direction-choice-btn .material-symbols-outlined {
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+
+        .servo-direction-choice-btn.btn-gold {
+            border-color: var(--high-impact-color);
+        }
+
+        @media (max-width: 576px) {
+            .per-servo-invert-row {
+                align-items: stretch;
+            }
+
+            .servo-direction-choice-group {
+                width: 100%;
+            }
+
+            .servo-direction-choice-btn {
+                flex: 1 1 50%;
+            }
         }
 
         .per-servo-param-row {

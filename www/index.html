@@ -483,7 +483,8 @@
                                     </div>
                                 </div>
                                 <div class="form-text mt-2">
-                                    <small>Tilt your phone to control the TRX4's suspension in real time. Front/back tilt controls fore/aft balance; left/right tilt controls side-to-side lean.</small>
+                                    <small>IMPORTANT: Be sure you have configured your servo's under hardware Configuration first or you may see unexpected behavior.<br/>
+                                        Tilt your phone to control the TRX4's suspension in real time. Front/back tilt controls fore/aft balance; left/right tilt controls side-to-side lean.</small>
                                 </div>
                             </div>
                         </div>
@@ -980,10 +981,16 @@
                                             <span>Front Left</span>
                                         </div>
                                         <div class="per-servo-invert-row">
-                                            <label class="form-check-label" for="servoFLInvert">Invert</label>
-                                            <div class="form-check form-switch mb-0">
-                                                <input class="form-check-input" type="checkbox" id="servoFLInvert" role="switch">
+                                            <div class="per-servo-direction-label">Which rotation raises the chassis?</div>
+                                            <div class="btn-group servo-direction-choice-group" role="group" aria-label="Front Left raise direction">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary servo-direction-choice-btn" data-servo-test-key="frontLeft" data-servo-test-dir="-1" data-servo-reversed="true" title="Test rotate left for Front Left" aria-label="Front Left rotate left raises the chassis">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">rotate_left</span>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary servo-direction-choice-btn" data-servo-test-key="frontLeft" data-servo-test-dir="1" data-servo-reversed="false" title="Test rotate right for Front Left" aria-label="Front Left rotate right raises the chassis">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">rotate_right</span>
+                                                </button>
                                             </div>
+                                            <input class="d-none" type="checkbox" id="servoFLInvert" aria-hidden="true" tabindex="-1">
                                         </div>
                                         <div class="per-servo-param-row">
                                             <span class="per-servo-label">Trim</span>
@@ -1017,10 +1024,16 @@
                                             <span>Front Right</span>
                                         </div>
                                         <div class="per-servo-invert-row">
-                                            <label class="form-check-label" for="servoFRInvert">Invert</label>
-                                            <div class="form-check form-switch mb-0">
-                                                <input class="form-check-input" type="checkbox" id="servoFRInvert" role="switch">
+                                            <div class="per-servo-direction-label">Which rotation raises the chassis?</div>
+                                            <div class="btn-group servo-direction-choice-group" role="group" aria-label="Front Right raise direction">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary servo-direction-choice-btn" data-servo-test-key="frontRight" data-servo-test-dir="-1" data-servo-reversed="true" title="Test rotate left for Front Right" aria-label="Front Right rotate left raises the chassis">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">rotate_left</span>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary servo-direction-choice-btn" data-servo-test-key="frontRight" data-servo-test-dir="1" data-servo-reversed="false" title="Test rotate right for Front Right" aria-label="Front Right rotate right raises the chassis">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">rotate_right</span>
+                                                </button>
                                             </div>
+                                            <input class="d-none" type="checkbox" id="servoFRInvert" aria-hidden="true" tabindex="-1">
                                         </div>
                                         <div class="per-servo-param-row">
                                             <span class="per-servo-label">Trim</span>
@@ -1054,10 +1067,16 @@
                                             <span>Rear Left</span>
                                         </div>
                                         <div class="per-servo-invert-row">
-                                            <label class="form-check-label" for="servoRLInvert">Invert</label>
-                                            <div class="form-check form-switch mb-0">
-                                                <input class="form-check-input" type="checkbox" id="servoRLInvert" role="switch">
+                                            <div class="per-servo-direction-label">Which rotation raises the chassis?</div>
+                                            <div class="btn-group servo-direction-choice-group" role="group" aria-label="Rear Left raise direction">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary servo-direction-choice-btn" data-servo-test-key="rearLeft" data-servo-test-dir="-1" data-servo-reversed="true" title="Test rotate left for Rear Left" aria-label="Rear Left rotate left raises the chassis">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">rotate_left</span>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary servo-direction-choice-btn" data-servo-test-key="rearLeft" data-servo-test-dir="1" data-servo-reversed="false" title="Test rotate right for Rear Left" aria-label="Rear Left rotate right raises the chassis">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">rotate_right</span>
+                                                </button>
                                             </div>
+                                            <input class="d-none" type="checkbox" id="servoRLInvert" aria-hidden="true" tabindex="-1">
                                         </div>
                                         <div class="per-servo-param-row">
                                             <span class="per-servo-label">Trim</span>
@@ -1091,10 +1110,16 @@
                                             <span>Rear Right</span>
                                         </div>
                                         <div class="per-servo-invert-row">
-                                            <label class="form-check-label" for="servoRRInvert">Invert</label>
-                                            <div class="form-check form-switch mb-0">
-                                                <input class="form-check-input" type="checkbox" id="servoRRInvert" role="switch">
+                                            <div class="per-servo-direction-label">Which rotation raises the chassis?</div>
+                                            <div class="btn-group servo-direction-choice-group" role="group" aria-label="Rear Right raise direction">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary servo-direction-choice-btn" data-servo-test-key="rearRight" data-servo-test-dir="-1" data-servo-reversed="true" title="Test rotate left for Rear Right" aria-label="Rear Right rotate left raises the chassis">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">rotate_left</span>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary servo-direction-choice-btn" data-servo-test-key="rearRight" data-servo-test-dir="1" data-servo-reversed="false" title="Test rotate right for Rear Right" aria-label="Rear Right rotate right raises the chassis">
+                                                    <span class="material-symbols-outlined" aria-hidden="true">rotate_right</span>
+                                                </button>
                                             </div>
+                                            <input class="d-none" type="checkbox" id="servoRRInvert" aria-hidden="true" tabindex="-1">
                                         </div>
                                         <div class="per-servo-param-row">
                                             <span class="per-servo-label">Trim</span>
@@ -1135,78 +1160,6 @@
                     </div>
                 </div>
 
-                <!-- Servo Card -->
-                <div class="col-12 col-md-6">
-                    <div class="card" id="servoTestCard">
-                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: black; color: white; cursor:pointer;" onclick="toggleCardCollapse('servoTestCard', 'servoTestChevron', 'servoTestCardCollapsed')">
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="material-symbols-outlined" style="color: var(--danger);">
-                                info
-                                </span>
-                                <span>Servo Test</span>
-                            </div>
-                            <span class="material-symbols-outlined icon-action" id="servoTestChevron" title="Collapse servo test">keyboard_arrow_down</span>
-                        </div>
-                        <div class="card-body">
-
-                                <div class="servo-test-grid">
-                                    <div class="servo-settings-section tuning-slider-group">
-                                        <div class="servo-settings-title">
-                                            <div class="servo-settings-title-main">
-                                                <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_warm_up</span>
-                                                <span>F. Left</span>
-                                            </div>
-                                        </div>
-                                        <div class="servo-test-actions">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="frontLeft" data-servo-test-dir="1" onclick="runServoTestAction('frontLeft', 1)">Raise</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="frontLeft" data-servo-test-dir="-1" onclick="runServoTestAction('frontLeft', -1)">Lower</button>
-                                        </div>
-                                    </div>
-
-                                    <div class="servo-settings-section tuning-slider-group">
-                                        <div class="servo-settings-title">
-                                            <div class="servo-settings-title-main">
-                                                <span class="material-symbols-outlined" style="transform: rotate(45deg); color: var(--danger);">arrow_warm_up</span>
-                                                <span>F. Right</span>
-                                            </div>
-                                        </div>
-                                        <div class="servo-test-actions">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="frontRight" data-servo-test-dir="1" onclick="runServoTestAction('frontRight', 1)">Raise</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="frontRight" data-servo-test-dir="-1" onclick="runServoTestAction('frontRight', -1)">Lower</button>
-                                        </div>
-                                    </div>
-
-                                    <div class="servo-settings-section tuning-slider-group">
-                                        <div class="servo-settings-title">
-                                            <div class="servo-settings-title-main">
-                                                <span class="material-symbols-outlined icon-rotate-45 icon-danger">arrow_cool_down</span>
-                                                <span>R. Left</span>
-                                            </div>
-                                        </div>
-                                        <div class="servo-test-actions">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="rearLeft" data-servo-test-dir="1" onclick="runServoTestAction('rearLeft', 1)">Raise</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="rearLeft" data-servo-test-dir="-1" onclick="runServoTestAction('rearLeft', -1)">Lower</button>
-                                        </div>
-                                    </div>
-
-                                    <div class="servo-settings-section tuning-slider-group">
-                                        <div class="servo-settings-title">
-                                            <div class="servo-settings-title-main">
-                                                <span class="material-symbols-outlined icon-rotate-minus45 icon-danger">arrow_cool_down</span>
-                                                <span>R. Right</span>
-                                            </div>
-                                        </div>
-                                        <div class="servo-test-actions">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="rearRight" data-servo-test-dir="1" onclick="runServoTestAction('rearRight', 1)">Raise</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary servo-test-btn" data-servo-test-key="rearRight" data-servo-test-dir="-1" onclick="runServoTestAction('rearRight', -1)">Lower</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <!-- <div id="servoTestStatus" class="servo-test-status mt-3">Ready. Select a wheel and tap Raise or Lower.</div> -->
-                        </div>
-                    </div>
-                </div>
-           
             <!-- Help Card -->
                 <div class="col-12 col-md-6">
                     <div class="card">
@@ -1434,15 +1387,15 @@
                                     </div>
                                 </div>
 
-                                <!-- Invert -->
+                                <!-- Raise Direction -->
                                 <div class="col-12 col-md-6 mb-3">
                                     <div class="text-muted small">
                                         <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">sync_alt</span> Invert
+                                            <span class="material-symbols-outlined" style="color: var(--danger);">sync_alt</span> Raise Direction
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div><strong>Definition:</strong> Reverses the direction a servo moves in response to roll and pitch inputs.</div>
-                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Enable if a corner rises when it should drop. Use Servo Test (Raise/Lower) first to confirm which servos need inverting before a test drive.</div>
+                                            <div><strong>Definition:</strong> Choose the rotation that lifts that corner of the chassis. The selected button becomes the saved direction the suspension logic uses as "raise" for that servo.</div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Tap <strong>rotate left</strong> or <strong>rotate right</strong> and watch the vehicle. Leave selected whichever button lifts that corner upward.</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1468,7 +1421,7 @@
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
                                             <div><strong>Definition:</strong> The microsecond pulse-width limits for each servo — the physical travel range the firmware is allowed to command.</div>
-                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Set Min and Max to the safe mechanical limits of each corner's linkage. Going beyond these risks binding gears or damaging components. Use Raise/Lower in Servo Test to find the limits safely.</div>
+                                            <div style="margin-top: 5px;"><strong>Tip:</strong> Set Min and Max to the safe mechanical limits of each corner's linkage. Going beyond these risks binding gears or damaging components. Use the rotate-left and rotate-right buttons in Per-Servo Setup to probe each end safely.</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1478,538 +1431,6 @@
                     </div>
                 </div>
 
-                <!-- Help: Servo Test Card -->
-                <div class="col-12 col-md-6">
-                    <div class="card" id="helpServoTestCard">
-                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" onclick="toggleCardCollapse('helpServoTestCard', 'helpServoTestChevron', 'helpServoTestCardCollapsed')">
-                            <div>
-                                <span class="material-symbols-outlined" style="color: var(--danger);">info</span> Help: Servo Test
-                            </div>
-                            <span class="material-symbols-outlined" id="helpServoTestChevron" style="color: var(--high-impact-color);">keyboard_arrow_right</span>
-                        </div>
-                        <div class="card-body" style="display: none;">
-                            <div class="row">
-
-                                <!-- Purpose -->
-                                <div class="col-12 mb-3">
-                                    <div class="text-muted small">
-                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">info</span> Purpose
-                                        </div>
-                                        <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div>Use the <strong>Raise</strong> and <strong>Lower</strong> buttons to move each servo to its maximum or minimum travel limit. Limits are defined by the Min and Max values in Per-Servo Setup.</div>
-                                            <div style="margin-top: 5px;">This confirms each servo is responding and moving in the correct direction. If a corner moves in the wrong direction, enable <strong>Invert</strong> for that servo in Hardware Configuration &rsaquo; Per-Servo Setup.</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Raise -->
-                                <div class="col-12 col-md-6 mb-3">
-                                    <div class="text-muted small">
-                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrow_upward</span> Raise
-                                        </div>
-                                        <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div>Commands the servo to its <strong>Max</strong> position. The corner should rise (extend upward).</div>
-                                            <div style="margin-top: 5px;"><strong>Tip:</strong> If the corner drops instead of rises, enable Invert for that servo.</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Lower -->
-                                <div class="col-12 col-md-6 mb-3">
-                                    <div class="text-muted small">
-                                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">
-                                            <span class="material-symbols-outlined" style="color: var(--danger);">arrow_downward</span> Lower
-                                        </div>
-                                        <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            <div>Commands the servo to its <strong>Min</strong> position. The corner should drop (compress downward).</div>
-                                            <div style="margin-top: 5px;"><strong>Tip:</strong> If binding or resistance is felt before full travel, reduce Min or Max to stay within the safe mechanical range.</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </section>
-
-        <!-- Lights Section -->
-            <!-- Simple 5-LED Blue Lower -->
-                <section id="simpleLedTest" class="page-section">
-                    <div class="col-12">
-                        <div class="card" id="simpleLedTestCard">
-                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="material-symbols-outlined" style="color: var(--danger);">lightbulb</span>
-                                    Simple 5-LED Blue Test
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <p class="mb-2 text-muted" style="font-size:0.9rem;">
-                                    Turns LEDs 0-4 blue (on) or off, bypassing the light engine.
-                                </p>
-                                <div class="d-flex align-items-center gap-2 mb-2">
-                                    <button type="button" class="btn btn-sm btn-primary" id="simpleLedOnBtn" onclick="simpleLedTestOn()">
-                                        Turn ON (Blue)
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-secondary" id="simpleLedOffBtn" onclick="simpleLedTestOff()">
-                                        Turn OFF
-                                    </button>
-                                </div>
-                                <small id="simpleLedTestStatus" class="text-muted">Ready.</small>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-        <section id="lights" class="page-section">
-            <div class="section-title-row">
-                <div class="d-flex align-items-center justify-content-between w-100 gap-2">
-                    <h2 class="section-title">Lights</h2>
-                    <button type="button" id="basicScenarioStripSwitch" class="btn btn-outline-secondary" aria-pressed="false" onclick="basicScenarioStripToggle()">
-                        <span id="basicScenarioStripLabel">Lights are OFF</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Lights Controls -->
-            <div class="row g-3">
-                <div class="col-12">
-                <div id="lightsControlsContainer" class="row g-3">
-
-                    <div class="col-12">
-                    <div class="card" id="lightingProfilesCard">
-                        <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor:pointer;" onclick="toggleLightingProfilesCard()">
-                            <div class="d-flex align-items-center gap-2">
-                                <span style="position:relative;display:inline-flex;width:22px;height:22px;">
-                                    <span class="material-symbols-outlined" style="font-size:22px;color:var(--danger);line-height:1;">lightbulb</span>
-                                    <span class="material-symbols-outlined" style="position:absolute;top:-4px;right:-6px;font-size:12px;color:var(--danger);background:#000;border-radius:50%;line-height:1;">settings</span>
-                                </span>
-                                Lighting Profiles
-                            </div>
-                            <div class="d-flex align-items-center gap-2 profile-card-header-actions">
-                                <span class="material-symbols-outlined icon-action" id="lightingProfilesLockIcon" title="Lock lighting profiles to prevent changes" onclick="event.stopPropagation(); toggleLightingProfilesLock(this)">lock_open_right</span>
-                                <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="lightingProfilesChevron" title="Collapse lighting profiles">keyboard_arrow_down</span>
-                            </div>
-                        </div>
-                        <div class="card-body p-2" id="lightingProfilesCardBody" style="background:#1a1a1a;">
-                            <div id="ltProfileList" style="display:flex;flex-direction:column;gap:4px;">
-                                <div class="text-muted text-center py-2" style="font-size:0.875rem; color:#fff">No profiles saved yet</div>
-                            </div>
-                            <div class="d-flex gap-2 mt-2">
-                                <button type="button" class="btn btn-sm btn-outline-warning profile-update-btn" id="ltProfileUpdateBtn" disabled
-                                        style="flex:1;"
-                                        onclick="updateActiveLightingProfile()">
-                                    Save Changes
-                                </button>
-                                <button type="button" class="btn btn-sm btn-gold" id="saveNewLightingProfileBtn"
-                                        style="flex:1;"
-                                        onclick="saveAsNewLightingProfile()">
-                                    Save as New
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    </div>
-            
-                    <!-- Basic Lights Test (Stage 1) -->
-                    <div class="col-12">
-                        <div class="card" id="basicLightsTestCard">
-                            
-                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor:pointer;" onclick="toggleLightingControlCard()">
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="material-symbols-outlined" style="color: var(--danger);">tune</span>
-                                    Profile Look
-                                </div>
-                                <div class="d-flex align-items-center gap-2 profile-card-header-actions">
-                                    <span class="material-symbols-outlined icon-action" id="lightingControlLockIcon" title="Lock profile look to prevent changes" onclick="event.stopPropagation(); toggleLightingControlLock(this)">lock_open_right</span>
-                                    <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="lightingControlChevron" title="Collapse profile look">keyboard_arrow_down</span>
-                                </div>
-                            </div>
-                            <div class="card-body" id="basicLightsTestCardBody">
-                                <div id="basicLedFxOutputCard">
-                                    <div class="d-flex justify-content-between align-items-center mb-3" style="cursor:pointer;" onclick="toggleCardCollapse('basicLedFxOutputCard', 'basicLedFxOutputChevron', 'basicLedFxOutputCardCollapsed')">
-                                        <h6 class="mb-0">
-                                            <span class="material-symbols-outlined icon-danger">auto_awesome</span>
-                                            LED Fx &amp; Output
-                                        </h6>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="basicLedFxOutputChevron" title="Collapse LED FX and output">keyboard_arrow_down</span>
-                                        </div>
-                                    </div>
-                                    <div class="card-body p-0" id="basicLedFxOutputCardBody">
-                                        <div class="light-group-item">
-                                            <div class="light-group-info" style="width:100%;">
-                                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <div class="light-group-name">LED Brightness</div>
-                                                    <!-- <span id="basicScenarioBrightnessLabel" style="min-width:56px;text-align:right;color:#111827;font-size:0.9rem;font-weight:700;">100%</span> -->
-                                                </div>
-                                                <div class="slider-section" style="margin:8px 0 4px;">
-                                                    <div class="slider-stepper-control">
-                                                        <button type="button" class="slider-stepper-btn" aria-label="Decrease LED brightness" onclick="basicScenarioBrightnessStep(-1)">-</button>
-                                                        <div id="basicScenarioBrightness" class="slider-stepper-track"></div>
-                                                        <button type="button" class="slider-stepper-btn" aria-label="Increase LED brightness" onclick="basicScenarioBrightnessStep(1)">+</button>
-                                                    </div>
-                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                        <span>0%</span>
-                                                        <span>50%</span>
-                                                        <span>100%</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="light-group-item">
-                                            <div class="light-group-info" style="width:100%;">
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <div class="light-group-name" style="width:50%;">Fx</div>
-                                                    <select id="basicScenarioFx" class="form-select form-select-sm ms-auto" style="width:50%;" onchange="basicScenarioFxChange(this.value)">
-                                                        <option value="android">Android</option>
-                                                        <option value="blink">Blink</option>
-                                                        <option value="bpm">BPM</option>
-                                                        <option value="breathe">Breathe</option>
-                                                        <option value="candle">Candle</option>
-                                                        <option value="candle_multi">Candle Multi</option>
-                                                        <option value="chase_2">Chase 2</option>
-                                                        <option value="chase_flash">Chase Flash</option>
-                                                        <option value="chase_rainbow">Chase Rainbow</option>
-                                                        <option value="chunchun">Chunchun</option>
-                                                        <option value="colorwaves">Colorwaves</option>
-                                                        <option value="dancing_shadows">Dancing Shadows</option>
-                                                        <option value="fairy">Fairy</option>
-                                                        <option value="fairy_twinkle">Fairy Twinkle</option>
-                                                        <option value="flicker">Flicker</option>
-                                                        <option value="glitter">Glitter</option>
-                                                        <option value="heartbeat">Heartbeat</option>
-                                                        <option value="ripple">Ripple</option>
-                                                        <option value="running">Running</option>
-                                                        <option value="sine">Sine</option>
-                                                        <option value="solid">Solid</option>
-                                                        <option value="strobe">Strobe</option>
-                                                        <option value="strobe_mega">Strobe Mega</option>
-                                                        <option value="wipe">Wipe</option>
-                                                    </select>
-                                                </div>
-
-                                                <div id="basicScenarioFxIntensityRow" class="mt-3" style="display:none;">
-                                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                                        <div class="light-group-name">FX Intensity</div>
-                                                        <!-- <span id="basicScenarioFxIntensityLabel" style="min-width:56px;text-align:right;color:#111827;font-size:0.9rem;font-weight:700;">128</span> -->
-                                                    </div>
-                                                    <div class="slider-section" style="margin:8px 0 4px;">
-                                                        <div class="slider-stepper-control">
-                                                            <button type="button" class="slider-stepper-btn" aria-label="Decrease FX intensity" onclick="basicScenarioFxIntensityStep(-1)">-</button>
-                                                            <div id="basicScenarioFxIntensity" class="slider-stepper-track"></div>
-                                                            <button type="button" class="slider-stepper-btn" aria-label="Increase FX intensity" onclick="basicScenarioFxIntensityStep(1)">+</button>
-                                                        </div>
-                                                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                            <span>1</span>
-                                                            <span>128</span>
-                                                            <span>255</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div id="basicScenarioLarsonSettingsRow" class="mt-3" style="display:none;">
-                                                    <div id="basicScenarioLarsonSpeedRow">
-                                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                                            <div class="light-group-name">FX Speed</div>
-                                                        </div>
-                                                        <div class="slider-section" style="margin:8px 0 4px;">
-                                                            <div class="slider-stepper-control">
-                                                                <button type="button" class="slider-stepper-btn" aria-label="Decrease FX speed" onclick="basicScenarioLarsonSpeedStep(-1)">-</button>
-                                                                <div id="basicScenarioLarsonSpeed" class="slider-stepper-track"></div>
-                                                                <button type="button" class="slider-stepper-btn" aria-label="Increase FX speed" onclick="basicScenarioLarsonSpeedStep(1)">+</button>
-                                                            </div>
-                                                            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                                <span>1</span>
-                                                                <span>128</span>
-                                                                <span>255</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div id="basicScenarioFxParam1Row">
-                                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                                            <div class="light-group-name" id="basicScenarioFxParam1Label">Width</div>
-                                                        </div>
-                                                        <div class="slider-section" style="margin:8px 0 4px;">
-                                                            <div class="slider-stepper-control">
-                                                                <button type="button" class="slider-stepper-btn" aria-label="Decrease FX parameter" onclick="basicScenarioLarsonDelayStep(-1)">-</button>
-                                                                <div id="basicScenarioLarsonDelay" class="slider-stepper-track"></div>
-                                                                <button type="button" class="slider-stepper-btn" aria-label="Increase FX parameter" onclick="basicScenarioLarsonDelayStep(1)">+</button>
-                                                            </div>
-                                                            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                                <span>1</span>
-                                                                <span>128</span>
-                                                                <span>255</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div id="basicScenarioGlitterColorRow" class="mt-3" style="display:none;">
-                                                    <div class="d-flex align-items-center gap-2">
-                                                        <div class="light-group-name" id="basicScenarioFxSecondaryColorLabel" style="width:50%;">Secondary Color</div>
-                                                        <input type="color" id="basicScenarioGlitterColor" class="light-group-color-input ms-auto" value="#f5f5f5" oninput="basicScenarioGlitterColorChange(this.value)">
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <hr class="mt-4 mb-3">
-                                <div id="basicActiveLedAllocationCard">
-                                    <div class="d-flex justify-content-between align-items-center mb-3" style="cursor:pointer;" onclick="toggleCardCollapse('basicActiveLedAllocationCard', 'basicActiveLedAllocationChevron', 'basicActiveLedAllocationCardCollapsed')">
-                                        <h6 class="mb-0">
-                                            <span class="material-symbols-outlined icon-danger">format_list_bulleted</span>
-                                            Groups
-                                        </h6>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="material-symbols-outlined icon-action lights-collapse-chevron" id="basicActiveLedAllocationChevron" title="Collapse active LED allocation">keyboard_arrow_down</span>
-                                        </div>
-                                    </div>
-                                    <div class="card-body p-0" id="basicActiveLedAllocationCardBody">
-                                        <div id="basicScenarioList" style="margin-bottom:0.5rem;"></div>
-                                        <div class="d-flex gap-2 mb-2">
-                                            <button type="button" class="btn w-100 btn-gold" onclick="basicOpenScenarioGroupModal()">
-                                                Add Group
-                                            </button>
-                                            <button type="button" class="btn btn-outline-secondary w-100" onclick="basicScenarioConfigResetDefaults()">
-                                                Reset Defaults
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <hr class="mt-4 mb-3">
-
-                                <div id="basicLedMappingSection">
-                                    <div class="d-flex justify-content-between align-items-center mb-3" style="cursor:pointer;" onclick="basicToggleLedMapInline()">
-                                        <h6 class="mb-0">
-                                            <span class="material-symbols-outlined icon-danger">hub</span>
-                                            LED Mapping
-                                        </h6>
-                                        <span class="material-symbols-outlined icon-action lights-collapse-chevron is-collapsed" id="basicLedMapInlineChevron" title="Expand LED mapping">keyboard_arrow_down</span>
-                                    </div>
-                                    <div id="basicLedMapInlineSummary" class="basic-led-map-meta mb-2"></div>
-                                    <div id="basicLedMapInline" style="display:none;">
-                                        <div class="light-group-item">
-                                            <div class="light-group-info" style="width:100%;">
-                                                <div class="light-group-name mb-2" style="font-size:0.9rem;">Step 1. Select Group</div>
-                                                <div id="basicLedMapPalette" class="basic-led-map-palette"></div>
-                                            </div>
-                                        </div>
-                                        <div class="light-group-item">
-                                            <div class="light-group-info" style="width:100%;">
-                                                <div class="light-group-name mb-2" style="font-size:0.9rem;">Step 2. Select Color</div>
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <input type="color" id="basicLedMapSelectedColor" class="light-group-color-input" value="#f5f5f5" oninput="basicLedMapSelectedColorChange(this.value)">
-                                                    <div id="basicLedMapSelectedColorLabel" class="basic-led-map-meta" style="margin:0;">No group selected</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="light-group-item">
-                                            <div class="light-group-info" style="width:100%;">
-                                                <div class="light-group-name mb-2" style="font-size:0.9rem;">Step 3. Select LED</div>
-                                                <div id="basicLedMapMeta" class="basic-led-map-meta"></div>
-                                                <div id="basicLedMapGrid" class="basic-led-map-grid"></div>
-                                                <div class="d-flex gap-2 mt-3">
-                                                    <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" onclick="basicLedMapClearScenario()">
-                                                        Clear Group
-                                                    </button>
-                                                    <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" onclick="basicLedMapClearAll()">
-                                                        Clear All
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="modal fade" id="basicScenarioGroupModal" tabindex="-1" aria-hidden="true">
-                                    <div class="modal-dialog modal-sm modal-dialog-centered">
-                                        <div class="modal-content">
-                                            <div class="modal-header" style="background-color: black; color: white;">
-                                                <span class="material-symbols-outlined" style="color: var(--danger);">edit</span>
-                                                <h5 class="modal-title" id="basicScenarioGroupModalTitle">Edit Group</h5>
-                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            </div>
-                                            <div class="modal-body" style="color:#000;">
-                                                <label for="basicScenarioGroupNameInput" class="form-label" style="font-size:0.85rem;font-weight:600;">Group Name</label>
-                                                <input type="text" id="basicScenarioGroupNameInput" class="form-control form-control-sm" maxlength="24" placeholder="Group name">
-                                            </div>
-                                            <div class="modal-footer d-flex w-100 gap-2" style="background-color: black;">
-                                                <button type="button" id="basicScenarioGroupDeleteBtn" class="btn w-100 btn-danger" onclick="basicScenarioGroupDelete()">
-                                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">delete</span> Delete
-                                                </button>
-                                                <button type="button" class="btn w-100 btn-gold" onclick="basicScenarioGroupSave()">
-                                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">save</span> Save
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Hardware Setup Card -->
-                    <div class="col-12">
-                        <div class="card" id="hardwareSetupCard">
-                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor:pointer;" onclick="toggleHardwareSetupCard()">
-                                <div class="d-flex align-items-center gap-2 flex-nowrap hardware-setup-title-wrap">
-                                    <span class="material-symbols-outlined" style="color: var(--danger);">settings_input_component</span>
-                                    <span class="hardware-setup-title">Hardware Setup</span>
-                                    <span id="hardwareSetupSummary" class="text-muted ms-2 hardware-setup-summary" style="font-size:0.8rem;font-weight:400;"></span>
-                                </div>
-                                <div class="d-flex align-items-center gap-2 profile-card-header-actions">
-                                    <span class="material-symbols-outlined icon-action" id="hardwareSetupLockIcon" title="Lock hardware setup to prevent changes" onclick="event.stopPropagation(); toggleHardwareSetupLock()">lock_open_right</span>
-                                    <span class="material-symbols-outlined lights-collapse-chevron is-collapsed" id="hardwareSetupChevron" title="Expand hardware setup" style="color: var(--high-impact-color);">keyboard_arrow_down</span>
-                                </div>
-                            </div>
-                            <div class="card-body" id="hardwareSetupCardBody" style="display:none;">
-                                <div id="basicLedConfigurationCard">
-                                    <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <h6 class="mb-0">
-                                            <span class="material-symbols-outlined icon-danger">settings_input_component</span>
-                                            LED Configuration
-                                        </h6>
-                                    </div>
-                                    <div id="basicLedConfigurationCardBody">
-                                        <div class="light-group-item">
-                                            <div class="light-group-info" style="width:100%;">
-                                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <div class="light-group-name">LEDs Count</div>
-                                                </div>
-                                                <div class="slider-section" style="margin:8px 0 4px;">
-                                                    <div class="slider-stepper-control">
-                                                        <button type="button" class="slider-stepper-btn" aria-label="Decrease LEDs count" onclick="basicScenarioLedCountStep(-1)">-</button>
-                                                        <div id="basicScenarioLedCount" class="slider-stepper-track"></div>
-                                                        <button type="button" class="slider-stepper-btn" aria-label="Increase LEDs count" onclick="basicScenarioLedCountStep(1)">+</button>
-                                                    </div>
-                                                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
-                                                        <span>0</span>
-                                                        <span>15</span>
-                                                        <span>30</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="light-group-item">
-                                            <div class="light-group-info" style="width:100%;">
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <div class="light-group-name" style="width:50%;">Color Order</div>
-                                                    <select id="basicScenarioColorOrder" class="form-select form-select-sm ms-auto" style="width:50%;" onchange="basicScenarioColorOrderChange(this.value)">
-                                                        <option value="rgb">RGB</option>
-                                                        <option value="grb">GRB</option>
-                                                        <option value="rbg">RBG</option>
-                                                        <option value="gbr">GBR</option>
-                                                        <option value="brg">BRG</option>
-                                                        <option value="bgr">BGR</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <hr class="mt-4 mb-3">
-
-                                <div id="basicLedMapActionRow" class="d-grid gap-2" style="display:none;">
-                                    <button type="button" class="btn btn-sm btn-outline-warning w-100" onclick="basicLedMapInlineCancel()">Cancel</button>
-                                    <button type="button" class="btn btn-gold" onclick="basicLedMapSave()">Save</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Manage Light Groups Card -->
-                    <!-- <div class="col-12 col-md-6">
-                        <div class="card" id="manageLightGroupsCard">
-                            <div class="card-header card-header-dark d-flex justify-content-between align-items-center">
-                                <div>
-                                    <span class="material-symbols-outlined" style="color: var(--danger);">ad_group</span>
-                                    &nbsp;Manage Light Groups
-                                </div>
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="material-symbols-outlined icon-action" id="manageLightGroupsLockIcon" title="Lock light group controls" onclick="toggleManageLightGroupsLock()">lock_open_right</span>
-                                    <span class="material-symbols-outlined icon-action" id="manageLightGroupsChevron" title="Collapse manage light groups" onclick="toggleCardCollapse('manageLightGroupsCard', 'manageLightGroupsChevron', 'manageLightGroupsCardCollapsed')">keyboard_arrow_down</span>
-                                </div>
-                            </div>
-                            <div class="card-body" id="manageLightGroupsCardBody">
-                                <div class="light-group-config-item mb-3">
-                                    <label for="totalLEDCount" class="form-label mb-0" style="flex:1;">
-                                        <strong>Total LEDs <span id="totalLEDCountVehicleLabel" class="ms-1 fw-normal text-muted" style="font-size:0.85em; display:none;"></span></strong>
-                                        <div class="form-text mt-0"><small>Minimum: 0, Maximum: 30</small></div>
-                                    </label>
-                                    <input type="number" class="form-control text-center" id="totalLEDCount" min="0" max="30" value="11" placeholder="11" style="width:80px;flex-shrink:0;">
-                                </div>
-                                <div class="light-group-config-item mb-3">
-                                    <label for="lightColorOrder" class="form-label mb-0" style="flex:1;">
-                                        <strong>LED Color Order</strong>
-                                    </label>
-                                    <select class="form-select" id="lightColorOrder" style="max-width:120px;flex-shrink:0;">
-                                        <option value="grb" selected>GRB</option>
-                                        <option value="rgb">RGB</option>
-                                        <option value="rbg">RBG</option>
-                                        <option value="gbr">GBR</option>
-                                        <option value="brg">BRG</option>
-                                        <option value="bgr">BGR</option>
-                                    </select>
-                                </div>
-                                <hr class="my-3">
-
-                                <button type="button" class="lights-master-toggle-btn mb-3" id="lightsToggleLightGroups" aria-pressed="false" aria-label="Master Light Switch off" title="Master lights off">
-                                    <span class="material-symbols-outlined lights-master-toggle-icon" aria-hidden="true">light_off</span>
-                                    <span class="lights-master-toggle-text">Master Light Switch</span>
-                                </button>
-
-                                <div id="lightGroupsList" style="margin-bottom: 1rem;"></div>
-                                <div id="lightGroupsEmptyState" style="text-align: center; color: #999; padding: 2rem;">
-                                    <span class="material-symbols-outlined" style="font-size: 3rem; display: block; margin-bottom: 0.5rem;">fluorescent</span>
-                                    <p>No light groups yet. Create your first one to get started!</p>
-                                </div>
-                                <button type="button" class="btn w-100 btn-gold" id="addLightGroupBtn">
-                                    <span class="material-symbols-outlined">add_circle</span>
-                                    Add Light Group
-                                </button>
-                            </div>
-                        </div>
-                    </div> -->
-
-                    <!-- Help Card -->
-                    <div class="col-12">
-                        <div class="card" id="lightsGuideCard">
-                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark" style="cursor: pointer;" onclick="toggleLightsGuideCard()">
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="material-symbols-outlined" style="color: var(--danger);">help</span>
-                                    Help: Lights
-                                </div>
-                                <span class="material-symbols-outlined lights-collapse-chevron" id="lightsGuideChevron" style="color: var(--high-impact-color);">keyboard_arrow_down</span>
-                            </div>
-                            <div class="card-body" id="lightsGuideCardBody">
-                                <ol style="margin: 0; padding-left: 1.5rem; line-height: 1.8;">
-                                    <li><strong>Set Total LED Count:</strong> Update the Total LEDs field in the Manage Light Groups card to match your LED count.</li>
-                                    <li><strong>Create Light Groups:</strong> Click "Add Light Group" to define a group with a name, pattern, and color(s).</li>
-                                    <li><strong>Assign LEDs to Groups:</strong> In the group editor, select which LED positions belong to this group.</li>
-                                    <li><strong>Set Brightness:</strong> Adjust the brightness slider for each group independently.</li>
-                                    <li><strong>Configure Patterns:</strong> Choose a pattern (solid, blink, pulse, etc.). Patterns marked with * use both primary and secondary colors.</li>
-                                    <li><strong>Organize Priority:</strong> Use up/down arrows in each group card to set priority order (top = highest priority).</li>
-                                    <li><strong>Master Switch:</strong> Available on the Dashboard to enable/disable all lights at once.</li>
-                                    <li><strong>Enable Individual Groups:</strong> Use the group toggles in the Manage Light Groups card to enable/disable specific groups.</li>
-                                    <li><strong>Save a Profile:</strong> Tap "+ Save as New" in the Lighting Profiles card to save your setup for quick recall.</li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-                
             </div>
         </section>
 
@@ -2144,7 +1565,7 @@
                                             <span class="material-symbols-outlined" style="color: var(--danger);">route</span> Quick Navigation
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            Use the three-dot menu to jump directly to Suspension, Lights, or FPV for the selected vehicle.
+                                            Use the three-dot menu to jump directly to Suspension or FPV for the selected vehicle.
                                         </div>
                                     </div>
                                 </div>
@@ -2177,7 +1598,7 @@
                                             <span class="material-symbols-outlined" style="color: var(--danger);">backup</span> Backup
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            Tap Backup to export garage, light groups, and lighting profiles to a JSON file.
+                                            Tap Backup to export your garage data to a JSON file.
                                         </div>
                                     </div>
                                 </div>
@@ -2199,7 +1620,7 @@
                                             <span class="material-symbols-outlined" style="color: var(--danger);">delete</span> Deleting a Vehicle
                                         </div>
                                         <div style="font-size: 0.7rem; line-height: 1.4;">
-                                            Open the three-dot menu and choose Delete. Driving profiles, lighting profiles, and light groups for that truck are also removed.
+                                            Open the three-dot menu and choose Delete. Driving profiles for that truck are also removed.
                                         </div>
                                     </div>
                                 </div>
@@ -2253,10 +1674,6 @@
                 <!-- <span class="material-symbols-outlined footer-nav-icon-badge">settings</span> -->
             <!-- </span> -->
             <span>Tuning</span>
-        </button>
-        <button id="nav-lights" data-target="lights">
-            <span class="material-symbols-outlined">lightbulb</span>
-            <span>Lights</span>
         </button>
         <button id="nav-fpv" data-target="fpv">
             <span class="material-symbols-outlined">videocam</span>

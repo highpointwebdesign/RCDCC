@@ -45,8 +45,7 @@ firmware/
     ├── SensorFusion.h         # IMU complementary filter
     ├── SuspensionSimulator.h  # Suspension simulation
     ├── StorageManager.h       # SPIFFS persistence
-    ├── PWMOutputs.h           # Servo PWM control
-    └── LightsEngine.h         # LED group/pattern engine
+    └── PWMOutputs.h           # Servo PWM control
 ```
 
 ## BLE Service
@@ -57,7 +56,6 @@ The firmware exposes one BLE GATT service with characteristics for:
 - Config write
 - Telemetry notify (roll, pitch, accelX, accelY, accelZ)
 - Servo command write
-- Lights command write
 - System command write
 
 Device name in BLE advertising comes from persisted `deviceName` in config (default: `ESP32-RCDCC`).

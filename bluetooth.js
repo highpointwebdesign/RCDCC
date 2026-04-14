@@ -22,7 +22,6 @@ class BluetoothManager {
         this.CHAR_CONFIG_WRITE = '1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e';
         this.CHAR_TELEMETRY    = 'd8de624e-140f-4a22-8594-e2216b84a5f2';
         this.CHAR_SERVO_CMD    = 'e8a3c5f2-4b9d-11ec-81d3-0242ac130003';
-        this.CHAR_LIGHTS_CMD   = 'f2b4d6e8-4b9d-11ec-81d3-0242ac130003';
         this.CHAR_SYSTEM_CMD   = '068c1d3a-4b9e-11ec-81d3-0242ac130003';
         this.PREFERRED_DEVICE_ID_KEY = 'rcdccBlePreferredDeviceId';
 
@@ -285,20 +284,8 @@ class BluetoothManager {
         console.log('📤 Servo command sent via BLE');
     }
 
-    // -------------------------------------------------------------------------
-    // sendLightsCommand
-    // -------------------------------------------------------------------------
     async sendLightsCommand(lightsConfig) {
-        if (!this.isConnected) throw new Error('Not connected to BLE device');
-
-        const ble = await this._getBle();
-        const data = this._encodeJson(lightsConfig);
-
-        await this.enqueueGattOperation('write-lights', () =>
-            ble.write(this.deviceId, this.SERVICE_UUID, this.CHAR_LIGHTS_CMD, data)
-        );
-        this.stats.bytesSent += data.byteLength;
-        console.log('📤 Lights command sent via BLE');
+        throw new Error('Lighting features have been removed');
     }
 
     // -------------------------------------------------------------------------

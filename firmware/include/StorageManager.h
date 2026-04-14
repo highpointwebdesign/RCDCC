@@ -15,8 +15,6 @@ private:
   ServoConfig legacyServoConfig = {};
 
   LEDConfig ledConfig;
-  LightsConfig lightsConfig;
-  NewLightsConfig newLightsConfig = {};
   bool littleFsReady = false;
   bool servoTrimResetWarning = false;
 
@@ -107,7 +105,6 @@ private:
     strncpy(state.system.firmwareVersion, FIRMWARE_VERSION, sizeof(state.system.firmwareVersion) - 1);
     state.system.firmwareVersion[sizeof(state.system.firmwareVersion) - 1] = '\0';
     state.system.activeDrivingProfile = DEFAULT_ACTIVE_DRIVING_PROFILE;
-    state.system.activeLightingProfile = DEFAULT_ACTIVE_LIGHTING_PROFILE;
 
     syncLegacyFromState();
   }
@@ -227,7 +224,6 @@ private:
     pref.putString("device_nm", state.system.deviceName);
     pref.putString("fw_version", state.system.firmwareVersion);
     pref.putInt("act_drv_prof", state.system.activeDrivingProfile);
-    pref.putInt("act_lt_prof", state.system.activeLightingProfile);
     pref.end();
   }
 
@@ -328,7 +324,6 @@ private:
     strncpy(state.system.firmwareVersion, FIRMWARE_VERSION, sizeof(state.system.firmwareVersion) - 1);
     state.system.firmwareVersion[sizeof(state.system.firmwareVersion) - 1] = '\0';
     state.system.activeDrivingProfile = DEFAULT_ACTIVE_DRIVING_PROFILE;
-    state.system.activeLightingProfile = DEFAULT_ACTIVE_LIGHTING_PROFILE;
 
     Preferences pref;
     if (!pref.begin(NS_SYSTEM, true)) {
@@ -346,7 +341,6 @@ private:
     state.system.firmwareVersion[sizeof(state.system.firmwareVersion) - 1] = '\0';
 
     state.system.activeDrivingProfile = pref.getInt("act_drv_prof", DEFAULT_ACTIVE_DRIVING_PROFILE);
-    state.system.activeLightingProfile = pref.getInt("act_lt_prof", DEFAULT_ACTIVE_LIGHTING_PROFILE);
     pref.end();
   }
 
@@ -610,21 +604,9 @@ private:
     }
   }
 
-  void initLightsDefaults() {
-    lightsConfig.headlights = {DEFAULT_HEADLIGHTS_ENABLED, DEFAULT_HEADLIGHTS_BRIGHTNESS, DEFAULT_HEADLIGHTS_MODE, DEFAULT_HEADLIGHTS_BLINK_RATE};
-    lightsConfig.tailLights = {DEFAULT_TAILLIGHTS_ENABLED, DEFAULT_TAILLIGHTS_BRIGHTNESS, DEFAULT_TAILLIGHTS_MODE, DEFAULT_TAILLIGHTS_BLINK_RATE};
-    lightsConfig.emergencyLights = {DEFAULT_EMERGENCY_LIGHTS_ENABLED, DEFAULT_EMERGENCY_LIGHTS_BRIGHTNESS, DEFAULT_EMERGENCY_LIGHTS_MODE, DEFAULT_EMERGENCY_LIGHTS_BLINK_RATE};
-
-    memset(&newLightsConfig, 0, sizeof(NewLightsConfig));
-    newLightsConfig.useLegacyMode = false;
-    newLightsConfig.groupCount = 0;
-    newLightsConfig.legacy = lightsConfig;
-  }
-
 public:
   void init() {
     ledConfig.color = DEFAULT_LED_COLOR;
-    initLightsDefaults();
     loadStateDefaults();
 
     // Partition table uses label "littlefs". Mount that explicitly first.
@@ -750,8 +732,6 @@ public:
         state.system.deviceName[sizeof(state.system.deviceName) - 1] = '\0';
       } else if (key == "act_drv_prof") {
         state.system.activeDrivingProfile = value.as<int32_t>();
-      } else if (key == "act_lt_prof") {
-        state.system.activeLightingProfile = value.as<int32_t>();
       } else if (key == "fw_version") {
         String s = value.as<String>();
         if (s.length() > 15) s = s.substring(0, 15);
@@ -939,16 +919,14 @@ public:
     Serial.println("Config reset to defaults");
   }
 
-  String getConfigJSON(bool includeActiveLightingProfile = true) {
-    DynamicJsonDocument doc(includeActiveLightingProfile ? 10240 : 3072);
+  String getConfigJSON() {
+    DynamicJsonDocument doc(4096);
 
     auto writeServo = [&](const char* name, const RCDCCServoState& servo) {
       JsonObject s = doc.createNestedObject(name);
-      if (includeActiveLightingProfile) {
-        s["label"] = servo.label;
-        s["type"] = servo.type;
-        s["enabled"] = servo.enabled;
-      }
+      s["label"] = servo.label;
+      s["type"] = servo.type;
+      s["enabled"] = servo.enabled;
       s["trim"] = servo.trimUs;
       s["min"] = servo.minUs;
       s["max"] = servo.maxUs;
@@ -979,16 +957,8 @@ public:
     system["device_nm"] = state.system.deviceName;
     system["fw_version"] = state.system.firmwareVersion;
     system["act_drv_prof"] = state.system.activeDrivingProfile;
-    system["act_lt_prof"] = state.system.activeLightingProfile;
 
     doc["fw_version"] = state.system.firmwareVersion;
-
-    // BLE config reads use this compact shape to stay within characteristic size limits.
-    if (!includeActiveLightingProfile) {
-      String compactOutput;
-      serializeJson(doc, compactOutput);
-      return compactOutput;
-    }
 
     doc["reactionSpeed"]   = legacyConfig.reactionSpeed;
     doc["rideHeightOffset"] = legacyConfig.rideHeightOffset;
@@ -1067,52 +1037,6 @@ public:
       }
     }
 
-    // Phase 5: Lighting profiles
-    {
-      JsonArray ltProfArr = doc.createNestedArray("lt_profiles");
-      getLightingProfileNames(ltProfArr);
-      doc["lt_profile_count"] = ltProfArr.size();
-
-      int activeLtProf = 0;
-      Preferences pref;
-      if (pref.begin("system", false)) {
-        activeLtProf = pref.getInt("act_lt_prof", 0);
-        doc["act_lt_prof"] = activeLtProf;
-        pref.end();
-      } else {
-        doc["act_lt_prof"] = 0;
-      }
-
-      // Include full active profile JSON only when requested.
-      // Keeping this out of BLE characteristic reads avoids large callback payloads.
-      if (includeActiveLightingProfile) {
-        LightingProfile activeProfile = {};
-        if (loadLightingProfile(activeLtProf, activeProfile)) {
-          JsonObject ap = doc.createNestedObject("active_lt_profile");
-          ap["index"] = activeLtProf;
-          ap["name"] = activeProfile.name;
-          ap["master"] = activeProfile.master;
-          ap["total_leds"] = activeProfile.totalLeds;
-          JsonArray groups = ap.createNestedArray("groups");
-          for (uint8_t i = 0; i < activeProfile.groupCount; i++) {
-            const LightingGroup& g = activeProfile.groups[i];
-            JsonObject go = groups.createNestedObject();
-            go["id"] = g.id;
-            go["name"] = g.name;
-            go["enabled"] = g.enabled;
-            go["effect"] = g.effect;
-            go["color_primary"] = g.colorPrimary;
-            go["color_secondary"] = g.colorSecondary;
-            go["brightness"] = g.brightness;
-            go["effect_speed"] = g.effectSpeed;
-            go["effect_intensity"] = g.effectIntensity;
-            JsonArray leds = go.createNestedArray("leds");
-            for (uint16_t j = 0; j < g.ledCount; j++) leds.add(g.leds[j]);
-          }
-        }
-      }
-    }
-
     String output;
     serializeJson(doc, output);
     return output;
@@ -1144,19 +1068,6 @@ public:
       doc["executor_mode"] = "kv_only";
       doc["servo_count"] = 4 + servoRegistry.auxCount;
 
-      String out;
-      serializeJson(doc, out);
-      return out;
-    }
-
-    // Lights scope: return minimal empty config (no filesystem ops)
-    if (scope == "lights") {
-      DynamicJsonDocument doc(512);
-      doc["lt_profile_count"] = 0;
-      doc["act_lt_prof"] = 0;
-      JsonArray ltProfArr = doc.createNestedArray("lt_profiles");
-      // Empty profiles array - no file I/O
-      
       String out;
       serializeJson(doc, out);
       return out;
@@ -1545,664 +1456,6 @@ public:
     else if (colorName == "blue") ledConfig.color = LED_COLOR_BLUE;
   }
 
-  void loadLights() {
-    if (!littleFsReady) {
-      Serial.println("LittleFS unavailable, using default lights config");
-      return;
-    }
-
-    if (!LittleFS.exists(LIGHTS_SPIFFS_PATH)) {
-      Serial.println("Lights config file not found in LittleFS, using defaults");
-      return;
-    }
-
-    File file = LittleFS.open(LIGHTS_SPIFFS_PATH, "r");
-    if (!file) {
-      Serial.println("Failed to open lights config file in LittleFS");
-      return;
-    }
-
-    DynamicJsonDocument doc(1024);
-    DeserializationError error = deserializeJson(doc, file);
-    file.close();
-
-    if (error) {
-      Serial.print("Lights JSON parsing failed: ");
-      Serial.println(error.c_str());
-      return;
-    }
-
-    if (doc.containsKey("lightGroups")) {
-      JsonObject groups = doc["lightGroups"];
-
-      if (groups.containsKey("headlights")) {
-        JsonObject hl = groups["headlights"];
-        lightsConfig.headlights.enabled = hl["enabled"] | DEFAULT_HEADLIGHTS_ENABLED;
-        lightsConfig.headlights.brightness = hl["brightness"] | DEFAULT_HEADLIGHTS_BRIGHTNESS;
-        lightsConfig.headlights.mode = hl["mode"] | DEFAULT_HEADLIGHTS_MODE;
-        lightsConfig.headlights.blinkRate = hl["blinkRate"] | DEFAULT_HEADLIGHTS_BLINK_RATE;
-      }
-
-      if (groups.containsKey("tailLights")) {
-        JsonObject tl = groups["tailLights"];
-        lightsConfig.tailLights.enabled = tl["enabled"] | DEFAULT_TAILLIGHTS_ENABLED;
-        lightsConfig.tailLights.brightness = tl["brightness"] | DEFAULT_TAILLIGHTS_BRIGHTNESS;
-        lightsConfig.tailLights.mode = tl["mode"] | DEFAULT_TAILLIGHTS_MODE;
-        lightsConfig.tailLights.blinkRate = tl["blinkRate"] | DEFAULT_TAILLIGHTS_BLINK_RATE;
-      }
-
-      if (groups.containsKey("emergencyLights")) {
-        JsonObject el = groups["emergencyLights"];
-        lightsConfig.emergencyLights.enabled = el["enabled"] | DEFAULT_EMERGENCY_LIGHTS_ENABLED;
-        lightsConfig.emergencyLights.brightness = el["brightness"] | DEFAULT_EMERGENCY_LIGHTS_BRIGHTNESS;
-        lightsConfig.emergencyLights.mode = el["mode"] | DEFAULT_EMERGENCY_LIGHTS_MODE;
-        lightsConfig.emergencyLights.blinkRate = el["blinkRate"] | DEFAULT_EMERGENCY_LIGHTS_BLINK_RATE;
-      }
-    }
-
-    newLightsConfig.legacy = lightsConfig;
-
-    if (doc.containsKey("lightGroupsArray")) {
-      JsonArray groupsArray = doc["lightGroupsArray"];
-      newLightsConfig.useLegacyMode = false;
-      newLightsConfig.groupCount = 0;
-
-      for (JsonObject groupObj : groupsArray) {
-        if (newLightsConfig.groupCount >= MAX_DYNAMIC_LIGHT_GROUPS) break;
-
-        ExtendedLightGroup& group = newLightsConfig.groups[newLightsConfig.groupCount];
-        memset(&group, 0, sizeof(ExtendedLightGroup));
-
-        const char* name = groupObj["name"] | "";
-        strncpy(group.name, name, sizeof(group.name) - 1);
-        group.name[sizeof(group.name) - 1] = '\0';
-
-        const char* pattern = groupObj["pattern"] | "Steady";
-        strncpy(group.pattern, pattern, sizeof(group.pattern) - 1);
-        group.pattern[sizeof(group.pattern) - 1] = '\0';
-
-        group.enabled = groupObj["enabled"] | false;
-        group.brightness = groupObj["brightness"] | 255;
-        group.mode = groupObj["mode"] | LIGHT_MODE_SOLID;
-        group.blinkRate = groupObj["blinkRate"] | 500;
-        group.color = groupObj["color"] | 0xFF0000;
-        group.color2 = groupObj["color2"] | 0x000000;
-
-        group.ledCount = 0;
-        if (groupObj.containsKey("indices")) {
-          JsonArray indicesArray = groupObj["indices"];
-          for (uint16_t idx : indicesArray) {
-            if (group.ledCount >= MAX_DYNAMIC_GROUP_LEDS) break;
-            group.ledIndices[group.ledCount++] = idx;
-          }
-        }
-
-        newLightsConfig.groupCount++;
-      }
-    }
-
-    Serial.println("Lights config loaded from LittleFS");
-  }
-
-  void saveLights() {
-    if (!littleFsReady) {
-      Serial.println("LittleFS unavailable, skipping lights config save");
-      return;
-    }
-
-    static DynamicJsonDocument doc(8192);
-    doc.clear();
-
-    JsonObject groups = doc.createNestedObject("lightGroups");
-
-    JsonObject hl = groups.createNestedObject("headlights");
-    hl["enabled"] = lightsConfig.headlights.enabled;
-    hl["brightness"] = lightsConfig.headlights.brightness;
-    hl["mode"] = lightsConfig.headlights.mode;
-    hl["blinkRate"] = lightsConfig.headlights.blinkRate;
-
-    JsonObject tl = groups.createNestedObject("tailLights");
-    tl["enabled"] = lightsConfig.tailLights.enabled;
-    tl["brightness"] = lightsConfig.tailLights.brightness;
-    tl["mode"] = lightsConfig.tailLights.mode;
-    tl["blinkRate"] = lightsConfig.tailLights.blinkRate;
-
-    JsonObject el = groups.createNestedObject("emergencyLights");
-    el["enabled"] = lightsConfig.emergencyLights.enabled;
-    el["brightness"] = lightsConfig.emergencyLights.brightness;
-    el["mode"] = lightsConfig.emergencyLights.mode;
-    el["blinkRate"] = lightsConfig.emergencyLights.blinkRate;
-
-    JsonObject defaults = doc.createNestedObject("defaults");
-    defaults["brightness"] = 100;
-    defaults["blinkRate"] = 500;
-
-    JsonArray dynamicGroups = doc.createNestedArray("lightGroupsArray");
-    for (uint8_t i = 0; i < newLightsConfig.groupCount && i < MAX_DYNAMIC_LIGHT_GROUPS; i++) {
-      const ExtendedLightGroup& group = newLightsConfig.groups[i];
-      JsonObject g = dynamicGroups.createNestedObject();
-      g["name"] = group.name;
-      g["pattern"] = group.pattern;
-      g["enabled"] = group.enabled;
-      g["brightness"] = group.brightness;
-      g["mode"] = group.mode;
-      g["blinkRate"] = group.blinkRate;
-      g["color"] = group.color;
-      g["color2"] = group.color2;
-
-      JsonArray idx = g.createNestedArray("indices");
-      for (uint8_t led = 0; led < group.ledCount && led < MAX_DYNAMIC_GROUP_LEDS; led++) {
-        idx.add(group.ledIndices[led]);
-      }
-    }
-
-    File file = LittleFS.open(LIGHTS_SPIFFS_PATH, "w");
-    if (!file) {
-      Serial.println("Failed to create lights config file in LittleFS");
-      return;
-    }
-
-    serializeJson(doc, file);
-    file.close();
-
-    Serial.println("Lights config saved to LittleFS");
-  }
-
-  LightsConfig getLightsConfig() const {
-    return lightsConfig;
-  }
-
-  String getLightsConfigJSON() {
-    static DynamicJsonDocument doc(8192);
-    doc.clear();
-
-    JsonObject groups = doc.createNestedObject("lightGroups");
-
-    JsonObject hl = groups.createNestedObject("headlights");
-    hl["enabled"] = lightsConfig.headlights.enabled;
-    hl["brightness"] = lightsConfig.headlights.brightness;
-    hl["mode"] = lightsConfig.headlights.mode;
-    hl["blinkRate"] = lightsConfig.headlights.blinkRate;
-
-    JsonObject tl = groups.createNestedObject("tailLights");
-    tl["enabled"] = lightsConfig.tailLights.enabled;
-    tl["brightness"] = lightsConfig.tailLights.brightness;
-    tl["mode"] = lightsConfig.tailLights.mode;
-    tl["blinkRate"] = lightsConfig.tailLights.blinkRate;
-
-    JsonObject el = groups.createNestedObject("emergencyLights");
-    el["enabled"] = lightsConfig.emergencyLights.enabled;
-    el["brightness"] = lightsConfig.emergencyLights.brightness;
-    el["mode"] = lightsConfig.emergencyLights.mode;
-    el["blinkRate"] = lightsConfig.emergencyLights.blinkRate;
-
-    JsonArray dynamicGroups = doc.createNestedArray("lightGroupsArray");
-    for (uint8_t i = 0; i < newLightsConfig.groupCount && i < MAX_DYNAMIC_LIGHT_GROUPS; i++) {
-      const ExtendedLightGroup& group = newLightsConfig.groups[i];
-      JsonObject g = dynamicGroups.createNestedObject();
-      g["name"] = group.name;
-      g["pattern"] = group.pattern;
-      g["enabled"] = group.enabled;
-      g["brightness"] = group.brightness;
-      g["mode"] = group.mode;
-      g["blinkRate"] = group.blinkRate;
-      g["color"] = group.color;
-      g["color2"] = group.color2;
-
-      JsonArray idx = g.createNestedArray("indices");
-      for (uint8_t led = 0; led < group.ledCount && led < MAX_DYNAMIC_GROUP_LEDS; led++) {
-        idx.add(group.ledIndices[led]);
-      }
-    }
-
-    doc["useLegacyMode"] = newLightsConfig.useLegacyMode;
-    doc["groupCount"] = newLightsConfig.groupCount;
-
-    String output;
-    serializeJson(doc, output);
-    return output;
-  }
-
-  void updateLightsGroup(const String& groupName, JsonObject& updates) {
-    LightGroup* target = nullptr;
-
-    if (groupName == "headlights") target = &lightsConfig.headlights;
-    else if (groupName == "tailLights") target = &lightsConfig.tailLights;
-    else if (groupName == "emergencyLights") target = &lightsConfig.emergencyLights;
-
-    if (target && updates.size() > 0) {
-      if (updates.containsKey("enabled")) target->enabled = updates["enabled"];
-      if (updates.containsKey("brightness")) target->brightness = constrain((uint8_t)updates["brightness"], 0, 255);
-      if (updates.containsKey("mode")) target->mode = updates["mode"];
-      if (updates.containsKey("blinkRate")) target->blinkRate = updates["blinkRate"];
-
-      saveLights();
-      Serial.printf("Updated lights group: %s\n", groupName.c_str());
-    }
-  }
-
-  void setNewLightsConfig(const NewLightsConfig& config) {
-    newLightsConfig = config;
-    newLightsConfig.legacy = lightsConfig;
-    saveLights();
-  }
-
-  NewLightsConfig* getNewLightsConfig() {
-    return &newLightsConfig;
-  }
-
-  // ==================== Phase 5: Lighting Profile Management ====================
-  // Lighting profiles are completely independent from driving profiles.
-  // Profiles are stored as JSON files in LittleFS: lt_p0.json through lt_p9.json.
-  // Only the active profile index (system.act_lt_prof) is stored in NVS.
-  // LED indices are ZERO-BASED throughout.
-
-private:
-  // Helper: Convert hex color string (#RRGGBB) to 32-bit RGB
-  uint32_t hexToRGB(const char* hexStr) {
-    if (!hexStr || hexStr[0] != '#' || strlen(hexStr) < 7) return 0;
-    uint32_t r = strtol(hexStr + 1, nullptr, 16) >> 16 & 0xFF;
-    uint32_t g = (strtol(hexStr + 1, nullptr, 16) >> 8) & 0xFF;
-    uint32_t b = strtol(hexStr + 1, nullptr, 16) & 0xFF;
-    return (r << 16) | (g << 8) | b;
-  }
-
-  // Helper: Convert 32-bit RGB to hex string (#RRGGBB)
-  String rgbToHex(uint32_t rgb) {
-    char buf[8];
-    snprintf(buf, sizeof(buf), "#%06X", rgb & 0xFFFFFF);
-    return String(buf);
-  }
-
-  // Helper: Get LittleFS filename for profile index
-  String getLightingProfilePath(int index) {
-    char buf[32];
-    snprintf(buf, sizeof(buf), "/lt_p%d.json", index);
-    return String(buf);
-  }
-
-  int getActiveLightingProfileIndex() {
-    int activeLtProf = state.system.activeLightingProfile;
-    Preferences pref;
-    if (pref.begin("system", false)) {
-      activeLtProf = pref.getInt("act_lt_prof", activeLtProf);
-      pref.end();
-    }
-    if (activeLtProf < 0) activeLtProf = 0;
-    if (activeLtProf >= MAX_LIGHTING_PROFILES) activeLtProf = MAX_LIGHTING_PROFILES - 1;
-    return activeLtProf;
-  }
-
-public:
-  // Load a lighting profile from LittleFS
-  bool loadLightingProfile(int index, LightingProfile& profile) {
-    if (index < 0 || index >= MAX_LIGHTING_PROFILES) return false;
-    if (!littleFsReady) return false;
-    
-    String path = getLightingProfilePath(index);
-    if (!LittleFS.exists(path)) {
-      Serial.printf("[StorageManager] Lighting profile %d not found: %s\n", index, path.c_str());
-      return false;
-    }
-
-    File file = LittleFS.open(path, "r");
-    if (!file) {
-      Serial.printf("[StorageManager] Failed to open profile: %s\n", path.c_str());
-      return false;
-    }
-
-    static DynamicJsonDocument doc(8192);
-    doc.clear();
-    DeserializationError err = deserializeJson(doc, file);
-    file.close();
-
-    if (err) {
-      Serial.printf("[StorageManager] JSON parse error in %s: %s\n", path.c_str(), err.c_str());
-      return false;
-    }
-
-    // Parse profile from JSON
-    strncpy(profile.name, doc["name"] | "Unnamed", sizeof(profile.name) - 1);
-    profile.master = doc["master"] | true;
-    profile.totalLeds = constrain(static_cast<uint16_t>(doc["total_leds"] | 20), static_cast<uint16_t>(1), static_cast<uint16_t>(MAX_LIGHTS_TOTAL_LEDS));
-    profile.groupCount = 0;
-
-    if (doc.containsKey("groups") && doc["groups"].is<JsonArray>()) {
-      JsonArray groupsArr = doc["groups"];
-      for (JsonObject groupObj : groupsArr) {
-        if (profile.groupCount >= MAX_GROUPS_PER_PROFILE) break;
-        
-        LightingGroup& grp = profile.groups[profile.groupCount];
-        grp.id = groupObj["id"] | profile.groupCount;
-        strncpy(grp.name, groupObj["name"] | "Group", sizeof(grp.name) - 1);
-        grp.enabled = groupObj["enabled"] | true;
-        strncpy(grp.effect, groupObj["effect"] | EFFECT_SOLID, sizeof(grp.effect) - 1);
-        strncpy(grp.colorPrimary, groupObj["color_primary"] | "#FFFFFF", sizeof(grp.colorPrimary) - 1);
-        strncpy(grp.colorSecondary, groupObj["color_secondary"] | "#000000", sizeof(grp.colorSecondary) - 1);
-        grp.brightness = groupObj["brightness"] | DEFAULT_BRIGHTNESS;
-        grp.effectSpeed = groupObj["effect_speed"] | DEFAULT_EFFECT_SPEED;
-        grp.effectIntensity = groupObj["effect_intensity"] | DEFAULT_EFFECT_INTENSITY;
-        
-        // Parse LED indices (zero-based)
-        grp.ledCount = 0;
-        if (groupObj.containsKey("leds") && groupObj["leds"].is<JsonArray>()) {
-          JsonArray ledsArr = groupObj["leds"];
-          for (JsonVariant ledVal : ledsArr) {
-            if (grp.ledCount >= MAX_GROUP_LEDS) break;
-            const uint16_t led = ledVal.as<uint16_t>();
-            if (led < MAX_LIGHTS_TOTAL_LEDS) {
-              grp.leds[grp.ledCount++] = led;
-            }
-          }
-        }
-        
-        profile.groupCount++;
-      }
-    }
-
-    Serial.printf("[StorageManager] Loaded lighting profile %d: %s (%d groups)\n", 
-                  index, profile.name, profile.groupCount);
-    return true;
-  }
-
-  // Save a lighting profile to LittleFS
-  bool saveLightingProfile(int index, const LightingProfile& profile) {
-    if (index < 0 || index >= MAX_LIGHTING_PROFILES) return false;
-    if (!littleFsReady) return false;
-
-    static DynamicJsonDocument doc(8192);
-    doc.clear();
-    doc["name"]        = profile.name;
-    doc["master"]      = profile.master;
-    doc["total_leds"]  = constrain(profile.totalLeds, static_cast<uint16_t>(1), static_cast<uint16_t>(MAX_LIGHTS_TOTAL_LEDS));
-
-    JsonArray groupsArr = doc.createNestedArray("groups");
-    for (int i = 0; i < profile.groupCount; i++) {
-      const LightingGroup& grp = profile.groups[i];
-      JsonObject groupObj = groupsArr.createNestedObject();
-      
-      groupObj["id"]               = grp.id;
-      groupObj["name"]             = grp.name;
-      groupObj["enabled"]          = grp.enabled;
-      groupObj["effect"]           = grp.effect;
-      groupObj["color_primary"]    = grp.colorPrimary;
-      groupObj["color_secondary"]  = grp.colorSecondary;
-      groupObj["brightness"]       = grp.brightness;
-      groupObj["effect_speed"]     = grp.effectSpeed;
-      groupObj["effect_intensity"] = grp.effectIntensity;
-      
-      JsonArray ledsArr = groupObj.createNestedArray("leds");
-      for (int j = 0; j < grp.ledCount; j++) {
-        if (grp.leds[j] < MAX_LIGHTS_TOTAL_LEDS) {
-          ledsArr.add(grp.leds[j]);  // Zero-based LED indices
-        }
-      }
-    }
-
-    String path = getLightingProfilePath(index);
-    File file = LittleFS.open(path, "w");
-    if (!file) {
-      Serial.printf("[StorageManager] Failed to open profile for writing: %s\n", path.c_str());
-      return false;
-    }
-
-    size_t written = serializeJson(doc, file);
-    file.close();
-
-    if (written == 0) {
-      Serial.printf("[StorageManager] Failed to serialize profile to %s\n", path.c_str());
-      return false;
-    }
-
-    Serial.printf("[StorageManager] Saved lighting profile %d: %s (%d groups, %d bytes)\n", 
-                  index, profile.name, profile.groupCount, written);
-    return true;
-  }
-
-  // Delete a lighting profile from LittleFS
-  bool deleteLightingProfile(int index) {
-    if (index < 0 || index >= MAX_LIGHTING_PROFILES) return false;
-    if (!littleFsReady) return false;
-
-    String path = getLightingProfilePath(index);
-    if (LittleFS.remove(path)) {
-      Serial.printf("[StorageManager] Deleted lighting profile: %s\n", path.c_str());
-      return true;
-    } else {
-      Serial.printf("[StorageManager] Failed to delete profile: %s\n", path.c_str());
-      return false;
-    }
-  }
-
-  // Count existing lighting profiles
-  int getLightingProfileCount() {
-    if (!littleFsReady) return 0;
-    int count = 0;
-    for (int i = 0; i < MAX_LIGHTING_PROFILES; i++) {
-      if (LittleFS.exists(getLightingProfilePath(i))) {
-        count++;
-      }
-    }
-    return count;
-  }
-
-  // Get names of all lighting profiles
-  void getLightingProfileNames(JsonArray& outArray) {
-    if (!littleFsReady) return;
-    for (int i = 0; i < MAX_LIGHTING_PROFILES; i++) {
-      String path = getLightingProfilePath(i);
-      if (LittleFS.exists(path)) {
-        File file = LittleFS.open(path, "r");
-        if (file) {
-          DynamicJsonDocument doc(512);
-          if (deserializeJson(doc, file) == DeserializationError::Ok) {
-            JsonObject entry = outArray.createNestedObject();
-            entry["index"] = i;
-            entry["name"]  = doc["name"] | "Unnamed";
-          }
-          file.close();
-        }
-      }
-    }
-  }
-
-  // Build lightweight active lighting profile index payload for BLE.
-  // Includes only metadata and a compact group list (no LED arrays).
-  bool getActiveLightingGroupIndexJSON(String& outJson) {
-    outJson = "{}";
-    const int activeLtProf = getActiveLightingProfileIndex();
-
-    DynamicJsonDocument doc(4096);
-    JsonArray ltProfArr = doc.createNestedArray("lt_profiles");
-    getLightingProfileNames(ltProfArr);
-    doc["lt_profile_count"] = ltProfArr.size();
-    doc["act_lt_prof"] = activeLtProf;
-
-    static LightingProfile activeProfile = {};
-    if (!loadLightingProfile(activeLtProf, activeProfile)) {
-      doc["active_lt_profile_missing"] = true;
-      serializeJson(doc, outJson);
-      return false;
-    }
-
-    JsonObject ap = doc.createNestedObject("active_lt_profile");
-    ap["index"] = activeLtProf;
-    ap["name"] = activeProfile.name;
-    ap["master"] = activeProfile.master;
-    ap["total_leds"] = activeProfile.totalLeds;
-    ap["group_count"] = activeProfile.groupCount;
-
-    JsonArray groups = ap.createNestedArray("groups");
-    for (uint8_t i = 0; i < activeProfile.groupCount; i++) {
-      const LightingGroup& g = activeProfile.groups[i];
-      JsonObject go = groups.createNestedObject();
-      go["cursor"] = i;
-      go["id"] = g.id;
-      go["name"] = g.name;
-      go["enabled"] = g.enabled;
-      go["effect"] = g.effect;
-      go["brightness"] = g.brightness;
-      go["led_count"] = g.ledCount;
-    }
-
-    serializeJson(doc, outJson);
-    return true;
-  }
-
-  // Build one active lighting group payload by cursor index.
-  // Returns false when profile/group is unavailable.
-  bool getActiveLightingGroupDetailJSON(int cursor, String& outJson, int& nextCursor, bool& done) {
-    outJson = "{}";
-    nextCursor = 0;
-    done = true;
-
-    const int activeLtProf = getActiveLightingProfileIndex();
-    static LightingProfile activeProfile = {};
-    if (!loadLightingProfile(activeLtProf, activeProfile)) {
-      DynamicJsonDocument missDoc(256);
-      missDoc["mode"] = "lights_group_detail";
-      missDoc["ok"] = false;
-      missDoc["reason"] = "active_profile_missing";
-      missDoc["act_lt_prof"] = activeLtProf;
-      serializeJson(missDoc, outJson);
-      return false;
-    }
-
-    const int safeCursor = cursor < 0 ? 0 : cursor;
-    if (safeCursor >= activeProfile.groupCount) {
-      DynamicJsonDocument doneDoc(320);
-      doneDoc["mode"] = "lights_group_detail";
-      doneDoc["ok"] = true;
-      doneDoc["act_lt_prof"] = activeLtProf;
-      doneDoc["cursor"] = safeCursor;
-      doneDoc["group_count"] = activeProfile.groupCount;
-      doneDoc["done"] = true;
-      doneDoc["next_cursor"] = activeProfile.groupCount;
-      serializeJson(doneDoc, outJson);
-      nextCursor = activeProfile.groupCount;
-      done = true;
-      return true;
-    }
-
-    const LightingGroup& g = activeProfile.groups[safeCursor];
-    DynamicJsonDocument doc(3072);
-    doc["mode"] = "lights_group_detail";
-    doc["ok"] = true;
-    doc["act_lt_prof"] = activeLtProf;
-    doc["cursor"] = safeCursor;
-    doc["group_count"] = activeProfile.groupCount;
-    doc["done"] = (safeCursor + 1) >= activeProfile.groupCount;
-    doc["next_cursor"] = doc["done"].as<bool>() ? activeProfile.groupCount : (safeCursor + 1);
-
-    JsonObject go = doc.createNestedObject("group");
-    go["id"] = g.id;
-    go["name"] = g.name;
-    go["enabled"] = g.enabled;
-    go["effect"] = g.effect;
-    go["color_primary"] = g.colorPrimary;
-    go["color_secondary"] = g.colorSecondary;
-    go["brightness"] = g.brightness;
-    go["effect_speed"] = g.effectSpeed;
-    go["effect_intensity"] = g.effectIntensity;
-    JsonArray leds = go.createNestedArray("leds");
-    for (uint16_t j = 0; j < g.ledCount; j++) {
-      leds.add(g.leds[j]);
-    }
-
-    serializeJson(doc, outJson);
-    nextCursor = doc["next_cursor"].as<int>();
-    done = doc["done"].as<bool>();
-    return true;
-  }
-
-  // Create default lighting profiles on first boot
-  void createDefaultLightingProfiles() {
-    if (!littleFsReady) {
-      Serial.println("LittleFS unavailable, skipping default lighting profile creation");
-      return;
-    }
-
-    // Check if profiles already exist
-    if (LittleFS.exists("/lt_p0.json")) {
-      Serial.println("[StorageManager] Lighting profiles already exist, skipping defaults");
-      return;
-    }
-
-    // Default profile 0: "Daytime Running"
-    {
-      static LightingProfile p0 = {};
-      strncpy(p0.name, "Daytime Running", sizeof(p0.name) - 1);
-      p0.master = true;
-      p0.totalLeds = 20;
-      p0.groupCount =  1;
-
-      LightingGroup& grp = p0.groups[0];
-      grp.id = 0;
-      strncpy(grp.name, "Headlights", sizeof(grp.name) - 1);
-      grp.leds[0] = 0; grp.leds[1] = 1;  // LEDs 0,1 (zero-based)
-      grp.ledCount = 2;
-      grp.enabled = true;
-      strncpy(grp.effect, EFFECT_SOLID, sizeof(grp.effect) - 1);
-      strncpy(grp.colorPrimary, "#FFFFFF", sizeof(grp.colorPrimary) - 1);
-      strncpy(grp.colorSecondary, "#000000", sizeof(grp.colorSecondary) - 1);
-      grp.brightness = 100;
-      grp.effectSpeed = 50;
-      grp.effectIntensity = 100;
-
-      saveLightingProfile(0, p0);
-    }
-
-    // Default profile 1: "Night Mode"
-    {
-      static LightingProfile p1 = {};
-      strncpy(p1.name, "Night Mode", sizeof(p1.name) - 1);
-      p1.master = true;
-      p1.totalLeds = 20;
-      p1.groupCount = 2;
-
-      // Group 0: Headlights (warm white)
-      LightingGroup& grp0 = p1.groups[0];
-      grp0.id = 0;
-      strncpy(grp0.name, "Headlights", sizeof(grp0.name) - 1);
-      grp0.leds[0] = 0; grp0.leds[1] = 1;
-      grp0.ledCount = 2;
-      grp0.enabled = true;
-      strncpy(grp0.effect, EFFECT_SOLID, sizeof(grp0.effect) - 1);
-      strncpy(grp0.colorPrimary, "#FFE0A0", sizeof(grp0.colorPrimary) - 1);
-      strncpy(grp0.colorSecondary, "#000000", sizeof(grp0.colorSecondary) - 1);
-      grp0.brightness = 60;
-      grp0.effectSpeed = 50;
-      grp0.effectIntensity = 100;
-
-      // Group 1: Underglow (red, breathing)
-      LightingGroup& grp1 = p1.groups[1];
-      grp1.id = 1;
-      strncpy(grp1.name, "Underglow", sizeof(grp1.name) - 1);
-      grp1.leds[0] = 4; grp1.leds[1] = 5; grp1.leds[2] = 6; grp1.leds[3] = 7;
-      grp1.ledCount = 4;
-      grp1.enabled = true;
-      strncpy(grp1.effect, EFFECT_BREATHE, sizeof(grp1.effect) - 1);
-      strncpy(grp1.colorPrimary, "#FF0000", sizeof(grp1.colorPrimary) - 1);
-      strncpy(grp1.colorSecondary, "#000000", sizeof(grp1.colorSecondary) - 1);
-      grp1.brightness = 40;
-      grp1.effectSpeed = 40;
-      grp1.effectIntensity = 100;
-
-      saveLightingProfile(1, p1);
-    }
-
-    // Set initial active profile to 0
-    {
-      Preferences pref;
-      if (pref.begin("system", false)) {
-        pref.putInt("act_lt_prof", 0);
-        pref.end();
-        state.system.activeLightingProfile = 0;
-      }
-    }
-
-    Serial.println("[StorageManager] Created default lighting profiles");
-  }
 };
 
 #endif

@@ -4,7 +4,7 @@ param(
 	[string]$UploadPort,
 	[switch]$SkipBuild,
 	[switch]$Monitor,
-	[int]$MonitorBaud = 115200,
+	[int]$MonitorBaud = 460800,
 	[switch]$ListPorts
 )
 

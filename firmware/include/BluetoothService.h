@@ -24,7 +24,6 @@
 
 // Command Characteristics
 #define SERVO_CMD_UUID      "e8a3c5f2-4b9d-11ec-81d3-0242ac130003"
-#define LIGHTS_CMD_UUID     "f2b4d6e8-4b9d-11ec-81d3-0242ac130003"
 #define SYSTEM_CMD_UUID     "068c1d3a-4b9e-11ec-81d3-0242ac130003"
 
 class BluetoothService {
@@ -38,7 +37,6 @@ private:
     BLECharacteristic* pKvWriteChar;
     BLECharacteristic* pTelemetryChar;
     BLECharacteristic* pServoCommandChar;
-    BLECharacteristic* pLightsCommandChar;
     BLECharacteristic* pSystemCommandChar;
     
     StorageManager* storage;
@@ -47,7 +45,6 @@ private:
     std::function<bool(const String&)> configWriteHandler;
     std::function<bool(const String&)> kvWriteHandler;
     std::function<bool(const String&)> servoWriteHandler;
-    std::function<bool(const String&)> lightsWriteHandler;
     std::function<bool(const String&)> systemWriteHandler;
 
     SemaphoreHandle_t queueMutex = nullptr;
@@ -67,13 +64,10 @@ private:
     static constexpr size_t CONFIG_WRITE_CAPACITY = 2048;
     static constexpr size_t KV_WRITE_CAPACITY = 256;
     static constexpr size_t SERVO_WRITE_CAPACITY = 256;
-    static constexpr size_t LIGHTS_WRITE_CAPACITY = 4096;
     static constexpr size_t SYSTEM_WRITE_CAPACITY = 256;
     char pendingConfigWrite[CONFIG_WRITE_CAPACITY] = {};
     char pendingKvWrite[KV_WRITE_CAPACITY] = {};
     char pendingServoWrite[SERVO_WRITE_CAPACITY] = {};
-    char pendingLightsWrite[LIGHTS_WRITE_CAPACITY] = {};
-    char pendingLightsMasterSystemWrite[SYSTEM_WRITE_CAPACITY] = {};
     static constexpr size_t SYSTEM_QUEUE_CAPACITY = 8;
     char pendingSystemWrites[SYSTEM_QUEUE_CAPACITY][SYSTEM_WRITE_CAPACITY] = {};
     size_t pendingSystemHead = 0;
@@ -82,28 +76,14 @@ private:
     volatile bool hasPendingConfigWrite = false;
     volatile bool hasPendingKvWrite = false;
     volatile bool hasPendingServoWrite = false;
-    volatile bool hasPendingLightsWrite = false;
-    volatile bool hasPendingLightsMasterSystemWrite = false;
     volatile bool hasPendingSystemWrite = false;
     volatile bool hasPendingConnectionStateChange = false;
     volatile bool pendingConnectionState = false;
 
-    bool isLightsMasterSystemCommand(const String& payload) {
-        // Fast-path matcher to coalesce master-light toggles without parsing overhead.
-        return payload.indexOf("\"command\"") >= 0 && payload.indexOf("lights_master") >= 0;
-    }
-
     bool isConfigReadControlCommand(const String& payload) {
         // These commands only paginate config reads and must not invalidate cache.
         return payload.indexOf("cfg_read_prepare") >= 0
-            || payload.indexOf("cfg_read_chunk") >= 0
-            || payload.indexOf("lights_group_index") >= 0
-            || payload.indexOf("lights_group_detail") >= 0;
-    }
-
-    bool isLightsMasterSystemCommand(const std::string& payload) {
-        return payload.find("\"command\"") != std::string::npos
-            && payload.find("lights_master") != std::string::npos;
+            || payload.indexOf("cfg_read_chunk") >= 0;
     }
 
     bool lockQueue(TickType_t timeout = portMAX_DELAY) {
@@ -133,7 +113,7 @@ private:
         bool dequeued = false;
         if (!slot || capacity == 0) return false;
 
-        static char localCopy[LIGHTS_WRITE_CAPACITY];
+        static char localCopy[CONFIG_WRITE_CAPACITY];
         localCopy[0] = '\0';
 
         // Copy raw bytes while protected by the spinlock; convert to String later.
@@ -160,21 +140,11 @@ private:
             return false;
         }
 
-        const bool isMasterCommand = isLightsMasterSystemCommand(payload);
-
         bool queued = false;
         if (!lockQueue()) {
             return false;
         }
-        if (isMasterCommand) {
-            if (payload.size() < SYSTEM_WRITE_CAPACITY) {
-                memcpy(pendingLightsMasterSystemWrite, payload.c_str(), payload.size() + 1);
-            } else {
-                pendingLightsMasterSystemWrite[0] = '\0';
-            }
-            hasPendingLightsMasterSystemWrite = true;
-            queued = (payload.size() < SYSTEM_WRITE_CAPACITY);
-        } else if (pendingSystemCount < SYSTEM_QUEUE_CAPACITY) {
+        if (pendingSystemCount < SYSTEM_QUEUE_CAPACITY) {
             if (payload.size() < SYSTEM_WRITE_CAPACITY) {
                 memcpy(pendingSystemWrites[pendingSystemTail], payload.c_str(), payload.size() + 1);
                 pendingSystemTail = (pendingSystemTail + 1) % SYSTEM_QUEUE_CAPACITY;
@@ -203,28 +173,6 @@ private:
             pendingSystemHead = (pendingSystemHead + 1) % SYSTEM_QUEUE_CAPACITY;
             pendingSystemCount--;
             hasPendingSystemWrite = (pendingSystemCount > 0);
-            dequeued = true;
-        }
-        unlockQueue();
-        if (dequeued) {
-            out = localCopy;
-        }
-        return dequeued;
-    }
-
-    bool dequeueLightsMasterSystemPayload(String& out) {
-        bool dequeued = false;
-        char localCopy[SYSTEM_WRITE_CAPACITY];
-        localCopy[0] = '\0';
-        if (!lockQueue()) {
-            return false;
-        }
-        if (hasPendingLightsMasterSystemWrite) {
-            size_t copyLen = strnlen(pendingLightsMasterSystemWrite, SYSTEM_WRITE_CAPACITY - 1);
-            memcpy(localCopy, pendingLightsMasterSystemWrite, copyLen);
-            localCopy[copyLen] = '\0';
-            hasPendingLightsMasterSystemWrite = false;
-            pendingLightsMasterSystemWrite[0] = '\0';
             dequeued = true;
         }
         unlockQueue();
@@ -345,7 +293,6 @@ private:
     friend class ConfigWriteCallbacks;
     friend class KVWriteCallbacks;
     friend class ServoCommandCallbacks;
-    friend class LightsCommandCallbacks;
     friend class SystemCommandCallbacks;
     
 public:
@@ -360,7 +307,6 @@ public:
     void setConfigWriteHandler(std::function<bool(const String&)> handler) { configWriteHandler = handler; }
     void setKVWriteHandler(std::function<bool(const String&)> handler) { kvWriteHandler = handler; }
     void setServoWriteHandler(std::function<bool(const String&)> handler) { servoWriteHandler = handler; }
-    void setLightsWriteHandler(std::function<bool(const String&)> handler) { lightsWriteHandler = handler; }
     void setSystemWriteHandler(std::function<bool(const String&)> handler) { systemWriteHandler = handler; }
     void setConnectionStateHandler(std::function<void(bool)> handler) { connectionStateHandler = handler; }
 
@@ -389,7 +335,7 @@ public:
     }
 
     // Push an immediate JSON reply for the next config-read characteristic fetch.
-    // Used by lightweight system commands to avoid rebuilding large scoped snapshots.
+    // Used by minimal system commands to avoid rebuilding large scoped snapshots.
     void setDirectConfigReadResponse(const String& json) {
         size_t copyLen = json.length();
         if (copyLen >= CONFIG_CACHE_CAPACITY) copyLen = CONFIG_CACHE_CAPACITY - 1;
@@ -413,7 +359,6 @@ public:
     class ConfigWriteCallbacks;
     class KVWriteCallbacks;
     class ServoCommandCallbacks;
-    class LightsCommandCallbacks;
     class SystemCommandCallbacks;
 };
 
@@ -517,23 +462,6 @@ public:
     }
 };
 
-// Lights command callbacks
-class BluetoothService::LightsCommandCallbacks : public BLECharacteristicCallbacks {
-private:
-    BluetoothService* service;
-public:
-    LightsCommandCallbacks(BluetoothService* bleService) : service(bleService) {}
-    
-    void onWrite(BLECharacteristic* pCharacteristic) {
-        std::string value = pCharacteristic->getValue();
-        if (value.length() > 0) {
-            if (!service->queuePayload(service->pendingLightsWrite, BluetoothService::LIGHTS_WRITE_CAPACITY, service->hasPendingLightsWrite, value)) {
-                Serial.println("BLE: Lights command dropped");
-            }
-        }
-    }
-};
-
 // System command callbacks
 class BluetoothService::SystemCommandCallbacks : public BLECharacteristicCallbacks {
 private:
@@ -578,9 +506,9 @@ void BluetoothService::begin(const char* deviceName) {
     // Create BLE Service with enough attribute handles for all characteristics.
     // Handle budget:
     // 1 service
-    // 2 each for ConfigRead/ConfigWrite/KV/Servo/Lights/System = 12
+    // 2 each for ConfigRead/ConfigWrite/KV/Servo/System = 10
     // 3 for Telemetry (char + value + CCCD)
-    // Total = 16, so allocate some headroom.
+    // Total = 14, so allocate some headroom.
         pService = pServer->createService(BLEUUID(RCDCC_SERVICE_UUID), 20);
     
     // Create Configuration Read Characteristic
@@ -618,13 +546,6 @@ void BluetoothService::begin(const char* deviceName) {
     );
     pServoCommandChar->setCallbacks(new ServoCommandCallbacks(this));
     
-    // Create Lights Command Characteristic
-    pLightsCommandChar = pService->createCharacteristic(
-        LIGHTS_CMD_UUID,
-        BLECharacteristic::PROPERTY_WRITE
-    );
-    pLightsCommandChar->setCallbacks(new LightsCommandCallbacks(this));
-    
     // Create System Command Characteristic
     pSystemCommandChar = pService->createCharacteristic(
         SYSTEM_CMD_UUID,
@@ -650,7 +571,6 @@ void BluetoothService::begin(const char* deviceName) {
     Serial.printf("  KV Write     : %s\n", KV_WRITE_UUID);
     Serial.printf("  Telemetry    : %s\n", TELEMETRY_UUID);
     Serial.printf("  Servo Cmd    : %s\n", SERVO_CMD_UUID);
-    Serial.printf("  Lights Cmd   : %s\n", LIGHTS_CMD_UUID);
     Serial.printf("  System Cmd   : %s\n", SYSTEM_CMD_UUID);
     
     Serial.println("BLE Service started. Waiting for connections...");
@@ -686,19 +606,6 @@ void BluetoothService::update() {
     if (dequeuePayload(pendingServoWrite, SERVO_WRITE_CAPACITY, hasPendingServoWrite, payload)) {
         bool ok = servoWriteHandler ? servoWriteHandler(payload) : false;
         Serial.println(ok ? "BLE: Servo command processed" : "BLE: Servo command handler failed");
-        if (ok) markConfigDirty();
-    }
-
-    if (dequeuePayload(pendingLightsWrite, LIGHTS_WRITE_CAPACITY, hasPendingLightsWrite, payload)) {
-        bool ok = lightsWriteHandler ? lightsWriteHandler(payload) : false;
-        Serial.println(ok ? "BLE: Lights command processed" : "BLE: Lights command handler failed");
-        if (ok) markConfigDirty();
-    }
-
-    // Master light is a state command; coalesce to the latest requested state.
-    if (dequeueLightsMasterSystemPayload(payload)) {
-        bool ok = systemWriteHandler ? systemWriteHandler(payload) : false;
-        Serial.println(ok ? "BLE: System command processed" : "BLE: System command handler failed");
         if (ok) markConfigDirty();
     }
 

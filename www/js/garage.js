@@ -8,11 +8,6 @@
 const GarageManager = (() => {
     const STORAGE_KEY = 'rcdcc_garage_vehicles';
     const DRIVING_PROFILES_STORAGE_KEY = 'rcdcc_driving_profiles_v2';
-    const LIGHT_GROUPS_STORAGE_KEY = 'lightGroups';
-    const LIGHT_GROUPS_INITIALIZED_KEY = 'lightGroupsInitialized';
-    const LIGHT_MASTER_STORAGE_KEY = 'lightsMasterEnabled';
-    const TOTAL_LED_COUNT_KEY = 'totalLEDCount';
-    const LIGHTING_PROFILES_STORAGE_KEY = 'rcdcc_lighting_profiles_v1';
     let _renameVehicleId = null;
     let _connectingVehicleId = null;
     let _connectErrorVehicleId = null;
@@ -301,30 +296,10 @@ const GarageManager = (() => {
     }
 
     function buildExportPayload() {
-        let lightGroups = [];
-        let lightingProfiles = { profiles: [], activeIndex: 0 };
-        try {
-            const parsed = JSON.parse(localStorage.getItem(LIGHT_GROUPS_STORAGE_KEY) || '[]');
-            lightGroups = Array.isArray(parsed) ? parsed : [];
-        } catch (_) {
-            lightGroups = [];
-        }
-
-        try {
-            const parsedLightingProfiles = JSON.parse(localStorage.getItem(LIGHTING_PROFILES_STORAGE_KEY) || '{"profiles":[],"activeIndex":0}');
-            lightingProfiles = (parsedLightingProfiles && Array.isArray(parsedLightingProfiles.profiles))
-                ? parsedLightingProfiles
-                : { profiles: [], activeIndex: 0 };
-        } catch (_) {
-            lightingProfiles = { profiles: [], activeIndex: 0 };
-        }
-
         return {
-            schema: 'rcdcc-garage-lighting-export-v2',
+            schema: 'rcdcc-garage-export-v3',
             exportedAt: new Date().toISOString(),
-            garageVehicles: getVehicles(),
-            lightGroups,
-            lightingProfiles
+            garageVehicles: getVehicles()
         };
     }
 
@@ -360,7 +335,7 @@ const GarageManager = (() => {
         });
         const uriResult = await Filesystem.getUri({ path, directory });
         await Share.share({
-            title: 'Export Garage + Light Groups',
+            title: 'Export Garage Data',
             text: 'Choose where to save/share the export file.',
             url: uriResult.uri,
             dialogTitle: 'Save or share export file'
@@ -387,7 +362,7 @@ const GarageManager = (() => {
         const now = new Date();
         const two = (n) => String(n).padStart(2, '0');
         const stamp = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}_${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
-        return `rcdcc_garage_lightgroups_${stamp}.json`;
+        return `rcdcc_garage_${stamp}.json`;
     }
 
     async function exportGarageAndLightGroups() {
@@ -412,7 +387,7 @@ const GarageManager = (() => {
             }
 
             downloadTextFile(filename, json);
-            if (window.toast) toast.success('Garage and light groups exported to your default Downloads location');
+            if (window.toast) toast.success('Garage exported to your default Downloads location');
             localStorage.setItem('rcdcc_last_backup_at', new Date().toISOString());
             updateLastBackupTimestampUI();
         } catch (error) {
@@ -463,13 +438,6 @@ const GarageManager = (() => {
         return deduped.slice(0, MAX_GARAGE_VEHICLES);
     }
 
-    function normalizeImportedLightGroups(sourceLightGroups) {
-        if (!Array.isArray(sourceLightGroups)) return [];
-        return sourceLightGroups
-            .filter(group => group && typeof group === 'object')
-            .map(group => ({ ...group }));
-    }
-
     async function importGarageAndLightGroupsFromFile(file) {
         if (!file) return;
 
@@ -480,45 +448,18 @@ const GarageManager = (() => {
             const garageSource = Array.isArray(parsed?.garageVehicles)
                 ? parsed.garageVehicles
                 : (Array.isArray(parsed?.garage) ? parsed.garage : []);
-            const lightGroupSource = Array.isArray(parsed?.lightGroups)
-                ? parsed.lightGroups
-                : [];
-            const lightingProfilesSource = (parsed?.lightingProfiles && Array.isArray(parsed.lightingProfiles.profiles))
-                ? parsed.lightingProfiles
-                : null;
-
-            if (!garageSource.length && !lightGroupSource.length && !lightingProfilesSource) {
-                throw new Error('No garage vehicles, light groups, or lighting profiles found in file');
+            if (!garageSource.length) {
+                throw new Error('No garage vehicles found in file');
             }
 
             const importedVehicles = normalizeImportedGarageVehicles(garageSource);
-            const importedLightGroups = normalizeImportedLightGroups(lightGroupSource);
 
             saveVehicles(importedVehicles);
-
-            if (lightGroupSource.length) {
-                localStorage.setItem(LIGHT_GROUPS_STORAGE_KEY, JSON.stringify(importedLightGroups));
-                localStorage.setItem(LIGHT_GROUPS_INITIALIZED_KEY, 'true');
-                if (typeof window.reloadLightGroupsFromStorage === 'function') {
-                    await window.reloadLightGroupsFromStorage();
-                }
-            }
-
-            if (lightingProfilesSource) {
-                localStorage.setItem(LIGHTING_PROFILES_STORAGE_KEY, JSON.stringify({
-                    profiles: lightingProfilesSource.profiles,
-                    activeIndex: Number(lightingProfilesSource.activeIndex) || 0
-                }));
-                if (typeof window.reloadLightingProfilesFromStorage === 'function') {
-                    await window.reloadLightingProfilesFromStorage();
-                }
-            }
 
             renderGarage();
 
             if (window.toast) {
-                const importedLightingProfileCount = lightingProfilesSource ? lightingProfilesSource.profiles.length : 0;
-                toast.success(`Import complete: ${importedVehicles.length} vehicles, ${importedLightGroups.length} light groups, ${importedLightingProfileCount} lighting profiles`);
+                toast.success(`Import complete: ${importedVehicles.length} vehicles`);
             }
         } catch (error) {
             console.error('Import failed:', error);
@@ -594,12 +535,7 @@ const GarageManager = (() => {
             const scopedSuffix = normalizeDeviceId(deviceId);
             if (scopedSuffix) {
                 [
-                    DRIVING_PROFILES_STORAGE_KEY,
-                    LIGHTING_PROFILES_STORAGE_KEY,
-                    LIGHT_GROUPS_STORAGE_KEY,
-                    LIGHT_GROUPS_INITIALIZED_KEY,
-                    LIGHT_MASTER_STORAGE_KEY,
-                    TOTAL_LED_COUNT_KEY
+                    DRIVING_PROFILES_STORAGE_KEY
                 ].forEach((baseKey) => localStorage.removeItem(`${baseKey}::${scopedSuffix}`));
             }
         }
@@ -713,11 +649,6 @@ const GarageManager = (() => {
                             <li>
                                 <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'tuning')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
                                     Tuning
-                                </button>
-                            </li>
-                            <li>
-                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'lights')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    Lights
                                 </button>
                             </li>
                            <!-- <li>
@@ -1079,7 +1010,7 @@ const GarageManager = (() => {
     }
 
     async function openVehicleSection(deviceId, sectionId) {
-        if (!['tuning', 'lights', 'fpv'].includes(sectionId)) return;
+        if (!['tuning', 'fpv'].includes(sectionId)) return;
 
         const connected = isVehicleConnected(deviceId) || await connectToVehicle(deviceId);
         if (!connected) return;

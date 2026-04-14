@@ -61,7 +61,6 @@ class BluetoothManager {
         this.CHAR_KV_WRITE     = '7c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e';
         this.CHAR_TELEMETRY    = 'd8de624e-140f-4a22-8594-e2216b84a5f2';
         this.CHAR_SERVO_CMD    = 'e8a3c5f2-4b9d-11ec-81d3-0242ac130003';
-        this.CHAR_LIGHTS_CMD   = 'f2b4d6e8-4b9d-11ec-81d3-0242ac130003';
         this.CHAR_SYSTEM_CMD   = '068c1d3a-4b9e-11ec-81d3-0242ac130003';
         this.PREFERRED_DEVICE_ID_KEY = 'rcdccBlePreferredDeviceId';
         this.GATT_OPERATION_TIMEOUT_MS = 9000;
@@ -562,36 +561,11 @@ class BluetoothManager {
     }
 
     async readLightsGroupIndex() {
-        if (!this.isConnected) throw new Error('Not connected to BLE device');
-
-        await this.sendSystemCommand('lights_group_index', {});
-        await new Promise(r => setTimeout(r, 80));
-        const response = await this._readConfigOnce();
-
-        if (!response || typeof response !== 'object' || Array.isArray(response)) {
-            throw new Error('Invalid lights group index response');
-        }
-
-        return response;
+        throw new Error('Lighting features have been removed');
     }
 
     async readLightsGroupDetail(cursor = null) {
-        if (!this.isConnected) throw new Error('Not connected to BLE device');
-
-        const payload = {};
-        if (Number.isInteger(cursor) && cursor >= 0) {
-            payload.cursor = cursor;
-        }
-
-        await this.sendSystemCommand('lights_group_detail', payload);
-        await new Promise(r => setTimeout(r, 80));
-        const response = await this._readConfigOnce();
-
-        if (!response || typeof response !== 'object' || Array.isArray(response)) {
-            throw new Error('Invalid lights group detail response');
-        }
-
-        return response;
+        throw new Error('Lighting features have been removed');
     }
 
     async writeConfig(config) {
@@ -653,18 +627,7 @@ class BluetoothManager {
     }
 
     async sendLightsCommand(lightsConfig) {
-        if (!this.isConnected) throw new Error('Not connected to BLE device');
-        const ble = await this._getBle();
-        const data = this._encodeJson(lightsConfig);
-        await this.enqueueGattOperation('write-lights', () =>
-            ble.write({
-                deviceId: this.deviceId,
-                service: this.SERVICE_UUID,
-                characteristic: this.CHAR_LIGHTS_CMD,
-                value: data
-            })
-        );
-        this.stats.bytesSent += Math.floor(data.length / 2);
+        throw new Error('Lighting features have been removed');
     }
 
     async sendSystemCommand(command, params = {}) {
