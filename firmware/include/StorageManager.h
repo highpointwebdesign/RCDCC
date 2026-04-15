@@ -140,8 +140,8 @@ private:
     };
 
     auto fillLegacyServo = [&](const RCDCCServoState& source, ServoCalibration& target) {
-      target.minLimit = mapUsToDegrees(source.minUs, source.minUs, source.maxUs);
-      target.maxLimit = mapUsToDegrees(source.maxUs, source.minUs, source.maxUs);
+      target.minLimit = mapUsToDegrees(source.minUs, DEFAULT_SERVO_MIN_US, DEFAULT_SERVO_MAX_US);
+      target.maxLimit = mapUsToDegrees(source.maxUs, DEFAULT_SERVO_MIN_US, DEFAULT_SERVO_MAX_US);
       const int32_t trimDeltaUs = source.trimUs - DEFAULT_SERVO_TRIM_US;
       const int32_t trimDeg = static_cast<int32_t>(roundf(static_cast<float>(trimDeltaUs) * 180.0f / 1000.0f));
       target.trim = static_cast<int8_t>(clampI32(trimDeg, -45, 45));
@@ -1047,7 +1047,7 @@ public:
     scope.toLowerCase();
 
     if (scope == "bootstrap") {
-      DynamicJsonDocument doc(768);
+      DynamicJsonDocument doc(4096);
       doc["fw_version"] = state.system.firmwareVersion;
       doc["device_nm"] = state.system.deviceName;
       doc["config_owner"] = "app";
@@ -1055,6 +1055,35 @@ public:
       doc["mac_wifi_sta"] = readInterfaceMac(ESP_MAC_WIFI_STA);
       doc["mac_softap"] = readInterfaceMac(ESP_MAC_WIFI_SOFTAP);
       doc["mac_ble"] = readInterfaceMac(ESP_MAC_BT);
+
+      auto writeNamespacedServo = [&](const char* key, const RCDCCServoState& servo) {
+        JsonObject s = doc.createNestedObject(key);
+        s["trim"] = servo.trimUs;
+        s["min"] = servo.minUs;
+        s["max"] = servo.maxUs;
+        s["reverse"] = servo.reverse;
+        s["ride_ht"] = servo.rideHeight;
+      };
+
+      writeNamespacedServo("srv_fl", state.servoFL);
+      writeNamespacedServo("srv_fr", state.servoFR);
+      writeNamespacedServo("srv_rl", state.servoRL);
+      writeNamespacedServo("srv_rr", state.servoRR);
+
+      JsonObject servos = doc.createNestedObject("servos");
+      auto writeLegacyServo = [&](const char* key, const ServoCalibration& cal) {
+        JsonObject node = servos.createNestedObject(key);
+        node["trim"] = cal.trim;
+        node["min"] = cal.minLimit;
+        node["max"] = cal.maxLimit;
+        node["reversed"] = cal.reversed;
+      };
+
+      writeLegacyServo("frontLeft", legacyServoConfig.frontLeft);
+      writeLegacyServo("frontRight", legacyServoConfig.frontRight);
+      writeLegacyServo("rearLeft", legacyServoConfig.rearLeft);
+      writeLegacyServo("rearRight", legacyServoConfig.rearRight);
+
       String out;
       serializeJson(doc, out);
       return out;

@@ -36,7 +36,7 @@ bool ledBleOn = false;  // true while BLE is connected (steady-on state)
 // command is received within this window (phone disconnection safety net).
 static uint32_t lastBleCommandMs = 0;
 static constexpr uint32_t CONTINUOUS_WATCHDOG_MS = 500;
-static constexpr bool SUSPENSION_DEBUG_LOGS = true;
+static constexpr bool SUSPENSION_DEBUG_LOGS = false;
 static constexpr uint32_t SUSPENSION_DEBUG_INTERVAL_MS = 500;
 static constexpr bool I2C_BUS_SCAN_ENABLED = false;
 static constexpr bool BLE_STARTUP_ENABLED = true;

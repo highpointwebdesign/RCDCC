@@ -3044,19 +3044,10 @@
             cursor: not-allowed;
         }
 
-        #servoSettingsCard.trim-locked .range-slider {
-            opacity: 0.5;
-            pointer-events: none;
-        }
-
         #servoSettingsCard.rotation-locked .servo-direction-toggle {
             opacity: 0.5;
             pointer-events: none;
             cursor: not-allowed;
-        }
-
-        .servo-settings-section {
-            /* padding: 0.75rem; */
         }
 
         .servo-settings-section + .servo-settings-section {
@@ -3661,4 +3652,8 @@
     /* bootstrap overrides */
     .mb-3 {
         /* margin-bottom: 1rem !important; */
+    }
+
+    .h5, h5 {
+        font-size: 0.75rem;
     }

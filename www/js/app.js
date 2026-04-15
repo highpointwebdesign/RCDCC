@@ -90,8 +90,8 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.736';
-        const BUILD_DATE = '2026-04-14';
+        const APP_VERSION = '1.1.794';
+        const BUILD_DATE = '2026-04-15';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -119,19 +119,25 @@ window.addEventListener('beforeunload', function(event) {
 
         // ==================== Phase 6: Dance Mode ====================
         const DANCE_TILT_INTERVAL_MS = 50; // ~20Hz
-        const DANCE_TILT_FULL_SCALE_DEG = 45;
-        const DANCE_DEADZONE_MIN_DEG = 1;
-        const DANCE_DEADZONE_MAX_DEG = 15;
-        const DANCE_DEADZONE_DEFAULT_DEG = 5;
+        const DANCE_TILT_FULL_SCALE_DEG = 60;
+        const DANCE_DEADZONE_MIN_DEG = 0;
+        const DANCE_DEADZONE_MAX_DEG = 16;
+        const DANCE_DEADZONE_STEP = 1;
+        const DANCE_DEADZONE_DEFAULT_DEG = 6;
         const DANCE_DEADZONE_STORAGE_KEY = 'danceModeDeadzoneDeg';
         const DANCE_ORIENTATION_STORAGE_KEY = 'danceModePhoneOrientation';
+        const DANCE_INVERT_FRONT_BACK_STORAGE_KEY = 'danceModeInvertFrontBack';
+        const DANCE_INVERT_SIDE_TO_SIDE_STORAGE_KEY = 'danceModeInvertSideToSide';
         const SERVO_REVERSED_STORAGE_KEY = 'servoReversedStates';
 
         const danceModeState = {
             enabled: false,
             toggleSync: false,
             deadzoneDeg: DANCE_DEADZONE_DEFAULT_DEG,
+            deadzoneSliderInstance: null,
             orientationMode: 'portrait',
+            invertFrontBack: false,
+            invertSideToSide: false,
             latestRawRollDeg: 0,
             latestRawPitchDeg: 0,
             orientationListenerAttached: false,
@@ -735,9 +741,36 @@ window.addEventListener('beforeunload', function(event) {
         const dirtyPages = new Set();
         const DIRTY_PAGE_LABELS = {
             tuning: 'Tuning',
-            servo: 'Trim / Rotation',
+            servo: 'Range / Rotation',
             system: 'Hardware Configuration'
         };
+        let hardwareAutoSaveTimer = null;
+        let hardwareAutoSaveInFlight = false;
+
+        function scheduleHardwareAutoSave() {
+            if (!isBleConnected() || !bleManager || typeof bleManager.sendSaveCommandWithTimeout !== 'function') {
+                return;
+            }
+
+            if (hardwareAutoSaveTimer) {
+                clearTimeout(hardwareAutoSaveTimer);
+            }
+
+            hardwareAutoSaveTimer = setTimeout(async () => {
+                hardwareAutoSaveTimer = null;
+                if (hardwareAutoSaveInFlight) return;
+                hardwareAutoSaveInFlight = true;
+                try {
+                    await bleManager.sendSaveCommandWithTimeout(3000);
+                    clearPageDirty('servo');
+                    clearPageDirty('system');
+                } catch (error) {
+                    console.warn('Auto-save hardware settings failed:', error?.message || error);
+                } finally {
+                    hardwareAutoSaveInFlight = false;
+                }
+            }, 1200);
+        }
 
         function markPageDirty(pageKey) {
             dirtyPages.add(pageKey);
@@ -767,18 +800,6 @@ window.addEventListener('beforeunload', function(event) {
             const dotId = `${pageKey}-dirty-dot`;
             const dot = document.getElementById(dotId);
             if (dot) dot.style.display = dirty ? 'inline' : 'none';
-
-            // Hardware Configuration Save button lives on the system card but should
-            // enable for both system and servo hardware edits.
-            if (pageKey === 'system' || pageKey === 'servo') {
-                const hardwareSaveBtn = document.getElementById('system-save-btn');
-                if (hardwareSaveBtn) {
-                    const hardwareDirty = isPageDirty('system') || isPageDirty('servo');
-                    hardwareSaveBtn.disabled = !hardwareDirty;
-                    hardwareSaveBtn.classList.toggle('btn-gold', hardwareDirty);
-                    hardwareSaveBtn.classList.toggle('btn-secondary', !hardwareDirty);
-                }
-            }
 
             if ((pageKey === 'tuning' || pageKey === 'servo') && typeof syncDrivingProfileActionButtons === 'function') {
                 syncDrivingProfileActionButtons();
@@ -2642,12 +2663,24 @@ window.addEventListener('beforeunload', function(event) {
                 banner: document.getElementById('danceModeStatusBanner'),
                 dot: document.getElementById('danceTiltDot'),
                 deadzoneCircle: document.getElementById('danceDeadzoneCircle'),
+                axisTop: document.getElementById('danceAxisTop'),
+                axisLeft: document.getElementById('danceAxisLeft'),
+                axisRight: document.getElementById('danceAxisRight'),
+                axisBottom: document.getElementById('danceAxisBottom'),
                 slider: document.getElementById('danceDeadzoneSlider'),
                 deadzoneValue: document.getElementById('danceDeadzoneValue'),
                 indicatorWrap: document.getElementById('danceTiltIndicatorWrap'),
                 orientationPortrait: document.getElementById('danceOrientationPortrait'),
-                orientationLandscape: document.getElementById('danceOrientationLandscape')
+                orientationLandscape: document.getElementById('danceOrientationLandscape'),
+                invertFrontBack: document.getElementById('danceInvertFrontBack'),
+                invertSideToSide: document.getElementById('danceInvertSideToSide')
             };
+        }
+
+        function parseStoredBoolean(value, fallback = false) {
+            if (value === 'true') return true;
+            if (value === 'false') return false;
+            return !!fallback;
         }
 
         function injectDanceModeStyles() {
@@ -2683,14 +2716,14 @@ window.addEventListener('beforeunload', function(event) {
                     height: 196px;
                     border-radius: 50%;
                     position: relative;
-                    border: 2px solid rgba(79, 156, 255, 0.7);
-                    background: radial-gradient(circle at center, rgba(79, 156, 255, 0.18) 0%, rgba(79, 156, 255, 0.04) 45%, rgba(0, 0, 0, 0.25) 100%);
-                    box-shadow: inset 0 0 24px rgba(79, 156, 255, 0.22);
+                    border: 2px solid rgba(200, 168, 0, 0.4);
+                    background: radial-gradient(circle at center, rgba(200, 168, 0, 0.18) 0%, rgba(200, 168, 0, 0.04) 45%, rgba(0, 0, 0, 0.25) 100%);
+                    box-shadow: inset 0 0 24px rgba(200, 168, 0, 0.22);
                     overflow: hidden;
                 }
                 .dance-grid-line {
                     position: absolute;
-                    background: rgba(79, 156, 255, 0.35);
+                    background: rgba(200, 168, 0, 0.4);
                 }
                 .dance-grid-line.h {
                     left: 12px;
@@ -2731,12 +2764,62 @@ window.addEventListener('beforeunload', function(event) {
                     box-shadow: 0 0 14px rgba(80, 255, 154, 0.65);
                     transition: transform 40ms linear;
                 }
+                .dance-axis-label {
+                    position: absolute;
+                    color: #ffe69a;
+                    font-size: 0.72rem;
+                    font-weight: 700;
+                    letter-spacing: 0.02em;
+                    line-height: 1;
+                    user-select: none;
+                    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.75);
+                    pointer-events: none;
+                }
+                .dance-axis-label.top {
+                    top: 7px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                }
+                .dance-axis-label.left {
+                    left: 8px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                }
+                .dance-axis-label.right {
+                    right: 8px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                }
+                .dance-axis-label.bottom {
+                    bottom: 7px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                }
                 .dance-mode-panel .form-label,
                 .dance-mode-panel .form-label strong {
                     color: #e6eef8;
                 }
+                .dance-mode-panel .form-check-label,
+                .dance-mode-panel .form-check-input + .form-check-label {
+                    color: #ffe69a;
+                }
                 .dance-mode-panel #danceDeadzoneValue {
                     color: #ffe69a;
+                }
+                .dance-mode-panel #danceDeadzoneSlider .range-slider__thumb[data-lower] {
+                    width: 0 !important;
+                    height: 0 !important;
+                    display: none !important;
+                }
+                .dance-mode-panel #danceDeadzoneSlider .range-slider__track {
+                    background: #ddd !important;
+                }
+                .dance-mode-panel #danceDeadzoneSlider .range-slider__range {
+                    background: transparent !important;
+                }
+                .dance-mode-panel #danceDeadzoneSlider .range-slider__thumb[data-upper] {
+                    width: 32px;
+                    height: 32px;
                 }
                 .dance-orientation-toggle {
                     display: grid;
@@ -2744,18 +2827,8 @@ window.addEventListener('beforeunload', function(event) {
                     gap: 8px;
                 }
                 .dance-orientation-btn {
-                    border: 1px solid rgba(79, 156, 255, 0.45);
-                    color: #9ecbff;
-                    background: rgba(18, 28, 42, 0.9);
                     border-radius: 10px;
-                    padding: 8px 10px;
                     font-weight: 600;
-                    transition: background 100ms ease, border-color 100ms ease, color 100ms ease;
-                }
-                .dance-orientation-btn.is-active {
-                    color: #0d1b2a;
-                    border-color: rgba(80, 255, 154, 0.95);
-                    background: linear-gradient(180deg, rgba(80, 255, 154, 0.95) 0%, rgba(58, 217, 133, 0.95) 100%);
                 }
                 .dance-orientation-help {
                     margin-top: 6px;
@@ -2790,6 +2863,10 @@ window.addEventListener('beforeunload', function(event) {
                 </div>
                 <div id="danceTiltIndicatorWrap" class="dance-tilt-wrap" aria-label="Dance Mode Tilt Indicator">
                     <div class="dance-tilt-indicator">
+                        <div id="danceAxisTop" class="dance-axis-label top">F</div>
+                        <div id="danceAxisLeft" class="dance-axis-label left">L</div>
+                        <div id="danceAxisRight" class="dance-axis-label right">R</div>
+                        <div id="danceAxisBottom" class="dance-axis-label bottom">B</div>
                         <div class="dance-grid-line h"></div>
                         <div class="dance-grid-line v"></div>
                         <div id="danceDeadzoneCircle" class="dance-deadzone-circle"></div>
@@ -2799,14 +2876,25 @@ window.addEventListener('beforeunload', function(event) {
                 <div class="mt-3">
                     <label class="form-label mb-1"><strong>Phone Orientation</strong></label>
                     <div class="dance-orientation-toggle" role="group" aria-label="Dance Mode phone orientation">
-                        <button type="button" id="danceOrientationPortrait" class="dance-orientation-btn">Portrait</button>
-                        <button type="button" id="danceOrientationLandscape" class="dance-orientation-btn">Landscape</button>
+                        <button type="button" id="danceOrientationPortrait" class="btn btn-sm dance-orientation-btn">Portrait</button>
+                        <button type="button" id="danceOrientationLandscape" class="btn btn-sm dance-orientation-btn">Landscape</button>
                     </div>
                     <div class="dance-orientation-help">Portrait matches normal app hold.</div>
                 </div>
                 <div class="mt-3">
+                    <label class="form-label mb-1"><strong>Axis Inversion</strong></label>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="danceInvertFrontBack">
+                        <label class="form-check-label" for="danceInvertFrontBack">Invert front/back movement</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="danceInvertSideToSide">
+                        <label class="form-check-label" for="danceInvertSideToSide">Invert side-to-side movement</label>
+                    </div>
+                </div>
+                <div class="mt-3">
                     <label for="danceDeadzoneSlider" class="form-label mb-1"><strong>Deadzone</strong> <span id="danceDeadzoneValue">${DANCE_DEADZONE_DEFAULT_DEG}°</span></label>
-                    <input type="range" id="danceDeadzoneSlider" class="form-range" min="${DANCE_DEADZONE_MIN_DEG}" max="${DANCE_DEADZONE_MAX_DEG}" step="1" value="${DANCE_DEADZONE_DEFAULT_DEG}">
+                    <div id="danceDeadzoneSlider" class="slider-stepper-track" aria-label="Dance Mode Deadzone"></div>
                 </div>
             `;
 
@@ -2864,14 +2952,50 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function updateDanceOrientationUi() {
-            const { orientationPortrait, orientationLandscape } = getDanceModeElements();
+            const {
+                orientationPortrait,
+                orientationLandscape,
+                axisTop,
+                axisLeft,
+                axisRight,
+                axisBottom
+            } = getDanceModeElements();
             if (!orientationPortrait || !orientationLandscape) return;
 
             const isPortrait = danceModeState.orientationMode !== 'landscape';
             orientationPortrait.classList.toggle('is-active', isPortrait);
             orientationLandscape.classList.toggle('is-active', !isPortrait);
+            orientationPortrait.classList.toggle('btn-gold', isPortrait);
+            orientationPortrait.classList.toggle('btn-outline-secondary', !isPortrait);
+            orientationLandscape.classList.toggle('btn-gold', !isPortrait);
+            orientationLandscape.classList.toggle('btn-outline-secondary', isPortrait);
             orientationPortrait.setAttribute('aria-pressed', isPortrait ? 'true' : 'false');
             orientationLandscape.setAttribute('aria-pressed', !isPortrait ? 'true' : 'false');
+
+            if (axisTop && axisLeft && axisRight && axisBottom) {
+                if (isPortrait) {
+                    axisTop.textContent = 'F';
+                    axisLeft.textContent = 'L';
+                    axisRight.textContent = 'R';
+                    axisBottom.textContent = 'B';
+                } else {
+                    const angle = getDanceOrientationAngle();
+                    // Landscape labels rotate with the device orientation.
+                    // angle~270: camera-left hold (portrait rotated CCW)
+                    if (angle >= 225 && angle < 315) {
+                        axisTop.textContent = 'R';
+                        axisLeft.textContent = 'F';
+                        axisRight.textContent = 'B';
+                        axisBottom.textContent = 'L';
+                    } else {
+                        // angle~90: portrait rotated CW
+                        axisTop.textContent = 'L';
+                        axisLeft.textContent = 'B';
+                        axisRight.textContent = 'F';
+                        axisBottom.textContent = 'R';
+                    }
+                }
+            }
         }
 
         function setDanceOrientationMode(mode, persist = true) {
@@ -2884,9 +3008,22 @@ window.addEventListener('beforeunload', function(event) {
 
         function updateDanceDeadzoneUi() {
             const { slider, deadzoneValue, deadzoneCircle } = getDanceModeElements();
-            if (!slider || !deadzoneValue || !deadzoneCircle) return;
+            if (!deadzoneValue || !deadzoneCircle) return;
 
-            slider.value = String(danceModeState.deadzoneDeg);
+            if (danceModeState.deadzoneSliderInstance) {
+                try {
+                    danceModeState.deadzoneSliderInstance.value([
+                        DANCE_DEADZONE_MIN_DEG,
+                        danceModeState.deadzoneDeg
+                    ]);
+                } catch (error) {
+                    console.warn('Dance deadzone slider sync failed, falling back to native control:', error?.message || error);
+                    danceModeState.deadzoneSliderInstance = null;
+                }
+            } else if (slider && typeof slider.value !== 'undefined') {
+                // Backward compatibility if the slider is still a native input.
+                slider.value = String(danceModeState.deadzoneDeg);
+            }
             deadzoneValue.textContent = `${danceModeState.deadzoneDeg}°`;
 
             const radiusMaxPx = 86;
@@ -2988,14 +3125,21 @@ window.addEventListener('beforeunload', function(event) {
                     danceModeState.latestRawPitchDeg
                 );
 
-                const rollNorm = normalizeDanceAxis(transformedTilt.roll, danceModeState.deadzoneDeg);
-                const pitchNorm = normalizeDanceAxis(transformedTilt.pitch, danceModeState.deadzoneDeg);
+                const frontBackSource = danceModeState.invertFrontBack
+                    ? -transformedTilt.pitch
+                    : transformedTilt.pitch;
+                const sideToSideSource = danceModeState.invertSideToSide
+                    ? -transformedTilt.roll
+                    : transformedTilt.roll;
+
+                const rollNorm = normalizeDanceAxis(sideToSideSource, danceModeState.deadzoneDeg);
+                const pitchNorm = normalizeDanceAxis(frontBackSource, danceModeState.deadzoneDeg);
 
                 // Display-only remap so the bubble follows the physical phone direction per mode.
-                // Portrait: camera=top=forward, right=right. Landscape (camera-left): volume=forward, camera=left.
+                // Portrait: map pitch -> vertical (F/B), roll -> horizontal (L/R).
                 const isPortrait = danceModeState.orientationMode === 'portrait';
-                const dispRoll  = isPortrait ?  pitchNorm : -pitchNorm;
-                const dispPitch = isPortrait ?  rollNorm  : -rollNorm;
+                const dispRoll  = isPortrait ?  rollNorm  : -pitchNorm;
+                const dispPitch = isPortrait ? -pitchNorm : -rollNorm;
                 updateDanceTiltIndicator(dispRoll, dispPitch);
                 queueDanceTiltUpdate(rollNorm, pitchNorm);
             }, DANCE_TILT_INTERVAL_MS);
@@ -3100,8 +3244,40 @@ window.addEventListener('beforeunload', function(event) {
 
         function initDanceModeUi() {
             ensureDanceModePanel();
-            const { toggle, slider, orientationPortrait, orientationLandscape } = getDanceModeElements();
+            const {
+                toggle,
+                slider,
+                orientationPortrait,
+                orientationLandscape,
+                invertFrontBack,
+                invertSideToSide
+            } = getDanceModeElements();
             if (!toggle) return;
+
+            if (slider && !danceModeState.deadzoneSliderInstance && typeof rangeSlider === 'function') {
+                try {
+                    danceModeState.deadzoneSliderInstance = rangeSlider(slider, {
+                        value: [DANCE_DEADZONE_MIN_DEG, DANCE_DEADZONE_DEFAULT_DEG],
+                        min: DANCE_DEADZONE_MIN_DEG,
+                        max: DANCE_DEADZONE_MAX_DEG,
+                        step: DANCE_DEADZONE_STEP,
+                        thumbsDisabled: [true, false],
+                        rangeSlideDisabled: true,
+                        onInput: function(value) {
+                            const next = Math.round(value[1]);
+                            danceModeState.deadzoneDeg = Math.max(
+                                DANCE_DEADZONE_MIN_DEG,
+                                Math.min(DANCE_DEADZONE_MAX_DEG, next)
+                            );
+                            localStorage.setItem(DANCE_DEADZONE_STORAGE_KEY, String(danceModeState.deadzoneDeg));
+                            updateDanceDeadzoneUi();
+                        }
+                    });
+                } catch (error) {
+                    console.warn('Dance deadzone slider initialization failed, falling back to native control:', error?.message || error);
+                    danceModeState.deadzoneSliderInstance = null;
+                }
+            }
 
             const storedDeadzone = parseInt(localStorage.getItem(DANCE_DEADZONE_STORAGE_KEY) || `${DANCE_DEADZONE_DEFAULT_DEG}`, 10);
             danceModeState.deadzoneDeg = Math.max(
@@ -3110,13 +3286,28 @@ window.addEventListener('beforeunload', function(event) {
             );
             const storedOrientation = localStorage.getItem(DANCE_ORIENTATION_STORAGE_KEY);
             setDanceOrientationMode(storedOrientation === 'landscape' ? 'landscape' : 'portrait', false);
+            danceModeState.invertFrontBack = parseStoredBoolean(
+                localStorage.getItem(DANCE_INVERT_FRONT_BACK_STORAGE_KEY),
+                false
+            );
+            danceModeState.invertSideToSide = parseStoredBoolean(
+                localStorage.getItem(DANCE_INVERT_SIDE_TO_SIDE_STORAGE_KEY),
+                false
+            );
+            if (invertFrontBack) {
+                invertFrontBack.checked = danceModeState.invertFrontBack;
+            }
+            if (invertSideToSide) {
+                invertSideToSide.checked = danceModeState.invertSideToSide;
+            }
             updateDanceDeadzoneUi();
             centerDanceTiltIndicator();
 
             toggle.addEventListener('change', handleDanceModeToggleChange);
             setDanceModeToggleChecked(false);
 
-            if (slider) {
+            if (slider && !danceModeState.deadzoneSliderInstance) {
+                // Backward compatibility path if rangeSlider is unavailable.
                 slider.addEventListener('input', function() {
                     const next = parseInt(this.value || `${DANCE_DEADZONE_DEFAULT_DEG}`, 10);
                     danceModeState.deadzoneDeg = Math.max(DANCE_DEADZONE_MIN_DEG, Math.min(DANCE_DEADZONE_MAX_DEG, next));
@@ -3134,6 +3325,26 @@ window.addEventListener('beforeunload', function(event) {
             if (orientationLandscape) {
                 orientationLandscape.addEventListener('click', function() {
                     setDanceOrientationMode('landscape', true);
+                });
+            }
+
+            if (invertFrontBack) {
+                invertFrontBack.addEventListener('change', function(event) {
+                    danceModeState.invertFrontBack = !!event?.target?.checked;
+                    localStorage.setItem(
+                        DANCE_INVERT_FRONT_BACK_STORAGE_KEY,
+                        danceModeState.invertFrontBack ? 'true' : 'false'
+                    );
+                });
+            }
+
+            if (invertSideToSide) {
+                invertSideToSide.addEventListener('change', function(event) {
+                    danceModeState.invertSideToSide = !!event?.target?.checked;
+                    localStorage.setItem(
+                        DANCE_INVERT_SIDE_TO_SIDE_STORAGE_KEY,
+                        danceModeState.invertSideToSide ? 'true' : 'false'
+                    );
                 });
             }
         }
@@ -3990,7 +4201,11 @@ window.addEventListener('beforeunload', function(event) {
             
             // Initialize settings controls
             initServoControls(); // Initialize servo rotation badge click handlers
-            initDanceModeUi();
+            try {
+                initDanceModeUi();
+            } catch (error) {
+                console.error('Dance Mode UI initialization failed:', error);
+            }
             // initGyroControls(); // Commented out - slider library not yet connected
             initNetworkSettings();
             initSettingsTabs();
@@ -4125,19 +4340,12 @@ window.addEventListener('beforeunload', function(event) {
             
             
             // Restore servo settings lock state from localStorage.
-            // Older builds stored trim and direction separately; the UI now uses one combined lock.
-            const savedServoTrimLock = localStorage.getItem('servoTrimLocked') === 'true';
             const savedServoRotationLock = localStorage.getItem('servoRotationLocked') === 'true';
-            const servoSettingsLocked = savedServoTrimLock || savedServoRotationLock;
             if (document.getElementById('servoSettingsLockIcon')) {
-                servoTrimLocked = servoSettingsLocked;
-                servoRotationLocked = servoSettingsLocked;
-                localStorage.setItem('servoTrimLocked', servoSettingsLocked.toString());
-                localStorage.setItem('servoRotationLocked', servoSettingsLocked.toString());
+                servoRotationLocked = savedServoRotationLock;
+                localStorage.setItem('servoRotationLocked', savedServoRotationLock.toString());
             } else {
-                servoTrimLocked = false;
                 servoRotationLocked = false;
-                localStorage.setItem('servoTrimLocked', 'false');
                 localStorage.setItem('servoRotationLocked', 'false');
             }
             syncServoSettingsLockUI();
@@ -10023,13 +10231,13 @@ window.addEventListener('beforeunload', function(event) {
             if (!btn || !label) return;
             btn.disabled = !isBleConnected();
             if (suspensionPaused) {
-                btn.classList.remove('btn-outline-secondary');
-                btn.classList.add('btn-warning');
+                btn.classList.remove('btn-gold', 'btn-outline-secondary');
+                btn.classList.add('btn-danger');
                 //  btn.querySelector('span.material-symbols-outlined').textContent = 'play_circle';
                 label.textContent = 'Suspension Paused';
             } else {
-                btn.classList.remove('btn-warning');
-                btn.classList.add('btn-outline-secondary');
+                btn.classList.remove('btn-danger', 'btn-outline-secondary');
+                btn.classList.add('btn-gold');
                 //     btn.querySelector('span.material-symbols-outlined').textContent = 'pause_circle';
                 label.textContent = 'Suspension Active';
             }
@@ -10867,13 +11075,21 @@ window.addEventListener('beforeunload', function(event) {
             updateTuningSliders(fakeConfig);
             isLoadingTuningConfig = false;
 
+            // Debounce Auto-mode KV writes while the Drive Mode slider is moving.
+            if (window.__masterFeelKvDebounceTimer) {
+                clearTimeout(window.__masterFeelKvDebounceTimer);
+            }
+
             const k = window.RCDCC_KEYS;
             const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
             if (canUseKv) {
-                bleManager.writeValue(k.SUSPENSION_OMEGA_N,   Math.round(newOmegaN * 100)).catch(e => console.error('KV masterFeel omegaN:', e));
-                bleManager.writeValue(k.SUSPENSION_ZETA,      Math.round(newZeta * 100)).catch(e => console.error('KV masterFeel zeta:', e));
-                bleManager.writeValue(k.SUSPENSION_RANGE,     Math.round(newRange * 100)).catch(e => console.error('KV masterFeel range:', e));
-                bleManager.writeValue(k.SUSPENSION_REACT_SPD, Math.round(newReact * 100)).catch(e => console.error('KV masterFeel react:', e));
+                window.__masterFeelKvDebounceTimer = setTimeout(() => {
+                    bleManager.writeValue(k.SUSPENSION_OMEGA_N,   Math.round(newOmegaN * 100)).catch(e => console.error('KV masterFeel omegaN:', e));
+                    bleManager.writeValue(k.SUSPENSION_ZETA,      Math.round(newZeta * 100)).catch(e => console.error('KV masterFeel zeta:', e));
+                    bleManager.writeValue(k.SUSPENSION_RANGE,     Math.round(newRange * 100)).catch(e => console.error('KV masterFeel range:', e));
+                    bleManager.writeValue(k.SUSPENSION_REACT_SPD, Math.round(newReact * 100)).catch(e => console.error('KV masterFeel react:', e));
+                    window.__masterFeelKvDebounceTimer = null;
+                }, 350);
             }
             markPageDirty('tuning');
         }
@@ -10886,15 +11102,15 @@ window.addEventListener('beforeunload', function(event) {
             const custBtn   = document.getElementById('tuningModeCustomBtn');
 
             const isAuto = mode === 'auto';
-            if (masterRow) masterRow.style.display = isAuto ? '' : 'none';
-            if (driveModeGroup) driveModeGroup.style.display = isAuto ? '' : 'none';
+            if (masterRow) masterRow.style.display = '';
+            if (driveModeGroup) driveModeGroup.style.display = '';
 
             const allSuspSliders = ['omegaN', 'zeta', 'range', 'deadband', 'hyst', 'reactionSpeed'];
             allSuspSliders.forEach(key => {
                 const el = document.querySelector(`.slider-stepper-control[data-slider-key="${key}"]`);
                 if (el) {
                     const group = el.closest('.tuning-slider-group');
-                    if (group) group.style.display = isAuto ? 'none' : '';
+                    if (group) group.style.display = '';
                 }
             });
 
@@ -10910,6 +11126,22 @@ window.addEventListener('beforeunload', function(event) {
             localStorage.setItem('tuningConfigMode', mode);
             if (!isLoadingTuningConfig && previousMode !== mode) {
                 markPageDirty('tuning');
+            }
+        }
+
+        function setTuningModeCustomForManualAdjust() {
+            if (isLoadingTuningConfig) return;
+            const currentMode = localStorage.getItem('tuningConfigMode') ?? 'auto';
+            if (currentMode !== 'custom') {
+                setTuningConfigMode('custom');
+            }
+        }
+
+        function setTuningModeAutoForDriveModeAdjust() {
+            if (isLoadingTuningConfig) return;
+            const currentMode = localStorage.getItem('tuningConfigMode') ?? 'auto';
+            if (currentMode !== 'auto') {
+                setTuningConfigMode('auto');
             }
         }
 
@@ -11258,6 +11490,7 @@ window.addEventListener('beforeunload', function(event) {
                     tuningSliderValues.omegaN = value[1];
                     updateTuningThumbLabel('sliderOmegaN', value[1], 1);
                     if (!isLoadingTuningConfig) {
+                        setTuningModeCustomForManualAdjust();
                         markPageDirty('tuning');
                         tuningSliderPendingSave.omegaN = true;
                     }
@@ -11281,6 +11514,7 @@ window.addEventListener('beforeunload', function(event) {
                     tuningSliderValues.zeta = value[1];
                     updateTuningThumbLabel('sliderZeta', value[1], 2);
                     if (!isLoadingTuningConfig) {
+                        setTuningModeCustomForManualAdjust();
                         markPageDirty('tuning');
                         tuningSliderPendingSave.zeta = true;
                     }
@@ -11304,6 +11538,7 @@ window.addEventListener('beforeunload', function(event) {
                     tuningSliderValues.range = value[1];
                     updateTuningThumbLabel('sliderRange', value[1], 1);
                     if (!isLoadingTuningConfig) {
+                        setTuningModeCustomForManualAdjust();
                         markPageDirty('tuning');
                         tuningSliderPendingSave.range = true;
                     }
@@ -11374,6 +11609,7 @@ window.addEventListener('beforeunload', function(event) {
                         tuningSliderValues.masterFeel = Math.round(value[1]);
                         updateTuningThumbLabel('sliderMasterFeel', tuningSliderValues.masterFeel, 0);
                         if (!isLoadingTuningConfig) {
+                            setTuningModeAutoForDriveModeAdjust();
                             updateMasterFeel(tuningSliderValues.masterFeel);
                         }
                         syncTuningStepperButtons();
@@ -11397,6 +11633,7 @@ window.addEventListener('beforeunload', function(event) {
                     tuningSliderValues.reactionSpeed = value[1];
                     updateTuningThumbLabel('sliderReactionSpeed', value[1], 1);
                     if (!isLoadingTuningConfig) {
+                        setTuningModeCustomForManualAdjust();
                         markPageDirty('tuning');
                         tuningSliderPendingSave.reactionSpeed = true;
                     }
@@ -11413,7 +11650,7 @@ window.addEventListener('beforeunload', function(event) {
                 value: [0, 50],
                 min: 0,
                 max: 100,
-                step: 1,
+                step: 5,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
@@ -11510,7 +11747,6 @@ window.addEventListener('beforeunload', function(event) {
 
         // Track locked state for servo sliders
         let servoRangeLocked = false;
-        let servoTrimLocked = false;
         let servoRotationLocked = false;
         let rcdccConfigurationLocked = false;
 
@@ -11519,10 +11755,10 @@ window.addEventListener('beforeunload', function(event) {
 
         // Store servo slider instances for later updates
         const servoSliderInstances = {
-            frontLeft: { minElement: null, maxElement: null, trimElement: null, minInstance: null, maxInstance: null, trimInstance: null, lastMinValue: 10, lastMaxValue: 170, lastTrimValue: 0 },
-            frontRight: { minElement: null, maxElement: null, trimElement: null, minInstance: null, maxInstance: null, trimInstance: null, lastMinValue: 10, lastMaxValue: 170, lastTrimValue: 0 },
-            rearLeft: { minElement: null, maxElement: null, trimElement: null, minInstance: null, maxInstance: null, trimInstance: null, lastMinValue: 10, lastMaxValue: 170, lastTrimValue: 0 },
-            rearRight: { minElement: null, maxElement: null, trimElement: null, minInstance: null, maxInstance: null, trimInstance: null, lastMinValue: 10, lastMaxValue: 170, lastTrimValue: 0 }
+            frontLeft: { minElement: null, maxElement: null, minInstance: null, maxInstance: null, lastMinValue: 10, lastMaxValue: 170 },
+            frontRight: { minElement: null, maxElement: null, minInstance: null, maxInstance: null, lastMinValue: 10, lastMaxValue: 170 },
+            rearLeft: { minElement: null, maxElement: null, minInstance: null, maxInstance: null, lastMinValue: 10, lastMaxValue: 170 },
+            rearRight: { minElement: null, maxElement: null, minInstance: null, maxInstance: null, lastMinValue: 10, lastMaxValue: 170 }
         };
 
         // Debounce timers for servo parameter saves
@@ -11545,32 +11781,31 @@ window.addEventListener('beforeunload', function(event) {
             }
 
             // Degree → microsecond conversions (matching pushConfigPayload Phase 1 logic)
-            const degToUs     = (d) => 1000 + Math.round((Number(d) || 0) / 180 * 1000);
-            const trimDegToUs = (d) => 1500 + Math.round((Number(d) || 0) * (1000 / 180));
+            const degToUs = (d) => 1000 + Math.round((Number(d) || 0) / 180 * 1000);
 
             // Phase 2: KV write helper for servo params with firmware gate
             function servoKvWrite(kvKey, kvValue, legacyServoName, legacyParam, legacyValue) {
                 const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
                 if (canUseKv) {
                     markPageDirty('servo');
-                    bleManager.writeValue(kvKey, kvValue).catch(e => console.error('KV write servo failed:', e));
+                    bleManager.writeValue(kvKey, kvValue)
+                        .then(() => scheduleHardwareAutoSave())
+                        .catch(e => console.error('KV write servo failed:', e));
                 } else {
                     saveServoParameter(legacyServoName, legacyParam, legacyValue);
                 }
             }
 
             const servoPendingSave = {
-                frontLeft: { min: false, max: false, trim: false },
-                frontRight: { min: false, max: false, trim: false },
-                rearLeft: { min: false, max: false, trim: false },
-                rearRight: { min: false, max: false, trim: false }
+                frontLeft: { min: false, max: false },
+                frontRight: { min: false, max: false },
+                rearLeft: { min: false, max: false },
+                rearRight: { min: false, max: false }
             };
 
             function commitServoSliderSave(servoName, sliderType) {
                 if (!servoPendingSave[servoName] || !servoPendingSave[servoName][sliderType]) return;
                 servoPendingSave[servoName][sliderType] = false;
-
-                if (sliderType === 'trim' && servoTrimLocked) return;
 
                 const sliderData = servoSliderInstances[servoName];
                 const values = servoSliderValues[servoName];
@@ -11604,17 +11839,6 @@ window.addEventListener('beforeunload', function(event) {
                     return;
                 }
 
-                // trim
-                const trimValue = Math.round(values.trim);
-                if (trimValue === sliderData.lastTrimValue) return;
-                const trimKeyMap = {
-                    frontLeft: window.RCDCC_KEYS.SERVO_FL_TRIM,
-                    frontRight: window.RCDCC_KEYS.SERVO_FR_TRIM,
-                    rearLeft: window.RCDCC_KEYS.SERVO_RL_TRIM,
-                    rearRight: window.RCDCC_KEYS.SERVO_RR_TRIM
-                };
-                servoKvWrite(trimKeyMap[servoName], trimDegToUs(trimValue), servoName, 'trim', trimValue);
-                sliderData.lastTrimValue = trimValue;
             }
 
             function attachServoReleaseSaveHandler(sliderElement, servoName, sliderType) {
@@ -11635,7 +11859,6 @@ window.addEventListener('beforeunload', function(event) {
                 Object.entries(servoPendingSave).forEach(([servoName, pending]) => {
                     if (pending.min) commitServoSliderSave(servoName, 'min');
                     if (pending.max) commitServoSliderSave(servoName, 'max');
-                    if (pending.trim) commitServoSliderSave(servoName, 'trim');
                 });
             }
 
@@ -11654,16 +11877,9 @@ window.addEventListener('beforeunload', function(event) {
             // Safe defaults: min=10, max=170 to prevent mechanical damage
             const defaultMin = 10;
             const defaultMax = 170;
-            const defaultTrim = 0;
 
-            // Initialize per-servo sliders (Trim, Min, Max) for each corner
+            // Initialize per-servo sliders (Min, Max) for each corner
             const servoKeys = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'];
-            const servoTrimIds = {
-                frontLeft: 'sliderFrontLeftTrim',
-                frontRight: 'sliderFrontRightTrim',
-                rearLeft: 'sliderRearLeftTrim',
-                rearRight: 'sliderRearRightTrim'
-            };
             const servoMinIds = {
                 frontLeft: 'sliderFrontLeftMin',
                 frontRight: 'sliderFrontRightMin',
@@ -11678,32 +11894,6 @@ window.addEventListener('beforeunload', function(event) {
             };
 
             servoKeys.forEach(function(servoName) {
-                // Trim slider (-32 to +32)
-                const trimEl = document.querySelector(`#${servoTrimIds[servoName]}`);
-                if (trimEl) {
-                    const trimInst = rangeSlider(trimEl, {
-                        value: [-32, defaultTrim],
-                        min: -32,
-                        max: 32,
-                        step: 4,
-                        thumbsDisabled: [true, false],
-                        rangeSlideDisabled: true,
-                        onInput: function(value) {
-                            updateSingleThumbLabel(servoTrimIds[servoName], value[1]);
-                            if (!isLoadingTuningConfig && !servoTrimLocked) {
-                                servoSliderValues[servoName].trim = Math.round(value[1]);
-                                markPageDirty('servo');
-                                servoPendingSave[servoName].trim = true;
-                            }
-                            syncServoTrimStepperButtons();
-                        }
-                    });
-                    servoSliderInstances[servoName].trimElement = trimEl;
-                    servoSliderInstances[servoName].trimInstance = trimInst;
-                    updateSingleThumbLabel(servoTrimIds[servoName], defaultTrim);
-                    attachServoReleaseSaveHandler(trimEl, servoName, 'trim');
-                }
-
                 // Min slider (0 to 180)
                 const minEl = document.querySelector(`#${servoMinIds[servoName]}`);
                 if (minEl) {
@@ -11782,6 +11972,7 @@ window.addEventListener('beforeunload', function(event) {
                 if (canUseKv) {
                     markPageDirty('servo');
                     bleManager.writeValue(window.RCDCC_KEYS[`SERVO_${abbrev}_REVERSE`], isReversed ? 1 : 0)
+                        .then(() => scheduleHardwareAutoSave())
                         .catch(e => console.error(`KV write ${abbrev}_REVERSE failed:`, e));
                 } else {
                     saveServoParameter(servoName, 'reversed', isReversed);
@@ -11823,14 +12014,6 @@ window.addEventListener('beforeunload', function(event) {
                 syncServoDirectionButtons(servoName);
             });
 
-            function setServoTrimSliderElementValue(servoName, newValue) {
-                const sliderData = servoSliderInstances[servoName];
-                if (!sliderData || !sliderData.trimInstance || !sliderData.trimElement) return;
-                const normalizedValue = normalizeServoTrimStepperValue(servoName, newValue);
-                sliderData.trimInstance.value([-32, normalizedValue]);
-                sliderData.trimElement.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-
             function setServoMinSliderElementValue(servoName, newValue) {
                 const sliderData = servoSliderInstances[servoName];
                 if (!sliderData || !sliderData.minInstance || !sliderData.minElement) return;
@@ -11845,29 +12028,6 @@ window.addEventListener('beforeunload', function(event) {
                 const clamped = normalizeServoMaxStepperValue(servoName, newValue);
                 sliderData.maxInstance.value([0, clamped]);
                 sliderData.maxElement.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-
-            function bindServoTrimStepperButtons() {
-                document.querySelectorAll('.slider-stepper-control[data-servo-trim]').forEach(control => {
-                    if (control.dataset.bound === 'true') return;
-                    control.dataset.bound = 'true';
-
-                    const servoName = control.dataset.servoTrim;
-                    const config = servoTrimStepperConfigs[servoName];
-                    if (!config) return;
-
-                    control.querySelectorAll('.slider-stepper-btn').forEach(button => {
-                        button.addEventListener('click', () => {
-                            if (servoTrimLocked) return;
-                            const current = normalizeServoTrimStepperValue(servoName, servoSliderValues?.[servoName]?.trim);
-                            const nextValue = normalizeServoTrimStepperValue(servoName, current + (Number(button.dataset.direction) || 0) * config.step);
-                            if (nextValue === current) return;
-                            setServoTrimSliderElementValue(servoName, nextValue);
-                            commitServoSliderSave(servoName, 'trim');
-                            syncServoTrimStepperButtons();
-                        });
-                    });
-                });
             }
 
             function bindServoMinMaxStepperButtons() {
@@ -11912,8 +12072,6 @@ window.addEventListener('beforeunload', function(event) {
                 });
             }
 
-            bindServoTrimStepperButtons();
-            syncServoTrimStepperButtons();
             bindServoMinMaxStepperButtons();
             syncServoMinMaxStepperButtons();
 
@@ -11967,7 +12125,7 @@ window.addEventListener('beforeunload', function(event) {
             hyst:         { min: 0.0,  max: 0.5,  step: 0.05, decimals: 2, valueKey: 'inputHyst' },
             masterFeel:   { min: 0,    max: 100,  step: 1,    decimals: 0, valueKey: 'masterFeel' },
             reactionSpeed:{ min: 0.1,  max: 5.0,  step: 0.1,  decimals: 1, valueKey: 'reactionSpeed' },
-            balance:      { min: 0,    max: 100,  step: 1,    decimals: 0, valueKey: 'frontRearBalance' },
+            balance:      { min: 0,    max: 100,  step: 5,    decimals: 0, valueKey: 'frontRearBalance' },
             sensorRate:   { min: 5,    max: 50,   step: 1,    decimals: 0, valueKey: 'sampleRate' }
         };
 
@@ -12001,33 +12159,19 @@ window.addEventListener('beforeunload', function(event) {
             });
         }
 
-        const servoTrimStepperConfigs = {
-            frontLeft: { min: -32, max: 32, step: 4 },
-            frontRight: { min: -32, max: 32, step: 4 },
-            rearLeft: { min: -32, max: 32, step: 4 },
-            rearRight: { min: -32, max: 32, step: 4 }
-        };
-
         const servoMinStepperConfigs = {
-            frontLeft: { min: 0, max: 178, step: 1 },
-            frontRight: { min: 0, max: 178, step: 1 },
-            rearLeft: { min: 0, max: 178, step: 1 },
-            rearRight: { min: 0, max: 178, step: 1 }
+            frontLeft: { min: 0, max: 180, step: 5 },
+            frontRight: { min: 0, max: 180, step: 5 },
+            rearLeft: { min: 0, max: 180, step: 5 },
+            rearRight: { min: 0, max: 180, step: 5 }
         };
 
         const servoMaxStepperConfigs = {
-            frontLeft: { min: 2, max: 180, step: 1 },
-            frontRight: { min: 2, max: 180, step: 1 },
-            rearLeft: { min: 2, max: 180, step: 1 },
-            rearRight: { min: 2, max: 180, step: 1 }
+            frontLeft: { min: 0, max: 180, step: 5 },
+            frontRight: { min: 0, max: 180, step: 5 },
+            rearLeft: { min: 0, max: 180, step: 5 },
+            rearRight: { min: 0, max: 180, step: 5 }
         };
-
-        function normalizeServoTrimStepperValue(servoName, value) {
-            const config = servoTrimStepperConfigs[servoName];
-            if (!config) return Math.round(Number(value) || 0);
-            const stepped = config.min + Math.round((Number(value) - config.min) / config.step) * config.step;
-            return Math.max(config.min, Math.min(config.max, Math.round(stepped)));
-        }
 
         function normalizeServoMinStepperValue(servoName, value) {
             const config = servoMinStepperConfigs[servoName];
@@ -12053,21 +12197,6 @@ window.addEventListener('beforeunload', function(event) {
 
             const stepped = config.min + Math.round((Number(value) - config.min) / config.step) * config.step;
             return Math.max(minAllowed, Math.min(config.max, Math.round(stepped)));
-        }
-
-        function syncServoTrimStepperButtons() {
-            document.querySelectorAll('.slider-stepper-control[data-servo-trim]').forEach(control => {
-                const servoName = control.dataset.servoTrim;
-                const config = servoTrimStepperConfigs[servoName];
-                if (!config) return;
-                const current = normalizeServoTrimStepperValue(servoName, servoSliderValues?.[servoName]?.trim);
-                control.querySelectorAll('.slider-stepper-btn').forEach(button => {
-                    const direction = Number(button.dataset.direction) || 0;
-                    const atMin = direction < 0 && current <= config.min;
-                    const atMax = direction > 0 && current >= config.max;
-                    button.disabled = !!servoTrimLocked || atMin || atMax;
-                });
-            });
         }
 
         function syncServoMinMaxStepperButtons() {
@@ -12253,6 +12382,20 @@ window.addEventListener('beforeunload', function(event) {
                 rearRight: config.servos.rearRight
             };
 
+            const servoNamespaceConfigs = {
+                frontLeft: config.srv_fl,
+                frontRight: config.srv_fr,
+                rearLeft: config.srv_rl,
+                rearRight: config.srv_rr
+            };
+
+            const usToDeg = (usValue) => {
+                const numeric = Number(usValue);
+                if (!Number.isFinite(numeric)) return null;
+                const clampedUs = Math.max(1000, Math.min(2000, Math.round(numeric)));
+                return Math.round(((clampedUs - 1000) / 1000) * 180);
+            };
+
             console.log('Servo configs:', servoConfigs);
 
             for (const [servoName, servoConfig] of Object.entries(servoConfigs)) {
@@ -12263,26 +12406,20 @@ window.addEventListener('beforeunload', function(event) {
 
                 console.log(`Processing ${servoName}:`, servoConfig);
 
-                // Update stored values for this servo with strict min<max normalization.
-                const minConfig = servoMinStepperConfigs[servoName] || { min: 0, max: 178 };
-                const maxConfig = servoMaxStepperConfigs[servoName] || { min: 2, max: 180 };
-                let minValue = Math.round(servoConfig.min !== undefined ? servoConfig.min : 10);
-                let maxValue = Math.round(servoConfig.max !== undefined ? servoConfig.max : 170);
-
-                minValue = Math.max(minConfig.min, Math.min(minConfig.max, minValue));
-                maxValue = Math.max(maxConfig.min, Math.min(maxConfig.max, maxValue));
-
-                if (minValue >= maxValue) {
-                    if (maxValue < maxConfig.max) {
-                        maxValue = minValue + 1;
-                    } else {
-                        minValue = Math.max(minConfig.min, maxValue - 1);
-                    }
-                }
+                // Trim is already hydrating correctly from legacy payload.
+                // Min/Max should come from namespaced servo fields (microseconds) when available.
+                const nsServoConfig = servoNamespaceConfigs[servoName] || null;
+                const namespacedMin = nsServoConfig ? usToDeg(nsServoConfig.min) : null;
+                const namespacedMax = nsServoConfig ? usToDeg(nsServoConfig.max) : null;
+                const minValue = namespacedMin !== null
+                    ? namespacedMin
+                    : Math.round(servoConfig.min !== undefined ? servoConfig.min : 10);
+                const maxValue = namespacedMax !== null
+                    ? namespacedMax
+                    : Math.round(servoConfig.max !== undefined ? servoConfig.max : 170);
 
                 servoSliderValues[servoName].min = minValue;
                 servoSliderValues[servoName].max = maxValue;
-                servoSliderValues[servoName].trim = servoConfig.trim !== undefined ? servoConfig.trim : 0;
 
                 const sliderData = servoSliderInstances[servoName];
                 if (!sliderData) {
@@ -12335,21 +12472,8 @@ window.addEventListener('beforeunload', function(event) {
                     }
                 }
 
-                // Update trim slider
-                if (sliderData.trimInstance) {
-                    const trimValue = servoConfig.trim !== undefined ? servoConfig.trim : 0;
-                    console.log(`Setting ${servoName} trim to ${trimValue}`);
-                    sliderData.trimInstance.value([-32, trimValue]);
-                    sliderData.lastTrimValue = Math.round(trimValue);
-                    if (sliderData.trimElement) {
-                        const trimThumb = sliderData.trimElement.querySelector('.range-slider__thumb[data-upper]')
-                            || sliderData.trimElement.querySelector('.range-slider__thumb');
-                        if (trimThumb) trimThumb.textContent = Math.round(trimValue);
-                    }
-                }
             }
 
-            syncServoTrimStepperButtons();
             syncServoMinMaxStepperButtons();
             
             // Clear flag after updating all sliders
@@ -12508,11 +12632,6 @@ window.addEventListener('beforeunload', function(event) {
             chevron.classList.add('card-collapse-chevron');
             chevron.classList.toggle('is-collapsed', isCollapsed);
 
-            // Keep the chassis Save Settings button hidden when Chassis Setup is collapsed.
-            if (cardId === 'servoSettingsCard') {
-                const saveBtn = document.getElementById('system-save-btn');
-                if (saveBtn) saveBtn.style.display = isCollapsed ? 'none' : '';
-            }
         }
 
         function toggleCardCollapse(cardId, chevronId, storageKey) {
@@ -12577,20 +12696,6 @@ window.addEventListener('beforeunload', function(event) {
             }
         }
         
-        function toggleServoTrimLock(iconElement) {
-            // Play click sound
-            const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
-            clickSound.play().catch(e => console.log('Sound play failed:', e));
-            
-            // Toggle the lock state
-            servoTrimLocked = !servoTrimLocked;
-            
-            // Save to localStorage
-            localStorage.setItem('servoTrimLocked', servoTrimLocked.toString());
-            
-            syncServoSettingsLockUI(iconElement);
-        }
-        
         function toggleServoRotationLock(iconElement) {
             // Play click sound
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
@@ -12609,24 +12714,22 @@ window.addEventListener('beforeunload', function(event) {
             const card = document.getElementById('servoSettingsCard');
             const lockIcon = iconElement || document.getElementById('servoSettingsLockIcon');
             const autoCalibrateBtn = document.getElementById('servoAutoCalibrateBtn');
-            const allLocked = servoTrimLocked && servoRotationLocked;
+            const allLocked = servoRotationLocked;
             if (card) {
-                card.classList.toggle('trim-locked', servoTrimLocked);
                 card.classList.toggle('rotation-locked', servoRotationLocked);
             }
             if (autoCalibrateBtn) {
                 autoCalibrateBtn.disabled = allLocked;
                 autoCalibrateBtn.setAttribute('aria-disabled', allLocked ? 'true' : 'false');
                 autoCalibrateBtn.title = allLocked
-                    ? 'Unlock Trim / Rotation to run Auto Calibrate'
+                    ? 'Unlock Rotation to run Auto Calibrate'
                     : 'Run Auto Calibrate';
             }
             if (lockIcon) {
                 lockIcon.textContent = allLocked ? 'lock' : 'lock_open_right';
                 lockIcon.style.color = allLocked ? 'var(--lime-green)' : 'var(--high-impact-color)';
-                lockIcon.title = allLocked ? 'Unlock trim and direction controls' : 'Lock trim and direction controls';
+                lockIcon.title = allLocked ? 'Unlock direction controls' : 'Lock direction controls';
             }
-            syncServoTrimStepperButtons();
         }
 
         function toggleServoSettingsLock(iconElement) {
@@ -12634,10 +12737,8 @@ window.addEventListener('beforeunload', function(event) {
             const clickSound = new Audio('toasty/dist/sounds/info/1.mp3');
             clickSound.play().catch(e => console.log('Sound play failed:', e));
 
-            const nextState = !(servoTrimLocked && servoRotationLocked);
-            servoTrimLocked = nextState;
+            const nextState = !servoRotationLocked;
             servoRotationLocked = nextState;
-            localStorage.setItem('servoTrimLocked', nextState.toString());
             localStorage.setItem('servoRotationLocked', nextState.toString());
             syncServoSettingsLockUI(iconElement);
         }
@@ -12814,6 +12915,7 @@ window.addEventListener('beforeunload', function(event) {
             const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
             if (canUseKv) {
                 bleManager.writeValue(window.RCDCC_KEYS.IMU_ORIENT, parseInt(value))
+                    .then(() => scheduleHardwareAutoSave())
                     .catch(e => {
                         console.error('KV write IMU_ORIENT failed:', e);
                         toast.error('Failed to update orientation');
