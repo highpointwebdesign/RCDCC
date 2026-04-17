@@ -15,9 +15,10 @@
 #define SERVO_RL_PIN   17
 #define SERVO_RR_PIN   18
 
-// Conservative pulse range for typical 180° hobby servos (µs)
-#define PULSE_MIN      1000
-#define PULSE_MAX      2000
+
+// Expanded pulse range for high-travel digital servos (µs)
+#define PULSE_MIN       600
+#define PULSE_MAX      2400
 
 // Safe mechanical envelope for 180° servos:
 // center 90°, limited to ±85° to avoid hard-stop binding.
@@ -27,6 +28,10 @@
 
 // How many degrees = full suspension travel
 #define SUSPENSION_TRAVEL_DEG  60.0f
+
+// Runtime-adjustable global travel slider bounds (total travel, peak-to-peak).
+#define GLOBAL_TRAVEL_DEG_MIN  10.0f
+#define GLOBAL_TRAVEL_DEG_MAX  170.0f
 
 // Mechanical travel envelope used by control math (tighter than servo hard-stop limits).
 // Start with full-travel-derived bounds; tune these once measured on the truck.
@@ -52,6 +57,11 @@ enum class MPUOrientation : uint8_t {
     Z_UP_X_RIGHT = 3,
     Z_DOWN_X_FWD = 4,
     Z_DOWN_X_BACK= 5
+};
+
+enum class SuspensionMode : uint8_t {
+    Reactive = 0,
+    Active = 1,
 };
 
 inline void applyOrientation(MPUOrientation ori, float rawPitch, float rawRoll,
@@ -167,7 +177,12 @@ struct ServoChannel {
 //  SuspensionConfig — global tuning parameters
 // ─────────────────────────────────────────────
 struct SuspensionConfig {
+    SuspensionMode suspensionMode = SuspensionMode::Reactive;
     float   rideHeight    = 0.0f;   // -1.0 (low) ... 0.0 (center) ... +1.0 (high)
+    float   travelDeg     = SUSPENSION_TRAVEL_DEG; // total global travel in servo degrees
+    bool    cornerAssist  = false;  // optional anti-roll assist during turns
+    float   cornerGain    = 1.0f;   // -2.0 ... +2.0 (sign flips direction)
+    float   cornerResponse = 0.25f; // 0.05 ... 1.00 smoothing factor per control step
     float   reactionSpeed = 0.4f;   // 0.0 (lazy) ... 1.0 (instant setpoint tracking)
     float   range         = 1.0f;   // 0.1 (small throw) ... 2.0 (large throw)
     float   inputDeadband = 0.30f;  // 0.00 ... 1.00 deg  — noise gate around zero
@@ -180,7 +195,12 @@ struct SuspensionConfig {
     bool    active        = true;
 
     void save(Preferences &prefs) const {
+        prefs.putUChar("mode",   (uint8_t)suspensionMode);
         prefs.putFloat("rideH",  rideHeight);
+        prefs.putFloat("trav",   travelDeg);
+        prefs.putBool("cAsst",   cornerAssist);
+        prefs.putFloat("cGain",  cornerGain);
+        prefs.putFloat("cResp",  cornerResponse);
         prefs.putFloat("react",  reactionSpeed);
         prefs.putFloat("range",  range);
         prefs.putFloat("inDb",   inputDeadband);
@@ -194,7 +214,12 @@ struct SuspensionConfig {
     }
 
     void load(Preferences &prefs) {
+        suspensionMode = (SuspensionMode)prefs.getUChar("mode", 0);
         rideHeight    = prefs.getFloat("rideH",  0.0f);
+        travelDeg     = prefs.getFloat("trav",   SUSPENSION_TRAVEL_DEG);
+        cornerAssist  = prefs.getBool("cAsst",   false);
+        cornerGain    = prefs.getFloat("cGain",  1.0f);
+        cornerResponse = prefs.getFloat("cResp", 0.25f);
         reactionSpeed = prefs.getFloat("react",  0.4f);
         range         = prefs.getFloat("range",  1.0f);
         inputDeadband = prefs.getFloat("inDb",   0.30f);
@@ -205,6 +230,11 @@ struct SuspensionConfig {
         refreshRateHz = prefs.getUChar("hz",     25);
         mpuOrientation = (MPUOrientation)prefs.getUChar("ori", 0);
         active        = prefs.getBool("active",  true);
+
+        travelDeg     = constrain(travelDeg, GLOBAL_TRAVEL_DEG_MIN, GLOBAL_TRAVEL_DEG_MAX);
+        cornerGain    = constrain(cornerGain, -2.0f, 2.0f);
+        cornerResponse = constrain(cornerResponse, 0.05f, 1.0f);
+        if ((uint8_t)suspensionMode > 1) suspensionMode = SuspensionMode::Reactive;
     }
 };
 
@@ -218,10 +248,14 @@ struct CornerTargets {
 
 inline CornerTargets computeTargets(float pitch, float roll,
                                     const SuspensionConfig &cfg) {
-    float rideOffsetDeg = cfg.rideHeight * (SUSPENSION_TRAVEL_DEG / 2.0f);
+    float travelDeg = constrain(cfg.travelDeg, GLOBAL_TRAVEL_DEG_MIN, GLOBAL_TRAVEL_DEG_MAX);
+    float globalMinDeg = SERVO_DEG_MID - (travelDeg / 2.0f);
+    float globalMaxDeg = SERVO_DEG_MID + (travelDeg / 2.0f);
+
+    float rideOffsetDeg = cfg.rideHeight * (travelDeg / 2.0f);
     float effectRange = constrain(cfg.range, 0.1f, 4.0f);
 
-    float baseCorrect = SUSPENSION_TRAVEL_DEG / 2.0f;
+    float baseCorrect = travelDeg / 2.0f;
     // pitch/roll here are the spring-damper output positions (posP/posR from main.cpp).
     // range scales how many servo degrees correspond to unit spring displacement.
     float p = constrain(pitch * effectRange, -baseCorrect, baseCorrect);
@@ -237,10 +271,10 @@ inline CornerTargets computeTargets(float pitch, float roll,
     t.rr = SERVO_DEG_MID + rideOffsetDeg + (-p * rearW) + (-r);
 
     // Detect saturation before group shift using mechanical travel envelope.
-    t.satFL = (t.fl < SERVO_MECH_DEG_MIN || t.fl > SERVO_MECH_DEG_MAX);
-    t.satFR = (t.fr < SERVO_MECH_DEG_MIN || t.fr > SERVO_MECH_DEG_MAX);
-    t.satRL = (t.rl < SERVO_MECH_DEG_MIN || t.rl > SERVO_MECH_DEG_MAX);
-    t.satRR = (t.rr < SERVO_MECH_DEG_MIN || t.rr > SERVO_MECH_DEG_MAX);
+    t.satFL = (t.fl < globalMinDeg || t.fl > globalMaxDeg);
+    t.satFR = (t.fr < globalMinDeg || t.fr > globalMaxDeg);
+    t.satRL = (t.rl < globalMinDeg || t.rl > globalMaxDeg);
+    t.satRR = (t.rr < globalMinDeg || t.rr > globalMaxDeg);
 
     // Shift the whole pattern to fit inside the mechanical envelope
     // rather than pinning individual corners independently.
@@ -248,11 +282,11 @@ inline CornerTargets computeTargets(float pitch, float roll,
     float minTarget = min(min(t.fl, t.fr), min(t.rl, t.rr));
     float shift = 0.0f;
 
-    if (maxTarget > SERVO_MECH_DEG_MAX) {
-        shift = SERVO_MECH_DEG_MAX - maxTarget;
+    if (maxTarget > globalMaxDeg) {
+        shift = globalMaxDeg - maxTarget;
     }
-    if (minTarget + shift < SERVO_MECH_DEG_MIN) {
-        shift += SERVO_MECH_DEG_MIN - (minTarget + shift);
+    if (minTarget + shift < globalMinDeg) {
+        shift += globalMinDeg - (minTarget + shift);
     }
 
     t.fl += shift;
@@ -260,10 +294,10 @@ inline CornerTargets computeTargets(float pitch, float roll,
     t.rl += shift;
     t.rr += shift;
 
-    t.fl = constrain(t.fl, SERVO_MECH_DEG_MIN, SERVO_MECH_DEG_MAX);
-    t.fr = constrain(t.fr, SERVO_MECH_DEG_MIN, SERVO_MECH_DEG_MAX);
-    t.rl = constrain(t.rl, SERVO_MECH_DEG_MIN, SERVO_MECH_DEG_MAX);
-    t.rr = constrain(t.rr, SERVO_MECH_DEG_MIN, SERVO_MECH_DEG_MAX);
+    t.fl = constrain(t.fl, globalMinDeg, globalMaxDeg);
+    t.fr = constrain(t.fr, globalMinDeg, globalMaxDeg);
+    t.rl = constrain(t.rl, globalMinDeg, globalMaxDeg);
+    t.rr = constrain(t.rr, globalMinDeg, globalMaxDeg);
 
     return t;
 }

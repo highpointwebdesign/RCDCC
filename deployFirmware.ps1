@@ -3,6 +3,7 @@ param(
 	[string]$Environment = 'esp32',
 	[string]$UploadPort,
 	[switch]$SkipBuild,
+	[switch]$EraseFlash,
 	[switch]$Monitor,
 	[int]$MonitorBaud = 460800,
 	[switch]$ListPorts
@@ -57,15 +58,19 @@ try {
 		}
 	}
 
-	$eraseArgs = @('run', '-e', $Environment, '--target', 'erase')
-	if ($UploadPort) {
-		$eraseArgs += @('--upload-port', $UploadPort)
-	}
+	if ($EraseFlash) {
+		$eraseArgs = @('run', '-e', $Environment, '--target', 'erase')
+		if ($UploadPort) {
+			$eraseArgs += @('--upload-port', $UploadPort)
+		}
 
-	Write-Host "Erasing flash..."
-	& $pioCommand @eraseArgs
-	if ($LASTEXITCODE -ne 0) {
-		throw "Flash erase failed."
+		Write-Host "Erasing flash..."
+		& $pioCommand @eraseArgs
+		if ($LASTEXITCODE -ne 0) {
+			throw "Flash erase failed."
+		}
+	} else {
+		Write-Host "Skipping flash erase (preserving NVS/config). Use -EraseFlash to force erase." -ForegroundColor Yellow
 	}
 
 	$uploadArgs = @('run', '-e', $Environment, '--target', 'upload')
@@ -96,4 +101,5 @@ try {
 }
 finally {
 	Pop-Location
+	Write-Host ("Last firmware flash attempt: {0}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')) -ForegroundColor Black -BackgroundColor Yellow
 }

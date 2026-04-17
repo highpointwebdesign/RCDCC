@@ -90,7 +90,7 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.794';
+        const APP_VERSION = '1.1.802';
         const BUILD_DATE = '2026-04-15';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.

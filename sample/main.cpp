@@ -288,7 +288,7 @@ void mpuTask(void *param) {
 void controlTask(void *param) {
     // Wait for MPU baseline — but still apply ride height while waiting
     while (!mpuReady) {
-        float rideDegs = SERVO_DEG_MID + cfg.rideHeight * (SUSPENSION_TRAVEL_DEG / 2.0f);
+        float rideDegs = SERVO_DEG_MID + cfg.rideHeight * (cfg.travelDeg / 2.0f);
         for (auto &sv : servos) sv.writeDeg(rideDegs);
         vTaskDelay(pdMS_TO_TICKS(50));
     }
@@ -306,6 +306,8 @@ void controlTask(void *param) {
     // Run control loop at a fixed fast rate for fluid servo motion.
     // MPU sampling can remain slower; we always use latest available reading.
     const uint32_t CTRL_INTERVAL_MS = 10; // 100 Hz
+    SuspensionMode lastMode = cfg.suspensionMode;
+    float cornerAssistDeg = 0.0f;
 
     for (;;) {
         // Pause loop during calibration or manual override (test buttons / direct commands)
@@ -366,6 +368,20 @@ void controlTask(void *param) {
         inPitch += inputAlpha * (gatedPitch - inPitch);
         inRoll  += inputAlpha * (gatedRoll  - inRoll);
 
+        if (cfg.suspensionMode != lastMode) {
+            if (cfg.suspensionMode == SuspensionMode::Reactive) {
+                posP = inPitch; posR = inRoll;
+                setP = inPitch; setR = inRoll;
+            } else {
+                posP = 0.0f; posR = 0.0f;
+                setP = 0.0f; setR = 0.0f;
+            }
+            velP = 0.0f;
+            velR = 0.0f;
+            cornerAssistDeg = 0.0f;
+            lastMode = cfg.suspensionMode;
+        }
+
         // ── Spring-damper physics ─────────────────────────────────────────────
         // dt from actual elapsed time so physics are sample-rate independent.
         static uint32_t lastCtrlUs = 0;
@@ -375,22 +391,42 @@ void controlTask(void *param) {
                    : constrain((nowUs - lastCtrlUs) / 1e6f, 0.001f, 0.1f);
         lastCtrlUs = nowUs;
 
-        // Slew equilibrium target toward measured angle.
-        // reactionSpeed=1.0 → 50 deg/s, reactionSpeed=0.1 → 5 deg/s.
-        float slewMax = cfg.reactionSpeed * 50.0f * dt;
-        setP += constrain(inPitch - setP, -slewMax, slewMax);
-        setR += constrain(inRoll  - setR, -slewMax, slewMax);
+        if (cfg.suspensionMode == SuspensionMode::Reactive) {
+            // Slew equilibrium target toward measured angle.
+            // reactionSpeed=1.0 → 50 deg/s, reactionSpeed=0.1 → 5 deg/s.
+            float slewMax = cfg.reactionSpeed * 50.0f * dt;
+            setP += constrain(inPitch - setP, -slewMax, slewMax);
+            setR += constrain(inRoll  - setR, -slewMax, slewMax);
 
-        // 2nd-order underdamped spring-damper (Euler integration).
-        //   acceleration = ωₙ²(setPoint − pos) − 2ζωₙ·vel
-        //   zeta < 1.0 → underdamped → decaying oscillations (worn-shock feel)
-        float wn    = cfg.omegaN;
-        float wn2   = wn * wn;
-        float c2wn  = 2.0f * cfg.zeta * wn;
-        velP += (wn2 * (setP - posP) - c2wn * velP) * dt;
-        velR += (wn2 * (setR - posR) - c2wn * velR) * dt;
-        posP += velP * dt;
-        posR += velR * dt;
+            // 2nd-order underdamped spring-damper (Euler integration).
+            //   acceleration = ωₙ²(setPoint − pos) − 2ζωₙ·vel
+            //   zeta < 1.0 → underdamped → decaying oscillations (worn-shock feel)
+            float wn    = cfg.omegaN;
+            float wn2   = wn * wn;
+            float c2wn  = 2.0f * cfg.zeta * wn;
+            velP += (wn2 * (setP - posP) - c2wn * velP) * dt;
+            velR += (wn2 * (setR - posR) - c2wn * velR) * dt;
+            posP += velP * dt;
+            posR += velR * dt;
+        } else {
+            // Active-cornering mode: pause reactive spring-damper behavior.
+            posP = 0.0f;
+            posR = 0.0f;
+            setP = 0.0f;
+            setR = 0.0f;
+            velP = 0.0f;
+            velR = 0.0f;
+        }
+
+        // Optional anti-roll assist: adds a temporary opposite-roll command and
+        // smoothly returns to neutral when turn input fades or mode is disabled.
+        float targetCornerAssist = 0.0f;
+        if (cfg.suspensionMode == SuspensionMode::Active && cfg.cornerAssist) {
+            float assistMaxDeg = constrain(cfg.travelDeg * 0.25f, 2.0f, 45.0f);
+            targetCornerAssist = constrain(-inRoll * cfg.cornerGain, -assistMaxDeg, assistMaxDeg);
+        }
+        float assistAlpha = constrain(cfg.cornerResponse, 0.05f, 1.0f);
+        cornerAssistDeg += assistAlpha * (targetCornerAssist - cornerAssistDeg);
 
         // ── Teleplot serial output (20 Hz) ────────────────────────────────────
         // Teleplot format: ">varName:value\n" — one variable per line.
@@ -403,7 +439,9 @@ void controlTask(void *param) {
         }
 
         if (cfg.active) {
-            CornerTargets t = computeTargets(posP, posR, cfg);
+            float modePitch = (cfg.suspensionMode == SuspensionMode::Reactive) ? posP : 0.0f;
+            float modeRoll  = (cfg.suspensionMode == SuspensionMode::Reactive) ? posR : 0.0f;
+            CornerTargets t = computeTargets(modePitch, modeRoll + cornerAssistDeg, cfg);
 
             servos[0].writeDeg(t.fl);
             servos[1].writeDeg(t.fr);
@@ -418,7 +456,7 @@ void controlTask(void *param) {
             lastSatRR = t.satRR || servos[3].wouldSaturate(t.rr);
         } else {
             // Inactive: hold ride height only — convert to absolute degrees
-            float rideDegs = SERVO_DEG_MID + cfg.rideHeight * (SUSPENSION_TRAVEL_DEG / 2.0f);
+            float rideDegs = SERVO_DEG_MID + cfg.rideHeight * (cfg.travelDeg / 2.0f);
             for (auto &sv : servos) sv.writeDeg(rideDegs);
         }
 
@@ -495,11 +533,24 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
         if      (strcmp(key,"rideHeight")    == 0) {
             cfg.rideHeight = constrain(val,-1.0f,1.0f);
             // Immediately move all servos to new ride height (absolute degrees)
-            float rideDegs = SERVO_DEG_MID + cfg.rideHeight * (SUSPENSION_TRAVEL_DEG / 2.0f);
+            float rideDegs = SERVO_DEG_MID + cfg.rideHeight * (cfg.travelDeg / 2.0f);
             manualOverride      = true;
             manualOverrideUntil = millis() + MANUAL_OVERRIDE_MS;
             for (auto &sv : servos) sv.writeDeg(rideDegs);
         }
+        else if (strcmp(key,"travelDeg")     == 0) {
+            cfg.travelDeg = constrain(val, GLOBAL_TRAVEL_DEG_MIN, GLOBAL_TRAVEL_DEG_MAX);
+            float rideDegs = SERVO_DEG_MID + cfg.rideHeight * (cfg.travelDeg / 2.0f);
+            manualOverride      = true;
+            manualOverrideUntil = millis() + MANUAL_OVERRIDE_MS;
+            for (auto &sv : servos) sv.writeDeg(rideDegs);
+        }
+        else if (strcmp(key,"suspMode")      == 0) {
+            cfg.suspensionMode = ((uint8_t)val == 1) ? SuspensionMode::Active : SuspensionMode::Reactive;
+        }
+        else if (strcmp(key,"cornerAssist")  == 0) cfg.cornerAssist = (val != 0.0f);
+        else if (strcmp(key,"cornerGain")    == 0) cfg.cornerGain = constrain(val, -2.0f, 2.0f);
+        else if (strcmp(key,"cornerResp")    == 0) cfg.cornerResponse = constrain(val, 0.05f, 1.0f);
         else if (strcmp(key,"reactionSpeed") == 0) cfg.reactionSpeed = constrain(val,0.0f,1.0f);
         else if (strcmp(key,"range")         == 0) cfg.range         = constrain(val,0.1f,4.0f);
         else if (strcmp(key,"inputDeadband") == 0) cfg.inputDeadband = constrain(val,0.0f,1.0f);
@@ -512,7 +563,7 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
         else if (strcmp(key,"active")        == 0) {
             cfg.active = (val != 0.0f);
             if (!cfg.active) {
-                float rideDegs = SERVO_DEG_MID + cfg.rideHeight * (SUSPENSION_TRAVEL_DEG / 2.0f);
+                float rideDegs = SERVO_DEG_MID + cfg.rideHeight * (cfg.travelDeg / 2.0f);
                 manualOverride      = true;
                 manualOverrideUntil = millis() + MANUAL_OVERRIDE_MS;
                 for (auto &sv : servos) sv.writeDeg(rideDegs);
@@ -645,10 +696,10 @@ void runAutoCalibrate() {
         }
         delay(200);
 
-        // 3. Move +20 degrees from center
-        float testPos = SERVO_DEG_MID + 20.0f;
+        // 3. Move +45 degrees from center
+        float testPos = SERVO_DEG_MID + 45.0f;
         servos[i].writeDeg(testPos);
-        delay(600);   // let chassis settle
+        delay(700);   // let chassis settle
 
         float p1 = 0, r1 = 0;
         if (xSemaphoreTake(mpuMutex, portMAX_DELAY)) {
@@ -746,8 +797,8 @@ void runServoCalibrate(uint8_t idx) {
     }
     delay(200);
 
-    servos[idx].writeDeg(SERVO_DEG_MID + 20.0f);
-    delay(600);
+    servos[idx].writeDeg(SERVO_DEG_MID + 45.0f);
+    delay(700);
 
     float p1 = 0, r1 = 0;
     if (xSemaphoreTake(mpuMutex, portMAX_DELAY)) {
@@ -847,7 +898,12 @@ void sendFullState(AsyncWebSocketClient *client) {
 
     // Global config
     JsonObject cfgObj = doc.createNestedObject("cfg");
+    cfgObj["suspMode"]      = (uint8_t)cfg.suspensionMode;
     cfgObj["rideHeight"]    = cfg.rideHeight;
+    cfgObj["travelDeg"]     = cfg.travelDeg;
+    cfgObj["cornerAssist"]  = cfg.cornerAssist;
+    cfgObj["cornerGain"]    = cfg.cornerGain;
+    cfgObj["cornerResp"]    = cfg.cornerResponse;
     cfgObj["reactionSpeed"] = cfg.reactionSpeed;
     cfgObj["range"]         = cfg.range;
     cfgObj["inputDeadband"] = cfg.inputDeadband;
@@ -925,7 +981,7 @@ void setup() {
     WiFi.begin(WIFI_SSID, WIFI_PASS);
     Serial.print("[WIFI] Connecting");
     uint8_t tries = 0;
-    while (WiFi.status() != WL_CONNECTED && tries < 20) {
+    while (WiFi.status() != WL_CONNECTED && tries < 40) {
         delay(500); Serial.print("."); tries++;
     }
 

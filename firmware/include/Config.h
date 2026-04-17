@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "26.04.47"
+#define FIRMWARE_VERSION "26.04.59"
 #endif
 
 // Sensor configuration

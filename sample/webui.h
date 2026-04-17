@@ -83,7 +83,7 @@ static const char WEBUI_HTML[] PROGMEM = R"HTMLEOF(
               color: var(--muted); margin-top: 8px; white-space: pre-wrap; }
 
   .section-title { font-size: 11px; color: var(--muted); text-transform: uppercase;
-                   letter-spacing: 1px; border-bottom: 1px solid var(--border);
+                   letter-spacing: 1px; /* border-bottom: 1px solid var(--border); */
                    padding-bottom: 4px; margin: 14px 0 10px; }
   .full-width { grid-column: 1 / -1; }
   .hidden { display: none !important; }
@@ -104,15 +104,59 @@ static const char WEBUI_HTML[] PROGMEM = R"HTMLEOF(
   </span>
 </div>
 
+<!-- Suspension Mode -->
+<div class="panel" style="margin-bottom:12px" id="suspensionModePanel">
+  <h2>SUSPENSION MODE</h2>
+  <div class="row">
+    <label>Mode</label>
+    <div style="display:flex; gap:12px; align-items:center;">
+      <label style="width:auto; color:var(--text); font-size:12px; display:flex; gap:6px; align-items:center;">
+        <input type="radio" name="suspMode" id="suspModeActive" value="active"
+               onchange="setSuspensionMode('active', true)">
+        Active
+      </label>
+      <label style="width:auto; color:var(--text); font-size:12px; display:flex; gap:6px; align-items:center;">
+        <input type="radio" name="suspMode" id="suspModeReactive" value="reactive"
+               onchange="setSuspensionMode('reactive', true)">
+        Reactive
+      </label>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="margin-bottom:12px" id="globalSettingsPanel">
+  <h2>GLOBAL SETTINGS</h2>
+  <div class="row">
+    <label>Travel Range (&deg;)</label>
+    <input type="range" id="travelDeg" min="10" max="170" step="2" value="60"
+      oninput="syncVal(this,'travelDegVal')" onchange="sendCustomSetting('travelDeg',this.value)">
+    <span class="val" id="travelDegVal">60</span>
+  </div>
+  <div class="row">
+    <label>Ride Height Trim</label>
+    <input type="range" id="rideHeight" min="-100" max="100" step="5" value="0"
+      oninput="syncVal(this,'rideHeightVal')" onchange="sendCustomSetting('rideHeight',this.value/100)">
+    <span class="val" id="rideHeightVal">0</span>
+  </div>
+</div>
+
 <!-- Global Settings -->
-<div class="panel" style="margin-bottom:12px">
+<div class="panel" style="margin-bottom:12px" id="tuningPanel">
   <h2>TUNING</h2>
   <div class="row">
     <label>Tuning Mode</label>
-    <select id="configMode" onchange="setConfigMode(this.value)">
-      <option value="auto">Auto</option>
-      <option value="custom">Custom</option>
-    </select>
+    <div style="display:flex; gap:12px; align-items:center;">
+      <label style="width:auto; color:var(--text); font-size:12px; display:flex; gap:6px; align-items:center;">
+        <input type="radio" name="configMode" id="configModeAuto" value="auto"
+               onchange="setConfigMode('auto')">
+        Auto
+      </label>
+      <label style="width:auto; color:var(--text); font-size:12px; display:flex; gap:6px; align-items:center;">
+        <input type="radio" name="configMode" id="configModeCustom" value="custom"
+               onchange="setConfigMode('custom')">
+        Custom
+      </label>
+    </div>
   </div>
   <div class="row" id="masterControlRow">
     <label>Drive Mode</label>
@@ -125,57 +169,51 @@ static const char WEBUI_HTML[] PROGMEM = R"HTMLEOF(
   <div class="row">
     <label>Motion Amount</label>
     <input type="range" id="range" min="10" max="400" value="100"
-           oninput="syncVal(this,'rangeVal')" onchange="sendSetting('range',this.value/100)">
+           oninput="syncVal(this,'rangeVal')" onchange="sendCustomSetting('range',this.value/100)">
     <span class="val" id="rangeVal">100</span>
   </div>
   <div class="row">
     <label>Bounce Speed</label>
     <input type="range" id="omegaN" min="50" max="1500" value="300"
            oninput="document.getElementById('omegaNVal').textContent=(this.value/100).toFixed(1)"
-           onchange="sendSetting('omegaN',this.value/100)">
+           onchange="sendCustomSetting('omegaN',this.value/100)">
     <span class="val" id="omegaNVal">3.0</span>
   </div>
   <div class="row">
     <label>Bounce Decay</label>
     <input type="range" id="zeta" min="5" max="95" value="25"
            oninput="document.getElementById('zetaVal').textContent=(this.value/100).toFixed(2)"
-           onchange="sendSetting('zeta',this.value/100)">
+           onchange="sendCustomSetting('zeta',this.value/100)">
     <span class="val" id="zetaVal">0.25</span>
   </div>
   <div class="row">
     <label>Noise Guard</label>
     <input type="range" id="inputDeadband" min="0" max="100" value="30"
       oninput="document.getElementById('inputDeadbandVal').textContent=(this.value/100).toFixed(2)"
-      onchange="sendSetting('inputDeadband',this.value/100)">
+      onchange="sendCustomSetting('inputDeadband',this.value/100)">
     <span class="val" id="inputDeadbandVal">0.30</span>
   </div>
   <div class="row">
     <label>Terrain Response Rate</label>
     <input type="range" id="reactionSpeed" min="1" max="100" value="40"
-      oninput="syncVal(this,'reactionSpeedVal')" onchange="sendSetting('reactionSpeed',this.value/100)">
+      oninput="syncVal(this,'reactionSpeedVal')" onchange="sendCustomSetting('reactionSpeed',this.value/100)">
     <span class="val" id="reactionSpeedVal">40</span>
   </div>
     <div class="row">
       <label>Noise Latch</label>
       <input type="range" id="inputHyst" min="0" max="50" value="15"
         oninput="document.getElementById('inputHystVal').textContent=(this.value/100).toFixed(2)"
-        onchange="sendSetting('inputHyst',this.value/100)">
+        onchange="sendCustomSetting('inputHyst',this.value/100)">
       <span class="val" id="inputHystVal">0.15</span>
     </div>
   </div>
 
-  <div class="section-title">SERVO/GYRO CONFIGURATION</div>
+  <div class="section-title">GYRO CONFIGURATION</div>
   <div class="row">
     <label>Front/Rear Bias</label>
     <input type="range" id="balance" min="-100" max="100" value="0"
-      oninput="syncVal(this,'balanceVal')" onchange="sendSetting('balance',this.value/100)">
+      oninput="syncVal(this,'balanceVal')" onchange="sendCustomSetting('balance',this.value/100)">
     <span class="val" id="balanceVal">0</span>
-  </div>
-  <div class="row">
-    <label>Ride Height Trim</label>
-    <input type="range" id="rideHeight" min="-100" max="100" value="0"
-      oninput="syncVal(this,'rideHeightVal')" onchange="sendSetting('rideHeight',this.value/100)">
-    <span class="val" id="rideHeightVal">0</span>
   </div>
   <div class="row">
     <label>Sensor Update Rate</label>
@@ -199,7 +237,30 @@ static const char WEBUI_HTML[] PROGMEM = R"HTMLEOF(
   </div>
 </div>
 
-<!-- Per-Servo Settings -->
+<div class="panel hidden" style="margin-bottom:12px" id="activeCorneringPanel">
+  <h2>ACTIVE CORNERING</h2>
+  <div class="row">
+    <label>Corner Assist</label>
+    <input type="checkbox" id="cornerAssist"
+      onchange="sendSetting('cornerAssist',this.checked?1:0)">
+    <span class="val"></span>
+  </div>
+  <div class="row">
+    <label>Corner Strength</label>
+    <input type="range" id="cornerGain" min="-200" max="200" step="5" value="100"
+      oninput="document.getElementById('cornerGainVal').textContent=this.value"
+      onchange="sendSetting('cornerGain',this.value/100)">
+    <span class="val" id="cornerGainVal">100</span>
+  </div>
+  <div class="row">
+    <label>Corner Response</label>
+    <input type="range" id="cornerResp" min="5" max="100" step="5" value="25"
+      oninput="document.getElementById('cornerRespVal').textContent=this.value"
+      onchange="sendSetting('cornerResp',this.value/100)">
+    <span class="val" id="cornerRespVal">25</span>
+  </div>
+</div>
+
 <div class="section-title">PER-SERVO SETTINGS</div>
 <div class="servo-grid" id="servoGrid">
   <!-- Populated by JS from server data -->
@@ -210,10 +271,70 @@ static const char WEBUI_HTML[] PROGMEM = R"HTMLEOF(
   <h2>CALIBRATION</h2>
   <div class="btn-row">
     <button class="ok" onclick="sendCmd('calibrate')">AUTO CALIBRATE (all 4)</button>
-    <button onclick="sendCmd('rebaseline')">RE-BASELINE LEVEL</button>
+    <button onclick="sendCmd('rebaseline')">SET AS LEVEL</button>
     <button class="danger" onclick="sendCmd('center_all')">CENTER ALL SERVOS</button>
   </div>
   <div id="calibLog">Calibration log will appear here...</div>
+</div>
+
+<!-- Wiring & Default Values -->
+<div class="panel" style="margin-bottom:12px">
+  <h2>WIRING &amp; DEFAULT VALUES</h2>
+  <div style="font-size:12px; color:var(--muted);">
+    <div style="color:var(--accent); margin-bottom:6px; letter-spacing:1px;">DEFAULT VALUES</div>
+    <div style="color:var(--accent); margin:8px 0 6px; letter-spacing:1px; font-size:11px;">GLOBAL / SERVO DEFAULTS</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 20px;">
+      <span>Suspension Mode</span>    <span style="color:var(--text);">Reactive</span>
+      <span>Global Travel</span>      <span style="color:var(--text);">60&deg;</span>
+      <span>Ride Height Trim</span>   <span style="color:var(--text);">0</span>
+      <span>Servo Center</span>       <span style="color:var(--text);">90&deg;</span>
+      <span>Servo Min (mech)</span>   <span style="color:var(--text);">60&deg;</span>
+      <span>Servo Max (mech)</span>   <span style="color:var(--text);">120&deg;</span>
+      <span>Servo Trim</span>         <span style="color:var(--text);">0&deg;</span>
+      <span>Pulse Range</span>        <span style="color:var(--text);">600&ndash;2400 &micro;s</span>
+    </div>
+
+    <div style="color:var(--accent); margin:10px 0 6px; letter-spacing:1px; font-size:11px;">REACTIVE TUNING DEFAULTS</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 20px;">
+      <span>Motion Amount</span>      <span style="color:var(--text);">1.0</span>
+      <span>Bounce Speed (&omega;n)</span> <span style="color:var(--text);">3.0 rad/s</span>
+      <span>Bounce Decay (&zeta;)</span>   <span style="color:var(--text);">0.25</span>
+      <span>Noise Guard</span>        <span style="color:var(--text);">0.30</span>
+      <span>Noise Latch</span>        <span style="color:var(--text);">0.15</span>
+      <span>Reaction Speed</span>     <span style="color:var(--text);">0.4</span>
+      <span>Front/Rear Bias</span>    <span style="color:var(--text);">0</span>
+      <span>Sensor Rate</span>        <span style="color:var(--text);">25 Hz</span>
+      <span>Sensor Mount</span>       <span style="color:var(--text);">Z-Up / X-Forward</span>
+    </div>
+
+    <div style="color:var(--accent); margin:10px 0 6px; letter-spacing:1px; font-size:11px;">ACTIVE CORNERING DEFAULTS</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 20px;">
+      <span>Corner Assist</span>      <span style="color:var(--text);">Off</span>
+      <span>Corner Strength</span>    <span style="color:var(--text);">1.0 (100)</span>
+      <span>Corner Response</span>    <span style="color:var(--text);">0.25 (25)</span>
+    </div>
+  </div>
+
+  <hr style="border:none; border-top:1px solid var(--border); margin:14px 0;">
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; font-size:12px; color:var(--muted);">
+    <div>
+      <div style="color:var(--accent); margin-bottom:6px; letter-spacing:1px;">SERVO PINS</div>
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <span><span style="color:var(--text);">FL</span> → GPIO 25</span>
+        <span><span style="color:var(--text);">FR</span> → GPIO 26</span>
+        <span><span style="color:var(--text);">RL</span> → GPIO 17</span>
+        <span><span style="color:var(--text);">RR</span> → GPIO 18</span>
+      </div>
+    </div>
+    <div>
+      <div style="color:var(--accent); margin-bottom:6px; letter-spacing:1px;">MPU6050 PINS</div>
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <span><span style="color:var(--text);">SDA</span> → GPIO 21</span>
+        <span><span style="color:var(--text);">SCL</span> → GPIO 22</span>
+      </div>
+    </div>
+  </div>
 </div>
 
 
@@ -266,6 +387,11 @@ function sendSetting(key, value) {
   }, DEBOUNCE_MS);
 }
 
+function sendCustomSetting(key, value) {
+  setConfigMode('custom');
+  sendSetting(key, value);
+}
+
 function sendServoSetting(idx, key, value) {
   const fullKey = 'servo_' + idx + '_' + key;
   clearTimeout(debounceTimers[fullKey]);
@@ -310,7 +436,7 @@ function lerp(a, b, t) {
 }
 
 function masterFeelText(v) {
-  if (v < 16) return 'Firm';
+  if (v < 16) return 'Race';
   if (v < 33) return 'Sport';
   if (v < 50) return 'Balanced';
   if (v < 66) return 'Touring';
@@ -319,15 +445,36 @@ function masterFeelText(v) {
 }
 
 let configMode = 'auto';
+let suspensionMode = 'reactive';
+
+function setSuspensionMode(mode, send = false) {
+  suspensionMode = (mode === 'active') ? 'active' : 'reactive';
+  const tuningPanel = document.getElementById('tuningPanel');
+  const activeCorneringPanel = document.getElementById('activeCorneringPanel');
+  const activeEl = document.getElementById('suspModeActive');
+  const reactiveEl = document.getElementById('suspModeReactive');
+
+  if (tuningPanel) tuningPanel.classList.toggle('hidden', suspensionMode !== 'reactive');
+  if (activeCorneringPanel) activeCorneringPanel.classList.toggle('hidden', suspensionMode !== 'active');
+  if (activeEl) activeEl.checked = (suspensionMode === 'active');
+  if (reactiveEl) reactiveEl.checked = (suspensionMode === 'reactive');
+
+  if (send) {
+    sendSetting('suspMode', suspensionMode === 'active' ? 1 : 0);
+  }
+}
 
 function setConfigMode(mode, persist = true) {
   configMode = (mode === 'custom') ? 'custom' : 'auto';
   const customPanel = document.getElementById('customControls');
   const masterRow = document.getElementById('masterControlRow');
-  const modeEl = document.getElementById('configMode');
-  if (customPanel) customPanel.classList.toggle('hidden', configMode === 'auto');
-  if (masterRow) masterRow.classList.toggle('hidden', configMode === 'custom');
-  if (modeEl) modeEl.value = configMode;
+  const autoEl = document.getElementById('configModeAuto');
+  const customEl = document.getElementById('configModeCustom');
+  // Keep both sections visible; tuning mode remains a saved preference/intent only.
+  if (customPanel) customPanel.classList.remove('hidden');
+  if (masterRow) masterRow.classList.remove('hidden');
+  if (autoEl) autoEl.checked = (configMode === 'auto');
+  if (customEl) customEl.checked = (configMode === 'custom');
   if (persist) {
     try { localStorage.setItem('suspensionConfigMode', configMode); } catch (e) {}
   }
@@ -380,6 +527,9 @@ function updateMasterFeel(rawVal, sendChanges) {
   }
 
   if (!sendChanges) return;
+
+  // Drive Mode interaction means we're back in Auto tuning intent.
+  setConfigMode('auto');
 
   // Push linked settings to firmware.
   sendSetting('range', motionAmount);
@@ -450,24 +600,24 @@ function buildServoGrid(servos) {
       </div>
       <div class="row">
         <label>Trim (&deg;)</label>
-        <input type="range" id="trim_${i}" min="-30" max="30" step="0.1" value="${trimVal.toFixed(1)}"
-               oninput="document.getElementById('trimVal_${i}').textContent=parseFloat(this.value).toFixed(1)"
+         <input type="range" id="trim_${i}" min="-30" max="30" step="2" value="${Math.round(trimVal)}"
+           oninput="document.getElementById('trimVal_${i}').textContent=Math.round(parseFloat(this.value))"
                onchange="sendServoSetting(${i},'trim',parseFloat(this.value))">
-        <span class="val" id="trimVal_${i}">${trimVal.toFixed(1)}</span>
+         <span class="val" id="trimVal_${i}">${Math.round(trimVal)}</span>
       </div>
       <div class="row">
         <label>Min (&deg;)</label>
-        <input type="range" id="min_${i}" min="0" max="180" step="0.5" value="${minVal.toFixed(1)}"
-               oninput="document.getElementById('minVal_${i}').textContent=parseFloat(this.value).toFixed(1)"
+         <input type="range" id="min_${i}" min="0" max="180" step="2" value="${Math.round(minVal)}"
+           oninput="document.getElementById('minVal_${i}').textContent=Math.round(parseFloat(this.value))"
                onchange="sendServoSetting(${i},'min',parseFloat(this.value))">
-        <span class="val" id="minVal_${i}">${minVal.toFixed(1)}</span>
+         <span class="val" id="minVal_${i}">${Math.round(minVal)}</span>
       </div>
       <div class="row">
         <label>Max (&deg;)</label>
-        <input type="range" id="max_${i}" min="0" max="180" step="0.5" value="${maxVal.toFixed(1)}"
-               oninput="document.getElementById('maxVal_${i}').textContent=parseFloat(this.value).toFixed(1)"
+         <input type="range" id="max_${i}" min="0" max="180" step="2" value="${Math.round(maxVal)}"
+           oninput="document.getElementById('maxVal_${i}').textContent=Math.round(parseFloat(this.value))"
                onchange="sendServoSetting(${i},'max',parseFloat(this.value))">
-        <span class="val" id="maxVal_${i}">${maxVal.toFixed(1)}</span>
+         <span class="val" id="maxVal_${i}">${Math.round(maxVal)}</span>
       </div>
       <div class="btn-row">
         <button onclick="sendCmd('testServo',{idx:${i},dir:1})">TEST +</button>
@@ -515,27 +665,39 @@ function handleMessage(msg) {
     if (inv) inv.checked = s.inverted;
     const trim = document.getElementById('trim_' + i);
     if (trim && Number.isFinite(Number(s.trimDeg))) {
-      trim.value = Number(s.trimDeg).toFixed(1);
+      trim.value = Math.round(Number(s.trimDeg));
       const trimVal = document.getElementById('trimVal_' + i);
-      if (trimVal) trimVal.textContent = Number(s.trimDeg).toFixed(1);
+      if (trimVal) trimVal.textContent = Math.round(Number(s.trimDeg));
     }
     const minEl = document.getElementById('min_' + i);
     if (minEl && Number.isFinite(Number(s.minDeg))) {
-      minEl.value = Number(s.minDeg).toFixed(1);
+      minEl.value = Math.round(Number(s.minDeg));
       const minVal = document.getElementById('minVal_' + i);
-      if (minVal) minVal.textContent = Number(s.minDeg).toFixed(1);
+      if (minVal) minVal.textContent = Math.round(Number(s.minDeg));
     }
     const maxEl = document.getElementById('max_' + i);
     if (maxEl && Number.isFinite(Number(s.maxDeg))) {
-      maxEl.value = Number(s.maxDeg).toFixed(1);
+      maxEl.value = Math.round(Number(s.maxDeg));
       const maxVal = document.getElementById('maxVal_' + i);
-      if (maxVal) maxVal.textContent = Number(s.maxDeg).toFixed(1);
+      if (maxVal) maxVal.textContent = Math.round(Number(s.maxDeg));
     }
   }
 }
 
 function applyGlobalSettings(cfg) {
+  setSuspensionMode(Number(cfg.suspMode) === 1 ? 'active' : 'reactive', false);
   setSlider('rideHeight',    Math.round(cfg.rideHeight   * 100), 'rideHeightVal');
+  if (Number.isFinite(Number(cfg.travelDeg))) {
+    setSlider('travelDeg', Math.round(cfg.travelDeg), 'travelDegVal');
+  }
+  const cornerAssistEl = document.getElementById('cornerAssist');
+  if (cornerAssistEl) cornerAssistEl.checked = !!cfg.cornerAssist;
+  if (Number.isFinite(Number(cfg.cornerGain))) {
+    setSlider('cornerGain', Math.round(cfg.cornerGain * 100), 'cornerGainVal');
+  }
+  if (Number.isFinite(Number(cfg.cornerResp))) {
+    setSlider('cornerResp', Math.round(cfg.cornerResp * 100), 'cornerRespVal');
+  }
   setSlider('reactionSpeed', Math.round(cfg.reactionSpeed* 100), 'reactionSpeedVal');
   setSlider('range',         Math.round(cfg.range        * 100), 'rangeVal');
   setSlider('balance',       Math.round(cfg.balance      * 100), 'balanceVal');
@@ -579,6 +741,7 @@ try {
   }
 } catch (e) {}
 setConfigMode(configMode, false);
+setSuspensionMode(suspensionMode, false);
 connect();
 </script>
 </body>

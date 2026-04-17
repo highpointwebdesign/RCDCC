@@ -325,6 +325,8 @@ bool applyConfigUpdatePayload(const String& payload) {
     return true;
   }
 
+  bool hasRideHeightUpdate = false;
+
   DynamicJsonDocument doc(2048);
   DeserializationError error = deserializeJson(doc, payload);
   if (error) {
@@ -333,7 +335,10 @@ bool applyConfigUpdatePayload(const String& payload) {
   }
 
   if (doc.containsKey("reactionSpeed")) storageManager.updateParameter("reactionSpeed", doc["reactionSpeed"]);
-  if (doc.containsKey("rideHeightOffset")) storageManager.updateParameter("rideHeightOffset", doc["rideHeightOffset"]);
+  if (doc.containsKey("rideHeightOffset")) {
+    storageManager.updateParameter("rideHeightOffset", doc["rideHeightOffset"]);
+    hasRideHeightUpdate = true;
+  }
   if (doc.containsKey("rangeLimit")) storageManager.updateParameter("rangeLimit", doc["rangeLimit"]);
   if (doc.containsKey("omegaN"))        storageManager.updateParameter("omegaN",        doc["omegaN"]);
   if (doc.containsKey("zeta"))          storageManager.updateParameter("zeta",          doc["zeta"]);
@@ -379,6 +384,7 @@ bool applyConfigUpdatePayload(const String& payload) {
         DynamicJsonDocument rideDoc(32);
         rideDoc["v"] = servo["rideHeight"].as<int32_t>();
         storageManager.setValue(ns + ".ride_ht", rideDoc["v"].as<JsonVariantConst>());
+        hasRideHeightUpdate = true;
       }
       if (servo.containsKey("ride_ht")) {
         String ns = (strcmp(servoName, "frontLeft") == 0) ? "srv_fl"
@@ -388,11 +394,18 @@ bool applyConfigUpdatePayload(const String& payload) {
         DynamicJsonDocument rideDoc(32);
         rideDoc["v"] = servo["ride_ht"].as<int32_t>();
         storageManager.setValue(ns + ".ride_ht", rideDoc["v"].as<JsonVariantConst>());
+        hasRideHeightUpdate = true;
       }
     }
   }
 
   refreshSuspensionRuntimeFromStorage();
+
+  // In pause mode, allow static ride-height adjustments without re-enabling
+  // the suspension loop. Dance Mode retains servo ownership when active.
+  if (gSuspensionPaused && hasRideHeightUpdate && !gDanceMode.enabled) {
+    writeRideHeightToAllSuspensionServos();
+  }
 
   startLedBlink();
   return true;
