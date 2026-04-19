@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "26.04.59"
+#define FIRMWARE_VERSION "26.04.69"
 #endif
 
 // Sensor configuration
@@ -40,13 +40,18 @@
 #define DEFAULT_SERVO_REVERSE 0
 #define DEFAULT_SERVO_RIDE_HT 50
 
-#define DEFAULT_SUSP_OMEGA_N   300   // omegaN × 100  →  3.00 rad/s
-#define DEFAULT_SUSP_ZETA       25   // zeta × 100    →  0.25 (underdamped)
-#define DEFAULT_SUSP_REACT_SPD  50
-#define DEFAULT_SUSP_FR_BALANCE  0
-#define DEFAULT_SUSP_RANGE     100   // range × 100   →  1.00 (unit scale)
-#define DEFAULT_SUSP_DEADBAND   30   // deadband × 100 → 0.30 deg
-#define DEFAULT_SUSP_HYST       15   // hyst × 100    →  0.15 deg
+#define DEFAULT_SUSP_OMEGA_N        300   // omegaN × 100  →  3.00 rad/s
+#define DEFAULT_SUSP_ZETA            25   // zeta × 100    →  0.25 (underdamped)
+#define DEFAULT_SUSP_REACT_SPD       50
+#define DEFAULT_SUSP_FR_BALANCE       0
+#define DEFAULT_SUSP_RANGE          100   // range × 100   →  1.00 (unit scale)
+#define DEFAULT_SUSP_DEADBAND        30   // deadband × 100 → 0.30 deg
+#define DEFAULT_SUSP_HYST            15   // hyst × 100    →  0.15 deg
+#define DEFAULT_SUSP_MODE             0   // 0 = reactive, 1 = active
+#define DEFAULT_SUSP_TRAVEL_DEG     160   // total travel envelope in degrees
+#define DEFAULT_SUSP_CORNER_ASSIST    1
+#define DEFAULT_SUSP_CORNER_GAIN    100   // × 100 → 1.00
+#define DEFAULT_SUSP_CORNER_RESP     25   // × 100 → 0.25
 
 #define DEFAULT_IMU_ORIENT 0
 #define DEFAULT_IMU_ROLL_TRIM 0.0f
@@ -57,7 +62,7 @@
 // Legacy runtime defaults retained for simulator compatibility.
 #define DEFAULT_REACTION_SPEED 1.0f
 #define DEFAULT_RIDE_HEIGHT 50.0f
-#define DEFAULT_RANGE_LIMIT 60.0f
+#define DEFAULT_RANGE_LIMIT static_cast<float>(DEFAULT_SUSP_TRAVEL_DEG)
 #define DEFAULT_OMEGA_N 3.0f
 #define DEFAULT_ZETA 0.25f
 #define DEFAULT_RANGE 1.0f
@@ -92,22 +97,32 @@ enum MPU6050Orientation {
   ARROW_LEFT_UP = 5        // Arrow points left, chip faces up
 };
 
+enum SuspensionMode : uint8_t {
+  SUSPENSION_MODE_REACTIVE = 0,
+  SUSPENSION_MODE_ACTIVE = 1
+};
+
 #define DEFAULT_MPU6050_ORIENTATION ARROW_FORWARD_UP
 
 // Data structures
 struct SuspensionConfig {
   float reactionSpeed;
   float rideHeightOffset;
-  float rangeLimit;        // legacy — travel envelope degrees (unused by new simulator)
+  float rangeLimit;        // legacy alias for travelDeg used by older app payloads
+  float travelDeg;         // total travel envelope in servo degrees
   float omegaN;            // natural frequency rad/s  (0.5 – 15.0)
   float zeta;              // damping ratio            (0.05 – 0.95)
   float range;             // input scale factor       (0.1 – 4.0)
   float inputDeadband;     // noise gate around zero   (0.0 – 1.0)
   float inputHyst;         // hysteresis to prevent chatter (0.0 – 0.5)
   float frontRearBalance;  // 0.0 = all rear, 1.0 = all front
+  float cornerGain;        // active-corner assist gain (−2.0 – 2.0)
+  float cornerResponse;    // active-corner smoothing   (0.05 – 1.0)
   uint16_t sampleRate;
   uint8_t telemetryRate;   // WebSocket broadcast rate in Hz (1-10)
   uint8_t mpuOrientation;  // MPU6050 mounting orientation
+  uint8_t suspensionMode;  // SuspensionMode enum value
+  bool cornerAssist;       // enable active-corner assist
   bool fpvAutoMode;        // FPV auto mode persistent setting
   char deviceName[64];     // Device hostname for network (e.g., "esp32-frontleft")
 };
@@ -132,6 +147,11 @@ struct RCDCCSuspensionState {
   int32_t range;            // × 100  (10–400   → 0.10–4.00)
   int32_t inputDeadband;    // × 100  (0–100    → 0.00–1.00 deg)
   int32_t inputHyst;        // × 100  (0–50     → 0.00–0.50 deg)
+  int32_t suspensionMode;   // 0 = reactive, 1 = active
+  int32_t travelDeg;        // 10–170 degrees
+  int32_t cornerAssist;     // 0/1
+  int32_t cornerGain;       // × 100  (−200..200 → −2.00..2.00)
+  int32_t cornerResponse;   // × 100  (5..100   → 0.05..1.00)
 };
 
 struct RCDCCImuState {
@@ -281,6 +301,11 @@ struct DrivingProfile {
   int32_t range;
   int32_t deadband;
   int32_t hyst;
+  int32_t suspMode;
+  int32_t travelDeg;
+  int32_t cornerAssist;
+  int32_t cornerGain;
+  int32_t cornerResponse;
 
   // IMU orientation index
   int32_t imuOrient;

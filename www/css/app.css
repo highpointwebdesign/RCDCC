@@ -22,7 +22,7 @@
         }
 
         span.material-symbols-outlined{
-            font-size: 24px;
+            font-size: 20px;
             vertical-align: middle;
             line-height: 1;
         }
@@ -437,7 +437,7 @@
             align-items: flex-start;
             justify-content: flex-start;
             gap: 0.75rem;
-            margin-bottom: 0.9rem;
+            margin-bottom: 1.5rem;
         }
 
         .section-title-row .section-title {
@@ -506,7 +506,7 @@
             position: absolute;
             left: 0;
               top: 0.12rem;
-              font-size: 1.35rem !important;
+                            font-size: 1.25rem !important;
             line-height: 1;
               color: var(--high-impact-color);
         }
@@ -514,7 +514,7 @@
         .garage-add-icon-plus {
             position: absolute;
                   right: calc(-0.18rem - 3px);
-                  top: calc(-0.18rem - 3px);
+                  top: calc(-0.18rem - 1px);
               font-size: 0.95rem !important;
             line-height: 1;
             color: var(--high-impact-color);
@@ -757,6 +757,16 @@
             flex-shrink: 0;
         }
 
+        .garage-card-actions {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 0.2rem;
+            flex-shrink: 0;
+            margin-left: 0.15rem;
+        }
+
         .garage-card-overflow.dropdown.show {
             z-index: 1050;
         }
@@ -898,10 +908,27 @@
             margin: 0;
         }
 
+        .mode-fade-section {
+            opacity: 1;
+            transition: opacity 250ms ease;
+        }
+
+        .mode-fade-section.mode-fade-hidden {
+            opacity: 0;
+        }
+
         .slider-stepper-control {
             display: flex;
             align-items: center;
             gap: 0.75rem;
+        }
+
+        .slider-stepper-control.slider-stepper-control-disabled {
+            opacity: 0.6;
+        }
+
+        .slider-stepper-control.slider-stepper-control-disabled .slider-stepper-track {
+            pointer-events: none;
         }
 
         .slider-stepper-track {
@@ -934,6 +961,11 @@
         .slider-stepper-btn:disabled {
             opacity: 0.45;
             cursor: not-allowed;
+        }
+
+        /* Tuning section h6 labels — reduced by 0.5rem from default 1rem */
+        #tuningParametersCardBody h6 {
+            font-size: 0.75rem;
         }
 
         /* Native range styling used only by the Lights page sliders.
@@ -999,6 +1031,11 @@
 
         .tuning-slider-group h6 {
             margin-bottom: 0.6rem;
+        }
+
+        .tuning-compact-title {
+            font-size: 0.75rem;
+            font-weight: 500;
         }
         
         .section-spacing {
@@ -1175,12 +1212,36 @@
             min-width: 2ch;
         }
 
+        .dashboard-quick-nav-text_alt {
+            color: var(--text-muted);
+            display: inline-block;
+            text-align: right;
+            line-height: 1.2;
+            min-width: 2ch;
+        }
+
+        .dashboard-suspension-status-active {
+            color: var(--lime-green) !important;
+        }
+
+        .dashboard-suspension-status-paused {
+            color: #ff4d4d !important;
+        }
+
         .dashboard-quick-nav-text::after {
             content: '';
             display: block;
             width: 100%;
             min-width: 1.6rem;
             border-bottom: 1px dashed var(--high-impact-color);
+        }
+
+        .dashboard-quick-nav-text_alt::after {
+            content: '';
+            display: block;
+            width: 100%;
+            min-width: 1.6rem;
+            /* border-bottom: 1px dashed var(--high-impact-color); */
         }
 
         .dashboard-quick-nav-text.dashboard-quick-nav-placeholder {
@@ -2955,10 +3016,14 @@
         #sliderOmegaN .range-slider__thumb[data-lower],
         #sliderZeta .range-slider__thumb[data-lower],
         #sliderRange .range-slider__thumb[data-lower],
+        #sliderTravelDeg .range-slider__thumb[data-lower],
         #sliderDeadband .range-slider__thumb[data-lower],
         #sliderHyst .range-slider__thumb[data-lower],
         #sliderReactionSpeed .range-slider__thumb[data-lower],
         #sliderBalance .range-slider__thumb[data-lower],
+        #sliderCornerGain .range-slider__thumb[data-lower],
+        #sliderCornerResponse .range-slider__thumb[data-lower],
+        #sliderCornerResp .range-slider__thumb[data-lower],
         #sliderSensorRate .range-slider__thumb[data-lower],
         #sliderFrontLeftTrim .range-slider__thumb[data-lower],
         #sliderFrontRightTrim .range-slider__thumb[data-lower],
@@ -2982,10 +3047,14 @@
             #sliderOmegaN .range-slider__range,
             #sliderZeta .range-slider__range,
             #sliderRange .range-slider__range,
+            #sliderTravelDeg .range-slider__range,
             #sliderDeadband .range-slider__range,
             #sliderHyst .range-slider__range,
         #sliderReactionSpeed .range-slider__range,
         #sliderBalance .range-slider__range,
+        #sliderCornerGain .range-slider__range,
+        #sliderCornerResponse .range-slider__range,
+        #sliderCornerResp .range-slider__range,
         #sliderSensorRate .range-slider__range,
         #sliderFrontLeftTrim .range-slider__range,
         #sliderFrontRightTrim .range-slider__range,
@@ -3026,6 +3095,57 @@
             opacity: 0.5;
             pointer-events: none;
             cursor: not-allowed;
+        }
+
+        .tuning-mode-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.9rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .tuning-mode-option {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s ease, opacity 0.2s ease;
+            opacity: 0.88;
+        }
+
+        .tuning-mode-option:hover,
+        .tuning-mode-option:focus-visible {
+            color: var(--text-muted);
+            opacity: 1;
+            outline: none;
+        }
+
+        .tuning-mode-option.is-active {
+            color: var(--text-muted);
+            opacity: 1;
+        }
+
+        .tuning-mode-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex: 0 0 10px;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.45);
+            transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .tuning-mode-option.is-active .tuning-mode-indicator {
+            background: var(--lime-green);
+            border-color: var(--lime-green);
+            box-shadow: 0 0 0 1px rgba(151, 255, 151, 0.18);
         }
 
         .slider-locked .slider-lock-icon {
@@ -3303,10 +3423,32 @@
         .per-servo-header {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 0.4rem;
             font-weight: 700;
-            font-size: 0.82rem;
-            margin-bottom: 0.1rem;
+            font-size: 0.75rem;
+            margin-bottom: 0.35rem;
+            flex-wrap: nowrap;
+        }
+
+        .per-servo-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .per-servo-header-actions {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-weight: normal;
+            flex: 0 0 auto;
+            white-space: nowrap;
         }
 
         .per-servo-invert-row {
@@ -3314,18 +3456,16 @@
             align-items: center;
             justify-content: space-between;
             gap: 0.65rem;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: var(--text-muted);
             padding: 0.2rem 0 0.35rem;
-            border-bottom: 1px solid #e5e7eb;
-            margin-bottom: 0.15rem;
             flex-wrap: wrap;
         }
 
         .per-servo-direction-label {
             flex: 1 1 9rem;
-            font-size: 0.72rem;
-            font-weight: 600;
+            font-size: 0.75rem;
+            font-weight: 700;
             line-height: 1.35;
         }
 
@@ -3353,7 +3493,19 @@
             border-color: var(--high-impact-color);
         }
 
+        .rl-35{
+            padding-left: 38px;
+        }
+
         @media (max-width: 576px) {
+            .per-servo-header {
+                align-items: center;
+            }
+
+            .per-servo-header-actions {
+                margin-left: auto;
+            }
+
             .per-servo-invert-row {
                 align-items: stretch;
             }
@@ -3373,10 +3525,24 @@
             gap: 0.4rem;
         }
 
+        .per-servo-invert-row {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
         .per-servo-label {
             font-size: 0.72rem;
             color: var(--text-muted);
             width: 2.2rem;
+            flex-shrink: 0;
+            text-align: left;
+        }
+
+        .per-servo-invert {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            /* width: 2.2rem; */
             flex-shrink: 0;
             text-align: right;
         }
@@ -3387,6 +3553,7 @@
 
         /* Tuning + Per-Servo Sliders - Labeled Thumbs */
         #sliderRideHeight .range-slider__thumb,
+        #sliderTravelDeg .range-slider__thumb,
         #sliderMasterFeel .range-slider__thumb,
         #sliderOmegaN .range-slider__thumb,
         #sliderZeta .range-slider__thumb,
@@ -3397,6 +3564,9 @@
         #sliderStiffness .range-slider__thumb,
         #sliderReactionSpeed .range-slider__thumb,
         #sliderBalance .range-slider__thumb,
+        #sliderCornerGain .range-slider__thumb,
+        #sliderCornerResponse .range-slider__thumb,
+        #sliderCornerResp .range-slider__thumb,
         #sliderSensorRate .range-slider__thumb,
         #sliderFrontLeftTrim .range-slider__thumb,
         #sliderFrontRightTrim .range-slider__thumb,
@@ -3429,11 +3599,15 @@
 
 #sliderRideHeight .range-slider__thumb[data-upper],
         #sliderMasterFeel .range-slider__thumb[data-upper],
+        #sliderTravelDeg .range-slider__thumb[data-upper],
         #sliderOmegaN .range-slider__thumb[data-upper],
         #sliderZeta .range-slider__thumb[data-upper],
         #sliderRange .range-slider__thumb[data-upper],
         #sliderDeadband .range-slider__thumb[data-upper],
         #sliderHyst .range-slider__thumb[data-upper],
+        #sliderCornerGain .range-slider__thumb[data-upper],
+        #sliderCornerResponse .range-slider__thumb[data-upper],
+        #sliderCornerResp .range-slider__thumb[data-upper],
         #sliderDamping .range-slider__thumb[data-upper],
         #sliderStiffness .range-slider__thumb[data-upper],
         #sliderReactionSpeed .range-slider__thumb[data-upper],

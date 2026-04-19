@@ -4,6 +4,7 @@ const path = require('path');
 const projectRoot = __dirname;
 const packageJsonPath = path.join(projectRoot, 'package.json');
 const appJsPath = path.join(projectRoot, 'www', 'js', 'app.js');
+const indexHtmlPath = path.join(projectRoot, 'www', 'index.html');
 const androidGradlePath = path.join(projectRoot, 'android', 'app', 'build.gradle');
 
 function readJson(filePath) {
@@ -54,6 +55,12 @@ function replaceOrThrow(content, pattern, replacement, label) {
   return content.replace(pattern, replacement);
 }
 
+function updateAssetVersion(content, assetPath, version) {
+  const escapedPath = assetPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`(["'])${escapedPath}(?:\\?v=[^"']*)?\\1`, 'g');
+  return content.replace(pattern, `$1${assetPath}?v=${version}$1`);
+}
+
 const pkg = readJson(packageJsonPath);
 const previousVersion = pkg.version;
 const appVersion = bumpPatch(previousVersion);
@@ -76,6 +83,24 @@ appJs = replaceOrThrow(
   'BUILD_DATE'
 );
 writeFileIfChanged(appJsPath, appJs);
+
+let indexHtml = fs.readFileSync(indexHtmlPath, 'utf8');
+[
+  'site.webmanifest',
+  'css/bootstrap.min.css',
+  'css/fonts.css',
+  'lib/range-slider/style.css',
+  'css/app.css',
+  'js/bootstrap.bundle.min.js',
+  'lib/range-slider/rangeslider.umd.min.js',
+  'js/console.js',
+  'js/bluetooth.js',
+  'js/garage.js',
+  'js/app.js'
+].forEach((assetPath) => {
+  indexHtml = updateAssetVersion(indexHtml, assetPath, appVersion);
+});
+writeFileIfChanged(indexHtmlPath, indexHtml);
 
 let buildGradle = fs.readFileSync(androidGradlePath, 'utf8');
 buildGradle = replaceOrThrow(

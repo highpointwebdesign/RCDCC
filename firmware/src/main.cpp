@@ -42,12 +42,38 @@ static constexpr bool I2C_BUS_SCAN_ENABLED = false;
 static constexpr bool BLE_STARTUP_ENABLED = true;
 static constexpr bool CALIBRATE_IMU_ON_BOOT = false;
 static constexpr bool SUSPENSION_PWM_ENABLED = true;
+static constexpr uint16_t SAMPLE_PROFILE_CONTROL_RATE_HZ = 100;
+static constexpr uint16_t LEGACY_PROFILE_MIN_RATE_HZ = 5;
+static constexpr uint16_t LEGACY_PROFILE_MAX_RATE_HZ = 200;
 
 // Addressable LED (NeoPixel) - kept for backward compatibility
 Adafruit_NeoPixel statusLED(STATUS_LED_COUNT, STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
 uint32_t currentLEDColor = 0;
 bool legacyStatusLedEnabled = true;
 static uint32_t lastSuspensionDebugMs = 0;
+
+enum class ControlProfileMode : uint8_t {
+  Sample = 0,
+  Legacy = 1
+};
+
+static volatile ControlProfileMode gControlProfileMode = ControlProfileMode::Sample;
+
+struct SharedSensorState {
+  float roll = 0.0f;
+  float pitch = 0.0f;
+  float yaw = 0.0f;
+  float verticalAccel = 0.0f;
+  float accelX = 0.0f;
+  float accelY = 0.0f;
+  float accelZ = 0.0f;
+  bool mpuConnected = false;
+};
+
+static SharedSensorState gSensorState;
+static SemaphoreHandle_t gSensorStateMutex = nullptr;
+static TaskHandle_t gImuTaskHandle = nullptr;
+static TaskHandle_t gControlTaskHandle = nullptr;
 
 // ==================== Phase 6: Dance Mode ====================
 DanceMode gDanceMode = { false, 0.0f, 0.0f };
@@ -189,6 +215,11 @@ static void refreshSuspensionRuntimeFromStorage() {
   suspensionSimulator.init(cfg, servoCfg);
 }
 
+static uint16_t getSuspensionLoopRateHz() {
+  const uint16_t configuredRate = storageManager.getConfig().sampleRate;
+  return static_cast<uint16_t>(constrain(configuredRate, static_cast<uint16_t>(5), static_cast<uint16_t>(200)));
+}
+
 static bool runServoTestCommand(uint8_t index, int dir) {
   if (index >= 4) return false;
 
@@ -295,6 +326,191 @@ float currentAccelX = 0.0f;
 float currentAccelY = 0.0f;
 float currentAccelZ = 0.0f;
 
+static void writeSharedSensorState(const SharedSensorState& nextState) {
+  if (!gSensorStateMutex) return;
+  if (xSemaphoreTake(gSensorStateMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+    gSensorState = nextState;
+    xSemaphoreGive(gSensorStateMutex);
+  }
+}
+
+static SharedSensorState readSharedSensorState() {
+  SharedSensorState snapshot;
+  if (!gSensorStateMutex) {
+    return snapshot;
+  }
+  if (xSemaphoreTake(gSensorStateMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+    snapshot = gSensorState;
+    xSemaphoreGive(gSensorStateMutex);
+  }
+  return snapshot;
+}
+
+static bool isSampleControlProfileActive() {
+  return gControlProfileMode == ControlProfileMode::Sample;
+}
+
+static uint16_t getControlLoopRateHz() {
+  if (isSampleControlProfileActive()) {
+    return SAMPLE_PROFILE_CONTROL_RATE_HZ;
+  }
+  const uint16_t configuredRate = storageManager.getConfig().sampleRate;
+  return static_cast<uint16_t>(constrain(configuredRate, LEGACY_PROFILE_MIN_RATE_HZ, LEGACY_PROFILE_MAX_RATE_HZ));
+}
+
+static void processAuxServoOutputs() {
+  const ServoRegistry& reg = storageManager.getServoRegistry();
+  for (int i = 0; i < reg.auxCount; i++) {
+    const AuxServoConfig& aux = reg.auxServos[i];
+    if (!aux.enabled) continue;
+    const char* t = aux.type;
+    if (strcmp(t, AUX_TYPE_POSITIONAL) == 0 || strcmp(t, AUX_TYPE_PAN) == 0) {
+      pwmOutputs.setAuxPositional(i, aux.trimUs);
+    } else if (strcmp(t, AUX_TYPE_CONTINUOUS) == 0) {
+      pwmOutputs.setAuxContinuous(i, aux.currentSpeed);
+    } else if (strcmp(t, AUX_TYPE_RELAY) == 0) {
+      pwmOutputs.setAuxRelay(i, aux.state != 0);
+    }
+  }
+}
+
+static void runSuspensionControlCycle(const SharedSensorState& sensors, uint32_t nowMs) {
+  if (gDanceMode.enabled || gSuspensionPaused) {
+    clearManualServoOverrides();
+    processAuxServoOutputs();
+    return;
+  }
+
+  suspensionSimulator.update(sensors.roll, sensors.pitch, sensors.verticalAccel);
+
+  float fl = suspensionSimulator.getFrontLeftOutput();
+  float fr = suspensionSimulator.getFrontRightOutput();
+  float rl = suspensionSimulator.getRearLeftOutput();
+  float rr = suspensionSimulator.getRearRightOutput();
+
+  const RCDCCConfigState& state = storageManager.getCurrentState();
+  const float halfTravel = SUSP_SIM_TRAVEL_DEG * 0.5f;
+  const float invHalfTravel = (halfTravel > 0.0001f) ? (1.0f / halfTravel) : 0.0f;
+
+  float flNorm = clampNorm((fl - SUSP_SIM_DEG_MID) * invHalfTravel);
+  float frNorm = clampNorm((fr - SUSP_SIM_DEG_MID) * invHalfTravel);
+  float rlNorm = clampNorm((rl - SUSP_SIM_DEG_MID) * invHalfTravel);
+  float rrNorm = clampNorm((rr - SUSP_SIM_DEG_MID) * invHalfTravel);
+
+  if (state.servoFL.reverse != 0) flNorm = -flNorm;
+  if (state.servoFR.reverse != 0) frNorm = -frNorm;
+  if (state.servoRL.reverse != 0) rlNorm = -rlNorm;
+  if (state.servoRR.reverse != 0) rrNorm = -rrNorm;
+
+  const int32_t flUs = mapNormToServoUs(flNorm, state.servoFL);
+  const int32_t frUs = mapNormToServoUs(frNorm, state.servoFR);
+  const int32_t rlUs = mapNormToServoUs(rlNorm, state.servoRL);
+  const int32_t rrUs = mapNormToServoUs(rrNorm, state.servoRR);
+
+  if (SUSPENSION_DEBUG_LOGS && (nowMs - lastSuspensionDebugMs >= SUSPENSION_DEBUG_INTERVAL_MS)) {
+    Serial.printf(
+      "[SUSP-DBG] mode=%s imu roll=%.2f pitch=%.2f vacc=%.2f | outDeg fl=%.1f fr=%.1f rl=%.1f rr=%.1f\n",
+      isSampleControlProfileActive() ? "sample" : "legacy",
+      sensors.roll,
+      sensors.pitch,
+      sensors.verticalAccel,
+      fl,
+      fr,
+      rl,
+      rr
+    );
+    lastSuspensionDebugMs = nowMs;
+  }
+
+  if (manualServoOverrideActive(0, nowMs)) pwmOutputs.setChannelMicroseconds(0, gManualServoOverrides[0].targetUs);
+  else pwmOutputs.setChannelMicroseconds(0, static_cast<uint16_t>(flUs));
+
+  if (manualServoOverrideActive(1, nowMs)) pwmOutputs.setChannelMicroseconds(1, gManualServoOverrides[1].targetUs);
+  else pwmOutputs.setChannelMicroseconds(1, static_cast<uint16_t>(frUs));
+
+  if (manualServoOverrideActive(2, nowMs)) pwmOutputs.setChannelMicroseconds(2, gManualServoOverrides[2].targetUs);
+  else pwmOutputs.setChannelMicroseconds(2, static_cast<uint16_t>(rlUs));
+
+  if (manualServoOverrideActive(3, nowMs)) pwmOutputs.setChannelMicroseconds(3, gManualServoOverrides[3].targetUs);
+  else pwmOutputs.setChannelMicroseconds(3, static_cast<uint16_t>(rrUs));
+
+  clearManualServoOverrides();
+  processAuxServoOutputs();
+}
+
+static void imuTask(void* /*pv*/) {
+  TickType_t lastWake = xTaskGetTickCount();
+
+  for (;;) {
+    const uint16_t sampleHz = getSuspensionLoopRateHz();
+    const uint32_t sampleIntervalMs = max<uint32_t>(1UL, 1000UL / static_cast<uint32_t>(sampleHz));
+    const TickType_t sampleTicks = pdMS_TO_TICKS(sampleIntervalMs);
+
+    SharedSensorState nextState = readSharedSensorState();
+
+    if (mpuConnected) {
+      int16_t ax, ay, az, gx, gy, gz;
+
+      esp_log_level_set("Wire", ESP_LOG_NONE);
+      mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+      esp_log_level_set("Wire", ESP_LOG_WARN);
+
+      if (ax != 0 || ay != 0 || az != 0 || gx != 0 || gy != 0 || gz != 0) {
+        const float accelX = ax / 16384.0f;
+        const float accelY = ay / 16384.0f;
+        const float accelZ = az / 16384.0f;
+        const float gyroX = gx / 131.0f;
+        const float gyroY = gy / 131.0f;
+        const float gyroZ = gz / 131.0f;
+
+        sensorFusion.update(accelX, accelY, accelZ, gyroX, gyroY, gyroZ);
+
+        nextState.roll = sensorFusion.getRoll();
+        nextState.pitch = sensorFusion.getPitch();
+        nextState.yaw = sensorFusion.getYaw();
+        nextState.verticalAccel = sensorFusion.getVerticalAcceleration();
+        nextState.accelX = accelX;
+        nextState.accelY = accelY;
+        nextState.accelZ = accelZ;
+        nextState.mpuConnected = true;
+        mpuConnected = true;
+      } else {
+        nextState.mpuConnected = false;
+        mpuConnected = false;
+      }
+    } else {
+      nextState.mpuConnected = false;
+    }
+
+    writeSharedSensorState(nextState);
+
+    // Keep legacy globals in sync for existing code paths and telemetry serialization.
+    currentRoll = nextState.roll;
+    currentPitch = nextState.pitch;
+    currentYaw = nextState.yaw;
+    currentVerticalAccel = nextState.verticalAccel;
+    currentAccelX = nextState.accelX;
+    currentAccelY = nextState.accelY;
+    currentAccelZ = nextState.accelZ;
+
+    vTaskDelayUntil(&lastWake, sampleTicks);
+  }
+}
+
+static void controlTask(void* /*pv*/) {
+  TickType_t lastWake = xTaskGetTickCount();
+
+  for (;;) {
+    const uint16_t controlRateHz = getControlLoopRateHz();
+    const uint32_t controlIntervalMs = max<uint32_t>(1UL, 1000UL / static_cast<uint32_t>(controlRateHz));
+    const TickType_t controlTicks = pdMS_TO_TICKS(controlIntervalMs);
+
+    const SharedSensorState sensors = readSharedSensorState();
+    runSuspensionControlCycle(sensors, millis());
+    vTaskDelayUntil(&lastWake, controlTicks);
+  }
+}
+
 // Function to start LED blink (250ms); stays on after if BLE connected
 void startLedBlink() {
   // Pulse opposite the steady BLE state so the 250ms flash is visible.
@@ -335,11 +551,16 @@ bool applyConfigUpdatePayload(const String& payload) {
   }
 
   if (doc.containsKey("reactionSpeed")) storageManager.updateParameter("reactionSpeed", doc["reactionSpeed"]);
+  if (doc.containsKey("suspensionMode")) storageManager.updateParameter("suspensionMode", doc["suspensionMode"]);
   if (doc.containsKey("rideHeightOffset")) {
     storageManager.updateParameter("rideHeightOffset", doc["rideHeightOffset"]);
     hasRideHeightUpdate = true;
   }
-  if (doc.containsKey("rangeLimit")) storageManager.updateParameter("rangeLimit", doc["rangeLimit"]);
+  if (doc.containsKey("travelDeg")) storageManager.updateParameter("travelDeg", doc["travelDeg"]);
+  else if (doc.containsKey("rangeLimit")) storageManager.updateParameter("rangeLimit", doc["rangeLimit"]);
+  if (doc.containsKey("cornerAssist")) storageManager.updateParameter("cornerAssist", doc["cornerAssist"].as<bool>() ? 1.0f : 0.0f);
+  if (doc.containsKey("cornerGain")) storageManager.updateParameter("cornerGain", doc["cornerGain"]);
+  if (doc.containsKey("cornerResponse")) storageManager.updateParameter("cornerResponse", doc["cornerResponse"]);
   if (doc.containsKey("omegaN"))        storageManager.updateParameter("omegaN",        doc["omegaN"]);
   if (doc.containsKey("zeta"))          storageManager.updateParameter("zeta",          doc["zeta"]);
   if (doc.containsKey("range"))         storageManager.updateParameter("range",         doc["range"]);
@@ -564,6 +785,18 @@ bool applySystemCommandPayload(const String& payload) {
     return true;
   }
 
+  if (command == "control_profile") {
+    String mode = doc["mode"] | String("");
+    mode.toLowerCase();
+    const bool sampleProfile = doc.containsKey("sample") ? doc["sample"].as<bool>() : (mode != "legacy");
+    gControlProfileMode = sampleProfile ? ControlProfileMode::Sample : ControlProfileMode::Legacy;
+    refreshSuspensionRuntimeFromStorage();
+    Serial.printf("{\"status\":\"control_profile\",\"mode\":\"%s\",\"hz\":%u}\n",
+                  sampleProfile ? "sample" : "legacy",
+                  static_cast<unsigned>(getControlLoopRateHz()));
+    return true;
+  }
+
   // ==================== Phase 6: Dance Mode ====================
 
   if (command == "suspend_suspension") {
@@ -762,6 +995,11 @@ void setup() {
   
   // Initialize sensor fusion with config
   sensorFusion.init(config.sampleRate);
+
+  gSensorStateMutex = xSemaphoreCreateMutex();
+  SharedSensorState bootState;
+  bootState.mpuConnected = mpuConnected;
+  writeSharedSensorState(bootState);
   
   // Initialize LED pin for feedback
   pinMode(LED_PIN, OUTPUT);
@@ -818,35 +1056,27 @@ void setup() {
   } else {
     Serial.println("BLE startup disabled");
   }
+
+  if (SUSPENSION_PWM_ENABLED) {
+    xTaskCreatePinnedToCore(imuTask, "imuTask", 4096, nullptr, 2, &gImuTaskHandle, 0);
+    xTaskCreatePinnedToCore(controlTask, "controlTask", 6144, nullptr, 2, &gControlTaskHandle, 1);
+    Serial.printf("Control runtime started (profile=%s, controlHz=%u)\n",
+                  isSampleControlProfileActive() ? "sample" : "legacy",
+                  static_cast<unsigned>(getControlLoopRateHz()));
+  }
   
   Serial.println("Setup complete!");
 }
 
 // Main loop
 void loop() {
-  unsigned long loopStartTime = millis();
-  unsigned long currentTime = loopStartTime;
-  static unsigned long lastLoopTime = 0;
-  static bool firstLoop = true;
+  const unsigned long currentTime = millis();
 
-  // Run BLE service work on the main loop task, not BTC_TASK callbacks.
+  // BLE message processing remains on the Arduino loop task.
   if (bluetoothService) {
     bluetoothService->update();
   }
 
-  // Detect genuinely slow single loop iterations (>100ms each).
-  // lastLoopTime tracks the START of the previous iteration for per-iteration timing.
-  if (firstLoop) {
-    lastLoopTime = loopStartTime;
-    firstLoop = false;
-  } else {
-    unsigned long iterationTime = loopStartTime - lastLoopTime;
-    if (iterationTime > 100) {
-      Serial.printf("⚠️  LONG LOOP DETECTED: %lums - possible blocking operation!\n", iterationTime);
-    }
-  }
-  lastLoopTime = loopStartTime;
-  
   // Handle LED blink timeout
   if (ledBlinkEndTime > 0 && currentTime >= ledBlinkEndTime) {
     // After a blink: keep LED on if BLE is still connected, otherwise off.
@@ -903,254 +1133,19 @@ void loop() {
       Serial.println("[Watchdog] Stopped continuous servos (BLE silent)");
     }
   }
-  
-  // Profile commands are app-driven; firmware should not own hardcoded group state.
-  
-  // Read MPU6050 sensor data at specified rate
-  // Skip I2C read if sensor not connected to avoid 5s timeout blocking
-  if (mpuConnected && currentTime - lastMPUReadTime >= (1000 / SUSPENSION_SAMPLE_RATE_HZ)) {
-    unsigned long sensorBlockStart = millis();
-    float accelX, accelY, accelZ, gyroX, gyroY, gyroZ;
-    
-    // Read sensor data from connected device
-    int16_t ax, ay, az, gx, gy, gz;
-    
-    // CHECKPOINT: I2C Read Start
-    unsigned long beforeI2C = millis();
-    
-    // Suppress I2C error messages temporarily to avoid flooding serial
-    esp_log_level_set("Wire", ESP_LOG_NONE);
-    mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-    esp_log_level_set("Wire", ESP_LOG_WARN);
-    
-    unsigned long i2cTime = millis() - beforeI2C;
-    if (i2cTime > 100) {
-      Serial.printf("⚠️  SLOW I2C READ: %lums\n", i2cTime);
+
+  // Send BLE telemetry at configured rate (loop task remains comms owner).
+  static unsigned long lastBroadcast = 0;
+  const SuspensionConfig config = storageManager.getConfig();
+  const uint8_t telemetryHz = max<uint8_t>(1, config.telemetryRate);
+  const uint16_t telemetryIntervalMs = 1000 / telemetryHz;
+  if (currentTime - lastBroadcast >= telemetryIntervalMs) {
+    const SharedSensorState sensors = readSharedSensorState();
+    if (bluetoothService && bluetoothService->isConnected() && sensors.mpuConnected) {
+      bluetoothService->sendTelemetry(sensors.roll, sensors.pitch, sensors.accelX, sensors.accelY, sensors.accelZ);
     }
-    
-    // WATCHDOG FEED: Feed watchdog after I2C operation (can be slow)
-    yield();
-    
-    // Check if we got valid data (not all zeros which indicates error)
-    if (ax != 0 || ay != 0 || az != 0 || gx != 0 || gy != 0 || gz != 0) {
-      // Convert raw values to g's and dps
-      accelX = ax / 16384.0f;
-      accelY = ay / 16384.0f;
-      accelZ = az / 16384.0f;
-      gyroX = gx / 131.0f;
-      gyroY = gy / 131.0f;
-      gyroZ = gz / 131.0f;
-      
-      // Update connection status - sensor is working!
-      if (!mpuConnected) {
-        mpuConnected = true;
-        Serial.println("MPU6050 now responding - sensor online");
-      }
-    } else {
-      // I2C error - use neutral values for safety
-      accelX = 0.0f;
-      accelY = 0.0f;
-      accelZ = 1.0f;  // Gravity
-      gyroX = 0.0f;
-      gyroY = 0.0f;
-      gyroZ = 0.0f;
-      
-      // Mark sensor as disconnected
-      if (mpuConnected) {
-        mpuConnected = false;
-        Serial.println("MPU6050 stopped responding");
-      }
-    }
-    
-    // Update sensor fusion
-    sensorFusion.update(accelX, accelY, accelZ, gyroX, gyroY, gyroZ);
-    
-    // Store acceleration values for BLE telemetry
-    currentAccelX = accelX;
-    currentAccelY = accelY;
-    currentAccelZ = accelZ;
-    
-    lastMPUReadTime = currentTime;
-    
-    unsigned long afterSensorTime = millis();
-    if (afterSensorTime - loopStartTime > 1000) {
-      Serial.printf("⚠️  LONG SENSOR READ: %lums\n", afterSensorTime - loopStartTime);
-    }
+    lastBroadcast = currentTime;
   }
-  
-  // Run suspension simulation
-  if (currentTime - lastSimulationTime >= (1000 / SUSPENSION_SAMPLE_RATE_HZ)) {
-    unsigned long simulationBlockStart = millis();
 
-    // Get current orientation and acceleration from sensor fusion
-    float roll = sensorFusion.getRoll();
-    float pitch = sensorFusion.getPitch();
-    float yaw = sensorFusion.getYaw();
-    float verticalAccel = sensorFusion.getVerticalAcceleration();
-
-    // CHECKPOINT: PWM writes
-    unsigned long beforePWM = millis();
-
-    if (!gDanceMode.enabled && !gSuspensionPaused) {
-      // Normal suspension loop runs only while Dance Mode is off and suspension is not paused.
-      unsigned long beforeSuspUpdate = millis();
-      suspensionSimulator.update(roll, pitch, verticalAccel);
-      unsigned long suspUpdateTime = millis() - beforeSuspUpdate;
-      if (suspUpdateTime > 50) {
-        Serial.printf("⚠️  SLOW SUSPENSION UPDATE: %lums\n", suspUpdateTime);
-      }
-
-      // Get suspension outputs (0-180 degrees for servos)
-      float fl = suspensionSimulator.getFrontLeftOutput();
-      float fr = suspensionSimulator.getFrontRightOutput();
-      float rl = suspensionSimulator.getRearLeftOutput();
-      float rr = suspensionSimulator.getRearRightOutput();
-
-      // Normalize simulator outputs into [-1..1] against the simulator envelope,
-      // then map per-servo into each corner's own trim/min/max window.
-      const RCDCCConfigState& state = storageManager.getCurrentState();
-      const float halfTravel = SUSP_SIM_TRAVEL_DEG * 0.5f;
-      const float invHalfTravel = (halfTravel > 0.0001f) ? (1.0f / halfTravel) : 0.0f;
-
-      float flNorm = clampNorm((fl - SUSP_SIM_DEG_MID) * invHalfTravel);
-      float frNorm = clampNorm((fr - SUSP_SIM_DEG_MID) * invHalfTravel);
-      float rlNorm = clampNorm((rl - SUSP_SIM_DEG_MID) * invHalfTravel);
-      float rrNorm = clampNorm((rr - SUSP_SIM_DEG_MID) * invHalfTravel);
-
-      if (state.servoFL.reverse != 0) flNorm = -flNorm;
-      if (state.servoFR.reverse != 0) frNorm = -frNorm;
-      if (state.servoRL.reverse != 0) rlNorm = -rlNorm;
-      if (state.servoRR.reverse != 0) rrNorm = -rrNorm;
-
-      const int32_t flUs = mapNormToServoUs(flNorm, state.servoFL);
-      const int32_t frUs = mapNormToServoUs(frNorm, state.servoFR);
-      const int32_t rlUs = mapNormToServoUs(rlNorm, state.servoRL);
-      const int32_t rrUs = mapNormToServoUs(rrNorm, state.servoRR);
-
-      if (SUSPENSION_DEBUG_LOGS && (currentTime - lastSuspensionDebugMs >= SUSPENSION_DEBUG_INTERVAL_MS)) {
-        const RCDCCConfigState& dbgState = state;
-        Serial.printf(
-          "[SUSP-DBG] imu roll=%.2f pitch=%.2f vacc=%.2f | outDeg fl=%.1f fr=%.1f rl=%.1f rr=%.1f\n",
-          roll,
-          pitch,
-          verticalAccel,
-          fl,
-          fr,
-          rl,
-          rr
-        );
-        Serial.printf(
-          "[SUSP-DBG] state us fl(t=%ld min=%ld max=%ld rh=%ld rev=%u) fr(t=%ld min=%ld max=%ld rh=%ld rev=%u)\n",
-          static_cast<long>(dbgState.servoFL.trimUs),
-          static_cast<long>(dbgState.servoFL.minUs),
-          static_cast<long>(dbgState.servoFL.maxUs),
-          static_cast<long>(dbgState.servoFL.rideHeight),
-          static_cast<unsigned>(dbgState.servoFL.reverse),
-          static_cast<long>(dbgState.servoFR.trimUs),
-          static_cast<long>(dbgState.servoFR.minUs),
-          static_cast<long>(dbgState.servoFR.maxUs),
-          static_cast<long>(dbgState.servoFR.rideHeight),
-          static_cast<unsigned>(dbgState.servoFR.reverse)
-        );
-        Serial.printf(
-          "[SUSP-DBG] state us rl(t=%ld min=%ld max=%ld rh=%ld rev=%u) rr(t=%ld min=%ld max=%ld rh=%ld rev=%u)\n",
-          static_cast<long>(dbgState.servoRL.trimUs),
-          static_cast<long>(dbgState.servoRL.minUs),
-          static_cast<long>(dbgState.servoRL.maxUs),
-          static_cast<long>(dbgState.servoRL.rideHeight),
-          static_cast<unsigned>(dbgState.servoRL.reverse),
-          static_cast<long>(dbgState.servoRR.trimUs),
-          static_cast<long>(dbgState.servoRR.minUs),
-          static_cast<long>(dbgState.servoRR.maxUs),
-          static_cast<long>(dbgState.servoRR.rideHeight),
-          static_cast<unsigned>(dbgState.servoRR.reverse)
-        );
-        Serial.printf(
-          "[SUSP-DBG] pins fl=%d fr=%d rl=%d rr=%d\n",
-          PWM_FL_PIN,
-          PWM_FR_PIN,
-          PWM_RL_PIN,
-          PWM_RR_PIN
-        );
-        lastSuspensionDebugMs = currentTime;
-      }
-
-      if (manualServoOverrideActive(0, currentTime)) pwmOutputs.setChannelMicroseconds(0, gManualServoOverrides[0].targetUs);
-      else pwmOutputs.setChannelMicroseconds(0, static_cast<uint16_t>(flUs));
-
-      if (manualServoOverrideActive(1, currentTime)) pwmOutputs.setChannelMicroseconds(1, gManualServoOverrides[1].targetUs);
-      else pwmOutputs.setChannelMicroseconds(1, static_cast<uint16_t>(frUs));
-
-      if (manualServoOverrideActive(2, currentTime)) pwmOutputs.setChannelMicroseconds(2, gManualServoOverrides[2].targetUs);
-      else pwmOutputs.setChannelMicroseconds(2, static_cast<uint16_t>(rlUs));
-
-      if (manualServoOverrideActive(3, currentTime)) pwmOutputs.setChannelMicroseconds(3, gManualServoOverrides[3].targetUs);
-      else pwmOutputs.setChannelMicroseconds(3, static_cast<uint16_t>(rrUs));
-    }
-
-
-    clearManualServoOverrides();
-    // Update aux servo PWM outputs
-    {
-      const ServoRegistry& reg = storageManager.getServoRegistry();
-      for (int i = 0; i < reg.auxCount; i++) {
-        const AuxServoConfig& aux = reg.auxServos[i];
-        if (!aux.enabled) continue;
-        const char* t = aux.type;
-        if (strcmp(t, AUX_TYPE_POSITIONAL) == 0 || strcmp(t, AUX_TYPE_PAN) == 0) {
-          pwmOutputs.setAuxPositional(i, aux.trimUs);
-        } else if (strcmp(t, AUX_TYPE_CONTINUOUS) == 0) {
-          pwmOutputs.setAuxContinuous(i, aux.currentSpeed);
-        } else if (strcmp(t, AUX_TYPE_RELAY) == 0) {
-          pwmOutputs.setAuxRelay(i, aux.state != 0);
-        }
-      }
-    }
-    unsigned long pwmTime = millis() - beforePWM;
-    if (pwmTime > 50) {
-      Serial.printf("⚠️  SLOW PWM WRITES: %lums\n", pwmTime);
-    }
-    
-    // Broadcast sensor data to web clients (interval based on telemetry rate config)
-    static unsigned long lastBroadcast = 0;
-    
-    // CHECKPOINT: System config load (SPIFFS read - can be slow)
-    unsigned long beforeSysConfig = millis();
-    SuspensionConfig config = storageManager.getConfig();
-    unsigned long sysConfigTime = millis() - beforeSysConfig;
-    if (sysConfigTime > 100) {
-      Serial.printf("⚠️  SLOW SYSTEM CONFIG LOAD: %lums (SPIFFS read)\n", sysConfigTime);
-    }
-    
-    uint16_t telemetryIntervalMs = 1000 / config.telemetryRate;  // Convert Hz to milliseconds
-    if (currentTime - lastBroadcast >= telemetryIntervalMs) {
-      // Send telemetry via Bluetooth LE if connected
-      if (bluetoothService && bluetoothService->isConnected() && mpuConnected) {
-        bluetoothService->sendTelemetry(roll, pitch, currentAccelX, currentAccelY, currentAccelZ);
-      }
-      
-      lastBroadcast = currentTime;
-    }
-    
-    lastSimulationTime = currentTime;
-  }
-  
-  // FINAL LOOP SUMMARY: Calculate total loop time and identify anomalies
-  unsigned long loopEndTime = millis();
-  unsigned long totalLoopTime = loopEndTime - loopStartTime;
-  static unsigned long maxLoopTime = 0;
-  static unsigned long crashDetectionWindow = 0;
-  
-  if (totalLoopTime > maxLoopTime) {
-    maxLoopTime = totalLoopTime;
-  }
-  
-  if (totalLoopTime > 1000) {
-    Serial.printf("\n⛔ CRITICAL: Loop took %lums (max so far: %lums)\n", totalLoopTime, maxLoopTime);
-    Serial.printf("   → If crash follows shortly, potential blocking operation identified\n\n");
-    crashDetectionWindow = loopEndTime;
-  }
-  
-  // FINAL WATCHDOG FEED before loop ends
   yield();
 }

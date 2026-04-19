@@ -95,6 +95,11 @@ private:
     state.suspension.range         = DEFAULT_SUSP_RANGE;
     state.suspension.inputDeadband = DEFAULT_SUSP_DEADBAND;
     state.suspension.inputHyst     = DEFAULT_SUSP_HYST;
+    state.suspension.suspensionMode = DEFAULT_SUSP_MODE;
+    state.suspension.travelDeg     = DEFAULT_SUSP_TRAVEL_DEG;
+    state.suspension.cornerAssist  = DEFAULT_SUSP_CORNER_ASSIST;
+    state.suspension.cornerGain    = DEFAULT_SUSP_CORNER_GAIN;
+    state.suspension.cornerResponse = DEFAULT_SUSP_CORNER_RESP;
 
     state.imu.orient = DEFAULT_IMU_ORIENT;
     state.imu.rollTrim = DEFAULT_IMU_ROLL_TRIM;
@@ -116,16 +121,21 @@ private:
     legacyConfig.rideHeightOffset = static_cast<float>(
       (state.servoFL.rideHeight + state.servoFR.rideHeight + state.servoRL.rideHeight + state.servoRR.rideHeight) / 4
     );
-    legacyConfig.rangeLimit = DEFAULT_RANGE_LIMIT;
+    legacyConfig.rangeLimit = static_cast<float>(clampI32(state.suspension.travelDeg, 10, DEFAULT_SUSP_TRAVEL_DEG));
+    legacyConfig.travelDeg = legacyConfig.rangeLimit;
     legacyConfig.omegaN = static_cast<float>(clampI32(state.suspension.omegaN, 50, 1500)) / 100.0f;
     legacyConfig.zeta   = static_cast<float>(clampI32(state.suspension.zeta,    5,   95)) / 100.0f;
     legacyConfig.range  = static_cast<float>(clampI32(state.suspension.range,  10, 400)) / 100.0f;
     legacyConfig.inputDeadband = static_cast<float>(clampI32(state.suspension.inputDeadband, 0, 100)) / 100.0f;
     legacyConfig.inputHyst     = static_cast<float>(clampI32(state.suspension.inputHyst,     0,  50)) / 100.0f;
     legacyConfig.frontRearBalance = static_cast<float>(clampI32(state.suspension.frontRearBalance, -100, 100) + 100) / 200.0f;
+    legacyConfig.cornerGain = static_cast<float>(clampI32(state.suspension.cornerGain, -200, 200)) / 100.0f;
+    legacyConfig.cornerResponse = static_cast<float>(clampI32(state.suspension.cornerResponse, 5, 100)) / 100.0f;
     legacyConfig.sampleRate = SUSPENSION_SAMPLE_RATE_HZ;
     legacyConfig.telemetryRate = DEFAULT_TELEMETRY_RATE_HZ;
-    legacyConfig.mpuOrientation = static_cast<uint8_t>(clampI32(state.imu.orient, 0, 3));
+    legacyConfig.mpuOrientation = static_cast<uint8_t>(clampI32(state.imu.orient, 0, 5));
+    legacyConfig.suspensionMode = static_cast<uint8_t>(clampI32(state.suspension.suspensionMode, SUSPENSION_MODE_REACTIVE, SUSPENSION_MODE_ACTIVE));
+    legacyConfig.cornerAssist = state.suspension.cornerAssist != 0;
     legacyConfig.fpvAutoMode = DEFAULT_FPV_AUTO_MODE;
 
     strncpy(legacyConfig.deviceName, state.system.deviceName, sizeof(legacyConfig.deviceName) - 1);
@@ -191,13 +201,18 @@ private:
       return;
     }
 
-    pref.putInt("omega_n",  state.suspension.omegaN);
-    pref.putInt("zeta",     state.suspension.zeta);
+    pref.putInt("omega_n",   state.suspension.omegaN);
+    pref.putInt("zeta",      state.suspension.zeta);
     pref.putInt("react_spd", state.suspension.reactSpeed);
     pref.putInt("fr_balance", state.suspension.frontRearBalance);
-    pref.putInt("range",    state.suspension.range);
-    pref.putInt("deadband", state.suspension.inputDeadband);
-    pref.putInt("hyst",     state.suspension.inputHyst);
+    pref.putInt("range",     state.suspension.range);
+    pref.putInt("deadband",  state.suspension.inputDeadband);
+    pref.putInt("hyst",      state.suspension.inputHyst);
+    pref.putInt("mode",      state.suspension.suspensionMode);
+    pref.putInt("travel_deg", state.suspension.travelDeg);
+    pref.putInt("corner_asst", state.suspension.cornerAssist);
+    pref.putInt("corner_gain", state.suspension.cornerGain);
+    pref.putInt("corner_resp", state.suspension.cornerResponse);
     pref.end();
   }
 
@@ -273,8 +288,18 @@ private:
 
   void readSuspensionNamespace() {
     state.suspension = {
-      DEFAULT_SUSP_OMEGA_N, DEFAULT_SUSP_ZETA, DEFAULT_SUSP_REACT_SPD,
-      DEFAULT_SUSP_FR_BALANCE, DEFAULT_SUSP_RANGE, DEFAULT_SUSP_DEADBAND, DEFAULT_SUSP_HYST
+      DEFAULT_SUSP_OMEGA_N,
+      DEFAULT_SUSP_ZETA,
+      DEFAULT_SUSP_REACT_SPD,
+      DEFAULT_SUSP_FR_BALANCE,
+      DEFAULT_SUSP_RANGE,
+      DEFAULT_SUSP_DEADBAND,
+      DEFAULT_SUSP_HYST,
+      DEFAULT_SUSP_MODE,
+      DEFAULT_SUSP_TRAVEL_DEG,
+      DEFAULT_SUSP_CORNER_ASSIST,
+      DEFAULT_SUSP_CORNER_GAIN,
+      DEFAULT_SUSP_CORNER_RESP
     };
 
     Preferences pref;
@@ -283,22 +308,32 @@ private:
       return;
     }
 
-    state.suspension.omegaN        = pref.getInt("omega_n",   DEFAULT_SUSP_OMEGA_N);
-    state.suspension.zeta          = pref.getInt("zeta",      DEFAULT_SUSP_ZETA);
-    state.suspension.reactSpeed    = pref.getInt("react_spd", DEFAULT_SUSP_REACT_SPD);
+    state.suspension.omegaN        = pref.getInt("omega_n",     DEFAULT_SUSP_OMEGA_N);
+    state.suspension.zeta          = pref.getInt("zeta",        DEFAULT_SUSP_ZETA);
+    state.suspension.reactSpeed    = pref.getInt("react_spd",   DEFAULT_SUSP_REACT_SPD);
     state.suspension.frontRearBalance = pref.getInt("fr_balance", DEFAULT_SUSP_FR_BALANCE);
-    state.suspension.range         = pref.getInt("range",     DEFAULT_SUSP_RANGE);
-    state.suspension.inputDeadband = pref.getInt("deadband",  DEFAULT_SUSP_DEADBAND);
-    state.suspension.inputHyst     = pref.getInt("hyst",      DEFAULT_SUSP_HYST);
+    state.suspension.range         = pref.getInt("range",       DEFAULT_SUSP_RANGE);
+    state.suspension.inputDeadband = pref.getInt("deadband",    DEFAULT_SUSP_DEADBAND);
+    state.suspension.inputHyst     = pref.getInt("hyst",        DEFAULT_SUSP_HYST);
+    state.suspension.suspensionMode = pref.getInt("mode",       DEFAULT_SUSP_MODE);
+    state.suspension.travelDeg     = pref.getInt("travel_deg",  DEFAULT_SUSP_TRAVEL_DEG);
+    state.suspension.cornerAssist  = pref.getInt("corner_asst", DEFAULT_SUSP_CORNER_ASSIST);
+    state.suspension.cornerGain    = pref.getInt("corner_gain", DEFAULT_SUSP_CORNER_GAIN);
+    state.suspension.cornerResponse = pref.getInt("corner_resp", DEFAULT_SUSP_CORNER_RESP);
     pref.end();
 
-    state.suspension.omegaN        = clampI32(state.suspension.omegaN,        50, 1500);
-    state.suspension.zeta          = clampI32(state.suspension.zeta,           5,   95);
-    state.suspension.reactSpeed    = clampI32(state.suspension.reactSpeed,     0,  100);
+    state.suspension.omegaN        = clampI32(state.suspension.omegaN,         50, 1500);
+    state.suspension.zeta          = clampI32(state.suspension.zeta,            5,   95);
+    state.suspension.reactSpeed    = clampI32(state.suspension.reactSpeed,      0,  100);
     state.suspension.frontRearBalance = clampI32(state.suspension.frontRearBalance, -100, 100);
-    state.suspension.range         = clampI32(state.suspension.range,         10,  400);
-    state.suspension.inputDeadband = clampI32(state.suspension.inputDeadband,  0,  100);
-    state.suspension.inputHyst     = clampI32(state.suspension.inputHyst,      0,   50);
+    state.suspension.range         = clampI32(state.suspension.range,          10,  400);
+    state.suspension.inputDeadband = clampI32(state.suspension.inputDeadband,   0,  100);
+    state.suspension.inputHyst     = clampI32(state.suspension.inputHyst,       0,   50);
+    state.suspension.suspensionMode = clampI32(state.suspension.suspensionMode, SUSPENSION_MODE_REACTIVE, SUSPENSION_MODE_ACTIVE);
+    state.suspension.travelDeg     = clampI32(state.suspension.travelDeg,      10, DEFAULT_SUSP_TRAVEL_DEG);
+    state.suspension.cornerAssist  = clampI32(state.suspension.cornerAssist,    0,    1);
+    state.suspension.cornerGain    = clampI32(state.suspension.cornerGain,   -200,  200);
+    state.suspension.cornerResponse = clampI32(state.suspension.cornerResponse, 5, 100);
   }
 
   void readImuNamespace() {
@@ -315,7 +350,7 @@ private:
     state.imu.pitchTrim = scaledI32ToFloat(pref.getInt("pitch_trim", floatToScaledI32(DEFAULT_IMU_PITCH_TRIM)));
     pref.end();
 
-    state.imu.orient = clampI32(state.imu.orient, 0, 3);
+    state.imu.orient = clampI32(state.imu.orient, 0, 5);
   }
 
   void readSystemNamespace() {
@@ -543,13 +578,18 @@ private:
     pref.putInt("srv_rr_trim", p.srvRrTrim);  pref.putInt("srv_rr_min", p.srvRrMin);
     pref.putInt("srv_rr_max",  p.srvRrMax);   pref.putInt("srv_rr_rht", p.srvRrRht);
     pref.putUChar("srv_rr_rev", p.srvRrRev);
-    pref.putInt("omega_n",   p.omegaN);
-    pref.putInt("zeta",      p.zeta);
-    pref.putInt("react_spd", p.reactSpd);
+    pref.putInt("omega_n",    p.omegaN);
+    pref.putInt("zeta",       p.zeta);
+    pref.putInt("react_spd",  p.reactSpd);
     pref.putInt("fr_balance", p.frBalance);
-    pref.putInt("range",     p.range);
-    pref.putInt("deadband",  p.deadband);
-    pref.putInt("hyst",      p.hyst);
+    pref.putInt("range",      p.range);
+    pref.putInt("deadband",   p.deadband);
+    pref.putInt("hyst",       p.hyst);
+    pref.putInt("mode",       p.suspMode);
+    pref.putInt("travel_deg", p.travelDeg);
+    pref.putInt("corner_asst", p.cornerAssist);
+    pref.putInt("corner_gain", p.cornerGain);
+    pref.putInt("corner_resp", p.cornerResponse);
     pref.putInt("imu_orient", p.imuOrient);
     pref.end();
   }
@@ -585,13 +625,18 @@ private:
     p.srvRrMax  = pref.getInt("srv_rr_max",  DEFAULT_SERVO_MAX_US);
     p.srvRrRht  = pref.getInt("srv_rr_rht",  DEFAULT_SERVO_RIDE_HT);
     p.srvRrRev  = pref.getUChar("srv_rr_rev", DEFAULT_SERVO_REVERSE);
-    p.omegaN   = pref.getInt("omega_n",   DEFAULT_SUSP_OMEGA_N);
-    p.zeta     = pref.getInt("zeta",      DEFAULT_SUSP_ZETA);
-    p.reactSpd = pref.getInt("react_spd", DEFAULT_SUSP_REACT_SPD);
+    p.omegaN   = pref.getInt("omega_n",    DEFAULT_SUSP_OMEGA_N);
+    p.zeta     = pref.getInt("zeta",       DEFAULT_SUSP_ZETA);
+    p.reactSpd = pref.getInt("react_spd",  DEFAULT_SUSP_REACT_SPD);
     p.frBalance = pref.getInt("fr_balance", DEFAULT_SUSP_FR_BALANCE);
-    p.range    = pref.getInt("range",     DEFAULT_SUSP_RANGE);
-    p.deadband = pref.getInt("deadband",  DEFAULT_SUSP_DEADBAND);
-    p.hyst     = pref.getInt("hyst",      DEFAULT_SUSP_HYST);
+    p.range    = pref.getInt("range",      DEFAULT_SUSP_RANGE);
+    p.deadband = pref.getInt("deadband",   DEFAULT_SUSP_DEADBAND);
+    p.hyst     = pref.getInt("hyst",       DEFAULT_SUSP_HYST);
+    p.suspMode = pref.getInt("mode",       DEFAULT_SUSP_MODE);
+    p.travelDeg = pref.getInt("travel_deg", DEFAULT_SUSP_TRAVEL_DEG);
+    p.cornerAssist = pref.getInt("corner_asst", DEFAULT_SUSP_CORNER_ASSIST);
+    p.cornerGain = pref.getInt("corner_gain", DEFAULT_SUSP_CORNER_GAIN);
+    p.cornerResponse = pref.getInt("corner_resp", DEFAULT_SUSP_CORNER_RESP);
     p.imuOrient = pref.getInt("imu_orient", DEFAULT_IMU_ORIENT);
     pref.end();
     p.populated = true;
@@ -701,13 +746,18 @@ public:
     }
 
     if (ns == NS_SUSP) {
-      if      (key == "omega_n")   state.suspension.omegaN        = clampI32(value.as<int32_t>(),  50, 1500);
-      else if (key == "zeta")      state.suspension.zeta          = clampI32(value.as<int32_t>(),   5,   95);
-      else if (key == "react_spd") state.suspension.reactSpeed    = clampI32(value.as<int32_t>(),   0,  100);
+      if      (key == "omega_n")    state.suspension.omegaN        = clampI32(value.as<int32_t>(),  50, 1500);
+      else if (key == "zeta")       state.suspension.zeta          = clampI32(value.as<int32_t>(),   5,   95);
+      else if (key == "react_spd")  state.suspension.reactSpeed    = clampI32(value.as<int32_t>(),   0,  100);
       else if (key == "fr_balance") state.suspension.frontRearBalance = clampI32(value.as<int32_t>(), -100, 100);
-      else if (key == "range")     state.suspension.range         = clampI32(value.as<int32_t>(),  10,  400);
-      else if (key == "deadband")  state.suspension.inputDeadband = clampI32(value.as<int32_t>(),   0,  100);
-      else if (key == "hyst")      state.suspension.inputHyst     = clampI32(value.as<int32_t>(),   0,   50);
+      else if (key == "range")      state.suspension.range         = clampI32(value.as<int32_t>(),  10,  400);
+      else if (key == "deadband")   state.suspension.inputDeadband = clampI32(value.as<int32_t>(),   0,  100);
+      else if (key == "hyst")       state.suspension.inputHyst     = clampI32(value.as<int32_t>(),   0,   50);
+      else if (key == "mode")       state.suspension.suspensionMode = clampI32(value.as<int32_t>(), SUSPENSION_MODE_REACTIVE, SUSPENSION_MODE_ACTIVE);
+      else if (key == "travel_deg") state.suspension.travelDeg     = clampI32(value.as<int32_t>(),  10, DEFAULT_SUSP_TRAVEL_DEG);
+      else if (key == "corner_asst") state.suspension.cornerAssist = clampI32(value.as<int32_t>(),   0,    1);
+      else if (key == "corner_gain") state.suspension.cornerGain   = clampI32(value.as<int32_t>(), -200,  200);
+      else if (key == "corner_resp") state.suspension.cornerResponse = clampI32(value.as<int32_t>(), 5, 100);
       else return false;
 
       syncLegacyFromState();
@@ -715,7 +765,7 @@ public:
     }
 
     if (ns == NS_IMU) {
-      if (key == "orient") state.imu.orient = clampI32(value.as<int32_t>(), 0, 3);
+      if (key == "orient") state.imu.orient = clampI32(value.as<int32_t>(), 0, 5);
       else if (key == "roll_trim") state.imu.rollTrim = value.as<float>();
       else if (key == "pitch_trim") state.imu.pitchTrim = value.as<float>();
       else return false;
@@ -852,7 +902,7 @@ public:
   void updateParameter(const String& key, float value) {
     DynamicJsonDocument doc(64);
     if (key == "reactionSpeed") {
-      doc["v"] = static_cast<int32_t>(roundf(value * 50.0f));
+      doc["v"] = static_cast<int32_t>(roundf(value * 100.0f));
       setValue("suspension.react_spd", doc["v"].as<JsonVariantConst>());
     } else if (key == "rideHeightOffset") {
       const int32_t rideHeight = clampI32(static_cast<int32_t>(roundf(value)), 0, 100);
@@ -861,8 +911,21 @@ public:
       setValue("srv_fr.ride_ht", doc["v"].as<JsonVariantConst>());
       setValue("srv_rl.ride_ht", doc["v"].as<JsonVariantConst>());
       setValue("srv_rr.ride_ht", doc["v"].as<JsonVariantConst>());
-    } else if (key == "rangeLimit") {
-      legacyConfig.rangeLimit = constrain(value, 0.0f, 180.0f);
+    } else if (key == "rangeLimit" || key == "travelDeg") {
+      doc["v"] = static_cast<int32_t>(roundf(value));
+      setValue("suspension.travel_deg", doc["v"].as<JsonVariantConst>());
+    } else if (key == "suspensionMode") {
+      doc["v"] = static_cast<int32_t>(roundf(value));
+      setValue("suspension.mode", doc["v"].as<JsonVariantConst>());
+    } else if (key == "cornerAssist") {
+      doc["v"] = value > 0.5f ? 1 : 0;
+      setValue("suspension.corner_asst", doc["v"].as<JsonVariantConst>());
+    } else if (key == "cornerGain") {
+      doc["v"] = static_cast<int32_t>(roundf(value * 100.0f));
+      setValue("suspension.corner_gain", doc["v"].as<JsonVariantConst>());
+    } else if (key == "cornerResponse") {
+      doc["v"] = static_cast<int32_t>(roundf(value * 100.0f));
+      setValue("suspension.corner_resp", doc["v"].as<JsonVariantConst>());
     } else if (key == "omegaN") {
       doc["v"] = static_cast<int32_t>(roundf(value * 100.0f));
       setValue("suspension.omega_n", doc["v"].as<JsonVariantConst>());
@@ -940,13 +1003,18 @@ public:
     writeServo("srv_rr", state.servoRR);
 
     JsonObject susp = doc.createNestedObject("suspension");
-    susp["omega_n"]   = state.suspension.omegaN;
-    susp["zeta"]      = state.suspension.zeta;
-    susp["react_spd"] = state.suspension.reactSpeed;
+    susp["omega_n"]    = state.suspension.omegaN;
+    susp["zeta"]       = state.suspension.zeta;
+    susp["react_spd"]  = state.suspension.reactSpeed;
     susp["fr_balance"] = state.suspension.frontRearBalance;
-    susp["range"]     = state.suspension.range;
-    susp["deadband"]  = state.suspension.inputDeadband;
-    susp["hyst"]      = state.suspension.inputHyst;
+    susp["range"]      = state.suspension.range;
+    susp["deadband"]   = state.suspension.inputDeadband;
+    susp["hyst"]       = state.suspension.inputHyst;
+    susp["mode"]       = state.suspension.suspensionMode;
+    susp["travel_deg"] = state.suspension.travelDeg;
+    susp["corner_asst"] = state.suspension.cornerAssist;
+    susp["corner_gain"] = state.suspension.cornerGain;
+    susp["corner_resp"] = state.suspension.cornerResponse;
 
     JsonObject imu = doc.createNestedObject("imu");
     imu["orient"] = state.imu.orient;
@@ -960,19 +1028,24 @@ public:
 
     doc["fw_version"] = state.system.firmwareVersion;
 
-    doc["reactionSpeed"]   = legacyConfig.reactionSpeed;
+    doc["reactionSpeed"]    = legacyConfig.reactionSpeed;
     doc["rideHeightOffset"] = legacyConfig.rideHeightOffset;
     doc["rangeLimit"]       = legacyConfig.rangeLimit;
-    doc["omegaN"]          = legacyConfig.omegaN;
-    doc["zeta"]            = legacyConfig.zeta;
-    doc["range"]           = legacyConfig.range;
-    doc["inputDeadband"]   = legacyConfig.inputDeadband;
-    doc["inputHyst"]       = legacyConfig.inputHyst;
-    doc["frontRearBalance"] = legacyConfig.frontRearBalance;
-    doc["sampleRate"] = legacyConfig.sampleRate;
-    doc["telemetryRate"] = legacyConfig.telemetryRate;
-    doc["mpuOrientation"] = legacyConfig.mpuOrientation;
-    doc["deviceName"] = legacyConfig.deviceName;
+    doc["travelDeg"]        = legacyConfig.travelDeg;
+    doc["omegaN"]           = legacyConfig.omegaN;
+    doc["zeta"]             = legacyConfig.zeta;
+    doc["range"]            = legacyConfig.range;
+    doc["inputDeadband"]    = legacyConfig.inputDeadband;
+    doc["inputHyst"]        = legacyConfig.inputHyst;
+    doc["frontRearBalance"] = static_cast<float>(clampI32(state.suspension.frontRearBalance, -100, 100) + 100) / 2.0f;
+    doc["sampleRate"]       = legacyConfig.sampleRate;
+    doc["telemetryRate"]    = legacyConfig.telemetryRate;
+    doc["mpuOrientation"]   = legacyConfig.mpuOrientation;
+    doc["suspensionMode"]   = legacyConfig.suspensionMode;
+    doc["cornerAssist"]     = legacyConfig.cornerAssist;
+    doc["cornerGain"]       = legacyConfig.cornerGain;
+    doc["cornerResponse"]   = legacyConfig.cornerResponse;
+    doc["deviceName"]       = legacyConfig.deviceName;
 
     JsonObject servos = doc.createNestedObject("servos");
     auto writeLegacyServo = [&](const char* key, const ServoCalibration& cal) {
@@ -1156,6 +1229,40 @@ public:
       setValue("suspension.react_spd", valueDoc["v"].as<JsonVariantConst>());
     }
 
+    if (doc.containsKey("suspensionMode")) {
+      DynamicJsonDocument valueDoc(32);
+      valueDoc["v"] = doc["suspensionMode"].as<int32_t>();
+      setValue("suspension.mode", valueDoc["v"].as<JsonVariantConst>());
+    }
+
+    if (doc.containsKey("travelDeg")) {
+      DynamicJsonDocument valueDoc(32);
+      valueDoc["v"] = static_cast<int32_t>(roundf(doc["travelDeg"].as<float>()));
+      setValue("suspension.travel_deg", valueDoc["v"].as<JsonVariantConst>());
+    } else if (doc.containsKey("rangeLimit")) {
+      DynamicJsonDocument valueDoc(32);
+      valueDoc["v"] = static_cast<int32_t>(roundf(doc["rangeLimit"].as<float>()));
+      setValue("suspension.travel_deg", valueDoc["v"].as<JsonVariantConst>());
+    }
+
+    if (doc.containsKey("cornerAssist")) {
+      DynamicJsonDocument valueDoc(16);
+      valueDoc["v"] = doc["cornerAssist"].as<bool>() ? 1 : 0;
+      setValue("suspension.corner_asst", valueDoc["v"].as<JsonVariantConst>());
+    }
+
+    if (doc.containsKey("cornerGain")) {
+      DynamicJsonDocument valueDoc(32);
+      valueDoc["v"] = static_cast<int32_t>(roundf(doc["cornerGain"].as<float>() * 100.0f));
+      setValue("suspension.corner_gain", valueDoc["v"].as<JsonVariantConst>());
+    }
+
+    if (doc.containsKey("cornerResponse")) {
+      DynamicJsonDocument valueDoc(32);
+      valueDoc["v"] = static_cast<int32_t>(roundf(doc["cornerResponse"].as<float>() * 100.0f));
+      setValue("suspension.corner_resp", valueDoc["v"].as<JsonVariantConst>());
+    }
+
     if (doc.containsKey("omegaN")) {
       DynamicJsonDocument valueDoc(32);
       valueDoc["v"] = static_cast<int32_t>(roundf(doc["omegaN"].as<float>() * 100.0f));
@@ -1293,13 +1400,18 @@ public:
     state.servoRR.rideHeight = clampI32(p.srvRrRht, 0, 100);
     state.servoRR.reverse   = p.srvRrRev ? 1 : 0;
 
-    state.suspension.omegaN        = clampI32(p.omegaN,    50, 1500);
-    state.suspension.zeta          = clampI32(p.zeta,       5,   95);
-    state.suspension.reactSpeed    = clampI32(p.reactSpd,   0,  100);
+    state.suspension.omegaN        = clampI32(p.omegaN,     50, 1500);
+    state.suspension.zeta          = clampI32(p.zeta,        5,   95);
+    state.suspension.reactSpeed    = clampI32(p.reactSpd,    0,  100);
     state.suspension.frontRearBalance = clampI32(p.frBalance, -100, 100);
-    state.suspension.range         = clampI32(p.range,     10,  400);
-    state.suspension.inputDeadband = clampI32(p.deadband,   0,  100);
-    state.suspension.inputHyst     = clampI32(p.hyst,       0,   50);
+    state.suspension.range         = clampI32(p.range,      10,  400);
+    state.suspension.inputDeadband = clampI32(p.deadband,    0,  100);
+    state.suspension.inputHyst     = clampI32(p.hyst,        0,   50);
+    state.suspension.suspensionMode = clampI32(p.suspMode, SUSPENSION_MODE_REACTIVE, SUSPENSION_MODE_ACTIVE);
+    state.suspension.travelDeg     = clampI32(p.travelDeg,  10, DEFAULT_SUSP_TRAVEL_DEG);
+    state.suspension.cornerAssist  = clampI32(p.cornerAssist, 0, 1);
+    state.suspension.cornerGain    = clampI32(p.cornerGain, -200, 200);
+    state.suspension.cornerResponse = clampI32(p.cornerResponse, 5, 100);
 
     state.imu.orient = clampI32(p.imuOrient, 0, 5);
     state.system.activeDrivingProfile = idx;
@@ -1329,13 +1441,18 @@ public:
     p.srvRrTrim = state.servoRR.trimUs;   p.srvRrMin = state.servoRR.minUs;
     p.srvRrMax  = state.servoRR.maxUs;    p.srvRrRht = state.servoRR.rideHeight;
     p.srvRrRev  = state.servoRR.reverse;
-    p.omegaN   = state.suspension.omegaN;
-    p.zeta     = state.suspension.zeta;
-    p.reactSpd = state.suspension.reactSpeed;
+    p.omegaN    = state.suspension.omegaN;
+    p.zeta      = state.suspension.zeta;
+    p.reactSpd  = state.suspension.reactSpeed;
     p.frBalance = state.suspension.frontRearBalance;
-    p.range    = state.suspension.range;
-    p.deadband = state.suspension.inputDeadband;
-    p.hyst     = state.suspension.inputHyst;
+    p.range     = state.suspension.range;
+    p.deadband  = state.suspension.inputDeadband;
+    p.hyst      = state.suspension.inputHyst;
+    p.suspMode  = state.suspension.suspensionMode;
+    p.travelDeg = state.suspension.travelDeg;
+    p.cornerAssist = state.suspension.cornerAssist;
+    p.cornerGain = state.suspension.cornerGain;
+    p.cornerResponse = state.suspension.cornerResponse;
     p.imuOrient = state.imu.orient;
 
     writeDrivingProfileToNVS(idx, p);

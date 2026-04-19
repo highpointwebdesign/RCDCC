@@ -90,8 +90,8 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.802';
-        const BUILD_DATE = '2026-04-15';
+        const APP_VERSION = '1.1.973';
+        const BUILD_DATE = '2026-04-19';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -186,6 +186,16 @@ window.addEventListener('beforeunload', function(event) {
             el.setAttribute('aria-label', connectedLabel || '--');
         }
 
+        function setDashboardSuspensionStatusTone(isPaused) {
+            const statusEl = document.getElementById('dashboardSuspendSuspensionLink');
+            if (!statusEl) return;
+
+            statusEl.classList.remove('dashboard-suspension-status-active', 'dashboard-suspension-status-paused');
+            if (!isBleConnected()) return;
+
+            statusEl.classList.add(isPaused ? 'dashboard-suspension-status-paused' : 'dashboard-suspension-status-active');
+        }
+
         function updateDashboardVehicleName(name = null) {
             if (!isBleConnected()) {
                 setDashboardQuickNavDisplay('activeVehicleDisplay', null, 'vehicle');
@@ -206,6 +216,7 @@ window.addEventListener('beforeunload', function(event) {
 
             updateDashboardVehicleName(vehicleName);
             updateDashboardActiveProfile();
+            updateDashboardSuspensionProfile();
 
             if (fullConfig && typeof fullConfig === 'object') {
                 updateSuspensionSettings(fullConfig);
@@ -341,16 +352,12 @@ window.addEventListener('beforeunload', function(event) {
 
         function clearDashboardActiveStatus() {
             setDashboardQuickNavDisplay('activeDrivingProfileDisplay', null, 'driving');
+            setDashboardQuickNavDisplay('dashboardSuspendSuspensionLink', null, 'driving');
+            setDashboardSuspensionStatusTone(false);
+            setDashboardQuickNavDisplay('dashboardSuspensionProfileBtn', null, 'driving');
+            setDashboardQuickNavDisplay('dashboardActiveCornerValue', null, 'driving');
+            setDashboardActiveCornerRowVisibility(false);
             updateDashboardVehicleName(null);
-
-            // Reset suspension settings card
-            const suspensionIds = ['rideHeightDisplay', 'omegaNDisplay', 'zetaDisplay', 'rangeDisplay', 'frontRearBalanceDisplay'];
-            suspensionIds.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = '--';
-            });
-            const badge = document.getElementById('reactionSpeedBadge');
-            if (badge) badge.textContent = '--';
 
             // Reset roll/pitch/GPS card
             const sensorIds = ['rollPitchRollValue', 'rollPitchPitchValue', 'latitude', 'longitude', 'elevation', 'accuracy'];
@@ -478,7 +485,7 @@ window.addEventListener('beforeunload', function(event) {
 
         function updateDashboardBleUI(connected) {
             const rollPitchBody = document.getElementById('rollPitchRollValue')?.closest('.card-body');
-            const settingsBody = document.getElementById('reactionSpeedBadge')?.closest('.card-body');
+            const settingsBody = document.getElementById('activeVehicleDisplay')?.closest('.card-body');
             [rollPitchBody, settingsBody].forEach(body => {
                 if (!body) return;
                 body.classList.toggle('ble-data-off', !connected);
@@ -643,6 +650,21 @@ window.addEventListener('beforeunload', function(event) {
             }
             if (Object.prototype.hasOwnProperty.call(payload, 'inputHyst')) {
                 pushWrite(window.RCDCC_KEYS.SUSPENSION_HYST, toInt((Number(payload.inputHyst) || 0) * 100));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'suspensionMode')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_MODE, toInt(payload.suspensionMode));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'travelDeg')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_TRAVEL_DEG, toInt(payload.travelDeg));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'cornerAssist')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_CORNER_ASST, payload.cornerAssist ? 1 : 0);
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'cornerGain')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_CORNER_GAIN, toInt((Number(payload.cornerGain) || 0) * 100));
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'cornerResponse')) {
+                pushWrite(window.RCDCC_KEYS.SUSPENSION_CORNER_RESP, toInt((Number(payload.cornerResponse) || 0) * 100));
             }
             if (Object.prototype.hasOwnProperty.call(payload, 'frontRearBalance')) {
                 const raw = Number(payload.frontRearBalance) || 0;
@@ -1606,6 +1628,8 @@ window.addEventListener('beforeunload', function(event) {
             }));
         }
 
+        const DEFAULT_CORNER_ASSIST_ENABLED = true;
+
         function getActiveDrivingProfile() {
             const active = drivingProfiles.find((profile) => Number(profile.index) === Number(activeDrivingProfileIndex));
             if (active) return active;
@@ -1619,7 +1643,9 @@ window.addEventListener('beforeunload', function(event) {
         function captureCurrentTuningValues() {
             return {
                 masterFeel: tuningSliderValues.masterFeel ?? 50,
+                suspensionMode: tuningSliderValues.suspensionMode ?? 0,
                 rideHeightOffset: tuningSliderValues.rideHeightOffset ?? 50,
+                travelDeg: tuningSliderValues.travelDeg ?? 160,
                 omegaN: tuningSliderValues.omegaN ?? 3.0,
                 zeta: tuningSliderValues.zeta ?? 0.25,
                 range: tuningSliderValues.range ?? 1.0,
@@ -1627,6 +1653,9 @@ window.addEventListener('beforeunload', function(event) {
                 inputHyst: tuningSliderValues.inputHyst ?? 0.15,
                 reactionSpeed: tuningSliderValues.reactionSpeed ?? 1.0,
                 frontRearBalance: tuningSliderValues.frontRearBalance ?? 50,
+                cornerAssist: tuningSliderValues.cornerAssist ?? DEFAULT_CORNER_ASSIST_ENABLED,
+                cornerGain: tuningSliderValues.cornerGain ?? 1.0,
+                cornerResponse: tuningSliderValues.cornerResponse ?? 0.25,
                 sampleRate: tuningSliderValues.sampleRate ?? 25,
                 tuningConfigMode: localStorage.getItem('tuningConfigMode') ?? 'auto'
             };
@@ -2163,6 +2192,7 @@ window.addEventListener('beforeunload', function(event) {
             isRunning: false,
             elapsedMs: 0,
             startedAtMs: 0,
+            totalDurationMs: 0,
             distanceMiles: 0,
             elevationGainFt: 0,
             elevationLossFt: 0,
@@ -2175,6 +2205,7 @@ window.addEventListener('beforeunload', function(event) {
                 isRunning: !!trailSessionState.isRunning,
                 elapsedMs: Math.max(0, Number(trailSessionState.elapsedMs) || 0),
                 startedAtMs: Math.max(0, Number(trailSessionState.startedAtMs) || 0),
+                totalDurationMs: Math.max(0, Number(trailSessionState.totalDurationMs) || 0),
                 distanceMiles: Math.max(0, Number(trailSessionState.distanceMiles) || 0),
                 elevationGainFt: Math.max(0, Number(trailSessionState.elevationGainFt) || 0),
                 elevationLossFt: Math.max(0, Number(trailSessionState.elevationLossFt) || 0),
@@ -2207,6 +2238,7 @@ window.addEventListener('beforeunload', function(event) {
                 trailSessionState.isRunning = !!parsed.isRunning;
                 trailSessionState.elapsedMs = Math.max(0, Number(parsed.elapsedMs) || 0);
                 trailSessionState.startedAtMs = Math.max(0, Number(parsed.startedAtMs) || 0);
+                trailSessionState.totalDurationMs = Math.max(0, Number(parsed.totalDurationMs) || 0);
                 trailSessionState.distanceMiles = Math.max(0, Number(parsed.distanceMiles) || 0);
                 trailSessionState.elevationGainFt = Math.max(0, Number(parsed.elevationGainFt) || 0);
                 trailSessionState.elevationLossFt = Math.max(0, Number(parsed.elevationLossFt) || 0);
@@ -2255,6 +2287,10 @@ window.addEventListener('beforeunload', function(event) {
             return Math.max(0, trailSessionState.elapsedMs + runningElapsed);
         }
 
+        function getTrailSessionTotalDurationMs() {
+            return Math.max(0, Number(trailSessionState.totalDurationMs) || 0) + getTrailSessionElapsedMs();
+        }
+
         function formatTrailDistance(miles) {
             return `${Math.max(0, Number(miles) || 0).toFixed(1)} mi`;
         }
@@ -2294,8 +2330,14 @@ window.addEventListener('beforeunload', function(event) {
 
         function updateTrailSessionDurationDisplay() {
             const durationEl = document.getElementById('trailDurationValue');
-            if (!durationEl) return;
-            durationEl.textContent = formatTrailDuration(getTrailSessionElapsedMs());
+            const totalDurationEl = document.getElementById('trailTotalDurationValue');
+
+            if (durationEl) {
+                durationEl.textContent = formatTrailDuration(getTrailSessionElapsedMs());
+            }
+            if (totalDurationEl) {
+                totalDurationEl.textContent = formatTrailDuration(getTrailSessionTotalDurationMs());
+            }
         }
 
         function updateTrailSessionDisplay() {
@@ -2461,6 +2503,7 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function resetTrailSession() {
+            trailSessionState.totalDurationMs += getTrailSessionElapsedMs();
             trailSessionState.elapsedMs = 0;
             trailSessionState.startedAtMs = 0;
             trailSessionState.isRunning = false;
@@ -3436,8 +3479,9 @@ window.addEventListener('beforeunload', function(event) {
                 const currentReversed = getServoReverseFromUi(servoName);
                 const isSelected = buttonWantsReversed === currentReversed;
                 const isBusy = servoTestActionPending && servoTestActiveKey === servoName && buttonDir === servoTestActiveDir;
+                const isLocked = rcdccConfigurationLocked;
 
-                button.disabled = isBusy;
+                button.disabled = isBusy || isLocked;
                 button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
                 button.classList.toggle('btn-gold', isSelected || isBusy);
                 button.classList.toggle('btn-outline-secondary', !isSelected && !isBusy);
@@ -3691,6 +3735,164 @@ window.addEventListener('beforeunload', function(event) {
                 }
             }
         }
+
+        function setServoCalibrationStatus(message) {
+            const statusEl = document.getElementById('servoCalibrationStatus');
+            if (statusEl) {
+                statusEl.textContent = message;
+            }
+        }
+
+        window.runServoDirectionCalibration = async function runServoDirectionCalibration(buttonElement = null) {
+            const button = buttonElement || document.getElementById('servoAutoCalibrateBtn');
+            if (!button) return;
+
+            if (button.disabled) {
+                return;
+            }
+
+            if (!isBleConnected()) {
+                setServoCalibrationStatus('Connect to a vehicle before running calibration.');
+                if (window.toast) toast.warning('Connect to a vehicle before running calibration');
+                return;
+            }
+
+            // Ensure we have a usable servo config snapshot.
+            if (!fullConfig || !fullConfig.servos) {
+                fullConfig = mergeConfigSnapshots(fullConfig, buildAutoCalibrateServoConfigFromUi());
+            }
+
+            const servos = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'];
+            const servoLabelMap = {
+                frontLeft: 'Front Left',
+                frontRight: 'Front Right',
+                rearLeft: 'Rear Left',
+                rearRight: 'Rear Right'
+            };
+
+            const servoExpectedPitch = {
+                frontLeft: 'positive',
+                frontRight: 'positive',
+                rearLeft: 'negative',
+                rearRight: 'negative'
+            };
+
+            const TEST_MOVEMENT = 10;
+            const SENSOR_SETTLE_MS = 1000;
+            const servoState = {};
+            const needsReversal = {};
+            let movementDetected = false;
+            let reversalCount = 0;
+
+            servos.forEach((servo) => {
+                if (fullConfig?.servos?.[servo]) {
+                    const configuredTrim = fullConfig.servos[servo].trim;
+                    servoState[servo] = {
+                        trim: Number.isFinite(configuredTrim) ? configuredTrim : 0,
+                        reversed: coerceBooleanValue(fullConfig.servos[servo].reversed, false)
+                    };
+                } else {
+                    const uiTrim = Number(servoSliderValues?.[servo]?.trim);
+                    servoState[servo] = {
+                        trim: Number.isFinite(uiTrim) ? uiTrim : 0,
+                        reversed: getServoReverseFromUi(servo)
+                    };
+                }
+            });
+
+            button.disabled = true;
+            button.classList.add('active');
+
+            try {
+                setServoCalibrationStatus('Starting raise-direction calibration...');
+
+                // Pass 1: test current direction behavior.
+                for (const servo of servos) {
+                    const servoLabel = servoLabelMap[servo] || servo;
+                    setServoCalibrationStatus(`Testing ${servoLabel} movement...`);
+
+                    const initialTrim = servoState[servo].trim;
+                    const testTrim = initialTrim + TEST_MOVEMENT;
+
+                    const baselineSensor = await getSensorData();
+                    const baselinePitch = baselineSensor.pitch;
+
+                    await updateServoTrim(servo, testTrim);
+                    servoState[servo].trim = testTrim;
+                    await autoLevelDelay(SENSOR_SETTLE_MS);
+
+                    const movedSensor = await getSensorData();
+                    const pitchChange = movedSensor.pitch - baselinePitch;
+                    if (Math.abs(pitchChange) >= 0.5) {
+                        movementDetected = true;
+                    }
+
+                    const expected = servoExpectedPitch[servo];
+                    const isCorrectDirection = (expected === 'positive' && pitchChange > 1) ||
+                        (expected === 'negative' && pitchChange < -1);
+
+                    needsReversal[servo] = !isCorrectDirection;
+
+                    await updateServoTrim(servo, initialTrim);
+                    servoState[servo].trim = initialTrim;
+                    await autoLevelDelay(SENSOR_SETTLE_MS);
+                }
+
+                if (!movementDetected) {
+                    throw new Error('No servo movement detected. Check power and linkage, then try again.');
+                }
+
+                // Pass 2: apply reverse where needed and verify.
+                for (const servo of servos) {
+                    if (!needsReversal[servo]) continue;
+
+                    const servoLabel = servoLabelMap[servo] || servo;
+                    setServoCalibrationStatus(`Applying reverse for ${servoLabel}...`);
+
+                    const newReversedState = !servoState[servo].reversed;
+                    await updateServoReversed(servo, newReversedState);
+                    servoState[servo].reversed = newReversedState;
+                    reversalCount += 1;
+
+                    await autoLevelDelay(500);
+
+                    const initialTrim = servoState[servo].trim;
+                    const testTrim = initialTrim + TEST_MOVEMENT;
+
+                    const baselineSensor = await getSensorData();
+                    const baselinePitch = baselineSensor.pitch;
+
+                    await updateServoTrim(servo, testTrim);
+                    servoState[servo].trim = testTrim;
+                    await autoLevelDelay(SENSOR_SETTLE_MS);
+
+                    const movedSensor = await getSensorData();
+                    const pitchChange = movedSensor.pitch - baselinePitch;
+                    const expected = servoExpectedPitch[servo];
+                    const isNowCorrect = (expected === 'positive' && pitchChange > 1) ||
+                        (expected === 'negative' && pitchChange < -1);
+
+                    await updateServoTrim(servo, initialTrim);
+                    servoState[servo].trim = initialTrim;
+                    await autoLevelDelay(SENSOR_SETTLE_MS);
+
+                    if (!isNowCorrect) {
+                        throw new Error(`${servoLabel} failed verification after applying reverse.`);
+                    }
+                }
+
+                const updatedCount = reversalCount;
+                setServoCalibrationStatus(`Calibration complete. Updated ${updatedCount} reverse toggle${updatedCount === 1 ? '' : 's'} based on measured movement.`);
+                if (window.toast) toast.success('Servo raise-direction calibration complete');
+            } catch (error) {
+                console.error('Servo direction calibration failed:', error);
+                setServoCalibrationStatus(`Calibration failed: ${String(error?.message || error)}`);
+                if (window.toast) toast.error(`Calibration failed: ${String(error?.message || error)}`);
+            } finally {
+                button.disabled = false;
+                button.classList.remove('active');
+            }
+        };
         
         async function handleAutoLevel(buttonElement = null) {
             const button = buttonElement
@@ -4289,6 +4491,7 @@ window.addEventListener('beforeunload', function(event) {
                     });
                 }
             }
+            syncSuspensionModeLockUi();
             
             // Restore formulas card collapse state from localStorage
             const formulasCollapsed = localStorage.getItem('formulasCardCollapsed') !== 'false';
@@ -4890,6 +5093,41 @@ window.addEventListener('beforeunload', function(event) {
             await selectDrivingProfile(selectedIndex);
         }
 
+        function getDashboardSuspensionProfileLabel(rawMode) {
+            const mode = normalizeSuspensionModeValue(rawMode);
+            return mode === 1 ? 'Active' : 'Reactive';
+        }
+
+        function setDashboardActiveCornerRowVisibility(show) {
+            const row = document.getElementById('dashboardActiveCornerRow');
+            if (!row) return;
+            row.hidden = !show;
+            row.setAttribute('aria-hidden', show ? 'false' : 'true');
+        }
+
+        function updateDashboardSuspensionProfile() {
+            if (!isBleConnected()) {
+                setDashboardQuickNavDisplay('dashboardSuspensionProfileBtn', null, 'driving');
+                setDashboardQuickNavDisplay('dashboardActiveCornerValue', null, 'driving');
+                setDashboardActiveCornerRowVisibility(false);
+                return;
+            }
+
+            const rawMode = tuningSliderValues.suspensionMode ?? fullConfig?.suspensionMode ?? 0;
+            const normalizedMode = normalizeSuspensionModeValue(rawMode);
+            const isActiveMode = normalizedMode === 1;
+            const cornerAssistEnabled = coerceBooleanValue(tuningSliderValues.cornerAssist ?? fullConfig?.cornerAssist, DEFAULT_CORNER_ASSIST_ENABLED);
+
+            setDashboardQuickNavDisplay('dashboardSuspensionProfileBtn', getDashboardSuspensionProfileLabel(normalizedMode), 'driving');
+            setDashboardActiveCornerRowVisibility(isActiveMode);
+
+            if (isActiveMode) {
+                setDashboardQuickNavDisplay('dashboardActiveCornerValue', cornerAssistEnabled ? 'On' : 'Off', 'driving');
+            } else {
+                setDashboardQuickNavDisplay('dashboardActiveCornerValue', null, 'driving');
+            }
+        }
+
         function bindDashboardCurrentSettingsQuickNav() {
             const bindNavBadge = (elementId, handler) => {
                 const el = document.getElementById(elementId);
@@ -4911,6 +5149,7 @@ window.addEventListener('beforeunload', function(event) {
 
             bindNavBadge('activeVehicleDisplay', handleDashboardVehicleBadgeNav);
             bindNavBadge('activeDrivingProfileDisplay', handleDashboardDrivingProfilePickerNav);
+            bindNavBadge('dashboardSuspendSuspensionLink', handleDashboardSuspendSuspensionToggleNav);
         }
 
         window.navigateToSection = navigateToSection;
@@ -10228,19 +10467,45 @@ window.addEventListener('beforeunload', function(event) {
         function updateSuspendSuspensionBtn() {
             const btn = document.getElementById('suspendSuspensionBtn');
             const label = document.getElementById('suspendSuspensionLabel');
-            if (!btn || !label) return;
-            btn.disabled = !isBleConnected();
-            if (suspensionPaused) {
-                btn.classList.remove('btn-gold', 'btn-outline-secondary');
-                btn.classList.add('btn-danger');
-                //  btn.querySelector('span.material-symbols-outlined').textContent = 'play_circle';
-                label.textContent = 'Suspension Paused';
-            } else {
-                btn.classList.remove('btn-danger', 'btn-outline-secondary');
-                btn.classList.add('btn-gold');
-                //     btn.querySelector('span.material-symbols-outlined').textContent = 'pause_circle';
-                label.textContent = 'Suspension Active';
+            const dashboardLink = document.getElementById('dashboardSuspendSuspensionLink');
+            const connected = isBleConnected();
+
+            if (btn) {
+                btn.disabled = !connected;
             }
+
+            if (suspensionPaused) {
+                if (btn) {
+                    btn.classList.remove('btn-gold', 'btn-outline-secondary');
+                    btn.classList.add('btn-danger');
+                }
+                if (label) {
+                    label.textContent = 'Paused';
+                }
+                if (dashboardLink) {
+                    setDashboardQuickNavDisplay('dashboardSuspendSuspensionLink', 'Paused', 'driving');
+                    dashboardLink.setAttribute('aria-disabled', connected ? 'false' : 'true');
+                }
+                setDashboardSuspensionStatusTone(true);
+            } else {
+                if (btn) {
+                    btn.classList.remove('btn-danger', 'btn-outline-secondary');
+                    btn.classList.add('btn-gold');
+                }
+                if (label) {
+                    label.textContent = 'Active';
+                }
+                if (dashboardLink) {
+                    setDashboardQuickNavDisplay('dashboardSuspendSuspensionLink', 'Active', 'driving');
+                    dashboardLink.setAttribute('aria-disabled', connected ? 'false' : 'true');
+                }
+                setDashboardSuspensionStatusTone(false);
+            }
+        }
+
+        async function handleDashboardSuspendSuspensionToggleNav(event) {
+            event?.preventDefault?.();
+            await toggleSuspendSuspension();
         }
 
         window.toggleSuspendSuspension = async function toggleSuspendSuspension() {
@@ -10781,20 +11046,6 @@ window.addEventListener('beforeunload', function(event) {
                 hasLoadedConfigFromDevice = false;
                 fullConfig = null;
 
-                const placeholderMap = {
-                    reactionSpeedBadge: '--',
-                    rideHeightDisplay: '--',
-                    omegaNDisplay: '--',
-                    zetaDisplay: '--',
-                    rangeDisplay: '--',
-                    frontRearBalanceDisplay: '--'
-                };
-
-                Object.entries(placeholderMap).forEach(([id, value]) => {
-                    const el = document.getElementById(id);
-                    if (el) el.textContent = value;
-                });
-
                 clearDashboardActiveStatus();
             };
 
@@ -10998,43 +11249,6 @@ window.addEventListener('beforeunload', function(event) {
         function updateSuspensionSettings(config) {
             if (!config) return;
             
-            // Update Reaction Speed
-            if (config.reactionSpeed !== undefined) {
-                const badge = document.getElementById('reactionSpeedBadge');
-                if (badge) badge.textContent = config.reactionSpeed.toFixed(1);
-            }
-            
-            // Update Ride Height
-            if (config.rideHeightOffset !== undefined) {
-                const display = document.getElementById('rideHeightDisplay');
-                if (display) display.textContent = `${config.rideHeightOffset.toFixed(0)}`;
-            }
-            
-            // Update Bounce Speed (omegaN)
-            if (config.omegaN !== undefined) {
-                const display = document.getElementById('omegaNDisplay');
-                if (display) display.textContent = config.omegaN.toFixed(1);
-            }
-            
-            // Update Bounce Decay (zeta)
-            if (config.zeta !== undefined) {
-                const display = document.getElementById('zetaDisplay');
-                if (display) display.textContent = config.zeta.toFixed(2);
-            }
-
-            // Update Motion Amount (range)
-            if (config.range !== undefined) {
-                const display = document.getElementById('rangeDisplay');
-                if (display) display.textContent = config.range.toFixed(1);
-            }
-            
-            // Update Front/Rear Balance
-            if (config.frontRearBalance !== undefined) {
-                const balancePercent = Math.round(config.frontRearBalance);
-                const display = document.getElementById('frontRearBalanceDisplay');
-                if (display) display.textContent = `${balancePercent}%`;
-            }
-            
             // Restore Tuning Mode (Auto/Custom)
             if (config.tuningConfigMode !== undefined) {
                 setTuningConfigMode(config.tuningConfigMode);
@@ -11054,6 +11268,8 @@ window.addEventListener('beforeunload', function(event) {
             const newZeta     = Number(lerp(0.55, 0.10, t).toFixed(2));
             const newRange    = Number(lerp(0.8,  3.4,  t).toFixed(1));
             const newReact    = Number(lerp(0.25, 0.95, t).toFixed(2));
+                const newDeadband = Number(lerp(0.45, 0.06, t).toFixed(2));
+                const newHyst     = Number(Math.max(0, Math.min(0.5, newDeadband * 0.5)).toFixed(2));
 
             const labels = ['Firm', 'Sport', 'Balanced', 'Touring', 'Relaxed', 'Loose'];
             const thresholds = [16, 33, 50, 66, 83, 100];
@@ -11069,7 +11285,9 @@ window.addEventListener('beforeunload', function(event) {
                 omegaN: newOmegaN,
                 zeta: newZeta,
                 range: newRange,
-                reactionSpeed: newReact
+                 reactionSpeed: newReact,
+                 inputDeadband: newDeadband,
+                 inputHyst: newHyst
             };
             isLoadingTuningConfig = true;
             updateTuningSliders(fakeConfig);
@@ -11088,6 +11306,8 @@ window.addEventListener('beforeunload', function(event) {
                     bleManager.writeValue(k.SUSPENSION_ZETA,      Math.round(newZeta * 100)).catch(e => console.error('KV masterFeel zeta:', e));
                     bleManager.writeValue(k.SUSPENSION_RANGE,     Math.round(newRange * 100)).catch(e => console.error('KV masterFeel range:', e));
                     bleManager.writeValue(k.SUSPENSION_REACT_SPD, Math.round(newReact * 100)).catch(e => console.error('KV masterFeel react:', e));
+                    bleManager.writeValue(k.SUSPENSION_DEADBAND,  Math.round(newDeadband * 100)).catch(e => console.error('KV masterFeel deadband:', e));
+                    bleManager.writeValue(k.SUSPENSION_HYST,      Math.round(newHyst * 100)).catch(e => console.error('KV masterFeel hyst:', e));
                     window.__masterFeelKvDebounceTimer = null;
                 }, 350);
             }
@@ -11115,12 +11335,12 @@ window.addEventListener('beforeunload', function(event) {
             });
 
             if (autoBtn) {
-                autoBtn.classList.toggle('btn-gold',              isAuto);
-                autoBtn.classList.toggle('btn-outline-secondary', !isAuto);
+                autoBtn.classList.toggle('is-active', isAuto);
+                autoBtn.setAttribute('aria-pressed', isAuto ? 'true' : 'false');
             }
             if (custBtn) {
-                custBtn.classList.toggle('btn-gold',              !isAuto);
-                custBtn.classList.toggle('btn-outline-secondary', isAuto);
+                custBtn.classList.toggle('is-active', !isAuto);
+                custBtn.setAttribute('aria-pressed', !isAuto ? 'true' : 'false');
             }
 
             localStorage.setItem('tuningConfigMode', mode);
@@ -11331,6 +11551,16 @@ window.addEventListener('beforeunload', function(event) {
             saveServoParameter(servoName, 'min', normalizedMin);
         }
 
+        function updateTuningParamLabel(labelId, value, min, max, labels) {
+            const label = document.getElementById(labelId);
+            if (!label) return;
+            const range = max - min;
+            const normalizedVal = (value - min) / range;
+            let idx = Math.round(normalizedVal * (labels.length - 1));
+            idx = Math.max(0, Math.min(labels.length - 1, idx));
+            label.textContent = labels[idx];
+        }
+
         function initTuningSliders() {
             // Helper function to update tuning slider thumb label
             function updateTuningThumbLabel(sliderId, value, decimals = 0) {
@@ -11353,6 +11583,7 @@ window.addEventListener('beforeunload', function(event) {
 
             const tuningSliderPendingSave = {
                 rideHeight: false,
+                travelDeg: false,
                 omegaN: false,
                 zeta: false,
                 range: false,
@@ -11360,6 +11591,8 @@ window.addEventListener('beforeunload', function(event) {
                 hyst: false,
                 reactionSpeed: false,
                 balance: false,
+                cornerGain: false,
+                cornerResponse: false,
                 sensorRate: false
             };
 
@@ -11368,6 +11601,7 @@ window.addEventListener('beforeunload', function(event) {
                 tuningSliderPendingSave[sliderKey] = false;
 
                 if (tuningSliderLocks[sliderKey]) return;
+                if (isCornerAssistDependentSliderDisabled(sliderKey)) return;
 
                 const canUseKv = !!(bleManager && typeof bleManager.writeValue === 'function' && bleManager.supportsKvUpdates);
                 const k = window.RCDCC_KEYS;
@@ -11382,6 +11616,11 @@ window.addEventListener('beforeunload', function(event) {
                     } else {
                         saveTuningSliderValue('rideHeight', tuningSliderValues.rideHeightOffset);
                     }
+                    return;
+                }
+
+                if (sliderKey === 'travelDeg') {
+                    tuningKvWrite(k.SUSPENSION_TRAVEL_DEG, Math.round(tuningSliderValues.travelDeg || 0), 'travelDeg', tuningSliderValues.travelDeg);
                     return;
                 }
 
@@ -11418,6 +11657,16 @@ window.addEventListener('beforeunload', function(event) {
                 if (sliderKey === 'balance') {
                     const mapped = Math.round(((tuningSliderValues.frontRearBalance || 0) / 100) * 200 - 100);
                     tuningKvWrite(k.SUSPENSION_FR_BAL, mapped, 'balance', tuningSliderValues.frontRearBalance);
+                    return;
+                }
+
+                if (sliderKey === 'cornerGain') {
+                    tuningKvWrite(k.SUSPENSION_CORNER_GAIN, Math.round((tuningSliderValues.cornerGain || 0) * 100), 'cornerGain', tuningSliderValues.cornerGain);
+                    return;
+                }
+
+                if (sliderKey === 'cornerResponse') {
+                    tuningKvWrite(k.SUSPENSION_CORNER_RESP, Math.round((tuningSliderValues.cornerResponse || 0) * 100), 'cornerResponse', tuningSliderValues.cornerResponse);
                     return;
                 }
 
@@ -11466,6 +11715,7 @@ window.addEventListener('beforeunload', function(event) {
                     const val = Math.round(value[1]);
                     tuningSliderValues.rideHeightOffset = val;
                     updateTuningThumbLabel('sliderRideHeight', val, 0);
+                    updateTuningParamLabel('rideHeightLabel', val, 0, 100, ['Lowest', 'Mid', 'Highest']);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
                         tuningSliderPendingSave.rideHeight = true;
@@ -11475,7 +11725,33 @@ window.addEventListener('beforeunload', function(event) {
             });
             tuningSliderInstances.rideHeight = { element: rideHeightElement, instance: rideHeightInstance };
             updateTuningThumbLabel('sliderRideHeight', 50, 0);
+            updateTuningParamLabel('rideHeightLabel', 50, 0, 100, ['Lowest', 'Mid', 'Highest']);
             attachReleaseSaveHandler(rideHeightElement, 'rideHeight');
+
+            // Initialize Travel Range - 10-160 degrees
+            let travelElement = document.querySelector('#sliderTravelDeg');
+            const travelInstance = rangeSlider(travelElement, {
+                value: [10, 160],
+                min: 10,
+                max: 170,
+                step: 5,
+                thumbsDisabled: [true, false],
+                rangeSlideDisabled: true,
+                onInput: function(value) {
+                    tuningSliderValues.travelDeg = Math.round(value[1]);
+                    updateTuningThumbLabel('sliderTravelDeg', tuningSliderValues.travelDeg, 0);
+                    updateTuningParamLabel('travelDegLabel', tuningSliderValues.travelDeg, 10, 170, ['Tight', 'Balanced', 'Wide']);
+                    if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
+                        tuningSliderPendingSave.travelDeg = true;
+                    }
+                    syncTuningStepperButtons();
+                }
+            });
+            tuningSliderInstances.travelDeg = { element: travelElement, instance: travelInstance };
+            updateTuningThumbLabel('sliderTravelDeg', 170, 0);
+            updateTuningParamLabel('travelDegLabel', 170, 10, 170, ['Tight', 'Balanced', 'Wide']);
+            attachReleaseSaveHandler(travelElement, 'travelDeg');
 
             // Initialize Bounce Speed (omegaN) - 0.5-15.0 rad/s
             let omegaNElement = document.querySelector('#sliderOmegaN');
@@ -11489,6 +11765,7 @@ window.addEventListener('beforeunload', function(event) {
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.omegaN = value[1];
                     updateTuningThumbLabel('sliderOmegaN', value[1], 1);
+                    updateTuningParamLabel('omegaNLabel', value[1], 0.5, 15.0, ['Slow', 'Balanced', 'Fast']);
                     if (!isLoadingTuningConfig) {
                         setTuningModeCustomForManualAdjust();
                         markPageDirty('tuning');
@@ -11513,6 +11790,7 @@ window.addEventListener('beforeunload', function(event) {
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.zeta = value[1];
                     updateTuningThumbLabel('sliderZeta', value[1], 2);
+                    updateTuningParamLabel('zetaLabel', value[1], 0.05, 0.95, ['Bouncy', 'Balanced', 'Firm']);
                     if (!isLoadingTuningConfig) {
                         setTuningModeCustomForManualAdjust();
                         markPageDirty('tuning');
@@ -11537,6 +11815,7 @@ window.addEventListener('beforeunload', function(event) {
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.range = value[1];
                     updateTuningThumbLabel('sliderRange', value[1], 1);
+                    updateTuningParamLabel('rangeLabel', value[1], 0.1, 4.0, ['Small', 'Normal', 'Large']);
                     if (!isLoadingTuningConfig) {
                         setTuningModeCustomForManualAdjust();
                         markPageDirty('tuning');
@@ -11561,6 +11840,7 @@ window.addEventListener('beforeunload', function(event) {
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.inputDeadband = value[1];
                     updateTuningThumbLabel('sliderDeadband', value[1], 2);
+                    updateTuningParamLabel('deadbandLabel', value[1], 0.0, 1.0, ['Off', 'Normal', 'High']);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
                         tuningSliderPendingSave.deadband = true;
@@ -11578,12 +11858,13 @@ window.addEventListener('beforeunload', function(event) {
                 value: [0.0, 0.15],
                 min: 0.0,
                 max: 0.5,
-                step: 0.05,
+                step: 0.01,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.inputHyst = value[1];
                     updateTuningThumbLabel('sliderHyst', value[1], 2);
+                    updateTuningParamLabel('hystLabel', value[1], 0.0, 0.5, ['Off', 'Normal', 'High']);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
                         tuningSliderPendingSave.hyst = true;
@@ -11620,18 +11901,19 @@ window.addEventListener('beforeunload', function(event) {
                 attachReleaseSaveHandler(masterFeelElement, 'masterFeel');
             }
 
-            // Initialize Reaction Speed - Horizontal slider (0.1-5.0)
+            // Initialize Reaction Speed - Horizontal slider (0.1-1.0)
             let reactionElement = document.querySelector('#sliderReactionSpeed');
             const reactionInstance = rangeSlider(reactionElement, {
                 value: [0.1, 1.0],
                 min: 0.1,
-                max: 5.0,
+                max: 1.0,
                 step: 0.1,
                 thumbsDisabled: [true, false],
                 rangeSlideDisabled: true,
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.reactionSpeed = value[1];
                     updateTuningThumbLabel('sliderReactionSpeed', value[1], 1);
+                    updateTuningParamLabel('reactionSpeedLabel', value[1], 0.1, 1.0, ['Slow', 'Balanced', 'Fast']);
                     if (!isLoadingTuningConfig) {
                         setTuningModeCustomForManualAdjust();
                         markPageDirty('tuning');
@@ -11656,6 +11938,7 @@ window.addEventListener('beforeunload', function(event) {
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.frontRearBalance = Math.round(value[1]);
                     updateTuningThumbLabel('sliderBalance', tuningSliderValues.frontRearBalance, 0);
+                    updateTuningParamLabel('balanceLabel', tuningSliderValues.frontRearBalance, 0, 100, ['Rear', 'Balanced', 'Front']);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
                         tuningSliderPendingSave.balance = true;
@@ -11665,7 +11948,58 @@ window.addEventListener('beforeunload', function(event) {
             });
             tuningSliderInstances.balance = { element: balanceElement, instance: balanceInstance };
             updateTuningThumbLabel('sliderBalance', 50, 0);
+            updateTuningParamLabel('balanceLabel', 50, 0, 100, ['Rear', 'Balanced', 'Front']);
             attachReleaseSaveHandler(balanceElement, 'balance');
+
+            // Initialize Corner Strength - -2.0 to 2.0
+            let cornerGainElement = document.querySelector('#sliderCornerGain');
+            const cornerGainInstance = rangeSlider(cornerGainElement, {
+                value: [-2.0, 1.0],
+                min: -2.0,
+                max: 2.0,
+                step: 0.1,
+                thumbsDisabled: [true, false],
+                rangeSlideDisabled: true,
+                onInput: function(value) {
+                    tuningSliderValues.cornerGain = Number(value[1].toFixed(1));
+                    updateTuningThumbLabel('sliderCornerGain', tuningSliderValues.cornerGain, 1);
+                    updateTuningParamLabel('cornerGainLabel', tuningSliderValues.cornerGain, -2.0, 2.0, ['Reverse', 'Neutral', 'Assist']);
+                    if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
+                        tuningSliderPendingSave.cornerGain = true;
+                    }
+                    syncTuningStepperButtons();
+                }
+            });
+            tuningSliderInstances.cornerGain = { element: cornerGainElement, instance: cornerGainInstance };
+            updateTuningThumbLabel('sliderCornerGain', 1.0, 1);
+            updateTuningParamLabel('cornerGainLabel', 1.0, -2.0, 2.0, ['Reverse', 'Neutral', 'Assist']);
+            attachReleaseSaveHandler(cornerGainElement, 'cornerGain');
+
+            // Initialize Corner Response - 0.05 to 1.0
+            let cornerResponseElement = document.querySelector('#sliderCornerResponse');
+            const cornerResponseInstance = rangeSlider(cornerResponseElement, {
+                value: [0.05, 0.25],
+                min: 0.05,
+                max: 1.0,
+                step: 0.05,
+                thumbsDisabled: [true, false],
+                rangeSlideDisabled: true,
+                onInput: function(value) {
+                    tuningSliderValues.cornerResponse = Number(value[1].toFixed(2));
+                    updateTuningThumbLabel('sliderCornerResponse', tuningSliderValues.cornerResponse, 2);
+                    updateTuningParamLabel('cornerResponseLabel', tuningSliderValues.cornerResponse, 0.05, 1.0, ['Slow', 'Balanced', 'Quick']);
+                    if (!isLoadingTuningConfig) {
+                        markPageDirty('tuning');
+                        tuningSliderPendingSave.cornerResponse = true;
+                    }
+                    syncTuningStepperButtons();
+                }
+            });
+            tuningSliderInstances.cornerResponse = { element: cornerResponseElement, instance: cornerResponseInstance };
+            updateTuningThumbLabel('sliderCornerResponse', 0.25, 2);
+            updateTuningParamLabel('cornerResponseLabel', 0.25, 0.05, 1.0, ['Soft', 'Balanced', 'Quick']);
+            attachReleaseSaveHandler(cornerResponseElement, 'cornerResponse');
 
             function setTuningSliderElementValue(sliderKey, minVal, newValue) {
                 const store = tuningSliderInstances[sliderKey];
@@ -11693,11 +12027,16 @@ window.addEventListener('beforeunload', function(event) {
 
                     control.querySelectorAll('.slider-stepper-btn').forEach(button => {
                         button.addEventListener('click', () => {
-                            if (tuningSliderLocks[sliderKey] || localStorage.getItem('tuningParametersLocked') === 'true') return;
+                            if (tuningSliderLocks[sliderKey] || localStorage.getItem('tuningParametersLocked') === 'true' || isCornerAssistDependentSliderDisabled(sliderKey)) return;
                             const current = normalizeTuningStepperValue(sliderKey, getTuningStepperCurrentValue(sliderKey));
                             const nextValue = normalizeTuningStepperValue(sliderKey, current + (Number(button.dataset.direction) || 0) * config.step);
                             if (nextValue === current) return;
                             setTuningSliderElementValue(sliderKey, config.min, nextValue);
+                            if (sliderKey === 'masterFeel' && !isLoadingTuningConfig) {
+                                // Ensure Auto Mode linked sliders update even for stepper-driven changes.
+                                setTuningModeAutoForDriveModeAdjust();
+                                updateMasterFeel(nextValue);
+                            }
                             commitTuningSliderSave(sliderKey);
                             syncTuningStepperButtons();
                         });
@@ -11718,6 +12057,7 @@ window.addEventListener('beforeunload', function(event) {
                 onInput: function(value, userInteraction) {
                     tuningSliderValues.sampleRate = Math.round(value[1]);
                     updateTuningThumbLabel('sliderSensorRate', tuningSliderValues.sampleRate, 0);
+                    updateTuningParamLabel('sensorRateLabel', tuningSliderValues.sampleRate, 5, 50, ['Low', 'Balanced', 'High']);
                     if (!isLoadingTuningConfig) {
                         markPageDirty('tuning');
                         tuningSliderPendingSave.sensorRate = true;
@@ -11727,6 +12067,7 @@ window.addEventListener('beforeunload', function(event) {
             });
             tuningSliderInstances.sensorRate = { element: sensorElement, instance: sensorInstance };
             updateTuningThumbLabel('sliderSensorRate', 25, 0);
+            updateTuningParamLabel('sensorRateLabel', 25, 5, 50, ['Low', 'Balanced', 'High']);
             attachReleaseSaveHandler(sensorElement, 'sensorRate');
             bindTuningStepperButtons();
             syncTuningStepperButtons();
@@ -11735,6 +12076,7 @@ window.addEventListener('beforeunload', function(event) {
         // Track locked state for each slider
         const tuningSliderLocks = {
             rideHeight: false,
+            travelDeg: false,
             omegaN: false,
             zeta: false,
             range: false,
@@ -11742,6 +12084,8 @@ window.addEventListener('beforeunload', function(event) {
             hyst: false,
             reactionSpeed: false,
             balance: false,
+            cornerGain: false,
+            cornerResponse: false,
             sensorRate: false
         };
 
@@ -11988,6 +12332,10 @@ window.addEventListener('beforeunload', function(event) {
                     if (invertToggle.dataset.bound !== 'true') {
                         invertToggle.dataset.bound = 'true';
                         invertToggle.addEventListener('change', function() {
+                            if (rcdccConfigurationLocked) {
+                                this.checked = !this.checked;
+                                return;
+                            }
                             persistServoReverseSelection(servoName, abbrev, this.checked);
                         });
                     }
@@ -11997,6 +12345,8 @@ window.addEventListener('beforeunload', function(event) {
                     if (button.dataset.bound === 'true') return;
                     button.dataset.bound = 'true';
                     button.addEventListener('click', async function() {
+                        if (rcdccConfigurationLocked) return;
+
                         const nextReversed = this.getAttribute('data-servo-reversed') === 'true';
                         const testDir = Number(this.getAttribute('data-servo-test-dir'));
 
@@ -12090,7 +12440,9 @@ window.addEventListener('beforeunload', function(event) {
             rearRight: { min: 10, max: 170, trim: 0 }
         };
         const tuningSliderValues = {
+            suspensionMode: 0,
             rideHeightOffset: 50,
+            travelDeg: 160,
             omegaN: 3.0,
             zeta: 0.25,
             range: 1.0,
@@ -12099,12 +12451,16 @@ window.addEventListener('beforeunload', function(event) {
             masterFeel: 50,
             reactionSpeed: 1.0,
             frontRearBalance: 50,
+            cornerAssist: DEFAULT_CORNER_ASSIST_ENABLED,
+            cornerGain: 1.0,
+            cornerResponse: 0.25,
             sampleRate: 25
         };
 
         // Store rangeSlider instances for tuning sliders
         const tuningSliderInstances = {
             rideHeight: null,
+            travelDeg: null,
             omegaN: null,
             zeta: null,
             range: null,
@@ -12113,21 +12469,203 @@ window.addEventListener('beforeunload', function(event) {
             masterFeel: null,
             reactionSpeed: null,
             balance: null,
+            cornerGain: null,
+            cornerResponse: null,
             sensorRate: null
         };
 
         const tuningStepperConfigs = {
-            rideHeight:   { min: 0,    max: 100,  step: 5,    decimals: 0, valueKey: 'rideHeightOffset' },
-            omegaN:       { min: 0.5,  max: 15.0, step: 0.1,  decimals: 1, valueKey: 'omegaN' },
-            zeta:         { min: 0.05, max: 0.95, step: 0.05, decimals: 2, valueKey: 'zeta' },
-            range:        { min: 0.1,  max: 4.0,  step: 0.1,  decimals: 1, valueKey: 'range' },
-            deadband:     { min: 0.0,  max: 1.0,  step: 0.05, decimals: 2, valueKey: 'inputDeadband' },
-            hyst:         { min: 0.0,  max: 0.5,  step: 0.05, decimals: 2, valueKey: 'inputHyst' },
-            masterFeel:   { min: 0,    max: 100,  step: 1,    decimals: 0, valueKey: 'masterFeel' },
-            reactionSpeed:{ min: 0.1,  max: 5.0,  step: 0.1,  decimals: 1, valueKey: 'reactionSpeed' },
-            balance:      { min: 0,    max: 100,  step: 5,    decimals: 0, valueKey: 'frontRearBalance' },
-            sensorRate:   { min: 5,    max: 50,   step: 1,    decimals: 0, valueKey: 'sampleRate' }
+            rideHeight:     { min: 0,    max: 100,  step: 5,    decimals: 0, valueKey: 'rideHeightOffset' },
+            travelDeg:      { min: 10,   max: 160,  step: 5,    decimals: 0, valueKey: 'travelDeg' },
+            omegaN:         { min: 0.5,  max: 15.0, step: 0.1,  decimals: 1, valueKey: 'omegaN' },
+            zeta:           { min: 0.05, max: 0.95, step: 0.05, decimals: 2, valueKey: 'zeta' },
+            range:          { min: 0.1,  max: 4.0,  step: 0.1,  decimals: 1, valueKey: 'range' },
+            deadband:       { min: 0.0,  max: 1.0,  step: 0.05, decimals: 2, valueKey: 'inputDeadband' },
+            hyst:           { min: 0.0,  max: 0.5,  step: 0.05, decimals: 2, valueKey: 'inputHyst' },
+            masterFeel:     { min: 0,    max: 100,  step: 1,    decimals: 0, valueKey: 'masterFeel' },
+            reactionSpeed:  { min: 0.1,  max: 1.0,  step: 0.1,  decimals: 1, valueKey: 'reactionSpeed' },
+            balance:        { min: 0,    max: 100,  step: 5,    decimals: 0, valueKey: 'frontRearBalance' },
+            cornerGain:     { min: -2.0, max: 2.0,  step: 0.1,  decimals: 1, valueKey: 'cornerGain' },
+            cornerResponse: { min: 0.05, max: 1.0,  step: 0.05, decimals: 2, valueKey: 'cornerResponse' },
+            sensorRate:     { min: 5,    max: 50,   step: 1,    decimals: 0, valueKey: 'sampleRate' }
         };
+
+        const cornerAssistDependentSliderKeys = new Set(['cornerGain', 'cornerResponse']);
+
+        function isCornerAssistDependentSliderDisabled(sliderKey) {
+            return cornerAssistDependentSliderKeys.has(sliderKey) && !coerceBooleanValue(tuningSliderValues.cornerAssist, DEFAULT_CORNER_ASSIST_ENABLED);
+        }
+
+        function normalizeFrontRearBalanceValue(rawValue) {
+            const numericValue = Number(rawValue);
+            if (!Number.isFinite(numericValue)) {
+                return undefined;
+            }
+
+            if (numericValue >= 0 && numericValue <= 1) {
+                return Math.round(numericValue * 100);
+            }
+
+            return Math.round(Math.max(0, Math.min(100, numericValue)));
+        }
+
+        function normalizeSuspensionModeValue(rawValue) {
+            if (rawValue === 'active') return 1;
+            if (rawValue === 'reactive') return 0;
+            const numericValue = Number(rawValue);
+            return numericValue === 1 ? 1 : 0;
+        }
+
+        function setModeSectionVisibility(element, show, options = {}) {
+            if (!element) return;
+
+            const { animate = true } = options;
+
+            element.classList.add('mode-fade-section');
+
+            if (element.__modeFadeTimer) {
+                clearTimeout(element.__modeFadeTimer);
+                element.__modeFadeTimer = null;
+            }
+
+            if (!animate) {
+                element.style.display = show ? '' : 'none';
+                element.classList.toggle('mode-fade-hidden', !show);
+                element.setAttribute('aria-hidden', show ? 'false' : 'true');
+                return;
+            }
+
+            if (show) {
+                element.style.display = '';
+                element.setAttribute('aria-hidden', 'false');
+                element.classList.add('mode-fade-hidden');
+                void element.offsetWidth;
+                requestAnimationFrame(() => {
+                    element.classList.remove('mode-fade-hidden');
+                });
+                return;
+            }
+
+            if (getComputedStyle(element).display === 'none') {
+                element.style.display = 'none';
+                element.classList.add('mode-fade-hidden');
+                element.setAttribute('aria-hidden', 'true');
+                return;
+            }
+
+            element.classList.add('mode-fade-hidden');
+            element.setAttribute('aria-hidden', 'true');
+            element.__modeFadeTimer = setTimeout(() => {
+                element.style.display = 'none';
+                element.__modeFadeTimer = null;
+            }, 250);
+        }
+
+        function syncSuspensionModeUi(rawMode, options = {}) {
+            const mode = normalizeSuspensionModeValue(rawMode);
+            const { animate = !isLoadingTuningConfig } = options;
+            tuningSliderValues.suspensionMode = mode;
+            const isActive = mode === 1;
+            const reactiveBtn = document.getElementById('suspensionModeReactiveBtn');
+            const activeBtn = document.getElementById('suspensionModeActiveBtn');
+            const reactiveControls = document.getElementById('reactiveTuningControls');
+            const activeCorneringGroup = document.getElementById('activeCorneringGroup');
+            const summary = document.getElementById('suspensionModeSummary');
+
+            if (reactiveBtn) {
+                reactiveBtn.classList.toggle('btn-gold', !isActive);
+                reactiveBtn.classList.toggle('btn-outline-secondary', isActive);
+            }
+            if (activeBtn) {
+                activeBtn.classList.toggle('btn-gold', isActive);
+                activeBtn.classList.toggle('btn-outline-secondary', !isActive);
+            }
+            setModeSectionVisibility(reactiveControls, !isActive, { animate });
+            setModeSectionVisibility(activeCorneringGroup, isActive, { animate });
+            if (summary) {
+                summary.textContent = isActive
+                    ? 'Adds an anti-roll force while active mode is selected to counter body roll.'
+                    : 'Reactive profile amplifies body roll of varying intensities.';
+            }
+
+            updateDashboardSuspensionProfile();
+            syncSuspensionModeLockUi();
+        }
+
+        function syncSuspensionModeLockUi() {
+            const tuningLocked = localStorage.getItem('tuningParametersLocked') === 'true';
+            const reactiveBtn = document.getElementById('suspensionModeReactiveBtn');
+            const activeBtn = document.getElementById('suspensionModeActiveBtn');
+
+            [reactiveBtn, activeBtn].forEach((btn) => {
+                if (!btn) return;
+                btn.disabled = tuningLocked;
+                btn.setAttribute('aria-disabled', tuningLocked ? 'true' : 'false');
+            });
+        }
+
+        function syncCornerAssistUi(enabled) {
+            // Active Cornering is always enabled; suspension pause handles temporary disable behavior.
+            tuningSliderValues.cornerAssist = true;
+            syncTuningStepperButtons();
+            updateDashboardSuspensionProfile();
+        }
+
+        async function saveSuspensionMode(mode) {
+            if (localStorage.getItem('tuningParametersLocked') === 'true') {
+                toast.warning('Tuning is locked. Unlock to change Suspension Profile.');
+                syncSuspensionModeLockUi();
+                return;
+            }
+
+            const normalizedMode = normalizeSuspensionModeValue(mode);
+            syncSuspensionModeUi(normalizedMode);
+            if (!isLoadingTuningConfig) {
+                markPageDirty('tuning');
+            }
+            try {
+                await pushConfigPayload({ suspensionMode: normalizedMode });
+                const configRef = ensureWritableFullConfig();
+                configRef.suspensionMode = normalizedMode;
+            } catch (error) {
+                console.error('Failed to save suspension mode:', error);
+            }
+        }
+
+        function syncControlProfileUi(profile) {
+            const sampleBtn = document.getElementById('controlProfileSampleBtn');
+            const legacyBtn = document.getElementById('controlProfileLegacyBtn');
+            if (!sampleBtn || !legacyBtn) return;
+            const isSample = profile === 'sample';
+            sampleBtn.className = isSample ? 'btn btn-sm btn-gold' : 'btn btn-sm btn-outline-secondary';
+            legacyBtn.className = isSample ? 'btn btn-sm btn-outline-secondary' : 'btn btn-sm btn-gold';
+        }
+
+        window.setControlProfile = async function setControlProfile(profile) {
+            const normalized = (profile === 'legacy') ? 'legacy' : 'sample';
+            syncControlProfileUi(normalized);
+            localStorage.setItem('controlProfile', normalized);
+            if (!isBleConnected()) return;
+            try {
+                await bleManager.sendSystemCommand('control_profile', { mode: normalized });
+            } catch (err) {
+                console.error('[controlProfile] BLE send failed:', err);
+            }
+        };
+
+        async function saveCornerAssistToggle(enabled) {
+            syncCornerAssistUi(true);
+            if (!isLoadingTuningConfig) {
+                markPageDirty('tuning');
+            }
+            try {
+                await pushConfigPayload({ cornerAssist: true });
+                const configRef = ensureWritableFullConfig();
+                configRef.cornerAssist = true;
+            } catch (error) {
+                console.error('Failed to save corner assist toggle:', error);
+            }
+        }
 
         function getTuningStepperCurrentValue(sliderKey) {
             const config = tuningStepperConfigs[sliderKey];
@@ -12149,12 +12687,27 @@ window.addEventListener('beforeunload', function(event) {
                 const sliderKey = control.dataset.sliderKey;
                 const config = tuningStepperConfigs[sliderKey];
                 if (!config) return;
+                const disabledByCornerAssist = isCornerAssistDependentSliderDisabled(sliderKey);
+                control.classList.toggle('slider-stepper-control-disabled', disabledByCornerAssist);
+                control.setAttribute('aria-disabled', disabledByCornerAssist ? 'true' : 'false');
+
+                const trackElement = control.querySelector('.slider-stepper-track');
+                if (trackElement) {
+                    trackElement.querySelectorAll('input[type="range"]').forEach(input => {
+                        input.disabled = disabledByCornerAssist;
+                    });
+                    const rsContainer = trackElement.querySelector('.rs-container');
+                    if (rsContainer) {
+                        rsContainer.classList.toggle('disabled', disabledByCornerAssist);
+                    }
+                }
+
                 const current = normalizeTuningStepperValue(sliderKey, getTuningStepperCurrentValue(sliderKey));
                 control.querySelectorAll('.slider-stepper-btn').forEach(button => {
                     const direction = Number(button.dataset.direction) || 0;
                     const atMin = direction < 0 && current <= config.min;
                     const atMax = direction > 0 && current >= config.max;
-                    button.disabled = tuningLocked || !!tuningSliderLocks[sliderKey] || atMin || atMax;
+                    button.disabled = disabledByCornerAssist || tuningLocked || !!tuningSliderLocks[sliderKey] || atMin || atMax;
                 });
             });
         }
@@ -12304,10 +12857,31 @@ window.addEventListener('beforeunload', function(event) {
                 if (labelEl) labelEl.textContent = label;
             }
 
+            if (config.suspensionMode !== undefined) {
+                syncSuspensionModeUi(config.suspensionMode);
+            }
+
+            syncControlProfileUi(localStorage.getItem('controlProfile') ?? 'sample');
+
+            if (config.cornerAssist !== undefined) {
+                syncCornerAssistUi(coerceBooleanValue(config.cornerAssist, DEFAULT_CORNER_ASSIST_ENABLED));
+            } else {
+                syncCornerAssistUi(DEFAULT_CORNER_ASSIST_ENABLED);
+            }
+
             if (config.rideHeightOffset !== undefined) {
                 tuningSliderValues.rideHeightOffset = Math.round(config.rideHeightOffset);
                 updateSliderElement('rideHeight', 'rideHeightOffset', 0, config.rideHeightOffset);
                 updateThumbnailLabel('sliderRideHeight', tuningSliderValues.rideHeightOffset, 0);
+                updateTuningParamLabel('rideHeightLabel', tuningSliderValues.rideHeightOffset, 0, 100, ['Lowest', 'Mid', 'Highest']);
+            }
+
+            if (config.travelDeg !== undefined || config.rangeLimit !== undefined) {
+                const travelDeg = Math.round(config.travelDeg ?? config.rangeLimit);
+                tuningSliderValues.travelDeg = travelDeg;
+                updateSliderElement('travelDeg', 'travelDeg', 10, travelDeg);
+                updateThumbnailLabel('sliderTravelDeg', tuningSliderValues.travelDeg, 0);
+                updateTuningParamLabel('travelDegLabel', tuningSliderValues.travelDeg, 10, 170, ['Tight', 'Balanced', 'Wide']);
             }
             
             if (config.omegaN !== undefined) {
@@ -12347,15 +12921,34 @@ window.addEventListener('beforeunload', function(event) {
             }
             
             if (config.frontRearBalance !== undefined) {
-                tuningSliderValues.frontRearBalance = Math.round(config.frontRearBalance);
-                updateSliderElement('balance', 'frontRearBalance', 0, config.frontRearBalance);
-                updateThumbnailLabel('sliderBalance', tuningSliderValues.frontRearBalance, 0);
+                const balancePercent = normalizeFrontRearBalanceValue(config.frontRearBalance);
+                if (balancePercent !== undefined) {
+                    tuningSliderValues.frontRearBalance = balancePercent;
+                    updateSliderElement('balance', 'frontRearBalance', 0, balancePercent);
+                    updateThumbnailLabel('sliderBalance', tuningSliderValues.frontRearBalance, 0);
+                    updateTuningParamLabel('balanceLabel', tuningSliderValues.frontRearBalance, 0, 100, ['Rear', 'Balanced', 'Front']);
+                }
             }
             
+            if (config.cornerGain !== undefined) {
+                tuningSliderValues.cornerGain = Number(config.cornerGain);
+                updateSliderElement('cornerGain', 'cornerGain', -2.0, tuningSliderValues.cornerGain);
+                updateThumbnailLabel('sliderCornerGain', tuningSliderValues.cornerGain, 1);
+                updateTuningParamLabel('cornerGainLabel', tuningSliderValues.cornerGain, -2.0, 2.0, ['Reverse', 'Neutral', 'Assist']);
+            }
+
+            if (config.cornerResponse !== undefined) {
+                tuningSliderValues.cornerResponse = Number(config.cornerResponse);
+                updateSliderElement('cornerResponse', 'cornerResponse', 0.05, tuningSliderValues.cornerResponse);
+                updateThumbnailLabel('sliderCornerResponse', tuningSliderValues.cornerResponse, 2);
+                updateTuningParamLabel('cornerResponseLabel', tuningSliderValues.cornerResponse, 0.05, 1.0, ['Soft', 'Balanced', 'Quick']);
+            }
+
             if (config.sampleRate !== undefined) {
                 tuningSliderValues.sampleRate = Math.round(config.sampleRate);
                 updateSliderElement('sensorRate', 'sampleRate', 5, config.sampleRate);
                 updateThumbnailLabel('sliderSensorRate', tuningSliderValues.sampleRate, 0);
+                updateTuningParamLabel('sensorRateLabel', tuningSliderValues.sampleRate, 5, 50, ['Low', 'Balanced', 'High']);
             }
             
             syncTuningStepperButtons();
@@ -12518,6 +13111,7 @@ window.addEventListener('beforeunload', function(event) {
             }
 
             syncTuningStepperButtons();
+            syncSuspensionModeLockUi();
         }
         
         function toggleFormulasCard() {
@@ -12644,6 +13238,7 @@ window.addEventListener('beforeunload', function(event) {
             const card = document.getElementById('rcdccConfigurationCard');
             const lockIcon = document.getElementById('rcdccConfigurationLockIcon');
             const orientationSelect = document.getElementById('mpuOrientation');
+            const servoReverseToggleIds = ['servoFLInvert', 'servoFRInvert', 'servoRLInvert', 'servoRRInvert'];
 
             if (card) {
                 card.classList.toggle('slider-locked', rcdccConfigurationLocked);
@@ -12658,6 +13253,15 @@ window.addEventListener('beforeunload', function(event) {
             if (orientationSelect) {
                 orientationSelect.disabled = rcdccConfigurationLocked;
             }
+
+            servoReverseToggleIds.forEach((id) => {
+                const toggle = document.getElementById(id);
+                if (!toggle) return;
+                toggle.disabled = rcdccConfigurationLocked;
+                toggle.setAttribute('aria-disabled', rcdccConfigurationLocked ? 'true' : 'false');
+            });
+
+            ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'].forEach(syncServoDirectionButtons);
         }
 
         function toggleRcdccConfigurationLock() {

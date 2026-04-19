@@ -33,6 +33,10 @@ private:
   float inPitch = 0.0f;
   float inRoll  = 0.0f;
 
+  // Active-corner assist state
+  float cornerAssistDeg = 0.0f;
+  uint8_t lastMode = SUSPENSION_MODE_REACTIVE;
+
   // dt tracking
   uint32_t lastUpdateUs = 0;
 
@@ -63,11 +67,15 @@ private:
   // pitch / roll are the spring-damper outputs (posP, posR) already in degrees.
   // Writes results directly to outFL/FR/RL/RR.
   void computeCorners(float pitch, float roll) {
-    // Ride-height offset: rideHeightOffset 0-100 → -30..+30 deg from centre
-    float rideOffsetDeg = ((config.rideHeightOffset / 100.0f) - 0.5f) * SUSP_SIM_TRAVEL_DEG;
+    const float travelDeg = constrain(config.travelDeg, 10.0f, SUSP_SIM_TRAVEL_DEG);
+    const float mechMin = SUSP_SIM_DEG_MID - (travelDeg * 0.5f);
+    const float mechMax = SUSP_SIM_DEG_MID + (travelDeg * 0.5f);
+
+    // Ride-height offset: rideHeightOffset 0-100 → centered within configured travel.
+    float rideOffsetDeg = ((config.rideHeightOffset / 100.0f) - 0.5f) * travelDeg;
 
     float effectRange = constrain(config.range, 0.1f, 4.0f);
-    float baseLimit   = SUSP_SIM_TRAVEL_DEG / 2.0f;
+    float baseLimit   = travelDeg * 0.5f;
 
     float p = constrain(pitch * effectRange, -baseLimit, baseLimit);
     float r = constrain(roll  * effectRange, -baseLimit, baseLimit);
@@ -82,18 +90,18 @@ private:
     float rl = SUSP_SIM_DEG_MID + rideOffsetDeg + (-p * rearW) + ( r);
     float rr = SUSP_SIM_DEG_MID + rideOffsetDeg + (-p * rearW) + (-r);
 
-    // Group-shift to stay inside mechanical envelope rather than
+    // Group-shift to stay inside the configured travel envelope rather than
     // pinning corners independently.
     float maxT = fmaxf(fmaxf(fl, fr), fmaxf(rl, rr));
     float minT = fminf(fminf(fl, fr), fminf(rl, rr));
     float shift = 0.0f;
-    if (maxT > SUSP_SIM_MECH_MAX) shift = SUSP_SIM_MECH_MAX - maxT;
-    if ((minT + shift) < SUSP_SIM_MECH_MIN) shift += SUSP_SIM_MECH_MIN - (minT + shift);
+    if (maxT > mechMax) shift = mechMax - maxT;
+    if ((minT + shift) < mechMin) shift += mechMin - (minT + shift);
 
-    outFL = constrain(fl + shift, SUSP_SIM_MECH_MIN, SUSP_SIM_MECH_MAX);
-    outFR = constrain(fr + shift, SUSP_SIM_MECH_MIN, SUSP_SIM_MECH_MAX);
-    outRL = constrain(rl + shift, SUSP_SIM_MECH_MIN, SUSP_SIM_MECH_MAX);
-    outRR = constrain(rr + shift, SUSP_SIM_MECH_MIN, SUSP_SIM_MECH_MAX);
+    outFL = constrain(fl + shift, mechMin, mechMax);
+    outFR = constrain(fr + shift, mechMin, mechMax);
+    outRL = constrain(rl + shift, mechMin, mechMax);
+    outRR = constrain(rr + shift, mechMin, mechMax);
   }
 
 public:
@@ -108,6 +116,8 @@ public:
     rollEngaged  = false;
     inPitch = 0.0f;
     inRoll  = 0.0f;
+    cornerAssistDeg = 0.0f;
+    lastMode = config.suspensionMode;
     lastUpdateUs = 0;
     computeCorners(0.0f, 0.0f);
   }
@@ -131,25 +141,61 @@ public:
     inPitch += inputAlpha * (gatedPitch - inPitch);
     inRoll  += inputAlpha * (gatedRoll  - inRoll);
 
-    // ── Slew equilibrium target toward measured angle ────────────────────
-    // reactionSpeed 0-100 → slewMax 1 … 100 deg/s
-    float slewMax = fmaxf(0.1f, config.reactionSpeed) * 50.0f * dt;
-    setP += constrain(inPitch - setP, -slewMax, slewMax);
-    setR += constrain(inRoll  - setR, -slewMax, slewMax);
+    if (config.suspensionMode != lastMode) {
+      if (config.suspensionMode == SUSPENSION_MODE_REACTIVE) {
+        posP = inPitch;
+        posR = inRoll;
+        setP = inPitch;
+        setR = inRoll;
+      } else {
+        posP = 0.0f;
+        posR = 0.0f;
+        setP = 0.0f;
+        setR = 0.0f;
+      }
+      velP = 0.0f;
+      velR = 0.0f;
+      cornerAssistDeg = 0.0f;
+      lastMode = config.suspensionMode;
+    }
 
-    // ── 2nd-order underdamped spring-damper (Euler integration) ─────────
-    //   acceleration = ωₙ²(setPoint − pos) − 2ζωₙ·vel
-    float wn   = constrain(config.omegaN, 0.5f, 15.0f);
-    float wn2  = wn * wn;
-    float c2wn = 2.0f * constrain(config.zeta, 0.05f, 0.95f) * wn;
+    if (config.suspensionMode == SUSPENSION_MODE_REACTIVE) {
+      // Slew equilibrium target toward measured angle.
+      float slewMax = fmaxf(0.1f, config.reactionSpeed) * 50.0f * dt;
+      setP += constrain(inPitch - setP, -slewMax, slewMax);
+      setR += constrain(inRoll  - setR, -slewMax, slewMax);
 
-    velP += (wn2 * (setP - posP) - c2wn * velP) * dt;
-    velR += (wn2 * (setR - posR) - c2wn * velR) * dt;
-    posP += velP * dt;
-    posR += velR * dt;
+      // 2nd-order underdamped spring-damper (Euler integration).
+      float wn   = constrain(config.omegaN, 0.5f, 15.0f);
+      float wn2  = wn * wn;
+      float c2wn = 2.0f * constrain(config.zeta, 0.05f, 0.95f) * wn;
 
-    // ── Map physics outputs to 4 corner servo degrees ────────────────────
-    computeCorners(posP, posR);
+      velP += (wn2 * (setP - posP) - c2wn * velP) * dt;
+      velR += (wn2 * (setR - posR) - c2wn * velR) * dt;
+      posP += velP * dt;
+      posR += velR * dt;
+    } else {
+      posP = 0.0f;
+      posR = 0.0f;
+      setP = 0.0f;
+      setR = 0.0f;
+      velP = 0.0f;
+      velR = 0.0f;
+    }
+
+    float targetCornerAssist = 0.0f;
+    if (config.suspensionMode == SUSPENSION_MODE_ACTIVE && config.cornerAssist) {
+      const float assistMaxDeg = constrain(config.travelDeg * 0.25f, 2.0f, 45.0f);
+      targetCornerAssist = constrain(-inRoll * config.cornerGain, -assistMaxDeg, assistMaxDeg);
+    }
+    const float assistAlpha = constrain(config.cornerResponse, 0.05f, 1.0f);
+    cornerAssistDeg += assistAlpha * (targetCornerAssist - cornerAssistDeg);
+
+    const float modePitch = (config.suspensionMode == SUSPENSION_MODE_REACTIVE) ? posP : 0.0f;
+    const float modeRoll = (config.suspensionMode == SUSPENSION_MODE_REACTIVE) ? posR : 0.0f;
+
+    // ── Map mode outputs to 4 corner servo degrees ───────────────────────
+    computeCorners(modePitch, modeRoll + cornerAssistDeg);
   }
 
   float getFrontLeftOutput()  const { return outFL; }

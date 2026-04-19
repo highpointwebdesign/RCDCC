@@ -628,52 +628,54 @@ const GarageManager = (() => {
                         </div>
                         <div class="garage-card-name" title="${safeLabel}">${safeLabel}</div>
                     </div>
-                    <div class="garage-card-overflow dropdown" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                        <button type="button" class="garage-card-overflow-btn dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Vehicle options" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                            <span class="material-symbols-outlined">more_vert</span>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end garage-card-menu" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                            ${isConnected
-                                ? `<li>
-                                    <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.toggleVehicleConnection('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                        Disconnect
+                    <div class="garage-card-actions" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                        <div class="garage-card-overflow dropdown" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                            <button type="button" class="garage-card-overflow-btn dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Vehicle options" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                <span class="material-symbols-outlined">more_vert</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end garage-card-menu" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                ${isConnected
+                                    ? `<li>
+                                        <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.toggleVehicleConnection('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                            Disconnect
+                                        </button>
+                                    </li>`
+                                    : `<li>
+                                        <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.toggleVehicleConnection('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                            Connect
+                                        </button>
+                                    </li>`
+                                }
+                                <!-- <li><hr class="dropdown-divider"></li> -->
+                                <li>
+                                    <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'tuning')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                        Tuning
                                     </button>
-                                </li>`
-                                : `<li>
-                                    <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.toggleVehicleConnection('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                        Connect
+                                </li>
+                               <!-- <li>
+                                    <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'fpv')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                        FPV
                                     </button>
-                                </li>`
-                            }
-                            <!-- <li><hr class="dropdown-divider"></li> -->
-                            <li>
-                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'tuning')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    Tuning
-                                </button>
-                            </li>
-                           <!-- <li>
-                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleSection('${v.id}', 'fpv')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    FPV
-                                </button>
-                            </li> -->
-                            <!-- <li><hr class="dropdown-divider"></li> -->
-                            <li>
-                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openRenameModal('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    Rename
-                                </button>
-                            </li>
-                             <li>
-                                <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleAbout('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    About
-                                </button>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <button type="button" class="dropdown-item text-danger" onclick="event.stopPropagation(); GarageManager.confirmDeleteVehicle('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
-                                    Delete
-                                </button>
-                            </li>
-                        </ul>
+                                </li> -->
+                                <!-- <li><hr class="dropdown-divider"></li> -->
+                                <li>
+                                    <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openRenameModal('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                        Rename
+                                    </button>
+                                </li>
+                                 <li>
+                                    <button type="button" class="dropdown-item" onclick="event.stopPropagation(); GarageManager.openVehicleAbout('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                        About
+                                    </button>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <button type="button" class="dropdown-item text-danger" onclick="event.stopPropagation(); GarageManager.confirmDeleteVehicle('${v.id}')" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+                                        Delete
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
                 <div class="garage-card-meta">
