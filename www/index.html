@@ -7,7 +7,7 @@
     <title>R/C Dynamic Chassis Control </title>
     
     <!-- PWA Manifest -->
-    <link rel="manifest" href="site.webmanifest?v=1.1.973">
+    <link rel="manifest" href="site.webmanifest?v=1.1.977">
     <meta name="theme-color" content="#2563eb">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,18 +20,18 @@
     <meta http-equiv="Permissions-Policy" content="geolocation=(self)">
     
     <!-- Bootstrap 5.3.2 Local -->
-    <link href="css/bootstrap.min.css?v=1.1.973" rel="stylesheet">
+    <link href="css/bootstrap.min.css?v=1.1.977" rel="stylesheet">
     
     <!-- Google Fonts Local (Space Grotesk) -->
-    <link href="css/fonts.css?v=1.1.973" rel="stylesheet">
+    <link href="css/fonts.css?v=1.1.977" rel="stylesheet">
     
     <!-- Font Awesome 6.4.0 Local -->
     <!-- <link rel="stylesheet" href="css/all.min.css"> -->
     
     <!-- Range Slider CSS -->
-    <link rel="stylesheet" href="lib/range-slider/style.css?v=1.1.973">
+    <link rel="stylesheet" href="lib/range-slider/style.css?v=1.1.977">
     
-        <link rel="stylesheet" href="css/app.css?v=1.1.973">
+        <link rel="stylesheet" href="css/app.css?v=1.1.977">
 
     <meta name="color-scheme" content="dark">
     <style>
@@ -459,31 +459,7 @@
                         </div>
                     </div>
 
-                    <!-- Dance Mode Card -->
-                    <div class="col-12 col-md-6">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center card-header-dark">
-                                <div>
-                                    <span class="material-symbols-outlined icon-danger">music_note</span>
-                                    Dance Mode
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <label class="form-check-label mb-0" for="danceModeToggle">
-                                        <strong>Enable Dance Mode</strong>
-                                    </label>
-                                    <div class="form-check form-switch m-0">
-                                        <input class="form-check-input" type="checkbox" id="danceModeToggle">
-                                    </div>
-                                </div>
-                                <div class="form-text mt-2">
-                                    <small>IMPORTANT: Be sure you have configured your servo's under hardware Configuration first or you may see unexpected behavior.<br/>
-                                        Tilt your phone to control the TRX4's suspension in real time. Front/back tilt controls fore/aft balance; left/right tilt controls side-to-side lean.</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+
 
                 </div>
             </div>
@@ -743,11 +719,21 @@
                                             onclick="saveSuspensionMode('active')">
                                         Active
                                     </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="suspensionModeDanceBtn" 
+                                            style="flex:1;"
+                                            onclick="saveSuspensionMode('dance')">
+                                        Dance
+                                    </button>
                                 </div>
                                 <!-- end reactive / active buttons -->
 
 
-                                <div class="small text-muted" id="suspensionModeSummary">Reactive profile amplifies body role based on the Auto Mode/Custom configuration.</div>
+                                <div class="small text-muted mt-2" id="suspensionModeSummary">Reactive profile amplifies body role based on the Auto Mode/Custom configuration.</div>
+                            </div>
+
+                            <!-- Dance Mode Controls (shown when Dance is selected) -->
+                            <div id="danceTuningControls" style="display: none;">
+                                <!-- Dance Mode panel will be inserted here by app.js -->
                             </div>
 
                             <div id="reactiveTuningControls">
@@ -1972,16 +1958,16 @@
   
 
     <!-- Bootstrap JS -->
-    <script src="js/bootstrap.bundle.min.js?v=1.1.973"></script>
+    <script src="js/bootstrap.bundle.min.js?v=1.1.977"></script>
     
     <!-- Range Slider JS -->
-    <script src="lib/range-slider/rangeslider.umd.min.js?v=1.1.973"></script>
+    <script src="lib/range-slider/rangeslider.umd.min.js?v=1.1.977"></script>
     
-    <script src="js/console.js?v=1.1.973"></script>
-    <script src="js/bluetooth.js?v=1.1.973"></script>
+    <script src="js/console.js?v=1.1.977"></script>
+    <script src="js/bluetooth.js?v=1.1.977"></script>
     <!-- bluetooth.js above is the Capacitor-native version of the original Web Bluetooth implementation -->
-    <script src="js/garage.js?v=1.1.973"></script>
+    <script src="js/garage.js?v=1.1.977"></script>
     
-    <script src="js/app.js?v=1.1.973"></script>
+    <script src="js/app.js?v=1.1.977"></script>
 </body>
 </html>

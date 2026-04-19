@@ -90,7 +90,7 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.973';
+        const APP_VERSION = '1.1.977';
         const BUILD_DATE = '2026-04-19';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
@@ -2888,11 +2888,8 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function ensureDanceModePanel() {
-            const toggle = document.getElementById('danceModeToggle');
-            if (!toggle) return;
-
-            const cardBody = toggle.closest('.card-body');
-            if (!cardBody) return;
+            const container = document.getElementById('danceTuningControls');
+            if (!container) return;
             if (document.getElementById('danceModePanel')) return;
 
             injectDanceModeStyles();
@@ -2941,15 +2938,12 @@ window.addEventListener('beforeunload', function(event) {
                 </div>
             `;
 
-            cardBody.appendChild(panel);
+            container.appendChild(panel);
         }
 
         function setDanceModeToggleChecked(checked) {
-            const { toggle } = getDanceModeElements();
-            if (!toggle) return;
-            danceModeState.toggleSync = true;
-            toggle.checked = !!checked;
-            danceModeState.toggleSync = false;
+            // This function is no longer used since we removed the toggle
+            // Kept for compatibility if referenced elsewhere
         }
 
         function normalizeDanceAxis(rawTiltDeg, deadzoneDeg) {
@@ -3213,21 +3207,22 @@ window.addEventListener('beforeunload', function(event) {
         async function enableDanceMode() {
             if (!(bleManager && bleManager.supportsKvUpdates)) {
                 toast.warning('Dance Mode requires firmware 2.0.0 or newer');
-                setDanceModeToggleChecked(false);
+                syncSuspensionModeUi('reactive'); // Fallback
                 return;
             }
             if (!isBleConnected()) {
                 toast.warning('Connect to Bluetooth before enabling Dance Mode');
-                setDanceModeToggleChecked(false);
+                syncSuspensionModeUi('reactive'); // Fallback
                 return;
             }
 
             const permissionGranted = await requestDanceModeOrientationPermission();
             if (!permissionGranted) {
-                setDanceModeToggleChecked(false);
+                syncSuspensionModeUi('reactive'); // Fallback
                 return;
             }
 
+            ensureDanceModePanel();
             await pushSystemCommand('dance_mode', { enabled: true });
 
             const { panel } = getDanceModeElements();
@@ -3251,7 +3246,6 @@ window.addEventListener('beforeunload', function(event) {
             const { panel } = getDanceModeElements();
             if (panel) panel.style.display = 'none';
             centerDanceTiltIndicator();
-            setDanceModeToggleChecked(false);
 
             if (sendCommand && isBleConnected()) {
                 try {
@@ -3286,7 +3280,7 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function initDanceModeUi() {
-            ensureDanceModePanel();
+            // ensureDanceModePanel will be called when dance mode is enabled
             const {
                 toggle,
                 slider,
@@ -3346,9 +3340,6 @@ window.addEventListener('beforeunload', function(event) {
             updateDanceDeadzoneUi();
             centerDanceTiltIndicator();
 
-            toggle.addEventListener('change', handleDanceModeToggleChange);
-            setDanceModeToggleChecked(false);
-
             if (slider && !danceModeState.deadzoneSliderInstance) {
                 // Backward compatibility path if rangeSlider is unavailable.
                 slider.addEventListener('input', function() {
@@ -3407,7 +3398,7 @@ window.addEventListener('beforeunload', function(event) {
             // Snap to center only when not in Phase A (disableSnapping = false)
             const isWithinThreshold = !disableSnapping && Math.abs(roll) < 5 && Math.abs(pitch) < 5;
             // Rotate motion mapping 90 degrees counter-clockwise.
-            const bubbleX = isWithinThreshold ? 8 : (pitch * 3 + 8);
+            const bubbleX = isWithinThreshold ? 0 : (pitch * 3 + 8);
             const bubbleY = isWithinThreshold ? 0 : (-roll * 3);
 
             const bubble = document.getElementById('bubbleLevelBubble');
@@ -12562,30 +12553,46 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function syncSuspensionModeUi(rawMode, options = {}) {
-            const mode = normalizeSuspensionModeValue(rawMode);
             const { animate = !isLoadingTuningConfig } = options;
-            tuningSliderValues.suspensionMode = mode;
+            const isDance = rawMode === 'dance';
+            const mode = isDance ? null : normalizeSuspensionModeValue(rawMode);
+            if (!isDance) {
+                tuningSliderValues.suspensionMode = mode;
+            }
             const isActive = mode === 1;
             const reactiveBtn = document.getElementById('suspensionModeReactiveBtn');
             const activeBtn = document.getElementById('suspensionModeActiveBtn');
+            const danceBtn = document.getElementById('suspensionModeDanceBtn');
             const reactiveControls = document.getElementById('reactiveTuningControls');
             const activeCorneringGroup = document.getElementById('activeCorneringGroup');
+            const danceControls = document.getElementById('danceTuningControls');
             const summary = document.getElementById('suspensionModeSummary');
 
             if (reactiveBtn) {
-                reactiveBtn.classList.toggle('btn-gold', !isActive);
-                reactiveBtn.classList.toggle('btn-outline-secondary', isActive);
+                reactiveBtn.classList.toggle('btn-gold', !isActive && !isDance);
+                reactiveBtn.classList.toggle('btn-outline-secondary', isActive || isDance);
             }
             if (activeBtn) {
-                activeBtn.classList.toggle('btn-gold', isActive);
-                activeBtn.classList.toggle('btn-outline-secondary', !isActive);
+                activeBtn.classList.toggle('btn-gold', isActive && !isDance);
+                activeBtn.classList.toggle('btn-outline-secondary', !isActive || isDance);
             }
-            setModeSectionVisibility(reactiveControls, !isActive, { animate });
-            setModeSectionVisibility(activeCorneringGroup, isActive, { animate });
+            if (danceBtn) {
+                danceBtn.classList.toggle('btn-gold', isDance);
+                danceBtn.classList.toggle('btn-outline-secondary', !isDance);
+            }
+            
+            setModeSectionVisibility(reactiveControls, !isActive && !isDance, { animate });
+            setModeSectionVisibility(activeCorneringGroup, isActive && !isDance, { animate });
+            setModeSectionVisibility(danceControls, isDance, { animate });
+            
             if (summary) {
-                summary.textContent = isActive
-                    ? 'Adds an anti-roll force while active mode is selected to counter body roll.'
-                    : 'Reactive profile amplifies body roll of varying intensities.';
+                if (isDance) {
+                    summary.textContent = 'Tilt phone to control suspension in real time. Front/back tilt controls fore/aft balance; left/right tilt controls side-to-side lean.';
+                } else if (isActive) {
+                    summary.textContent = 'Adds an anti-roll force while active mode is selected to counter body roll.';
+                } else {
+                    summary.textContent = 'Reactive profile amplifies body roll of varying intensities.';
+                }
             }
 
             updateDashboardSuspensionProfile();
@@ -12596,8 +12603,9 @@ window.addEventListener('beforeunload', function(event) {
             const tuningLocked = localStorage.getItem('tuningParametersLocked') === 'true';
             const reactiveBtn = document.getElementById('suspensionModeReactiveBtn');
             const activeBtn = document.getElementById('suspensionModeActiveBtn');
+            const danceBtn = document.getElementById('suspensionModeDanceBtn');
 
-            [reactiveBtn, activeBtn].forEach((btn) => {
+            [reactiveBtn, activeBtn, danceBtn].forEach((btn) => {
                 if (!btn) return;
                 btn.disabled = tuningLocked;
                 btn.setAttribute('aria-disabled', tuningLocked ? 'true' : 'false');
@@ -12616,6 +12624,22 @@ window.addEventListener('beforeunload', function(event) {
                 toast.warning('Tuning is locked. Unlock to change Suspension Profile.');
                 syncSuspensionModeLockUi();
                 return;
+            }
+
+            if (mode === 'dance') {
+                // Dance mode is handled separately
+                syncSuspensionModeUi('dance');
+                enableDanceMode().catch(error => {
+                    console.error('Failed to enable Dance Mode:', error);
+                    toast.error('Failed to enable Dance Mode');
+                    syncSuspensionModeUi('reactive'); // Fallback to reactive
+                });
+                return;
+            }
+
+            // Disable dance mode if switching away from it
+            if (danceModeState.enabled) {
+                await disableDanceMode({ sendCommand: true });
             }
 
             const normalizedMode = normalizeSuspensionModeValue(mode);
