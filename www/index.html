@@ -7,7 +7,7 @@
     <title>R/C Dynamic Chassis Control </title>
     
     <!-- PWA Manifest -->
-    <link rel="manifest" href="site.webmanifest?v=1.1.977">
+    <link rel="manifest" href="site.webmanifest?v=1.1.1004">
     <meta name="theme-color" content="#2563eb">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,18 +20,18 @@
     <meta http-equiv="Permissions-Policy" content="geolocation=(self)">
     
     <!-- Bootstrap 5.3.2 Local -->
-    <link href="css/bootstrap.min.css?v=1.1.977" rel="stylesheet">
+    <link href="css/bootstrap.min.css?v=1.1.1004" rel="stylesheet">
     
     <!-- Google Fonts Local (Space Grotesk) -->
-    <link href="css/fonts.css?v=1.1.977" rel="stylesheet">
+    <link href="css/fonts.css?v=1.1.1004" rel="stylesheet">
     
     <!-- Font Awesome 6.4.0 Local -->
     <!-- <link rel="stylesheet" href="css/all.min.css"> -->
     
     <!-- Range Slider CSS -->
-    <link rel="stylesheet" href="lib/range-slider/style.css?v=1.1.977">
+    <link rel="stylesheet" href="lib/range-slider/style.css?v=1.1.1004">
     
-        <link rel="stylesheet" href="css/app.css?v=1.1.977">
+        <link rel="stylesheet" href="css/app.css?v=1.1.1004">
 
     <meta name="color-scheme" content="dark">
     <style>
@@ -459,8 +459,6 @@
                         </div>
                     </div>
 
-
-
                 </div>
             </div>
 
@@ -731,11 +729,6 @@
                                 <div class="small text-muted mt-2" id="suspensionModeSummary">Reactive profile amplifies body role based on the Auto Mode/Custom configuration.</div>
                             </div>
 
-                            <!-- Dance Mode Controls (shown when Dance is selected) -->
-                            <div id="danceTuningControls" style="display: none;">
-                                <!-- Dance Mode panel will be inserted here by app.js -->
-                            </div>
-
                             <div id="reactiveTuningControls">
                                 <!-- Tuning Mode -->
                                 <div class="tuning-slider-group">
@@ -878,6 +871,54 @@
                                         <button type="button" class="slider-stepper-btn" data-direction="-1" aria-label="Decrease corner response">-</button>
                                         <div id="sliderCornerResponse" class="slider-stepper-track"></div>
                                         <button type="button" class="slider-stepper-btn" data-direction="1" aria-label="Increase corner response">+</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Dance Mode Controls -->
+                            <div class="tuning-slider-group" id="danceTuningControls" style="display:none;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0"><span class="material-symbols-outlined icon-danger">footprint</span> Dance Mode</h6>
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Tilt phone to control suspension</div>
+                                <div id="danceTiltIndicatorWrap" class="dance-tilt-wrap" aria-label="Dance Mode Tilt Indicator">
+                                    <div class="dance-tilt-indicator">
+                                        <div id="danceAxisTop" class="dance-axis-label top">F</div>
+                                        <div id="danceAxisLeft" class="dance-axis-label left">L</div>
+                                        <div id="danceAxisRight" class="dance-axis-label right">R</div>
+                                        <div id="danceAxisBottom" class="dance-axis-label bottom">B</div>
+                                        <div class="dance-grid-line h"></div>
+                                        <div class="dance-grid-line v"></div>
+                                        <div id="danceDeadzoneCircle" class="dance-deadzone-circle"></div>
+                                        <div id="danceTiltDot" class="dance-tilt-dot"></div>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <label class="small text-muted mb-2">Phone Orientation</label>
+                                    <div class="dance-orientation-toggle" role="group" aria-label="Dance Mode phone orientation">
+                                        <button type="button" id="danceOrientationPortrait" class="btn btn-sm dance-orientation-btn">Portrait</button>
+                                        <button type="button" id="danceOrientationLandscape" class="btn btn-sm dance-orientation-btn">Landscape</button>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <div class="small text-muted mt-2">Axis Inversion</div>
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" id="danceInvertFrontBack">
+                                        <label class="small text-muted mt-2" for="danceInvertFrontBack">Invert front/back movement</label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="danceInvertSideToSide">
+                                        <label class="small text-muted mt-2" for="danceInvertSideToSide">Invert side-to-side movement</label>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <div class="small text-muted mt-2">Deadzone <span id="danceDeadzoneValue" class="visually-hidden">5°</span></div>
+                                    <div class="slider-section" style="padding-top: 0; margin-bottom: 0;">
+                                        <div class="slider-stepper-control" aria-label="Dance Mode deadzone stepper control">
+                                            <button type="button" id="danceDeadzoneDecrease" class="slider-stepper-btn" aria-label="Decrease dance mode deadzone">-</button>
+                                            <div id="danceDeadzoneSlider" class="slider-stepper-track" aria-label="Dance Mode Deadzone"></div>
+                                            <button type="button" id="danceDeadzoneIncrease" class="slider-stepper-btn" aria-label="Increase dance mode deadzone">+</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1958,16 +1999,16 @@
   
 
     <!-- Bootstrap JS -->
-    <script src="js/bootstrap.bundle.min.js?v=1.1.977"></script>
+    <script src="js/bootstrap.bundle.min.js?v=1.1.1004"></script>
     
     <!-- Range Slider JS -->
-    <script src="lib/range-slider/rangeslider.umd.min.js?v=1.1.977"></script>
+    <script src="lib/range-slider/rangeslider.umd.min.js?v=1.1.1004"></script>
     
-    <script src="js/console.js?v=1.1.977"></script>
-    <script src="js/bluetooth.js?v=1.1.977"></script>
+    <script src="js/console.js?v=1.1.1004"></script>
+    <script src="js/bluetooth.js?v=1.1.1004"></script>
     <!-- bluetooth.js above is the Capacitor-native version of the original Web Bluetooth implementation -->
-    <script src="js/garage.js?v=1.1.977"></script>
+    <script src="js/garage.js?v=1.1.1004"></script>
     
-    <script src="js/app.js?v=1.1.977"></script>
+    <script src="js/app.js?v=1.1.1004"></script>
 </body>
 </html>

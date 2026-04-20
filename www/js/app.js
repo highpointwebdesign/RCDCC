@@ -90,8 +90,8 @@ window.addEventListener('beforeunload', function(event) {
         // ==================== Version Configuration ====================
         // Keep this value human-readable for the About screen.
         // `node build-version.js` refreshes these constants from package.json before builds.
-        const APP_VERSION = '1.1.977';
-        const BUILD_DATE = '2026-04-19';
+        const APP_VERSION = '1.1.1004';
+        const BUILD_DATE = '2026-04-20';
         
         // BLE manager is optional and only available when bluetooth.js is loaded.
         const bleManager = window.BluetoothManager ? new window.BluetoothManager() : null;
@@ -461,7 +461,6 @@ window.addEventListener('beforeunload', function(event) {
                 'saveNewLightingProfileBtn',
                 'ltProfileUpdateBtn',
                 'addAuxServoBtn',
-                'danceModeToggle',
                 'addLightGroupBtn'
             ];
             idsToDisable.forEach(id => {
@@ -475,12 +474,9 @@ window.addEventListener('beforeunload', function(event) {
                 auxTabBtn.style.display = disable ? 'none' : '';
             }
 
-            const dancePanel = document.getElementById('danceModePanel');
-            if (dancePanel && disable) {
-                dancePanel.style.display = 'none';
-            }
+            injectDanceModeStyles();
             updateDashboardBleUI(isBleConnected());
-                updateSuspendSuspensionBtn();
+            updateSuspendSuspensionBtn();
         }
 
         function updateDashboardBleUI(connected) {
@@ -2701,8 +2697,6 @@ window.addEventListener('beforeunload', function(event) {
 
         function getDanceModeElements() {
             return {
-                toggle: document.getElementById('danceModeToggle'),
-                panel: document.getElementById('danceModePanel'),
                 banner: document.getElementById('danceModeStatusBanner'),
                 dot: document.getElementById('danceTiltDot'),
                 deadzoneCircle: document.getElementById('danceDeadzoneCircle'),
@@ -2712,12 +2706,45 @@ window.addEventListener('beforeunload', function(event) {
                 axisBottom: document.getElementById('danceAxisBottom'),
                 slider: document.getElementById('danceDeadzoneSlider'),
                 deadzoneValue: document.getElementById('danceDeadzoneValue'),
+                deadzoneDecrease: document.getElementById('danceDeadzoneDecrease'),
+                deadzoneIncrease: document.getElementById('danceDeadzoneIncrease'),
                 indicatorWrap: document.getElementById('danceTiltIndicatorWrap'),
                 orientationPortrait: document.getElementById('danceOrientationPortrait'),
                 orientationLandscape: document.getElementById('danceOrientationLandscape'),
                 invertFrontBack: document.getElementById('danceInvertFrontBack'),
                 invertSideToSide: document.getElementById('danceInvertSideToSide')
             };
+        }
+
+        function syncDanceDeadzoneSliderPosition() {
+            const { slider } = getDanceModeElements();
+            if (danceModeState.deadzoneSliderInstance) {
+                try {
+                    danceModeState.deadzoneSliderInstance.value([
+                        DANCE_DEADZONE_MIN_DEG,
+                        danceModeState.deadzoneDeg
+                    ]);
+                } catch (error) {
+                    console.warn('Dance deadzone slider sync failed, falling back to native control:', error?.message || error);
+                    danceModeState.deadzoneSliderInstance = null;
+                }
+            } else if (slider && typeof slider.value !== 'undefined') {
+                // Backward compatibility if the slider is still a native input.
+                slider.value = String(danceModeState.deadzoneDeg);
+            }
+        }
+
+        function setDanceDeadzoneValue(nextValue, options = {}) {
+            const fromSlider = options.fromSlider === true;
+            danceModeState.deadzoneDeg = Math.max(
+                DANCE_DEADZONE_MIN_DEG,
+                Math.min(DANCE_DEADZONE_MAX_DEG, Number(nextValue) || 0)
+            );
+            localStorage.setItem(DANCE_DEADZONE_STORAGE_KEY, String(danceModeState.deadzoneDeg));
+            if (!fromSlider) {
+                syncDanceDeadzoneSliderPosition();
+            }
+            updateDanceDeadzoneUi();
         }
 
         function parseStoredBoolean(value, fallback = false) {
@@ -2735,18 +2762,18 @@ window.addEventListener('beforeunload', function(event) {
                     margin-top: 14px;
                     display: none;
                     border-radius: 12px;
-                    border: 1px solid rgba(200, 168, 0, 0.4);
-                    background: linear-gradient(180deg, rgba(22, 22, 22, 0.95) 0%, rgba(10, 10, 10, 0.95) 100%);
+                    border: 1px solid rgba(108, 132, 82, 0.45);
+                    background: linear-gradient(180deg, rgba(29, 37, 24, 0.96) 0%, rgba(13, 18, 11, 0.96) 100%);
                     padding: 12px;
                 }
                 .dance-mode-banner {
-                    border: 1px solid rgba(200, 168, 0, 0.6);
+                    border: 1px solid rgba(132, 156, 102, 0.65);
                     border-radius: 10px;
                     padding: 8px 10px;
                     font-size: 0.85rem;
                     font-weight: 600;
-                    color: #ffe69a;
-                    background: rgba(200, 168, 0, 0.08);
+                    color: #58595d;
+                    background: rgba(90, 112, 68, 0.22);
                     animation: dancePulseBorder 1.2s ease-in-out infinite;
                 }
                 .dance-tilt-wrap {
@@ -2759,14 +2786,14 @@ window.addEventListener('beforeunload', function(event) {
                     height: 196px;
                     border-radius: 50%;
                     position: relative;
-                    border: 2px solid rgba(200, 168, 0, 0.4);
-                    background: radial-gradient(circle at center, rgba(200, 168, 0, 0.18) 0%, rgba(200, 168, 0, 0.04) 45%, rgba(0, 0, 0, 0.25) 100%);
-                    box-shadow: inset 0 0 24px rgba(200, 168, 0, 0.22);
+                    border: 2px solid rgba(220, 38, 38, 0.45);
+                    background: radial-gradient(circle at center, rgba(32, 24, 24, 0.9) 0%, rgba(20, 14, 14, 0.95) 48%, rgba(10, 8, 8, 0.98) 100%);
+                    box-shadow: inset 0 0 24px rgba(200, 50, 50, 0.2);
                     overflow: hidden;
                 }
                 .dance-grid-line {
                     position: absolute;
-                    background: rgba(200, 168, 0, 0.4);
+                    background: rgba(220, 38, 38, 0.35);
                 }
                 .dance-grid-line.h {
                     left: 12px;
@@ -2789,8 +2816,8 @@ window.addEventListener('beforeunload', function(event) {
                     width: 22px;
                     height: 22px;
                     border-radius: 50%;
-                    border: 1.5px solid rgba(200, 168, 0, 0.9);
-                    background: rgba(200, 168, 0, 0.12);
+                    border: 1.5px solid rgba(220, 38, 38, 0.75);
+                    background: rgba(220, 38, 38, 0.12);
                     transform: translate(-50%, -50%);
                     transition: width 120ms linear, height 120ms linear;
                 }
@@ -2802,14 +2829,14 @@ window.addEventListener('beforeunload', function(event) {
                     height: 14px;
                     border-radius: 50%;
                     border: 2px solid #0d0d0d;
-                    background: #50ff9a;
+                    background: var(--danger);
                     transform: translate(-50%, -50%);
-                    box-shadow: 0 0 14px rgba(80, 255, 154, 0.65);
+                    box-shadow: 0 0 14px rgba(220, 38, 38, 0.6);
                     transition: transform 40ms linear;
                 }
                 .dance-axis-label {
                     position: absolute;
-                    color: #ffe69a;
+                    color: #58595d;
                     font-size: 0.72rem;
                     font-weight: 700;
                     letter-spacing: 0.02em;
@@ -2838,31 +2865,16 @@ window.addEventListener('beforeunload', function(event) {
                     left: 50%;
                     transform: translateX(-50%);
                 }
-                .dance-mode-panel .form-label,
-                .dance-mode-panel .form-label strong {
-                    color: #e6eef8;
+                #danceTuningControls .form-label,
+                #danceTuningControls .form-label strong {
+                    color: #dde8d1;
                 }
-                .dance-mode-panel .form-check-label,
-                .dance-mode-panel .form-check-input + .form-check-label {
-                    color: #ffe69a;
+                #danceTuningControls .form-check-label,
+                #danceTuningControls .form-check-input + .form-check-label {
+                    color: #58595d;
                 }
-                .dance-mode-panel #danceDeadzoneValue {
-                    color: #ffe69a;
-                }
-                .dance-mode-panel #danceDeadzoneSlider .range-slider__thumb[data-lower] {
-                    width: 0 !important;
-                    height: 0 !important;
-                    display: none !important;
-                }
-                .dance-mode-panel #danceDeadzoneSlider .range-slider__track {
-                    background: #ddd !important;
-                }
-                .dance-mode-panel #danceDeadzoneSlider .range-slider__range {
-                    background: transparent !important;
-                }
-                .dance-mode-panel #danceDeadzoneSlider .range-slider__thumb[data-upper] {
-                    width: 32px;
-                    height: 32px;
+                #danceDeadzoneValue {
+                    color: #58595d;
                 }
                 .dance-orientation-toggle {
                     display: grid;
@@ -2875,75 +2887,22 @@ window.addEventListener('beforeunload', function(event) {
                 }
                 .dance-orientation-help {
                     margin-top: 6px;
-                    color: #9fb0c3;
+                    color: #a9bc95;
                     font-size: 0.78rem;
                 }
                 @keyframes dancePulseBorder {
-                    0% { box-shadow: 0 0 0 0 rgba(200, 168, 0, 0.35); }
-                    70% { box-shadow: 0 0 0 8px rgba(200, 168, 0, 0); }
-                    100% { box-shadow: 0 0 0 0 rgba(200, 168, 0, 0); }
+                    0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.35); }
+                    70% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
                 }
             `;
             document.head.appendChild(style);
         }
 
         function ensureDanceModePanel() {
-            const container = document.getElementById('danceTuningControls');
-            if (!container) return;
-            if (document.getElementById('danceModePanel')) return;
-
+              // Panel is now static in HTML as danceTuningControls on the tuning page.
             injectDanceModeStyles();
-
-            const panel = document.createElement('div');
-            panel.id = 'danceModePanel';
-            panel.className = 'dance-mode-panel';
-            panel.innerHTML = `
-                <div id="danceModeStatusBanner" class="dance-mode-banner">
-                    Dance Mode Active - Tilt phone to control suspension
-                </div>
-                <div id="danceTiltIndicatorWrap" class="dance-tilt-wrap" aria-label="Dance Mode Tilt Indicator">
-                    <div class="dance-tilt-indicator">
-                        <div id="danceAxisTop" class="dance-axis-label top">F</div>
-                        <div id="danceAxisLeft" class="dance-axis-label left">L</div>
-                        <div id="danceAxisRight" class="dance-axis-label right">R</div>
-                        <div id="danceAxisBottom" class="dance-axis-label bottom">B</div>
-                        <div class="dance-grid-line h"></div>
-                        <div class="dance-grid-line v"></div>
-                        <div id="danceDeadzoneCircle" class="dance-deadzone-circle"></div>
-                        <div id="danceTiltDot" class="dance-tilt-dot"></div>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <label class="form-label mb-1"><strong>Phone Orientation</strong></label>
-                    <div class="dance-orientation-toggle" role="group" aria-label="Dance Mode phone orientation">
-                        <button type="button" id="danceOrientationPortrait" class="btn btn-sm dance-orientation-btn">Portrait</button>
-                        <button type="button" id="danceOrientationLandscape" class="btn btn-sm dance-orientation-btn">Landscape</button>
-                    </div>
-                    <div class="dance-orientation-help">Portrait matches normal app hold.</div>
-                </div>
-                <div class="mt-3">
-                    <label class="form-label mb-1"><strong>Axis Inversion</strong></label>
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" id="danceInvertFrontBack">
-                        <label class="form-check-label" for="danceInvertFrontBack">Invert front/back movement</label>
-                    </div>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="danceInvertSideToSide">
-                        <label class="form-check-label" for="danceInvertSideToSide">Invert side-to-side movement</label>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <label for="danceDeadzoneSlider" class="form-label mb-1"><strong>Deadzone</strong> <span id="danceDeadzoneValue">${DANCE_DEADZONE_DEFAULT_DEG}°</span></label>
-                    <div id="danceDeadzoneSlider" class="slider-stepper-track" aria-label="Dance Mode Deadzone"></div>
-                </div>
-            `;
-
-            container.appendChild(panel);
-        }
-
-        function setDanceModeToggleChecked(checked) {
-            // This function is no longer used since we removed the toggle
-            // Kept for compatibility if referenced elsewhere
+              if (!document.getElementById('danceTuningControls')) return;
         }
 
         function normalizeDanceAxis(rawTiltDeg, deadzoneDeg) {
@@ -3044,24 +3003,20 @@ window.addEventListener('beforeunload', function(event) {
         }
 
         function updateDanceDeadzoneUi() {
-            const { slider, deadzoneValue, deadzoneCircle } = getDanceModeElements();
+            const { slider, deadzoneValue, deadzoneCircle, deadzoneDecrease, deadzoneIncrease } = getDanceModeElements();
             if (!deadzoneValue || !deadzoneCircle) return;
 
-            if (danceModeState.deadzoneSliderInstance) {
-                try {
-                    danceModeState.deadzoneSliderInstance.value([
-                        DANCE_DEADZONE_MIN_DEG,
-                        danceModeState.deadzoneDeg
-                    ]);
-                } catch (error) {
-                    console.warn('Dance deadzone slider sync failed, falling back to native control:', error?.message || error);
-                    danceModeState.deadzoneSliderInstance = null;
-                }
-            } else if (slider && typeof slider.value !== 'undefined') {
-                // Backward compatibility if the slider is still a native input.
-                slider.value = String(danceModeState.deadzoneDeg);
-            }
             deadzoneValue.textContent = `${danceModeState.deadzoneDeg}°`;
+            const deadzoneThumb = slider?.querySelector('.range-slider__thumb[data-upper]');
+            if (deadzoneThumb) {
+                deadzoneThumb.textContent = `${danceModeState.deadzoneDeg}°`;
+            }
+            if (deadzoneDecrease) {
+                deadzoneDecrease.disabled = danceModeState.deadzoneDeg <= DANCE_DEADZONE_MIN_DEG;
+            }
+            if (deadzoneIncrease) {
+                deadzoneIncrease.disabled = danceModeState.deadzoneDeg >= DANCE_DEADZONE_MAX_DEG;
+            }
 
             const radiusMaxPx = 86;
             const ratio = Math.max(0, Math.min(1, danceModeState.deadzoneDeg / DANCE_TILT_FULL_SCALE_DEG));
@@ -3207,29 +3162,23 @@ window.addEventListener('beforeunload', function(event) {
         async function enableDanceMode() {
             if (!(bleManager && bleManager.supportsKvUpdates)) {
                 toast.warning('Dance Mode requires firmware 2.0.0 or newer');
-                syncSuspensionModeUi('reactive'); // Fallback
                 return;
             }
             if (!isBleConnected()) {
                 toast.warning('Connect to Bluetooth before enabling Dance Mode');
-                syncSuspensionModeUi('reactive'); // Fallback
                 return;
             }
 
             const permissionGranted = await requestDanceModeOrientationPermission();
             if (!permissionGranted) {
-                syncSuspensionModeUi('reactive'); // Fallback
                 return;
             }
 
-            ensureDanceModePanel();
             await pushSystemCommand('dance_mode', { enabled: true });
 
-            const { panel } = getDanceModeElements();
             danceModeState.enabled = true;
             danceModeState.latestRawRollDeg = 0;
             danceModeState.latestRawPitchDeg = 0;
-            if (panel) panel.style.display = 'block';
             centerDanceTiltIndicator();
             startDanceModeSampling();
         }
@@ -3243,8 +3192,6 @@ window.addEventListener('beforeunload', function(event) {
             danceModeState.latestRawRollDeg = 0;
             danceModeState.latestRawPitchDeg = 0;
 
-            const { panel } = getDanceModeElements();
-            if (panel) panel.style.display = 'none';
             centerDanceTiltIndicator();
 
             if (sendCommand && isBleConnected()) {
@@ -3260,36 +3207,17 @@ window.addEventListener('beforeunload', function(event) {
             }
         }
 
-        function handleDanceModeToggleChange(event) {
-            if (danceModeState.toggleSync) return;
-            const isEnabled = !!event?.target?.checked;
-
-            if (isEnabled) {
-                enableDanceMode().catch(error => {
-                    console.error('Failed to enable Dance Mode:', error);
-                    toast.error('Failed to enable Dance Mode');
-                    setDanceModeToggleChecked(false);
-                    danceModeState.enabled = false;
-                    stopDanceModeSampling();
-                });
-            } else {
-                disableDanceMode({ sendCommand: true }).catch(error => {
-                    console.error('Failed to disable Dance Mode:', error);
-                });
-            }
-        }
-
         function initDanceModeUi() {
-            // ensureDanceModePanel will be called when dance mode is enabled
+            ensureDanceModePanel();
             const {
-                toggle,
                 slider,
+                deadzoneDecrease,
+                deadzoneIncrease,
                 orientationPortrait,
                 orientationLandscape,
                 invertFrontBack,
                 invertSideToSide
             } = getDanceModeElements();
-            if (!toggle) return;
 
             if (slider && !danceModeState.deadzoneSliderInstance && typeof rangeSlider === 'function') {
                 try {
@@ -3302,12 +3230,7 @@ window.addEventListener('beforeunload', function(event) {
                         rangeSlideDisabled: true,
                         onInput: function(value) {
                             const next = Math.round(value[1]);
-                            danceModeState.deadzoneDeg = Math.max(
-                                DANCE_DEADZONE_MIN_DEG,
-                                Math.min(DANCE_DEADZONE_MAX_DEG, next)
-                            );
-                            localStorage.setItem(DANCE_DEADZONE_STORAGE_KEY, String(danceModeState.deadzoneDeg));
-                            updateDanceDeadzoneUi();
+                            setDanceDeadzoneValue(next, { fromSlider: true });
                         }
                     });
                 } catch (error) {
@@ -3340,13 +3263,24 @@ window.addEventListener('beforeunload', function(event) {
             updateDanceDeadzoneUi();
             centerDanceTiltIndicator();
 
+
             if (slider && !danceModeState.deadzoneSliderInstance) {
                 // Backward compatibility path if rangeSlider is unavailable.
                 slider.addEventListener('input', function() {
                     const next = parseInt(this.value || `${DANCE_DEADZONE_DEFAULT_DEG}`, 10);
-                    danceModeState.deadzoneDeg = Math.max(DANCE_DEADZONE_MIN_DEG, Math.min(DANCE_DEADZONE_MAX_DEG, next));
-                    localStorage.setItem(DANCE_DEADZONE_STORAGE_KEY, String(danceModeState.deadzoneDeg));
-                    updateDanceDeadzoneUi();
+                    setDanceDeadzoneValue(next);
+                });
+            }
+
+            if (deadzoneDecrease) {
+                deadzoneDecrease.addEventListener('click', function() {
+                    setDanceDeadzoneValue(danceModeState.deadzoneDeg - DANCE_DEADZONE_STEP);
+                });
+            }
+
+            if (deadzoneIncrease) {
+                deadzoneIncrease.addEventListener('click', function() {
+                    setDanceDeadzoneValue(danceModeState.deadzoneDeg + DANCE_DEADZONE_STEP);
                 });
             }
 
@@ -12554,45 +12488,63 @@ window.addEventListener('beforeunload', function(event) {
 
         function syncSuspensionModeUi(rawMode, options = {}) {
             const { animate = !isLoadingTuningConfig } = options;
-            const isDance = rawMode === 'dance';
-            const mode = isDance ? null : normalizeSuspensionModeValue(rawMode);
-            if (!isDance) {
-                tuningSliderValues.suspensionMode = mode;
-            }
-            const isActive = mode === 1;
             const reactiveBtn = document.getElementById('suspensionModeReactiveBtn');
             const activeBtn = document.getElementById('suspensionModeActiveBtn');
             const danceBtn = document.getElementById('suspensionModeDanceBtn');
             const reactiveControls = document.getElementById('reactiveTuningControls');
             const activeCorneringGroup = document.getElementById('activeCorneringGroup');
-            const danceControls = document.getElementById('danceTuningControls');
+            const danceTuningControls = document.getElementById('danceTuningControls');
             const summary = document.getElementById('suspensionModeSummary');
 
+            // Handle Dance mode
+            if (rawMode === 'dance') {
+                if (reactiveBtn) {
+                    reactiveBtn.classList.remove('btn-gold');
+                    reactiveBtn.classList.add('btn-outline-secondary');
+                }
+                if (activeBtn) {
+                    activeBtn.classList.remove('btn-gold');
+                    activeBtn.classList.add('btn-outline-secondary');
+                }
+                if (danceBtn) {
+                    danceBtn.classList.remove('btn-outline-secondary');
+                    danceBtn.classList.add('btn-gold');
+                }
+                setModeSectionVisibility(reactiveControls, false, { animate });
+                setModeSectionVisibility(activeCorneringGroup, false, { animate });
+                setModeSectionVisibility(danceTuningControls, true, { animate });
+                if (summary) {
+                    summary.textContent = 'Dance Mode: Tilt your phone to control the suspension in real time.';
+                }
+                updateDashboardSuspensionProfile();
+                syncSuspensionModeLockUi();
+                return;
+            }
+
+            // Handle normal Reactive/Active modes
+            const mode = normalizeSuspensionModeValue(rawMode);
+            tuningSliderValues.suspensionMode = mode;
+            const isActive = mode === 1;
+
             if (reactiveBtn) {
-                reactiveBtn.classList.toggle('btn-gold', !isActive && !isDance);
-                reactiveBtn.classList.toggle('btn-outline-secondary', isActive || isDance);
+                reactiveBtn.classList.toggle('btn-gold', !isActive);
+                reactiveBtn.classList.toggle('btn-outline-secondary', isActive);
             }
             if (activeBtn) {
-                activeBtn.classList.toggle('btn-gold', isActive && !isDance);
-                activeBtn.classList.toggle('btn-outline-secondary', !isActive || isDance);
+                activeBtn.classList.toggle('btn-gold', isActive);
+                activeBtn.classList.toggle('btn-outline-secondary', !isActive);
             }
             if (danceBtn) {
-                danceBtn.classList.toggle('btn-gold', isDance);
-                danceBtn.classList.toggle('btn-outline-secondary', !isDance);
+                danceBtn.classList.remove('btn-gold');
+                danceBtn.classList.add('btn-outline-secondary');
             }
-            
-            setModeSectionVisibility(reactiveControls, !isActive && !isDance, { animate });
-            setModeSectionVisibility(activeCorneringGroup, isActive && !isDance, { animate });
-            setModeSectionVisibility(danceControls, isDance, { animate });
-            
+            setModeSectionVisibility(reactiveControls, !isActive, { animate });
+            setModeSectionVisibility(activeCorneringGroup, isActive, { animate });
+            setModeSectionVisibility(danceTuningControls, false, { animate });
             if (summary) {
-                if (isDance) {
-                    summary.textContent = 'Tilt phone to control suspension in real time. Front/back tilt controls fore/aft balance; left/right tilt controls side-to-side lean.';
-                } else if (isActive) {
-                    summary.textContent = 'Adds an anti-roll force while active mode is selected to counter body roll.';
-                } else {
-                    summary.textContent = 'Reactive profile amplifies body roll of varying intensities.';
-                }
+                summary.textContent = isActive
+                    ? 'Adds an anti-roll force while active mode is selected to counter body roll.'
+                    : 'Reactive profile amplifies body roll of varying intensities.';
             }
 
             updateDashboardSuspensionProfile();
@@ -12626,20 +12578,21 @@ window.addEventListener('beforeunload', function(event) {
                 return;
             }
 
+            // Handle Dance mode separately - it only affects UI display, not firmware mode
             if (mode === 'dance') {
-                // Dance mode is handled separately
                 syncSuspensionModeUi('dance');
-                enableDanceMode().catch(error => {
-                    console.error('Failed to enable Dance Mode:', error);
-                    toast.error('Failed to enable Dance Mode');
-                    syncSuspensionModeUi('reactive'); // Fallback to reactive
-                });
+                if (isBleConnected() && danceModeState.enabled === false) {
+                    try {
+                        await enableDanceMode();
+                    } catch (error) {
+                        console.error('Failed to enable Dance Mode:', error);
+                    }
+                }
                 return;
             }
 
-            // Disable dance mode if switching away from it
             if (danceModeState.enabled) {
-                await disableDanceMode({ sendCommand: true });
+                await disableDanceMode({ sendCommand: true, bleDisconnected: false });
             }
 
             const normalizedMode = normalizeSuspensionModeValue(mode);
