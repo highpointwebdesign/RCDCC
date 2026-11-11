@@ -70,3 +70,6 @@ Device name in BLE advertising comes from persisted `deviceName` in config (defa
 
 - HTTP/WebSocket webserver support has been removed from runtime code.
 - Configuration and control now flow through BLE payload handlers and SPIFFS persistence.
+
+
+Test for commit;
